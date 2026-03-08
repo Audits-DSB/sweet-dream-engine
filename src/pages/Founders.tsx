@@ -66,7 +66,7 @@ export default function FoundersPage() {
                 <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center"><span className="text-lg font-bold text-primary">{f.name.charAt(0)}</span></div>
                 <div><p className="font-semibold">{f.name}</p><p className="text-xs text-muted-foreground">{f.alias} · {f.email}</p></div>
               </div>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => toast.info(`${t.edit} ${f.name}`)}><Pencil className="h-3.5 w-3.5" /></Button>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setEditingFounder(f); setEditForm({ name: f.name, alias: f.alias, email: f.email, phone: f.phone }); setEditDialogOpen(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
             </div>
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div className="p-2.5 rounded-lg bg-muted/50 text-center"><p className="text-muted-foreground">{t.contribution}</p><p className="font-bold mt-0.5">{(f.totalContributed / 1000).toFixed(0)} {t.thousand}</p></div>
