@@ -4,6 +4,7 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Plus, Eye, MoreHorizontal, CheckCircle, XCircle, ArrowRight } from "lucide-react";
+import { toast } from "sonner";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -54,7 +55,7 @@ export default function RequestsPage() {
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
         onExport={() => exportToCsv("requests", ["ID","Client","Date","Items","Expected Total","Status","Notes"], filtered.map(r => [r.id, r.client, r.date, r.items, r.expectedTotal, r.status, r.notes]))}
-        actions={<Button size="sm" className="h-9"><Plus className="h-3.5 w-3.5 mr-1.5" />New Request</Button>}
+        actions={<Button size="sm" className="h-9" onClick={() => toast.info("New request form coming soon")}><Plus className="h-3.5 w-3.5 mr-1.5" />New Request</Button>}
       />
 
       <div className="stat-card overflow-x-auto">
@@ -87,10 +88,10 @@ export default function RequestsPage() {
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem><Eye className="h-3.5 w-3.5 mr-2" />View Details</DropdownMenuItem>
-                      <DropdownMenuItem><CheckCircle className="h-3.5 w-3.5 mr-2" />Approve</DropdownMenuItem>
-                      <DropdownMenuItem><XCircle className="h-3.5 w-3.5 mr-2" />Reject</DropdownMenuItem>
-                      <DropdownMenuItem><ArrowRight className="h-3.5 w-3.5 mr-2" />Convert to Order</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toast.info(`Viewing ${req.id}`)}><Eye className="h-3.5 w-3.5 mr-2" />View Details</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { toast.success(`${req.id} approved`); }}><CheckCircle className="h-3.5 w-3.5 mr-2" />Approve</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { toast.error(`${req.id} rejected`); }}><XCircle className="h-3.5 w-3.5 mr-2" />Reject</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { toast.success(`${req.id} converted to order`); }}><ArrowRight className="h-3.5 w-3.5 mr-2" />Convert to Order</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>

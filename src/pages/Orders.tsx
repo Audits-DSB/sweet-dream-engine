@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -59,7 +60,7 @@ export default function OrdersPage() {
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
         onExport={() => exportToCsv("orders", ["Order ID","Client","Date","Lines","Selling","Cost","Split","Source","Status"], filtered.map(o => [o.id, o.client, o.date, o.lines, o.totalSelling, o.totalCost, o.splitMode, o.source, o.status]))}
-        actions={<Button size="sm" className="h-9"><Plus className="h-3.5 w-3.5 mr-1.5" />New Order</Button>}
+        actions={<Button size="sm" className="h-9" onClick={() => toast.info("New order form coming soon")}><Plus className="h-3.5 w-3.5 mr-1.5" />New Order</Button>}
       />
 
       <div className="stat-card overflow-x-auto">
@@ -96,10 +97,10 @@ export default function OrdersPage() {
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem><Eye className="h-3.5 w-3.5 mr-2" />View Details</DropdownMenuItem>
-                      <DropdownMenuItem><Truck className="h-3.5 w-3.5 mr-2" />Record Delivery</DropdownMenuItem>
-                      <DropdownMenuItem><FileText className="h-3.5 w-3.5 mr-2" />Generate Invoice</DropdownMenuItem>
-                      <DropdownMenuItem><Copy className="h-3.5 w-3.5 mr-2" />Duplicate</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate(`/orders/${order.id}`)}><Eye className="h-3.5 w-3.5 mr-2" />View Details</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toast.success(`Delivery recorded for ${order.id}`)}><Truck className="h-3.5 w-3.5 mr-2" />Record Delivery</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toast.success(`Invoice generated for ${order.id}`)}><FileText className="h-3.5 w-3.5 mr-2" />Generate Invoice</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toast.success(`${order.id} duplicated`)}><Copy className="h-3.5 w-3.5 mr-2" />Duplicate</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>

@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Receipt, AlertTriangle, CheckCircle2, Clock, Plus, Eye, MoreHorizontal, DollarSign } from "lucide-react";
+import { toast } from "sonner";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -106,7 +107,7 @@ export default function CollectionsPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => setSelectedInvoice(inv)}><Eye className="h-3.5 w-3.5 mr-2" />View Details</DropdownMenuItem>
-                      {inv.remaining > 0 && <DropdownMenuItem><DollarSign className="h-3.5 w-3.5 mr-2" />Record Payment</DropdownMenuItem>}
+                      {inv.remaining > 0 && <DropdownMenuItem onClick={() => toast.success(`Payment recorded for ${inv.id}`)}><DollarSign className="h-3.5 w-3.5 mr-2" />Record Payment</DropdownMenuItem>}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>
