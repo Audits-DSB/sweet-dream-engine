@@ -179,7 +179,7 @@ export default function SettingsPage() {
                   <div className="p-2 rounded bg-muted/50"><p className="text-muted-foreground">{t.profits}</p><p className="font-semibold mt-0.5">{founder.totalProfit.toLocaleString()} {t.currency}</p></div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => toast.info(`${t.edit} ${founder.name}`)}><Pencil className="h-3 w-3 ltr:mr-1 rtl:ml-1" />{t.edit}</Button>
+                  <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => editFounder(founder)}><Pencil className="h-3 w-3 ltr:mr-1 rtl:ml-1" />{t.edit}</Button>
                   <Button variant="outline" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => deleteFounder(founder.id)}><Trash2 className="h-3 w-3" /></Button>
                 </div>
               </div>
