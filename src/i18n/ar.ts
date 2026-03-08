@@ -684,4 +684,10 @@ export const ar = {
   paymentLinkedToTreasury: "تم ربط الدفعة بالخزينة",
   enterValidAmount: "يرجى إدخال مبلغ صحيح",
   amountExceedsRemaining: "المبلغ يتجاوز المتبقي",
+  clientUpdated: "تم تحديث بيانات العميل",
+  noEmail: "لا يوجد بريد إلكتروني",
+  noPhone: "لا يوجد رقم هاتف",
+  founderUpdated: "تم تحديث بيانات المؤسس",
+  address: "العنوان",
+  save: "حفظ",
 };
