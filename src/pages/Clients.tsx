@@ -54,7 +54,7 @@ export default function ClientsPage() {
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => {}}
+        onExport={() => exportToCsv("clients", ["ID","Name","Contact","Email","Phone","City","Status","Join Date","Total Orders","Outstanding"], filtered.map(c => [c.id, c.name, c.contact, c.email, c.phone, c.city, c.status, c.joinDate, c.totalOrders, c.outstanding]))}
         actions={<Button size="sm" className="h-9"><Plus className="h-3.5 w-3.5 mr-1.5" />Add Client</Button>}
       />
 
