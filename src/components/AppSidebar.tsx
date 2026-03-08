@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Users,
@@ -99,6 +100,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
@@ -129,7 +131,9 @@ export function AppSidebar() {
 
       <SidebarFooter className="p-3 border-t border-sidebar-border space-y-2">
         {!collapsed && profile?.full_name && (
-          <p className="text-xs text-muted-foreground truncate px-1">{profile.full_name}</p>
+          <button onClick={() => navigate("/profile")} className="text-xs text-muted-foreground truncate px-1 hover:text-foreground transition-colors text-right w-full">
+            {profile.full_name}
+          </button>
         )}
         <div className={collapsed ? "flex justify-center" : "flex items-center justify-between"}>
           <ThemeToggle />
