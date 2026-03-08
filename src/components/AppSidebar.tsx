@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, ShoppingCart, Package, Truck, Warehouse,
   ClipboardCheck, Receipt, Landmark, UserCog, Building2, Bell,
-  BarChart3, Settings, FileText, Boxes, LogOut, ShieldCheck, Factory, Vault,
+  BarChart3, Settings, FileText, Boxes, LogOut, ShieldCheck, Factory, Vault, FileBarChart,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -41,6 +41,7 @@ function useNavItems() {
     { title: t.founders, url: "/founders", icon: UserCog },
     { title: t.companyProfit, url: "/company-profit", icon: Building2 },
     { title: t.founderFunding, url: "/founder-funding", icon: Landmark },
+    { title: t.finReport, url: "/financial-report", icon: FileBarChart },
   ];
 
   const systemItems = [

@@ -657,4 +657,31 @@ export const en = {
   treasury_cat_logistics: "Logistics",
   treasury_cat_maintenance: "Maintenance",
   treasury_cat_other: "Other",
+
+  // Financial Report
+  finReport: "Financial Report",
+  finReportTitle: "Comprehensive Financial Report",
+  finReportDesc: "Overview of company profits, treasury movements, and founder distributions",
+  finReportRevenue: "Total Revenue",
+  finReportProfit: "Net Profit",
+  finReportFounderDist: "Founder Distributions",
+  finReportRevVsProfit: "Revenue vs Profit",
+  finReportProfitSplit: "Profit Split (Company / Founders)",
+  finReportCollections: "Collections Summary",
+  finReportTotalInvoiced: "Total Invoiced",
+  finReportCollectionRate: "Collection Rate",
+  finReportMetric: "Metric",
+  finReport3m: "3 Months",
+  finReport6m: "6 Months",
+  finReport1y: "1 Year",
+
+  // Collection-Treasury link
+  recordPaymentDialog: "Record Payment",
+  paymentAmount: "Payment Amount",
+  treasuryAccountForPayment: "Treasury Account",
+  linkToTreasury: "Auto-link to Treasury",
+  paymentRecorded: "Payment recorded successfully",
+  paymentLinkedToTreasury: "Payment linked to treasury",
+  enterValidAmount: "Please enter a valid amount",
+  amountExceedsRemaining: "Amount exceeds remaining balance",
 };

@@ -1,18 +1,25 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, CheckCircle2, Clock, Receipt, Eye, MoreHorizontal, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { clientsList } from "@/data/store";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
-const mockCollections = [
+type TreasuryAccount = { id: string; name: string; balance: number };
+
+const initialCollections = [
   { id: "INV-001", order: "ORD-048", client: "عيادة د. أحمد", clientId: "C001", issueDate: "2025-03-06", dueDate: "2025-03-20", total: 32000, paid: 0, remaining: 32000, payments: [] as { date: string; amount: number; method: string }[], status: "Awaiting Confirmation" },
   { id: "INV-002", order: "ORD-047", client: "مركز نور لطب الأسنان", clientId: "C002", issueDate: "2025-03-05", dueDate: "2025-03-19", total: 85000, paid: 40000, remaining: 45000, payments: [{ date: "2025-03-10", amount: 40000, method: "Bank Transfer" }], status: "Partially Paid" },
   { id: "INV-003", order: "ORD-046", client: "عيادة جرين فالي", clientId: "C003", issueDate: "2025-03-04", dueDate: "2025-03-18", total: 21000, paid: 21000, remaining: 0, payments: [{ date: "2025-03-12", amount: 21000, method: "Cash" }], status: "Paid" },
@@ -24,22 +31,93 @@ const mockCollections = [
 ];
 
 export default function CollectionsPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const [collections, setCollections] = useState(initialCollections);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [selectedInvoice, setSelectedInvoice] = useState<typeof mockCollections[0] | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<typeof initialCollections[0] | null>(null);
 
-  const filtered = mockCollections.filter((c) => {
+  // Payment dialog state
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [paymentInvoice, setPaymentInvoice] = useState<typeof initialCollections[0] | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [linkToTreasury, setLinkToTreasury] = useState(true);
+  const [treasuryAccountId, setTreasuryAccountId] = useState("");
+  const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
+
+  useEffect(() => {
+    supabase.from("treasury_accounts").select("id, name, balance").eq("is_active", true).then(({ data }) => {
+      if (data) setTreasuryAccounts(data as TreasuryAccount[]);
+    });
+  }, []);
+
+  const filtered = collections.filter((c) => {
     const matchSearch = !search || c.client.toLowerCase().includes(search.toLowerCase()) || c.id.toLowerCase().includes(search.toLowerCase()) || c.order.toLowerCase().includes(search.toLowerCase());
     const matchStatus = !filters.status || filters.status === "all" || c.status === filters.status;
     return matchSearch && matchStatus;
   });
 
-  const totalOutstanding = mockCollections.reduce((sum, c) => sum + c.remaining, 0);
-  const overdueAmount = mockCollections.filter(c => c.status === "Overdue").reduce((sum, c) => sum + c.remaining, 0);
-  const paidCount = mockCollections.filter(c => c.status === "Paid").length;
-  const totalCollected = mockCollections.reduce((sum, c) => sum + c.paid, 0);
+  const totalOutstanding = collections.reduce((sum, c) => sum + c.remaining, 0);
+  const overdueAmount = collections.filter(c => c.status === "Overdue").reduce((sum, c) => sum + c.remaining, 0);
+  const paidCount = collections.filter(c => c.status === "Paid").length;
+  const totalCollected = collections.reduce((sum, c) => sum + c.paid, 0);
+
+  const openPaymentDialog = (inv: typeof initialCollections[0]) => {
+    setPaymentInvoice(inv);
+    setPaymentAmount("");
+    setPaymentMethod("cash");
+    setLinkToTreasury(true);
+    setTreasuryAccountId(treasuryAccounts.length > 0 ? treasuryAccounts[0].id : "");
+    setPaymentDialogOpen(true);
+  };
+
+  const recordPayment = async () => {
+    if (!paymentInvoice) return;
+    const amt = Number(paymentAmount);
+    if (!amt || amt <= 0) { toast.error(t.enterValidAmount); return; }
+    if (amt > paymentInvoice.remaining) { toast.error(t.amountExceedsRemaining); return; }
+
+    // Update local collection state
+    setCollections(prev => prev.map(c => {
+      if (c.id !== paymentInvoice.id) return c;
+      const newPaid = c.paid + amt;
+      const newRemaining = c.total - newPaid;
+      const newPayments = [...c.payments, { date: new Date().toISOString().split("T")[0], amount: amt, method: paymentMethod === "cash" ? "Cash" : "Bank Transfer" }];
+      const newStatus = newRemaining <= 0 ? "Paid" : "Partially Paid";
+      return { ...c, paid: newPaid, remaining: newRemaining, payments: newPayments, status: newStatus };
+    }));
+
+    // Link to treasury if enabled
+    if (linkToTreasury && treasuryAccountId) {
+      const account = treasuryAccounts.find(a => a.id === treasuryAccountId);
+      if (account) {
+        const newBalance = Number(account.balance) + amt;
+        const { error: txErr } = await supabase.from("treasury_transactions").insert({
+          account_id: treasuryAccountId,
+          tx_type: "inflow" as any,
+          amount: amt,
+          balance_after: newBalance,
+          description: `${t.recordPayment}: ${paymentInvoice.id} - ${paymentInvoice.client}`,
+          reference_id: paymentInvoice.id,
+          performed_by: user?.id || null,
+        });
+        if (!txErr) {
+          await supabase.from("treasury_accounts").update({ balance: newBalance }).eq("id", treasuryAccountId);
+          setTreasuryAccounts(prev => prev.map(a => a.id === treasuryAccountId ? { ...a, balance: newBalance } : a));
+          toast.success(t.paymentLinkedToTreasury);
+        }
+      }
+    }
+
+    toast.success(t.paymentRecorded);
+    setPaymentDialogOpen(false);
+    setPaymentInvoice(null);
+  };
+
+  const fmtMoney = (n: number) => n.toLocaleString(lang === "ar" ? "ar-EG" : "en-US");
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -50,9 +128,9 @@ export default function CollectionsPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title={t.totalCollected} value={`${totalCollected.toLocaleString()} ${t.currency}`} change={`${paidCount} ${t.fullyPaid}`} changeType="positive" icon={CheckCircle2} />
-        <StatCard title={t.outstandingAmount} value={`${totalOutstanding.toLocaleString()} ${t.currency}`} change={`${mockCollections.filter(c => c.remaining > 0).length} ${t.invoiceCount}`} changeType="neutral" icon={Clock} />
-        <StatCard title={t.overdueAmount} value={`${overdueAmount.toLocaleString()} ${t.currency}`} change={`${mockCollections.filter(c => c.status === "Overdue").length} ${t.invoiceCount}`} changeType="negative" icon={AlertTriangle} />
-        <StatCard title={t.invoicesLabel} value={mockCollections.length} change={t.totalIssued} changeType="neutral" icon={Receipt} />
+        <StatCard title={t.outstandingAmount} value={`${totalOutstanding.toLocaleString()} ${t.currency}`} change={`${collections.filter(c => c.remaining > 0).length} ${t.invoiceCount}`} changeType="neutral" icon={Clock} />
+        <StatCard title={t.overdueAmount} value={`${overdueAmount.toLocaleString()} ${t.currency}`} change={`${collections.filter(c => c.status === "Overdue").length} ${t.invoiceCount}`} changeType="negative" icon={AlertTriangle} />
+        <StatCard title={t.invoicesLabel} value={collections.length} change={t.totalIssued} changeType="neutral" icon={Receipt} />
       </div>
 
       <DataToolbar
@@ -106,7 +184,7 @@ export default function CollectionsPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => setSelectedInvoice(inv)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewDetails}</DropdownMenuItem>
-                      {inv.remaining > 0 && <DropdownMenuItem onClick={() => toast.success(`${t.recordPayment}: ${inv.id}`)}><DollarSign className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.recordPayment}</DropdownMenuItem>}
+                      {inv.remaining > 0 && <DropdownMenuItem onClick={() => openPaymentDialog(inv)}><DollarSign className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.recordPayment}</DropdownMenuItem>}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>
@@ -116,7 +194,8 @@ export default function CollectionsPage() {
         </table>
       </div>
 
-      <Dialog open={!!selectedInvoice} onOpenChange={() => setSelectedInvoice(null)}>
+      {/* Invoice Detail Dialog */}
+      <Dialog open={!!selectedInvoice && !paymentDialogOpen} onOpenChange={() => setSelectedInvoice(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{selectedInvoice?.id} — {selectedInvoice?.client}</DialogTitle></DialogHeader>
           {selectedInvoice && (
@@ -156,8 +235,73 @@ export default function CollectionsPage() {
                   <div className="h-full rounded-full bg-success transition-all" style={{ width: `${(selectedInvoice.paid / selectedInvoice.total) * 100}%` }} />
                 </div>
               </div>
+              {selectedInvoice.remaining > 0 && (
+                <Button className="w-full" onClick={() => { setSelectedInvoice(null); openPaymentDialog(selectedInvoice); }}>
+                  <DollarSign className="h-4 w-4 me-1" />{t.recordPayment}
+                </Button>
+              )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Dialog with Treasury Link */}
+      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{t.recordPaymentDialog}</DialogTitle></DialogHeader>
+          {paymentInvoice && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-muted/50 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">{t.invoice}</span><span className="font-medium">{paymentInvoice.id}</span></div>
+                <div className="flex justify-between mt-1"><span className="text-muted-foreground">{t.client}</span><span className="font-medium">{paymentInvoice.client}</span></div>
+                <div className="flex justify-between mt-1"><span className="text-muted-foreground">{t.remaining}</span><span className="font-semibold text-destructive">{fmtMoney(paymentInvoice.remaining)} {t.currency}</span></div>
+              </div>
+
+              <div>
+                <Label>{t.paymentAmount} ({t.currency})</Label>
+                <Input type="number" min="1" max={paymentInvoice.remaining} value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder={`${t.remaining}: ${fmtMoney(paymentInvoice.remaining)}`} />
+              </div>
+
+              <div>
+                <Label>{t.paymentMethod}</Label>
+                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">{t.cash}</SelectItem>
+                    <SelectItem value="bank">{t.bankTransfer}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+                <div>
+                  <p className="text-sm font-medium">{t.linkToTreasury}</p>
+                  <p className="text-[10px] text-muted-foreground">{t.paymentLinkedToTreasury}</p>
+                </div>
+                <Switch checked={linkToTreasury} onCheckedChange={setLinkToTreasury} />
+              </div>
+
+              {linkToTreasury && (
+                <div>
+                  <Label>{t.treasuryAccountForPayment}</Label>
+                  <Select value={treasuryAccountId} onValueChange={setTreasuryAccountId}>
+                    <SelectTrigger><SelectValue placeholder={t.treasurySelectAccount} /></SelectTrigger>
+                    <SelectContent>
+                      {treasuryAccounts.map(a => (
+                        <SelectItem key={a.id} value={a.id}>{a.name} ({fmtMoney(Number(a.balance))})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {treasuryAccounts.length === 0 && (
+                    <p className="text-[10px] text-muted-foreground mt-1">{t.treasuryNoAccounts}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={recordPayment}><DollarSign className="h-4 w-4 me-1" />{t.recordPayment}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
