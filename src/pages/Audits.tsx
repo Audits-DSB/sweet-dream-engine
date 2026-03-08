@@ -12,7 +12,7 @@ import { StatCard } from "@/components/StatCard";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Plus, Eye, MoreHorizontal, ClipboardCheck, AlertTriangle, CheckCircle2, XCircle,
-  Upload, FileSpreadsheet, Printer, Download, FileText,
+  Upload, FileSpreadsheet, Printer, Download, FileText, Package,
 } from "lucide-react";
 import { toast } from "sonner";
 import { clientsList, foundersList } from "@/data/store";
