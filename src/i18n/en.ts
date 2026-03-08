@@ -1,5 +1,5 @@
 export const en = {
-  dir: "ltr" as const,
+  dir: "ltr" as "rtl" | "ltr",
   // App
   appName: "OpsHub",
   appDesc: "Dental Supplies",
