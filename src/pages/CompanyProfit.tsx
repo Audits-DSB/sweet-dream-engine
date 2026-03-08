@@ -1,5 +1,7 @@
 import { StatCard } from "@/components/StatCard";
-import { TrendingUp, TrendingDown, DollarSign, Percent } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Percent, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { exportToCsv } from "@/lib/exportCsv";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell,
 } from "recharts";
