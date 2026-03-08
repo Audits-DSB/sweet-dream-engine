@@ -31,7 +31,7 @@ const businessRules = {
   auditReminderEnabled: true, auditReminderDays: 7,
 };
 
-type DialogMode = "founder" | "actor" | null;
+type DialogMode = "founder" | "actor" | "editFounder" | "editActor" | null;
 
 export default function SettingsPage() {
   const { t } = useLanguage();
@@ -41,6 +41,33 @@ export default function SettingsPage() {
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [founderForm, setFounderForm] = useState({ name: "", alias: "", email: "" });
   const [actorForm, setActorForm] = useState({ name: "", type: "external", phone: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const editFounder = (founder: typeof initialFounders[0]) => {
+    setEditingId(founder.id);
+    setFounderForm({ name: founder.name, alias: founder.alias, email: founder.email });
+    setDialogMode("editFounder");
+  };
+
+  const saveEditFounder = () => {
+    if (!founderForm.name) { toast.error(t.enterFounderName); return; }
+    setFounders(founders.map(f => f.id === editingId ? { ...f, name: founderForm.name, alias: founderForm.alias, email: founderForm.email } : f));
+    setDialogMode(null); setEditingId(null);
+    toast.success(t.founderUpdated);
+  };
+
+  const editActor = (actor: typeof initialActors[0]) => {
+    setEditingId(actor.id);
+    setActorForm({ name: actor.name, type: actor.type, phone: actor.phone });
+    setDialogMode("editActor");
+  };
+
+  const saveEditActor = () => {
+    if (!actorForm.name) { toast.error(t.enterFounderName); return; }
+    setActors(actors.map(a => a.id === editingId ? { ...a, name: actorForm.name, type: actorForm.type, phone: actorForm.phone } : a));
+    setDialogMode(null); setEditingId(null);
+    toast.success(t.actorAdded);
+  };
 
   const addFounder = () => {
     if (!founderForm.name) { toast.error(t.enterFounderName); return; }
