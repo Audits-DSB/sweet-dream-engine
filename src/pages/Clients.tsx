@@ -3,13 +3,22 @@ import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { Plus, Eye, MoreHorizontal, Mail, Phone, MapPin, Calendar } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Plus, Eye, MoreHorizontal, Mail, Phone } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
-const mockClients = [
+const initialClients = [
   { id: "C001", name: "عيادة د. أحمد", contact: "أحمد خالد", email: "ahmed@clinic.eg", phone: "+20 100 111 2233", city: "القاهرة", status: "Active", joinDate: "2024-03-15", totalOrders: 18, outstanding: 32000, lastAudit: "2025-02-28" },
   { id: "C002", name: "مركز نور لطب الأسنان", contact: "فاطمة حسن", email: "fatima@noor.eg", phone: "+20 111 222 3344", city: "الجيزة", status: "Active", joinDate: "2024-01-20", totalOrders: 24, outstanding: 58000, lastAudit: "2025-03-01" },
   { id: "C003", name: "عيادة جرين فالي", contact: "عمر سعيد", email: "omar@greenvalley.eg", phone: "+20 122 333 4455", city: "القاهرة", status: "Active", joinDate: "2024-06-10", totalOrders: 12, outstanding: 0, lastAudit: "2025-02-20" },
@@ -20,24 +29,42 @@ const mockClients = [
   { id: "C008", name: "عيادة كلاود ناين", contact: "منى صالح", email: "mona@cloudnine.eg", phone: "+20 122 888 9900", city: "القاهرة", status: "Inactive", joinDate: "2024-05-30", totalOrders: 4, outstanding: 0, lastAudit: "2024-12-10" },
 ];
 
+const emptyClient = { name: "", contact: "", email: "", phone: "", city: "القاهرة", status: "Active" };
+
 export default function ClientsPage() {
+  const [clients, setClients] = useState(initialClients);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState(emptyClient);
   const navigate = useNavigate();
 
-  const filtered = mockClients.filter((c) => {
+  const filtered = clients.filter((c) => {
     const matchSearch = !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.contact.toLowerCase().includes(search.toLowerCase()) || c.id.toLowerCase().includes(search.toLowerCase());
     const matchStatus = !filters.status || filters.status === "all" || c.status === filters.status;
     const matchCity = !filters.city || filters.city === "all" || c.city === filters.city;
     return matchSearch && matchStatus && matchCity;
   });
 
+  const handleAdd = () => {
+    if (!form.name || !form.contact) {
+      toast.error("يرجى إدخال الاسم وجهة الاتصال");
+      return;
+    }
+    const newId = `C${String(clients.length + 1).padStart(3, "0")}`;
+    const today = new Date().toISOString().split("T")[0];
+    setClients([...clients, { ...form, id: newId, joinDate: today, totalOrders: 0, outstanding: 0, lastAudit: "—" }]);
+    setForm(emptyClient);
+    setDialogOpen(false);
+    toast.success("تم إضافة العميل بنجاح");
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-header">العملاء</h1>
-          <p className="page-description">{mockClients.length} عميل · {mockClients.filter(c => c.status === "Active").length} نشط</p>
+          <p className="page-description">{clients.length} عميل · {clients.filter(c => c.status === "Active").length} نشط</p>
         </div>
       </div>
 
@@ -47,12 +74,12 @@ export default function ClientsPage() {
         onSearchChange={setSearch}
         filters={[
           { label: "الحالة", value: "status", options: [{ label: "نشط", value: "Active" }, { label: "غير نشط", value: "Inactive" }] },
-          { label: "المدينة", value: "city", options: [...new Set(mockClients.map(c => c.city))].map(c => ({ label: c, value: c })) },
+          { label: "المدينة", value: "city", options: [...new Set(clients.map(c => c.city))].map(c => ({ label: c, value: c })) },
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
         onExport={() => exportToCsv("clients", ["الكود","الاسم","جهة الاتصال","البريد","الهاتف","المدينة","الحالة","تاريخ الانضمام","الطلبات","المستحق"], filtered.map(c => [c.id, c.name, c.contact, c.email, c.phone, c.city, c.status, c.joinDate, c.totalOrders, c.outstanding]))}
-        actions={<Button size="sm" className="h-9"><Plus className="h-3.5 w-3.5 mr-1.5" />إضافة عميل</Button>}
+        actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />إضافة عميل</Button>}
       />
 
       <div className="stat-card overflow-x-auto">
@@ -114,6 +141,36 @@ export default function ClientsPage() {
           <div className="text-center py-12 text-muted-foreground text-sm">لا يوجد عملاء مطابقين للبحث.</div>
         )}
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>إضافة عميل جديد</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-xs">اسم العميل *</Label><Input className="h-9 mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="مثال: عيادة د. سمير" /></div>
+            <div><Label className="text-xs">جهة الاتصال *</Label><Input className="h-9 mt-1" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} placeholder="الاسم الكامل" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">البريد الإلكتروني</Label><Input className="h-9 mt-1" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+              <div><Label className="text-xs">الهاتف</Label><Input className="h-9 mt-1" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">المدينة</Label><Input className="h-9 mt-1" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>
+              <div>
+                <Label className="text-xs">الحالة</Label>
+                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                  <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Active">نشط</SelectItem>
+                    <SelectItem value="Inactive">غير نشط</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button className="w-full" onClick={handleAdd}>إضافة العميل</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,13 +1,17 @@
 import { useState } from "react";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Users, TrendingUp, Wallet, Pencil, Plus } from "lucide-react";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, BarChart, Bar, XAxis, Tooltip,
 } from "recharts";
 
-const founders = [
+const initialFounders = [
   {
     id: "1", name: "أحمد الراشد", alias: "المدير التنفيذي", email: "ahmed@opshub.com", phone: "+20 100 123 4567",
     active: true, totalContributed: 1250000, totalProfit: 425000, totalWithdrawn: 200000,
@@ -34,10 +38,29 @@ const founders = [
   },
 ];
 
+const emptyFounder = { name: "", alias: "", email: "", phone: "", totalContributed: "" };
+
 export default function FoundersPage() {
+  const [founders, setFounders] = useState(initialFounders);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState(emptyFounder);
+
   const totalContributed = founders.reduce((s, f) => s + f.totalContributed, 0);
   const totalProfit = founders.reduce((s, f) => s + f.totalProfit, 0);
   const totalBalance = founders.reduce((s, f) => s + (f.totalProfit - f.totalWithdrawn), 0);
+
+  const handleAdd = () => {
+    if (!form.name) { toast.error("يرجى إدخال اسم المؤسس"); return; }
+    const newId = String(founders.length + 1);
+    setFounders([...founders, {
+      id: newId, name: form.name, alias: form.alias, email: form.email, phone: form.phone,
+      active: true, totalContributed: Number(form.totalContributed) || 0, totalProfit: 0, totalWithdrawn: 0,
+      monthlyProfit: [{ month: "مار", profit: 0 }],
+    }]);
+    setForm(emptyFounder);
+    setDialogOpen(false);
+    toast.success("تم إضافة المؤسس بنجاح");
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -46,7 +69,7 @@ export default function FoundersPage() {
           <h1 className="page-header">المؤسسون</h1>
           <p className="page-description">ملفات المؤسسين والمساهمات وتوزيع الأرباح</p>
         </div>
-        <Button size="sm"><Plus className="h-3.5 w-3.5 mr-1.5" />إضافة مؤسس</Button>
+        <Button size="sm" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />إضافة مؤسس</Button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -68,7 +91,7 @@ export default function FoundersPage() {
                   <p className="text-xs text-muted-foreground">{f.alias} · {f.email}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><Pencil className="h-3.5 w-3.5" /></Button>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => toast.info(`تعديل ${f.name}`)}><Pencil className="h-3.5 w-3.5" /></Button>
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-xs">
@@ -104,6 +127,22 @@ export default function FoundersPage() {
           </div>
         ))}
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>إضافة مؤسس جديد</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-xs">الاسم *</Label><Input className="h-9 mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+            <div><Label className="text-xs">المسمى الوظيفي</Label><Input className="h-9 mt-1" value={form.alias} onChange={(e) => setForm({ ...form, alias: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">البريد</Label><Input className="h-9 mt-1" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+              <div><Label className="text-xs">الهاتف</Label><Input className="h-9 mt-1" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+            </div>
+            <div><Label className="text-xs">المساهمة الأولية (ج.م)</Label><Input className="h-9 mt-1" type="number" value={form.totalContributed} onChange={(e) => setForm({ ...form, totalContributed: e.target.value })} /></div>
+            <Button className="w-full" onClick={handleAdd}>إضافة المؤسس</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

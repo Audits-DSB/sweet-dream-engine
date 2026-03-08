@@ -3,6 +3,8 @@ import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Eye, MoreHorizontal, Truck, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,8 +13,10 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const mockDeliveries = [
+const initialDeliveries = [
   { id: "DEL-035", order: "ORD-048", client: "عيادة د. أحمد", requestedDate: "2025-03-08", actualDate: "—", actor: "أحمد (مؤسس)", items: 4, type: "كامل", status: "Pending" },
   { id: "DEL-034", order: "ORD-047", client: "مركز نور لطب الأسنان", requestedDate: "2025-03-07", actualDate: "—", actor: "DHL Express", items: 7, type: "كامل", status: "In Transit" },
   { id: "DEL-033", order: "ORD-046", client: "عيادة جرين فالي", requestedDate: "2025-03-06", actualDate: "2025-03-06", actor: "شركة توصيل سريع", items: 3, type: "كامل", status: "Delivered" },
@@ -23,39 +27,54 @@ const mockDeliveries = [
 ];
 
 const deliveryStatusMap: Record<string, string> = {
-  "Pending": "warning",
-  "In Transit": "info",
-  "Delivered": "success",
-  "Failed": "destructive",
+  "Pending": "warning", "In Transit": "info", "Delivered": "success", "Failed": "destructive",
 };
 
+const emptyDelivery = { order: "", client: "", actor: "", items: "1", type: "كامل", requestedDate: "" };
+
 export default function DeliveriesPage() {
+  const [deliveries, setDeliveries] = useState(initialDeliveries);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState(emptyDelivery);
   const { user } = useAuth();
   const { t } = useLanguage();
 
   const sendNotification = async (title: string, body: string, type: string = "info") => {
     if (!user) return;
-    await supabase.from("notifications").insert({
-      user_id: user.id,
-      title,
-      body,
-      type,
-    });
+    await supabase.from("notifications").insert({ user_id: user.id, title, body, type });
   };
 
-  const filtered = mockDeliveries.filter((d) => {
+  const filtered = deliveries.filter((d) => {
     const matchSearch = !search || d.client.toLowerCase().includes(search.toLowerCase()) || d.id.toLowerCase().includes(search.toLowerCase()) || d.order.toLowerCase().includes(search.toLowerCase());
     const matchStatus = !filters.status || filters.status === "all" || d.status === filters.status;
     return matchSearch && matchStatus;
   });
 
+  const handleAdd = () => {
+    if (!form.client || !form.order) {
+      toast.error("يرجى إدخال العميل ورقم الطلب");
+      return;
+    }
+    const num = deliveries.length > 0 ? parseInt(deliveries[0].id.split("-")[1]) + 1 : 36;
+    const newId = `DEL-${String(num).padStart(3, "0")}`;
+    const today = new Date().toISOString().split("T")[0];
+    setDeliveries([{
+      id: newId, order: form.order, client: form.client, requestedDate: form.requestedDate || today,
+      actualDate: "—", actor: form.actor, items: parseInt(form.items) || 1, type: form.type, status: "Pending",
+    }, ...deliveries]);
+    sendNotification("توصيل جديد", `${newId} - ${form.client}`, "info");
+    setForm(emptyDelivery);
+    setDialogOpen(false);
+    toast.success("تم إنشاء التوصيل بنجاح");
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="page-header">{t.deliveriesTitle}</h1>
-        <p className="page-description">{mockDeliveries.length} {t.deliveryCount} · {mockDeliveries.filter(d => d.status === "Pending").length} {t.pendingCount}</p>
+        <p className="page-description">{deliveries.length} {t.deliveryCount} · {deliveries.filter(d => d.status === "Pending").length} {t.pendingCount}</p>
       </div>
 
       <DataToolbar
@@ -72,6 +91,7 @@ export default function DeliveriesPage() {
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
         onExport={() => exportToCsv("deliveries", [t.code, t.order, t.client, t.requestedDate, t.actualDate, t.executor, t.items, t.type, t.status], filtered.map(d => [d.id, d.order, d.client, d.requestedDate, d.actualDate, d.actor, d.items, d.type, d.status]))}
+        actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />توصيل جديد</Button>}
       />
 
       <div className="stat-card overflow-x-auto">
@@ -121,6 +141,34 @@ export default function DeliveriesPage() {
           </tbody>
         </table>
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>توصيل جديد</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">رقم الطلب *</Label><Input className="h-9 mt-1" value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} placeholder="ORD-XXX" /></div>
+              <div><Label className="text-xs">العميل *</Label><Input className="h-9 mt-1" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} /></div>
+            </div>
+            <div><Label className="text-xs">المنفذ</Label><Input className="h-9 mt-1" value={form.actor} onChange={(e) => setForm({ ...form, actor: e.target.value })} placeholder="اسم شركة التوصيل أو المؤسس" /></div>
+            <div className="grid grid-cols-3 gap-3">
+              <div><Label className="text-xs">عدد الأصناف</Label><Input className="h-9 mt-1" type="number" value={form.items} onChange={(e) => setForm({ ...form, items: e.target.value })} /></div>
+              <div>
+                <Label className="text-xs">النوع</Label>
+                <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+                  <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="كامل">كامل</SelectItem>
+                    <SelectItem value="جزئي">جزئي</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label className="text-xs">التاريخ</Label><Input className="h-9 mt-1" type="date" value={form.requestedDate} onChange={(e) => setForm({ ...form, requestedDate: e.target.value })} /></div>
+            </div>
+            <Button className="w-full" onClick={handleAdd}>إنشاء التوصيل</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
