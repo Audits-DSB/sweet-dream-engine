@@ -17,6 +17,7 @@ import OrdersPage from "./pages/Orders";
 import OrderDetails from "./pages/OrderDetails";
 import DeliveriesPage from "./pages/Deliveries";
 import InventoryPage from "./pages/Inventory";
+import InventoryDetail from "./pages/InventoryDetail";
 import AuditsPage from "./pages/Audits";
 import RefillPage from "./pages/Refill";
 import CollectionsPage from "./pages/Collections";
@@ -64,6 +65,7 @@ const App = () => (
                 <Route path="/orders/:id" element={<OrderDetails />} />
                 <Route path="/deliveries" element={<DeliveriesPage />} />
                 <Route path="/inventory" element={<InventoryPage />} />
+                <Route path="/inventory/:id" element={<InventoryDetail />} />
                 <Route path="/audits" element={<AuditsPage />} />
                 <Route path="/refill" element={<RefillPage />} />
                 <Route path="/collections" element={<CollectionsPage />} />
