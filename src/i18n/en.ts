@@ -230,7 +230,6 @@ export const en = {
   selectMaterial: "Select material...",
   noItemsAdded: "No items added yet",
   orderItemsLabel: "Order Items",
-  sellingPrice: "Selling Price",
   costPrice: "Cost Price",
   manual: "Manual",
   printInvoice: "Print Invoice",

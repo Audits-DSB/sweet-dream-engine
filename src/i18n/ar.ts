@@ -230,7 +230,6 @@ export const ar = {
   selectMaterial: "اختر مادة...",
   noItemsAdded: "لم تتم إضافة أي مواد بعد",
   orderItemsLabel: "بنود الطلب",
-  sellingPrice: "سعر البيع",
   costPrice: "التكلفة",
   manual: "يدوي",
   printInvoice: "طباعة فاتورة",
