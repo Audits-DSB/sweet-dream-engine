@@ -24,6 +24,9 @@ export default function FoundersPage() {
   const navigate = useNavigate();
   const [founders, setFounders] = useState(initialFounders);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingFounder, setEditingFounder] = useState<typeof initialFounders[0] | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", alias: "", email: "", phone: "" });
   const [form, setForm] = useState(emptyFounder);
 
   const totalContributed = founders.reduce((s, f) => s + f.totalContributed, 0);
