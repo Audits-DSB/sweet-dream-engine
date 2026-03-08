@@ -5,16 +5,25 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy } from "lucide-react";
+import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { clientsList, ordersList as initialData } from "@/data/store";
+import { clientsList, ordersList as initialData, materialsList } from "@/data/store";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+interface OrderItem {
+  materialCode: string;
+  name: string;
+  quantity: number;
+  sellingPrice: number;
+  costPrice: number;
+}
 
 export default function OrdersPage() {
   const { t } = useLanguage();
@@ -23,7 +32,8 @@ export default function OrdersPage() {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState("");
-  const [form, setForm] = useState({ lines: "1", totalSelling: "", totalCost: "", splitMode: "equal", deliveryFee: "500" });
+  const [form, setForm] = useState({ splitMode: "equal", deliveryFee: "500" });
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const navigate = useNavigate();
 
   const filtered = orders.filter((o) => {
@@ -32,8 +42,35 @@ export default function OrdersPage() {
     return matchSearch && matchStatus;
   });
 
+  const addItem = () => {
+    setOrderItems([...orderItems, { materialCode: "", name: "", quantity: 1, sellingPrice: 0, costPrice: 0 }]);
+  };
+
+  const updateItem = (index: number, field: keyof OrderItem, value: string | number) => {
+    const updated = [...orderItems];
+    if (field === "materialCode") {
+      const mat = materialsList.find(m => m.code === value);
+      if (mat) {
+        updated[index] = { ...updated[index], materialCode: mat.code, name: mat.name, sellingPrice: mat.sellingPrice, costPrice: mat.storeCost };
+      }
+    } else {
+      (updated[index] as any)[field] = value;
+    }
+    setOrderItems(updated);
+  };
+
+  const removeItem = (index: number) => {
+    setOrderItems(orderItems.filter((_, i) => i !== index));
+  };
+
+  const totalSelling = orderItems.reduce((sum, item) => sum + item.sellingPrice * item.quantity, 0);
+  const totalCost = orderItems.reduce((sum, item) => sum + item.costPrice * item.quantity, 0);
+
   const handleAdd = () => {
-    if (!selectedClient || !form.totalSelling) { toast.error(t.selectClientAndTotal); return; }
+    if (!selectedClient || orderItems.length === 0 || orderItems.some(i => !i.materialCode)) {
+      toast.error(t.selectClientAndTotal);
+      return;
+    }
     const client = clientsList.find(c => c.id === selectedClient);
     if (!client) return;
     const num = orders.length > 0 ? parseInt(orders[0].id.split("-")[1]) + 1 : 49;
@@ -41,12 +78,13 @@ export default function OrdersPage() {
     const today = new Date().toISOString().split("T")[0];
     const splitLabel = form.splitMode === "equal" ? t.equal : t.byContribution;
     setOrders([{
-      id: newId, client: client.name, clientId: client.id, date: today, lines: parseInt(form.lines) || 1,
-      totalSelling: `${Number(form.totalSelling).toLocaleString()} ${t.currency}`, totalCost: `${Number(form.totalCost).toLocaleString()} ${t.currency}`,
+      id: newId, client: client.name, clientId: client.id, date: today, lines: orderItems.length,
+      totalSelling: `${totalSelling.toLocaleString()} ${t.currency}`, totalCost: `${totalCost.toLocaleString()} ${t.currency}`,
       splitMode: splitLabel, deliveryFee: parseInt(form.deliveryFee) || 0, status: "Draft", source: t.manual,
     }, ...orders]);
-    setForm({ lines: "1", totalSelling: "", totalCost: "", splitMode: "equal", deliveryFee: "500" });
+    setForm({ splitMode: "equal", deliveryFee: "500" });
     setSelectedClient("");
+    setOrderItems([]);
     setDialogOpen(false);
     toast.success(t.orderCreated);
   };
@@ -57,6 +95,8 @@ export default function OrdersPage() {
     { label: t.partiallyDelivered, value: "Partially Delivered" }, { label: t.delivered, value: "Delivered" },
     { label: t.invoiced, value: "Invoiced" }, { label: t.closed, value: "Closed" }, { label: t.cancelled, value: "Cancelled" },
   ];
+
+  const usedMaterialCodes = orderItems.map(i => i.materialCode);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -124,41 +164,108 @@ export default function OrdersPage() {
         {filtered.length === 0 && <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>}
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setOrderItems([]); setSelectedClient(""); } }}>
+        <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader><DialogTitle>{t.newOrder}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs">{t.client} *</Label>
-              <Select value={selectedClient} onValueChange={setSelectedClient}>
-                <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t.selectClientPlaceholder} /></SelectTrigger>
-                <SelectContent>
-                  {clientsList.filter(c => c.status === "Active").map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.name} — {c.city}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <ScrollArea className="max-h-[70vh] pr-2">
+            <div className="space-y-4">
+              {/* Client Selection */}
+              <div>
+                <Label className="text-xs">{t.client} *</Label>
+                <Select value={selectedClient} onValueChange={setSelectedClient}>
+                  <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t.selectClientPlaceholder} /></SelectTrigger>
+                  <SelectContent>
+                    {clientsList.filter(c => c.status === "Active").map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name} — {c.city}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Order Items */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-xs font-medium">{t.orderItemsLabel} *</Label>
+                  <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={addItem}>
+                    <Plus className="h-3 w-3 ltr:mr-1 rtl:ml-1" />{t.addItem}
+                  </Button>
+                </div>
+
+                {orderItems.length === 0 ? (
+                  <div className="text-center py-6 border border-dashed border-border rounded-md text-muted-foreground text-xs">
+                    {t.noItemsAdded}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {orderItems.map((item, idx) => (
+                      <div key={idx} className="border border-border rounded-md p-3 space-y-2 bg-muted/20">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1">
+                            <Select value={item.materialCode} onValueChange={(v) => updateItem(idx, "materialCode", v)}>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t.selectMaterial} /></SelectTrigger>
+                              <SelectContent>
+                                {materialsList.filter(m => m.active && (!usedMaterialCodes.includes(m.code) || m.code === item.materialCode)).map(m => (
+                                  <SelectItem key={m.code} value={m.code}>
+                                    <span className="font-mono text-muted-foreground">{m.code}</span> — {m.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive hover:text-destructive" onClick={() => removeItem(idx)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <Label className="text-[10px] text-muted-foreground">{t.quantity}</Label>
+                            <Input className="h-7 text-xs mt-0.5" type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", parseInt(e.target.value) || 1)} />
+                          </div>
+                          <div>
+                            <Label className="text-[10px] text-muted-foreground">{t.sellingPrice}</Label>
+                            <Input className="h-7 text-xs mt-0.5" type="number" value={item.sellingPrice} onChange={(e) => updateItem(idx, "sellingPrice", parseFloat(e.target.value) || 0)} />
+                          </div>
+                          <div>
+                            <Label className="text-[10px] text-muted-foreground">{t.costPrice}</Label>
+                            <Input className="h-7 text-xs mt-0.5" type="number" value={item.costPrice} onChange={(e) => updateItem(idx, "costPrice", parseFloat(e.target.value) || 0)} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Totals Summary */}
+              {orderItems.length > 0 && (
+                <div className="bg-muted/40 rounded-md p-3 text-xs space-y-1">
+                  <div className="flex justify-between"><span className="text-muted-foreground">{t.totalSelling}:</span><span className="font-medium">{totalSelling.toLocaleString()} {t.currency}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">{t.totalCost}:</span><span className="font-medium">{totalCost.toLocaleString()} {t.currency}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">{t.lines}:</span><span className="font-medium">{orderItems.length}</span></div>
+                </div>
+              )}
+
+              {/* Settings */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">{t.deliveryFee}</Label>
+                  <Input className="h-9 mt-1" type="number" value={form.deliveryFee} onChange={(e) => setForm({ ...form, deliveryFee: e.target.value })} />
+                </div>
+                <div>
+                  <Label className="text-xs">{t.splitModeLabel}</Label>
+                  <Select value={form.splitMode} onValueChange={(v) => setForm({ ...form, splitMode: v })}>
+                    <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="equal">{t.equal}</SelectItem>
+                      <SelectItem value="contribution">{t.byContribution}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <Button className="w-full" onClick={handleAdd}>{t.createOrder}</Button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">{t.totalSelling} *</Label><Input className="h-9 mt-1" type="number" value={form.totalSelling} onChange={(e) => setForm({ ...form, totalSelling: e.target.value })} /></div>
-              <div><Label className="text-xs">{t.totalCost}</Label><Input className="h-9 mt-1" type="number" value={form.totalCost} onChange={(e) => setForm({ ...form, totalCost: e.target.value })} /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">{t.lineCount}</Label><Input className="h-9 mt-1" type="number" value={form.lines} onChange={(e) => setForm({ ...form, lines: e.target.value })} /></div>
-              <div><Label className="text-xs">{t.deliveryFee}</Label><Input className="h-9 mt-1" type="number" value={form.deliveryFee} onChange={(e) => setForm({ ...form, deliveryFee: e.target.value })} /></div>
-            </div>
-            <div>
-              <Label className="text-xs">{t.splitModeLabel}</Label>
-              <Select value={form.splitMode} onValueChange={(v) => setForm({ ...form, splitMode: v })}>
-                <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="equal">{t.equal}</SelectItem>
-                  <SelectItem value="contribution">{t.byContribution}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button className="w-full" onClick={handleAdd}>{t.createOrder}</Button>
-          </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </div>
