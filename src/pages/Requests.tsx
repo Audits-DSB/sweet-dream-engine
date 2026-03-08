@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Eye, MoreHorizontal, CheckCircle, XCircle, ArrowRight } from "lucide-react";
+import { Plus, Eye, MoreHorizontal, CheckCircle, XCircle, ArrowRight, X, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,13 +18,28 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { clientsList } from "@/data/store";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+type FetchedMaterial = {
+  code: string;
+  name: string;
+  sellingPrice: number;
+  image_url?: string | null;
+};
+
+type RequestItem = {
+  materialCode: string;
+  materialName: string;
+  qty: number;
+  unitPrice: number;
+};
 
 type Request = {
   id: string;
   client: string;
   clientId: string;
   date: string;
-  items: number;
+  items: RequestItem[];
   expectedTotal: string;
   status: string;
   notes: string;
