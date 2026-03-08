@@ -9,13 +9,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const mockDeliveries = [
-  { id: "DEL-035", order: "ORD-048", client: "Al Salam Cafe", requestedDate: "2025-03-08", actualDate: "—", actor: "Ahmed (Founder)", items: 4, type: "Full", status: "Pending" },
-  { id: "DEL-034", order: "ORD-047", client: "Noor Restaurant", requestedDate: "2025-03-07", actualDate: "—", actor: "DHL Express", items: 7, type: "Full", status: "In Transit" },
-  { id: "DEL-033", order: "ORD-046", client: "Green Valley Lounge", requestedDate: "2025-03-06", actualDate: "2025-03-06", actor: "Fast Delivery Co.", items: 3, type: "Full", status: "Delivered" },
-  { id: "DEL-032", order: "ORD-044", client: "Blue Moon Cafe", requestedDate: "2025-03-03", actualDate: "2025-03-03", actor: "Sara (Founder)", items: 4, type: "Partial", status: "Delivered" },
-  { id: "DEL-031", order: "ORD-044", client: "Blue Moon Cafe", requestedDate: "2025-03-05", actualDate: "—", actor: "Ahmed (Founder)", items: 2, type: "Partial", status: "Pending" },
-  { id: "DEL-030", order: "ORD-045", client: "Royal Kitchen", requestedDate: "2025-03-02", actualDate: "2025-03-02", actor: "DHL Express", items: 5, type: "Full", status: "Delivered" },
-  { id: "DEL-029", order: "ORD-043", client: "Taste House", requestedDate: "2025-02-28", actualDate: "2025-03-01", actor: "Ahmed (Founder)", items: 2, type: "Full", status: "Delivered" },
+  { id: "DEL-035", order: "ORD-048", client: "عيادة د. أحمد", requestedDate: "2025-03-08", actualDate: "—", actor: "أحمد (مؤسس)", items: 4, type: "كامل", status: "Pending" },
+  { id: "DEL-034", order: "ORD-047", client: "مركز نور لطب الأسنان", requestedDate: "2025-03-07", actualDate: "—", actor: "DHL Express", items: 7, type: "كامل", status: "In Transit" },
+  { id: "DEL-033", order: "ORD-046", client: "عيادة جرين فالي", requestedDate: "2025-03-06", actualDate: "2025-03-06", actor: "شركة توصيل سريع", items: 3, type: "كامل", status: "Delivered" },
+  { id: "DEL-032", order: "ORD-044", client: "عيادة بلو مون", requestedDate: "2025-03-03", actualDate: "2025-03-03", actor: "سارة (مؤسس)", items: 4, type: "جزئي", status: "Delivered" },
+  { id: "DEL-031", order: "ORD-044", client: "عيادة بلو مون", requestedDate: "2025-03-05", actualDate: "—", actor: "أحمد (مؤسس)", items: 2, type: "جزئي", status: "Pending" },
+  { id: "DEL-030", order: "ORD-045", client: "المركز الملكي للأسنان", requestedDate: "2025-03-02", actualDate: "2025-03-02", actor: "DHL Express", items: 5, type: "كامل", status: "Delivered" },
+  { id: "DEL-029", order: "ORD-043", client: "عيادة سمايل هاوس", requestedDate: "2025-02-28", actualDate: "2025-03-01", actor: "أحمد (مؤسس)", items: 2, type: "كامل", status: "Delivered" },
 ];
 
 const deliveryStatusMap: Record<string, string> = {
@@ -38,40 +38,40 @@ export default function DeliveriesPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="page-header">Deliveries</h1>
-        <p className="page-description">{mockDeliveries.length} deliveries · {mockDeliveries.filter(d => d.status === "Pending").length} pending</p>
+        <h1 className="page-header">التوصيلات</h1>
+        <p className="page-description">{mockDeliveries.length} توصيلة · {mockDeliveries.filter(d => d.status === "Pending").length} معلقة</p>
       </div>
 
       <DataToolbar
-        searchPlaceholder="Search deliveries..."
+        searchPlaceholder="بحث في التوصيلات..."
         searchValue={search}
         onSearchChange={setSearch}
         filters={[
-          { label: "Status", value: "status", options: [
-            { label: "Pending", value: "Pending" },
-            { label: "In Transit", value: "In Transit" },
-            { label: "Delivered", value: "Delivered" },
+          { label: "الحالة", value: "status", options: [
+            { label: "معلق", value: "Pending" },
+            { label: "في الطريق", value: "In Transit" },
+            { label: "تم التسليم", value: "Delivered" },
           ]},
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("deliveries", ["ID","Order","Client","Requested Date","Actual Date","Actor","Items","Type","Status"], filtered.map(d => [d.id, d.order, d.client, d.requestedDate, d.actualDate, d.actor, d.items, d.type, d.status]))}
+        onExport={() => exportToCsv("deliveries", ["الكود","الطلب","العميل","التاريخ المطلوب","التاريخ الفعلي","المنفذ","البنود","النوع","الحالة"], filtered.map(d => [d.id, d.order, d.client, d.requestedDate, d.actualDate, d.actor, d.items, d.type, d.status]))}
       />
 
       <div className="stat-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">ID</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Order</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Client</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Requested</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Actual</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Actor</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">Items</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Type</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Status</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">Actions</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الكود</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الطلب</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">العميل</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">المطلوب</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الفعلي</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">المنفذ</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">البنود</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">النوع</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الحالة</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">إجراءات</th>
             </tr>
           </thead>
           <tbody>
@@ -92,8 +92,8 @@ export default function DeliveriesPage() {
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem><Eye className="h-3.5 w-3.5 mr-2" />View</DropdownMenuItem>
-                      <DropdownMenuItem><Truck className="h-3.5 w-3.5 mr-2" />Mark Delivered</DropdownMenuItem>
+                      <DropdownMenuItem><Eye className="h-3.5 w-3.5 mr-2" />عرض</DropdownMenuItem>
+                      <DropdownMenuItem><Truck className="h-3.5 w-3.5 mr-2" />تأكيد التسليم</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>

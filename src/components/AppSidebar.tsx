@@ -110,7 +110,7 @@ export function AppSidebar() {
             </div>
             <div>
               <h2 className="font-semibold text-sm text-foreground leading-none">OpsHub</h2>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Operations Platform</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">أدوات طب الأسنان</p>
             </div>
           </div>
         ) : (

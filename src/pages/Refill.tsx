@@ -7,15 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Package, ShoppingCart, AlertTriangle, TrendingDown, FileText } from "lucide-react";
 
 const mockRefills = [
-  { id: 1, client: "Al Salam Cafe", material: "Arabica Coffee Beans", code: "MAT-001", unit: "kg", currentStock: 45, avgWeeklyUsage: 12, coverageWeeks: 3.75, leadTimeWeeks: 2, safetyStock: 5, reorderPoint: 29, suggestedQty: 50, priority: "Normal" },
-  { id: 2, client: "Al Salam Cafe", material: "Green Tea Leaves", code: "MAT-002", unit: "kg", currentStock: 8, avgWeeklyUsage: 5, coverageWeeks: 1.6, leadTimeWeeks: 2, safetyStock: 3, reorderPoint: 13, suggestedQty: 25, priority: "Urgent" },
-  { id: 3, client: "Al Salam Cafe", material: "Milk Powder", code: "MAT-005", unit: "kg", currentStock: 2, avgWeeklyUsage: 3, coverageWeeks: 0.67, leadTimeWeeks: 2, safetyStock: 2, reorderPoint: 8, suggestedQty: 15, priority: "Critical" },
-  { id: 4, client: "Noor Restaurant", material: "Arabica Coffee Beans", code: "MAT-001", unit: "kg", currentStock: 65, avgWeeklyUsage: 18, coverageWeeks: 3.6, leadTimeWeeks: 2, safetyStock: 8, reorderPoint: 44, suggestedQty: 80, priority: "Normal" },
-  { id: 5, client: "Noor Restaurant", material: "Vanilla Extract", code: "MAT-008", unit: "L", currentStock: 0.5, avgWeeklyUsage: 0.8, coverageWeeks: 0.63, leadTimeWeeks: 3, safetyStock: 0.5, reorderPoint: 2.9, suggestedQty: 5, priority: "Critical" },
-  { id: 6, client: "Green Valley Lounge", material: "Green Tea Leaves", code: "MAT-002", unit: "kg", currentStock: 22, avgWeeklyUsage: 4, coverageWeeks: 5.5, leadTimeWeeks: 2, safetyStock: 3, reorderPoint: 11, suggestedQty: 0, priority: "OK" },
-  { id: 7, client: "Royal Kitchen", material: "Cinnamon Sticks", code: "MAT-010", unit: "kg", currentStock: 4, avgWeeklyUsage: 0.5, coverageWeeks: 8, leadTimeWeeks: 3, safetyStock: 1, reorderPoint: 2.5, suggestedQty: 0, priority: "OK" },
-  { id: 8, client: "Blue Moon Cafe", material: "Milk Powder", code: "MAT-005", unit: "kg", currentStock: 12, avgWeeklyUsage: 4, coverageWeeks: 3, leadTimeWeeks: 2, safetyStock: 3, reorderPoint: 11, suggestedQty: 20, priority: "Normal" },
-  { id: 9, client: "Taste House", material: "Sugar Syrup", code: "MAT-003", unit: "L", currentStock: 5, avgWeeklyUsage: 6, coverageWeeks: 0.83, leadTimeWeeks: 1, safetyStock: 3, reorderPoint: 9, suggestedQty: 30, priority: "Critical" },
+  { id: 1, client: "عيادة د. أحمد", material: "حشو كمبوزيت ضوئي", code: "MAT-001", unit: "عبوة", currentStock: 45, avgWeeklyUsage: 12, coverageWeeks: 3.75, leadTimeWeeks: 2, safetyStock: 5, reorderPoint: 29, suggestedQty: 50, priority: "Normal" },
+  { id: 2, client: "عيادة د. أحمد", material: "إبر تخدير", code: "MAT-002", unit: "علبة", currentStock: 8, avgWeeklyUsage: 5, coverageWeeks: 1.6, leadTimeWeeks: 2, safetyStock: 3, reorderPoint: 13, suggestedQty: 25, priority: "Urgent" },
+  { id: 3, client: "عيادة د. أحمد", material: "قفازات لاتكس", code: "MAT-005", unit: "كرتونة", currentStock: 2, avgWeeklyUsage: 3, coverageWeeks: 0.67, leadTimeWeeks: 2, safetyStock: 2, reorderPoint: 8, suggestedQty: 15, priority: "Critical" },
+  { id: 4, client: "مركز نور لطب الأسنان", material: "حشو كمبوزيت ضوئي", code: "MAT-001", unit: "عبوة", currentStock: 65, avgWeeklyUsage: 18, coverageWeeks: 3.6, leadTimeWeeks: 2, safetyStock: 8, reorderPoint: 44, suggestedQty: 80, priority: "Normal" },
+  { id: 5, client: "مركز نور لطب الأسنان", material: "مبيض أسنان", code: "MAT-008", unit: "عبوة", currentStock: 0.5, avgWeeklyUsage: 0.8, coverageWeeks: 0.63, leadTimeWeeks: 3, safetyStock: 0.5, reorderPoint: 2.9, suggestedQty: 5, priority: "Critical" },
+  { id: 6, client: "عيادة جرين فالي", material: "إبر تخدير", code: "MAT-002", unit: "علبة", currentStock: 22, avgWeeklyUsage: 4, coverageWeeks: 5.5, leadTimeWeeks: 2, safetyStock: 3, reorderPoint: 11, suggestedQty: 0, priority: "OK" },
+  { id: 7, client: "المركز الملكي للأسنان", material: "فرز دوارة", code: "MAT-010", unit: "عبوة", currentStock: 4, avgWeeklyUsage: 0.5, coverageWeeks: 8, leadTimeWeeks: 3, safetyStock: 1, reorderPoint: 2.5, suggestedQty: 0, priority: "OK" },
+  { id: 8, client: "عيادة بلو مون", material: "قفازات لاتكس", code: "MAT-005", unit: "كرتونة", currentStock: 12, avgWeeklyUsage: 4, coverageWeeks: 3, leadTimeWeeks: 2, safetyStock: 3, reorderPoint: 11, suggestedQty: 20, priority: "Normal" },
+  { id: 9, client: "عيادة سمايل هاوس", material: "مادة طبع سيليكون", code: "MAT-003", unit: "عبوة", currentStock: 5, avgWeeklyUsage: 6, coverageWeeks: 0.83, leadTimeWeeks: 1, safetyStock: 3, reorderPoint: 9, suggestedQty: 30, priority: "Critical" },
 ];
 
 const priorityStyles: Record<string, string> = {
@@ -56,37 +56,37 @@ export default function RefillPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="page-header">Refill Planning</h1>
-        <p className="page-description">Automated refill recommendations based on consumption and lead times</p>
+        <h1 className="page-header">تخطيط إعادة التعبئة</h1>
+        <p className="page-description">توصيات إعادة تعبئة تلقائية بناءً على الاستهلاك ومواعيد التوريد</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Critical Items" value={criticalCount} change="Below safety stock" changeType="negative" icon={AlertTriangle} />
-        <StatCard title="Urgent Items" value={urgentCount} change="Running low" changeType="negative" icon={TrendingDown} />
-        <StatCard title="Need Refill" value={needsRefill} change={`of ${mockRefills.length} tracked`} changeType="neutral" icon={Package} />
+        <StatCard title="أصناف حرجة" value={criticalCount} change="أقل من حد الأمان" changeType="negative" icon={AlertTriangle} />
+        <StatCard title="أصناف عاجلة" value={urgentCount} change="المخزون ينفذ" changeType="negative" icon={TrendingDown} />
+        <StatCard title="تحتاج تعبئة" value={needsRefill} change={`من ${mockRefills.length} متتبع`} changeType="neutral" icon={Package} />
       </div>
 
       <DataToolbar
-        searchPlaceholder="Search materials or clients..."
+        searchPlaceholder="بحث في المواد أو العملاء..."
         searchValue={search}
         onSearchChange={setSearch}
         filters={[
-          { label: "Priority", value: "priority", options: [
-            { label: "Critical", value: "Critical" },
-            { label: "Urgent", value: "Urgent" },
-            { label: "Normal", value: "Normal" },
-            { label: "OK", value: "OK" },
+          { label: "الأولوية", value: "priority", options: [
+            { label: "حرج", value: "Critical" },
+            { label: "عاجل", value: "Urgent" },
+            { label: "عادي", value: "Normal" },
+            { label: "جيد", value: "OK" },
           ]},
-          { label: "Client", value: "client", options: clients.map(c => ({ label: c, value: c })) },
+          { label: "العميل", value: "client", options: clients.map(c => ({ label: c, value: c })) },
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("refill", ["Client","Material","Code","Unit","Current Stock","Avg Weekly Usage","Coverage Weeks","Lead Time","Safety Stock","Reorder Point","Suggested Qty","Priority"], filtered.map(r => [r.client, r.material, r.code, r.unit, r.currentStock, r.avgWeeklyUsage, r.coverageWeeks, r.leadTimeWeeks, r.safetyStock, r.reorderPoint, r.suggestedQty, r.priority]))}
+        onExport={() => exportToCsv("refill", ["العميل","المادة","الكود","الوحدة","المخزون الحالي","متوسط الاستهلاك الأسبوعي","التغطية بالأسابيع","وقت التوريد","حد الأمان","نقطة إعادة الطلب","الكمية المقترحة","الأولوية"], filtered.map(r => [r.client, r.material, r.code, r.unit, r.currentStock, r.avgWeeklyUsage, r.coverageWeeks, r.leadTimeWeeks, r.safetyStock, r.reorderPoint, r.suggestedQty, r.priority]))}
         actions={
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="h-9" onClick={selectAllNeedRefill}>Select All Needs</Button>
+            <Button size="sm" variant="outline" className="h-9" onClick={selectAllNeedRefill}>تحديد الكل</Button>
             {selected.size > 0 && (
-              <Button size="sm" className="h-9"><ShoppingCart className="h-3.5 w-3.5 mr-1.5" />Create Order ({selected.size})</Button>
+              <Button size="sm" className="h-9"><ShoppingCart className="h-3.5 w-3.5 mr-1.5" />إنشاء طلب ({selected.size})</Button>
             )}
           </div>
         }
@@ -97,14 +97,14 @@ export default function RefillPage() {
           <thead>
             <tr className="border-b border-border">
               <th className="py-3 px-3 w-10"><input type="checkbox" className="rounded" onChange={(e) => e.target.checked ? selectAllNeedRefill() : setSelected(new Set())} /></th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Client</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Material</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">Stock</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">Avg/Week</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">Coverage</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">Reorder Pt</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">Suggested Qty</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Priority</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">العميل</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">المادة</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">المخزون</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">متوسط/أسبوع</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">التغطية</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">نقطة الطلب</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">الكمية المقترحة</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الأولوية</th>
             </tr>
           </thead>
           <tbody>
@@ -121,14 +121,14 @@ export default function RefillPage() {
                 <td className="py-3 px-3 text-right text-muted-foreground">{r.avgWeeklyUsage}</td>
                 <td className="py-3 px-3 text-right">
                   <span className={r.coverageWeeks < 2 ? "text-destructive font-medium" : r.coverageWeeks < 4 ? "text-warning" : "text-muted-foreground"}>
-                    {r.coverageWeeks.toFixed(1)}w
+                    {r.coverageWeeks.toFixed(1)} أسبوع
                   </span>
                 </td>
                 <td className="py-3 px-3 text-right text-muted-foreground">{r.reorderPoint}</td>
                 <td className="py-3 px-3 text-right font-semibold">{r.suggestedQty > 0 ? r.suggestedQty : "—"}</td>
                 <td className="py-3 px-3">
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${priorityStyles[r.priority]}`}>
-                    {r.priority}
+                    {r.priority === "Critical" ? "حرج" : r.priority === "Urgent" ? "عاجل" : r.priority === "Normal" ? "عادي" : "جيد"}
                   </span>
                 </td>
               </tr>

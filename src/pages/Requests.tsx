@@ -10,15 +10,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const mockRequests = [
-  { id: "REQ-001", client: "Al Salam Cafe", date: "2025-03-06", items: 4, expectedTotal: "SAR 3,200", status: "Client Requested", notes: "Urgent - running low on coffee" },
-  { id: "REQ-002", client: "Noor Restaurant", date: "2025-03-05", items: 7, expectedTotal: "SAR 8,500", status: "Pending Review", notes: "" },
-  { id: "REQ-003", client: "Green Valley Lounge", date: "2025-03-04", items: 3, expectedTotal: "SAR 2,100", status: "Approved", notes: "Monthly restock" },
-  { id: "REQ-004", client: "Royal Kitchen", date: "2025-03-03", items: 5, expectedTotal: "SAR 4,800", status: "Converted to Order", notes: "" },
-  { id: "REQ-005", client: "Taste House", date: "2025-03-02", items: 2, expectedTotal: "SAR 1,200", status: "Rejected", notes: "Client inactive" },
-  { id: "REQ-006", client: "Blue Moon Cafe", date: "2025-03-01", items: 6, expectedTotal: "SAR 5,600", status: "Pending Review", notes: "New items requested" },
-  { id: "REQ-007", client: "Spice Garden", date: "2025-02-28", items: 3, expectedTotal: "SAR 2,400", status: "Approved", notes: "" },
-  { id: "REQ-008", client: "Al Salam Cafe", date: "2025-02-25", items: 5, expectedTotal: "SAR 4,100", status: "Converted to Order", notes: "" },
-  { id: "REQ-009", client: "Royal Kitchen", date: "2025-02-22", items: 2, expectedTotal: "SAR 1,800", status: "Cancelled", notes: "Client cancelled" },
+  { id: "REQ-001", client: "عيادة د. أحمد", date: "2025-03-06", items: 4, expectedTotal: "32,000 ج.م", status: "Client Requested", notes: "عاجل - المخزون ينفذ" },
+  { id: "REQ-002", client: "مركز نور لطب الأسنان", date: "2025-03-05", items: 7, expectedTotal: "85,000 ج.م", status: "Pending Review", notes: "" },
+  { id: "REQ-003", client: "عيادة جرين فالي", date: "2025-03-04", items: 3, expectedTotal: "21,000 ج.م", status: "Approved", notes: "إعادة تخزين شهرية" },
+  { id: "REQ-004", client: "المركز الملكي للأسنان", date: "2025-03-03", items: 5, expectedTotal: "48,000 ج.م", status: "Converted to Order", notes: "" },
+  { id: "REQ-005", client: "عيادة سمايل هاوس", date: "2025-03-02", items: 2, expectedTotal: "12,000 ج.م", status: "Rejected", notes: "العميل غير نشط" },
+  { id: "REQ-006", client: "عيادة بلو مون", date: "2025-03-01", items: 6, expectedTotal: "56,000 ج.م", status: "Pending Review", notes: "أصناف جديدة مطلوبة" },
+  { id: "REQ-007", client: "مركز سبايس جاردن", date: "2025-02-28", items: 3, expectedTotal: "24,000 ج.م", status: "Approved", notes: "" },
+  { id: "REQ-008", client: "عيادة د. أحمد", date: "2025-02-25", items: 5, expectedTotal: "41,000 ج.م", status: "Converted to Order", notes: "" },
+  { id: "REQ-009", client: "المركز الملكي للأسنان", date: "2025-02-22", items: 2, expectedTotal: "18,000 ج.م", status: "Cancelled", notes: "العميل ألغى" },
 ];
 
 export default function RequestsPage() {
@@ -34,42 +34,42 @@ export default function RequestsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="page-header">Client Requests</h1>
-        <p className="page-description">{mockRequests.length} requests · {mockRequests.filter(r => r.status === "Pending Review").length} pending review</p>
+        <h1 className="page-header">طلبات العملاء</h1>
+        <p className="page-description">{mockRequests.length} طلب · {mockRequests.filter(r => r.status === "Pending Review").length} بانتظار المراجعة</p>
       </div>
 
       <DataToolbar
-        searchPlaceholder="Search requests..."
+        searchPlaceholder="بحث في الطلبات..."
         searchValue={search}
         onSearchChange={setSearch}
         filters={[
-          { label: "Status", value: "status", options: [
-            { label: "Client Requested", value: "Client Requested" },
-            { label: "Pending Review", value: "Pending Review" },
-            { label: "Approved", value: "Approved" },
-            { label: "Rejected", value: "Rejected" },
-            { label: "Converted to Order", value: "Converted to Order" },
-            { label: "Cancelled", value: "Cancelled" },
+          { label: "الحالة", value: "status", options: [
+            { label: "طلب عميل", value: "Client Requested" },
+            { label: "بانتظار المراجعة", value: "Pending Review" },
+            { label: "موافق عليه", value: "Approved" },
+            { label: "مرفوض", value: "Rejected" },
+            { label: "تم تحويله لطلب", value: "Converted to Order" },
+            { label: "ملغي", value: "Cancelled" },
           ]},
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("requests", ["ID","Client","Date","Items","Expected Total","Status","Notes"], filtered.map(r => [r.id, r.client, r.date, r.items, r.expectedTotal, r.status, r.notes]))}
-        actions={<Button size="sm" className="h-9" onClick={() => toast.info("New request form coming soon")}><Plus className="h-3.5 w-3.5 mr-1.5" />New Request</Button>}
+        onExport={() => exportToCsv("requests", ["الكود","العميل","التاريخ","البنود","الإجمالي المتوقع","الحالة","ملاحظات"], filtered.map(r => [r.id, r.client, r.date, r.items, r.expectedTotal, r.status, r.notes]))}
+        actions={<Button size="sm" className="h-9" onClick={() => toast.info("نموذج طلب جديد قريباً")}><Plus className="h-3.5 w-3.5 mr-1.5" />طلب جديد</Button>}
       />
 
       <div className="stat-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">ID</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Client</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Date</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">Items</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">Expected Total</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Status</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Notes</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">Actions</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الكود</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">العميل</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">التاريخ</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">البنود</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">الإجمالي المتوقع</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الحالة</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">ملاحظات</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">إجراءات</th>
             </tr>
           </thead>
           <tbody>
@@ -88,10 +88,10 @@ export default function RequestsPage() {
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => toast.info(`Viewing ${req.id}`)}><Eye className="h-3.5 w-3.5 mr-2" />View Details</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => { toast.success(`${req.id} approved`); }}><CheckCircle className="h-3.5 w-3.5 mr-2" />Approve</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => { toast.error(`${req.id} rejected`); }}><XCircle className="h-3.5 w-3.5 mr-2" />Reject</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => { toast.success(`${req.id} converted to order`); }}><ArrowRight className="h-3.5 w-3.5 mr-2" />Convert to Order</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toast.info(`عرض ${req.id}`)}><Eye className="h-3.5 w-3.5 mr-2" />عرض التفاصيل</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { toast.success(`تمت الموافقة على ${req.id}`); }}><CheckCircle className="h-3.5 w-3.5 mr-2" />موافقة</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { toast.error(`تم رفض ${req.id}`); }}><XCircle className="h-3.5 w-3.5 mr-2" />رفض</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { toast.success(`تم تحويل ${req.id} لطلب`); }}><ArrowRight className="h-3.5 w-3.5 mr-2" />تحويل لطلب</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>
@@ -100,7 +100,7 @@ export default function RequestsPage() {
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground text-sm">No requests match your search.</div>
+          <div className="text-center py-12 text-muted-foreground text-sm">لا توجد طلبات مطابقة للبحث.</div>
         )}
       </div>
     </div>

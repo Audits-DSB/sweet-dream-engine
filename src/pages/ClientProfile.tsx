@@ -9,45 +9,44 @@ import {
 
 const clientData: Record<string, any> = {
   "C001": {
-    id: "C001", name: "Al Salam Cafe", contact: "Khalid Ahmad", email: "khalid@alsalam.sa",
-    phone: "+966 50 111 2233", city: "Riyadh", address: "King Fahd Road, Riyadh 12345",
+    id: "C001", name: "عيادة د. أحمد", contact: "أحمد خالد", email: "ahmed@clinic.eg",
+    phone: "+20 100 111 2233", city: "القاهرة", address: "شارع التحرير، الدقي، الجيزة",
     status: "Active", joinDate: "2024-03-15", totalOrders: 18, totalDelivered: 16,
-    outstanding: 3200, totalPaid: 28500, currentInventoryValue: 12400,
+    outstanding: 32000, totalPaid: 285000, currentInventoryValue: 124000,
     consumptionData: [
-      { week: "W1", value: 1200 }, { week: "W2", value: 1500 }, { week: "W3", value: 1100 },
-      { week: "W4", value: 1800 }, { week: "W5", value: 1400 }, { week: "W6", value: 2100 },
+      { week: "أ1", value: 12000 }, { week: "أ2", value: 15000 }, { week: "أ3", value: 11000 },
+      { week: "أ4", value: 18000 }, { week: "أ5", value: 14000 }, { week: "أ6", value: 21000 },
     ],
     recentOrders: [
-      { id: "ORD-042", date: "2025-03-01", total: "SAR 3,200", status: "Delivered" },
-      { id: "ORD-038", date: "2025-02-20", total: "SAR 2,800", status: "Delivered" },
-      { id: "ORD-035", date: "2025-02-12", total: "SAR 1,600", status: "Closed" },
+      { id: "ORD-042", date: "2025-03-01", total: "32,000 ج.م", status: "Delivered" },
+      { id: "ORD-038", date: "2025-02-20", total: "28,000 ج.م", status: "Delivered" },
+      { id: "ORD-035", date: "2025-02-12", total: "16,000 ج.م", status: "Closed" },
     ],
     inventoryItems: [
-      { material: "Arabica Coffee Beans", qty: 45, unit: "kg", expiry: "2025-06-15", status: "In Stock" },
-      { material: "Green Tea Leaves", qty: 8, unit: "kg", expiry: "2025-04-20", status: "Low Stock" },
-      { material: "Sugar Syrup", qty: 30, unit: "L", expiry: "2025-12-01", status: "In Stock" },
-      { material: "Milk Powder", qty: 2, unit: "kg", expiry: "2025-03-25", status: "Low Stock" },
+      { material: "حشو كمبوزيت ضوئي", qty: 45, unit: "عبوة", expiry: "2025-06-15", status: "In Stock" },
+      { material: "إبر تخدير", qty: 8, unit: "علبة", expiry: "2025-04-20", status: "Low Stock" },
+      { material: "مادة طبع سيليكون", qty: 30, unit: "عبوة", expiry: "2025-12-01", status: "In Stock" },
+      { material: "قفازات لاتكس", qty: 2, unit: "كرتونة", expiry: "2025-03-25", status: "Low Stock" },
     ],
   },
 };
 
-// Default fallback
 const defaultClient = {
-  id: "C001", name: "Al Salam Cafe", contact: "Khalid Ahmad", email: "khalid@alsalam.sa",
-  phone: "+966 50 111 2233", city: "Riyadh", address: "King Fahd Road, Riyadh 12345",
+  id: "C001", name: "عيادة د. أحمد", contact: "أحمد خالد", email: "ahmed@clinic.eg",
+  phone: "+20 100 111 2233", city: "القاهرة", address: "شارع التحرير، الدقي، الجيزة",
   status: "Active", joinDate: "2024-03-15", totalOrders: 18, totalDelivered: 16,
-  outstanding: 3200, totalPaid: 28500, currentInventoryValue: 12400,
+  outstanding: 32000, totalPaid: 285000, currentInventoryValue: 124000,
   consumptionData: [
-    { week: "W1", value: 1200 }, { week: "W2", value: 1500 }, { week: "W3", value: 1100 },
-    { week: "W4", value: 1800 }, { week: "W5", value: 1400 }, { week: "W6", value: 2100 },
+    { week: "أ1", value: 12000 }, { week: "أ2", value: 15000 }, { week: "أ3", value: 11000 },
+    { week: "أ4", value: 18000 }, { week: "أ5", value: 14000 }, { week: "أ6", value: 21000 },
   ],
   recentOrders: [
-    { id: "ORD-042", date: "2025-03-01", total: "SAR 3,200", status: "Delivered" },
-    { id: "ORD-038", date: "2025-02-20", total: "SAR 2,800", status: "Delivered" },
+    { id: "ORD-042", date: "2025-03-01", total: "32,000 ج.م", status: "Delivered" },
+    { id: "ORD-038", date: "2025-02-20", total: "28,000 ج.م", status: "Delivered" },
   ],
   inventoryItems: [
-    { material: "Arabica Coffee Beans", qty: 45, unit: "kg", expiry: "2025-06-15", status: "In Stock" },
-    { material: "Green Tea Leaves", qty: 8, unit: "kg", expiry: "2025-04-20", status: "Low Stock" },
+    { material: "حشو كمبوزيت ضوئي", qty: 45, unit: "عبوة", expiry: "2025-06-15", status: "In Stock" },
+    { material: "إبر تخدير", qty: 8, unit: "علبة", expiry: "2025-04-20", status: "Low Stock" },
   ],
 };
 
@@ -57,10 +56,10 @@ export default function ClientProfile() {
   const client = clientData[id || ""] || defaultClient;
 
   const stats = [
-    { label: "Total Orders", value: client.totalOrders, icon: Package },
-    { label: "Total Paid", value: `SAR ${client.totalPaid.toLocaleString()}`, icon: Receipt },
-    { label: "Outstanding", value: `SAR ${client.outstanding.toLocaleString()}`, icon: TrendingUp },
-    { label: "Inventory Value", value: `SAR ${client.currentInventoryValue.toLocaleString()}`, icon: ClipboardCheck },
+    { label: "إجمالي الطلبات", value: client.totalOrders, icon: Package },
+    { label: "إجمالي المدفوع", value: `${client.totalPaid.toLocaleString()} ج.م`, icon: Receipt },
+    { label: "المستحق", value: `${client.outstanding.toLocaleString()} ج.م`, icon: TrendingUp },
+    { label: "قيمة المخزون", value: `${client.currentInventoryValue.toLocaleString()} ج.م`, icon: ClipboardCheck },
   ];
 
   return (
@@ -74,22 +73,20 @@ export default function ClientProfile() {
             <h1 className="page-header">{client.name}</h1>
             <StatusBadge status={client.status} />
           </div>
-          <p className="page-description">{client.id} · Joined {client.joinDate}</p>
+          <p className="page-description">{client.id} · انضم {client.joinDate}</p>
         </div>
-        <Button variant="outline" size="sm">Edit Client</Button>
+        <Button variant="outline" size="sm">تعديل العميل</Button>
       </div>
 
-      {/* Contact Info */}
       <div className="stat-card">
         <div className="flex flex-wrap gap-6 text-sm">
           <div className="flex items-center gap-2 text-muted-foreground"><Mail className="h-4 w-4" />{client.email}</div>
           <div className="flex items-center gap-2 text-muted-foreground"><Phone className="h-4 w-4" />{client.phone}</div>
           <div className="flex items-center gap-2 text-muted-foreground"><MapPin className="h-4 w-4" />{client.address}</div>
-          <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4" />Joined {client.joinDate}</div>
+          <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4" />انضم {client.joinDate}</div>
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
           <div key={stat.label} className="stat-card">
@@ -104,14 +101,14 @@ export default function ClientProfile() {
 
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList className="bg-muted">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="orders">Orders</TabsTrigger>
-          <TabsTrigger value="inventory">Inventory</TabsTrigger>
+          <TabsTrigger value="overview">نظرة عامة</TabsTrigger>
+          <TabsTrigger value="orders">الطلبات</TabsTrigger>
+          <TabsTrigger value="inventory">المخزون</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
           <div className="stat-card">
-            <h3 className="font-semibold text-sm mb-4">Consumption Trend (Last 6 Weeks)</h3>
+            <h3 className="font-semibold text-sm mb-4">اتجاه الاستهلاك (آخر 6 أسابيع)</h3>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={client.consumptionData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -129,10 +126,10 @@ export default function ClientProfile() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">Order ID</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">Date</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">Status</th>
-                  <th className="text-right py-2.5 px-3 text-xs font-medium text-muted-foreground">Total</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">رقم الطلب</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">التاريخ</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">الحالة</th>
+                  <th className="text-right py-2.5 px-3 text-xs font-medium text-muted-foreground">الإجمالي</th>
                 </tr>
               </thead>
               <tbody>
@@ -154,11 +151,11 @@ export default function ClientProfile() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">Material</th>
-                  <th className="text-right py-2.5 px-3 text-xs font-medium text-muted-foreground">Qty</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">Unit</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">Expiry</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">Status</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">المادة</th>
+                  <th className="text-right py-2.5 px-3 text-xs font-medium text-muted-foreground">الكمية</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">الوحدة</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">الانتهاء</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">الحالة</th>
                 </tr>
               </thead>
               <tbody>
