@@ -630,8 +630,6 @@ export const en = {
   treasuryTransferFrom: "Transfer from",
   egp: "EGP",
   viewAll: "View All",
-  active: "Active",
-  inactive: "Inactive",
 
   // Treasury account types
   treasury_cashbox: "Cashbox",

@@ -630,8 +630,6 @@ export const ar = {
   treasuryTransferFrom: "تحويل من",
   egp: "ج.م",
   viewAll: "عرض الكل",
-  active: "نشط",
-  inactive: "غير نشط",
 
   // Treasury account types
   treasury_cashbox: "الصندوق",
