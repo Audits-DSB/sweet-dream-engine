@@ -32,6 +32,7 @@ import SuppliersPage from "./pages/Suppliers";
 import TreasuryDashboard from "./pages/Treasury";
 import TreasuryAccountsPage from "./pages/TreasuryAccounts";
 import TreasuryTransactionsPage from "./pages/TreasuryTransactions";
+import FinancialReportPage from "./pages/FinancialReport";
 import ProfilePage from "./pages/Profile";
 import LoginPage from "./pages/Login";
 import SignupPage from "./pages/Signup";
