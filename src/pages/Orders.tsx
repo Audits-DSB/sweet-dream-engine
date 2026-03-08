@@ -267,7 +267,10 @@ export default function OrdersPage() {
                     ))}
                   </div>
                 )}
-                {materialSearch && filteredMaterials.length === 0 && (
+                {materialsLoading && (
+                  <div className="text-center py-2 text-muted-foreground text-xs mt-1 flex items-center justify-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> جاري تحميل المواد...</div>
+                )}
+                {!materialsLoading && materialSearch && filteredMaterials.length === 0 && (
                   <div className="text-center py-2 text-muted-foreground text-xs mt-1">{t.noResults}</div>
                 )}
               </div>
