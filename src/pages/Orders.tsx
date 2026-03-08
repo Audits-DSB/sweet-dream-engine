@@ -3,14 +3,22 @@ import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
-const mockOrders = [
+const initialOrders = [
   { id: "ORD-048", client: "عيادة د. أحمد", date: "2025-03-06", lines: 4, totalSelling: "32,000 ج.م", totalCost: "21,000 ج.م", splitMode: "متساوي", deliveryFee: 500, status: "Draft", source: "REQ-001" },
   { id: "ORD-047", client: "مركز نور لطب الأسنان", date: "2025-03-05", lines: 7, totalSelling: "85,000 ج.م", totalCost: "58,000 ج.م", splitMode: "بالمساهمة", deliveryFee: 750, status: "Confirmed", source: "REQ-002" },
   { id: "ORD-046", client: "عيادة جرين فالي", date: "2025-03-04", lines: 3, totalSelling: "21,000 ج.م", totalCost: "14,000 ج.م", splitMode: "متساوي", deliveryFee: 500, status: "Ready for Delivery", source: "REQ-003" },
@@ -22,22 +30,45 @@ const mockOrders = [
   { id: "ORD-040", client: "المركز الملكي للأسنان", date: "2025-02-20", lines: 4, totalSelling: "36,000 ج.م", totalCost: "24,000 ج.م", splitMode: "بالمساهمة", deliveryFee: 750, status: "Cancelled", source: "يدوي" },
 ];
 
+const emptyOrder = { client: "", lines: "1", totalSelling: "", totalCost: "", splitMode: "متساوي", deliveryFee: "500", source: "يدوي" };
+
 export default function OrdersPage() {
+  const [orders, setOrders] = useState(initialOrders);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState(emptyOrder);
   const navigate = useNavigate();
 
-  const filtered = mockOrders.filter((o) => {
+  const filtered = orders.filter((o) => {
     const matchSearch = !search || o.client.toLowerCase().includes(search.toLowerCase()) || o.id.toLowerCase().includes(search.toLowerCase());
     const matchStatus = !filters.status || filters.status === "all" || o.status === filters.status;
     return matchSearch && matchStatus;
   });
 
+  const handleAdd = () => {
+    if (!form.client || !form.totalSelling) {
+      toast.error("يرجى إدخال اسم العميل والإجمالي");
+      return;
+    }
+    const num = orders.length > 0 ? parseInt(orders[0].id.split("-")[1]) + 1 : 49;
+    const newId = `ORD-${String(num).padStart(3, "0")}`;
+    const today = new Date().toISOString().split("T")[0];
+    setOrders([{
+      id: newId, client: form.client, date: today, lines: parseInt(form.lines) || 1,
+      totalSelling: `${Number(form.totalSelling).toLocaleString()} ج.م`, totalCost: `${Number(form.totalCost).toLocaleString()} ج.م`,
+      splitMode: form.splitMode, deliveryFee: parseInt(form.deliveryFee) || 0, status: "Draft", source: form.source,
+    }, ...orders]);
+    setForm(emptyOrder);
+    setDialogOpen(false);
+    toast.success("تم إنشاء الطلب بنجاح");
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="page-header">الطلبات</h1>
-        <p className="page-description">{mockOrders.length} طلب · {mockOrders.filter(o => ["Draft", "Confirmed", "Ready for Delivery"].includes(o.status)).length} نشط</p>
+        <p className="page-description">{orders.length} طلب · {orders.filter(o => ["Draft", "Confirmed", "Ready for Delivery"].includes(o.status)).length} نشط</p>
       </div>
 
       <DataToolbar
@@ -46,21 +77,16 @@ export default function OrdersPage() {
         onSearchChange={setSearch}
         filters={[
           { label: "الحالة", value: "status", options: [
-            { label: "مسودة", value: "Draft" },
-            { label: "مؤكد", value: "Confirmed" },
-            { label: "في انتظار الشراء", value: "Awaiting Purchase" },
-            { label: "جاهز للتسليم", value: "Ready for Delivery" },
-            { label: "تسليم جزئي", value: "Partially Delivered" },
-            { label: "تم التسليم", value: "Delivered" },
-            { label: "مفوتر", value: "Invoiced" },
-            { label: "مغلق", value: "Closed" },
-            { label: "ملغي", value: "Cancelled" },
+            { label: "مسودة", value: "Draft" }, { label: "مؤكد", value: "Confirmed" },
+            { label: "في انتظار الشراء", value: "Awaiting Purchase" }, { label: "جاهز للتسليم", value: "Ready for Delivery" },
+            { label: "تسليم جزئي", value: "Partially Delivered" }, { label: "تم التسليم", value: "Delivered" },
+            { label: "مفوتر", value: "Invoiced" }, { label: "مغلق", value: "Closed" }, { label: "ملغي", value: "Cancelled" },
           ]},
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
         onExport={() => exportToCsv("orders", ["رقم الطلب","العميل","التاريخ","البنود","البيع","التكلفة","التقسيم","المصدر","الحالة"], filtered.map(o => [o.id, o.client, o.date, o.lines, o.totalSelling, o.totalCost, o.splitMode, o.source, o.status]))}
-        actions={<Button size="sm" className="h-9" onClick={() => toast.info("نموذج طلب جديد قريباً")}><Plus className="h-3.5 w-3.5 mr-1.5" />طلب جديد</Button>}
+        actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />طلب جديد</Button>}
       />
 
       <div className="stat-card overflow-x-auto">
@@ -109,6 +135,34 @@ export default function OrdersPage() {
           </tbody>
         </table>
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>طلب جديد</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-xs">العميل *</Label><Input className="h-9 mt-1" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} placeholder="اسم العميل" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">إجمالي البيع *</Label><Input className="h-9 mt-1" type="number" value={form.totalSelling} onChange={(e) => setForm({ ...form, totalSelling: e.target.value })} /></div>
+              <div><Label className="text-xs">إجمالي التكلفة</Label><Input className="h-9 mt-1" type="number" value={form.totalCost} onChange={(e) => setForm({ ...form, totalCost: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">عدد البنود</Label><Input className="h-9 mt-1" type="number" value={form.lines} onChange={(e) => setForm({ ...form, lines: e.target.value })} /></div>
+              <div><Label className="text-xs">رسوم التوصيل</Label><Input className="h-9 mt-1" type="number" value={form.deliveryFee} onChange={(e) => setForm({ ...form, deliveryFee: e.target.value })} /></div>
+            </div>
+            <div>
+              <Label className="text-xs">نظام التقسيم</Label>
+              <Select value={form.splitMode} onValueChange={(v) => setForm({ ...form, splitMode: v })}>
+                <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="متساوي">متساوي</SelectItem>
+                  <SelectItem value="بالمساهمة">بالمساهمة</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button className="w-full" onClick={handleAdd}>إنشاء الطلب</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

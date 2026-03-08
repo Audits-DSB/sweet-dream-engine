@@ -3,16 +3,17 @@ import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { StatCard } from "@/components/StatCard";
 import { Plus, Eye, MoreHorizontal, ClipboardCheck, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { toast } from "sonner";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-const mockAudits = [
+const initialAudits = [
   { id: "AUD-012", client: "Al Salam Cafe", date: "2025-03-05", auditor: "Ahmed Al-Rashid", totalItems: 8, matched: 6, shortage: 1, surplus: 1, notes: "Sugar Syrup bottle damaged", status: "Completed" },
   { id: "AUD-011", client: "Noor Restaurant", date: "2025-02-28", auditor: "Sara Al-Mansour", totalItems: 12, matched: 12, shortage: 0, surplus: 0, notes: "", status: "Completed" },
   { id: "AUD-010", client: "Green Valley Lounge", date: "2025-02-25", auditor: "Ahmed Al-Rashid", totalItems: 6, matched: 5, shortage: 1, surplus: 0, notes: "1kg Arabica missing — staff unable to explain", status: "Discrepancy" },
@@ -36,23 +37,39 @@ const auditDetails = [
   { material: "Napkins Pack", expected: 50, actual: 49, unit: "pcs", result: "Shortage" },
 ];
 
+const emptyAudit = { client: "", auditor: "", date: "", notes: "" };
+
 export default function AuditsPage() {
+  const [audits, setAudits] = useState(initialAudits);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [selectedAudit, setSelectedAudit] = useState<typeof mockAudits[0] | null>(null);
+  const [selectedAudit, setSelectedAudit] = useState<typeof initialAudits[0] | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState(emptyAudit);
 
-  const clients = [...new Set(mockAudits.map(a => a.client))];
+  const clients = [...new Set(audits.map(a => a.client))];
 
-  const filtered = mockAudits.filter((a) => {
+  const filtered = audits.filter((a) => {
     const matchSearch = !search || a.client.toLowerCase().includes(search.toLowerCase()) || a.id.toLowerCase().includes(search.toLowerCase()) || a.auditor.toLowerCase().includes(search.toLowerCase());
     const matchStatus = !filters.status || filters.status === "all" || a.status === filters.status;
     const matchClient = !filters.client || filters.client === "all" || a.client === filters.client;
     return matchSearch && matchStatus && matchClient;
   });
 
-  const completedCount = mockAudits.filter(a => a.status === "Completed").length;
-  const discrepancyCount = mockAudits.filter(a => a.status === "Discrepancy").length;
-  const scheduledCount = mockAudits.filter(a => a.status === "Scheduled" || a.status === "In Progress").length;
+  const completedCount = audits.filter(a => a.status === "Completed").length;
+  const discrepancyCount = audits.filter(a => a.status === "Discrepancy").length;
+  const scheduledCount = audits.filter(a => a.status === "Scheduled" || a.status === "In Progress").length;
+
+  const handleAdd = () => {
+    if (!form.client || !form.auditor) { toast.error("Please enter client and auditor"); return; }
+    const num = audits.length + 1;
+    const newId = `AUD-${String(num).padStart(3, "0")}`;
+    const today = form.date || new Date().toISOString().split("T")[0];
+    setAudits([{ id: newId, client: form.client, date: today, auditor: form.auditor, totalItems: 0, matched: 0, shortage: 0, surplus: 0, notes: form.notes, status: "Scheduled" }, ...audits]);
+    setForm(emptyAudit);
+    setDialogOpen(false);
+    toast.success("Audit scheduled successfully");
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -63,7 +80,7 @@ export default function AuditsPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard title="Completed Audits" value={completedCount} change="This quarter" changeType="neutral" icon={CheckCircle2} />
-        <StatCard title="Discrepancies Found" value={discrepancyCount} change={`${((discrepancyCount / mockAudits.length) * 100).toFixed(0)}% of audits`} changeType="negative" icon={AlertTriangle} />
+        <StatCard title="Discrepancies Found" value={discrepancyCount} change={`${((discrepancyCount / audits.length) * 100).toFixed(0)}% of audits`} changeType="negative" icon={AlertTriangle} />
         <StatCard title="Scheduled / In Progress" value={scheduledCount} change="Upcoming" changeType="neutral" icon={ClipboardCheck} />
       </div>
 
@@ -73,17 +90,15 @@ export default function AuditsPage() {
         onSearchChange={setSearch}
         filters={[
           { label: "Status", value: "status", options: [
-            { label: "Completed", value: "Completed" },
-            { label: "Discrepancy", value: "Discrepancy" },
-            { label: "Scheduled", value: "Scheduled" },
-            { label: "In Progress", value: "In Progress" },
+            { label: "Completed", value: "Completed" }, { label: "Discrepancy", value: "Discrepancy" },
+            { label: "Scheduled", value: "Scheduled" }, { label: "In Progress", value: "In Progress" },
           ]},
           { label: "Client", value: "client", options: clients.map(c => ({ label: c, value: c })) },
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
         onExport={() => exportToCsv("audits", ["Audit ID","Client","Date","Auditor","Total Items","Matched","Shortage","Surplus","Status","Notes"], filtered.map(a => [a.id, a.client, a.date, a.auditor, a.totalItems, a.matched, a.shortage, a.surplus, a.status, a.notes]))}
-        actions={<Button size="sm" className="h-9"><Plus className="h-3.5 w-3.5 mr-1.5" />New Audit</Button>}
+        actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />New Audit</Button>}
       />
 
       <div className="stat-card overflow-x-auto">
@@ -180,6 +195,20 @@ export default function AuditsPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Audit Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Schedule New Audit</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-xs">Client *</Label><Input className="h-9 mt-1" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} /></div>
+            <div><Label className="text-xs">Auditor *</Label><Input className="h-9 mt-1" value={form.auditor} onChange={(e) => setForm({ ...form, auditor: e.target.value })} /></div>
+            <div><Label className="text-xs">Date</Label><Input className="h-9 mt-1" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></div>
+            <div><Label className="text-xs">Notes</Label><Input className="h-9 mt-1" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+            <Button className="w-full" onClick={handleAdd}>Schedule Audit</Button>
           </div>
         </DialogContent>
       </Dialog>
