@@ -5,18 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 const mockMaterials = [
-  { code: "MAT-001", name: "Arabica Coffee Beans", category: "Coffee", unit: "kg", sellingPrice: 120, storeCost: 80, supplier: "Bean Masters", hasExpiry: true, active: true },
-  { code: "MAT-002", name: "Green Tea Leaves", category: "Tea", unit: "kg", sellingPrice: 95, storeCost: 60, supplier: "Tea Traders", hasExpiry: true, active: true },
-  { code: "MAT-003", name: "Sugar Syrup", category: "Sweeteners", unit: "L", sellingPrice: 45, storeCost: 28, supplier: "Sweet Co.", hasExpiry: true, active: true },
-  { code: "MAT-004", name: "Robusta Coffee Beans", category: "Coffee", unit: "kg", sellingPrice: 85, storeCost: 55, supplier: "Bean Masters", hasExpiry: true, active: true },
-  { code: "MAT-005", name: "Milk Powder", category: "Dairy", unit: "kg", sellingPrice: 40, storeCost: 28, supplier: "Dairy Plus", hasExpiry: true, active: true },
-  { code: "MAT-006", name: "Cocoa Powder", category: "Chocolate", unit: "kg", sellingPrice: 180, storeCost: 120, supplier: "Choco World", hasExpiry: true, active: true },
-  { code: "MAT-007", name: "Honey", category: "Sweeteners", unit: "L", sellingPrice: 220, storeCost: 150, supplier: "Honey Farm", hasExpiry: true, active: true },
-  { code: "MAT-008", name: "Vanilla Extract", category: "Flavoring", unit: "L", sellingPrice: 280, storeCost: 180, supplier: "Flavor Co.", hasExpiry: true, active: true },
-  { code: "MAT-009", name: "Cardamom Pods", category: "Spices", unit: "kg", sellingPrice: 350, storeCost: 240, supplier: "Spice Land", hasExpiry: false, active: true },
-  { code: "MAT-010", name: "Cinnamon Sticks", category: "Spices", unit: "kg", sellingPrice: 200, storeCost: 130, supplier: "Spice Land", hasExpiry: false, active: true },
-  { code: "MAT-011", name: "Matcha Powder", category: "Tea", unit: "kg", sellingPrice: 420, storeCost: 290, supplier: "Tea Traders", hasExpiry: true, active: true },
-  { code: "MAT-012", name: "Turmeric Powder", category: "Spices", unit: "kg", sellingPrice: 150, storeCost: 95, supplier: "Spice Land", hasExpiry: true, active: false },
+  { code: "MAT-001", name: "حشو كمبوزيت ضوئي", category: "حشوات", unit: "عبوة", sellingPrice: 1200, storeCost: 800, supplier: "3M ESPE", hasExpiry: true, active: true },
+  { code: "MAT-002", name: "إبر تخدير", category: "تخدير", unit: "علبة", sellingPrice: 950, storeCost: 600, supplier: "Septodont", hasExpiry: true, active: true },
+  { code: "MAT-003", name: "مادة طبع سيليكون", category: "طبعات", unit: "عبوة", sellingPrice: 450, storeCost: 280, supplier: "Zhermack", hasExpiry: true, active: true },
+  { code: "MAT-004", name: "جلاس أيونومر", category: "حشوات", unit: "عبوة", sellingPrice: 850, storeCost: 550, supplier: "GC Corporation", hasExpiry: true, active: true },
+  { code: "MAT-005", name: "قفازات لاتكس", category: "مستهلكات", unit: "كرتونة", sellingPrice: 400, storeCost: 280, supplier: "Supermax", hasExpiry: true, active: true },
+  { code: "MAT-006", name: "بوند لاصق", category: "حشوات", unit: "زجاجة", sellingPrice: 1800, storeCost: 1200, supplier: "Kerr Dental", hasExpiry: true, active: true },
+  { code: "MAT-007", name: "خيط خياطة جراحي", category: "جراحة", unit: "علبة", sellingPrice: 2200, storeCost: 1500, supplier: "Ethicon", hasExpiry: true, active: true },
+  { code: "MAT-008", name: "مبيض أسنان", category: "تجميل", unit: "عبوة", sellingPrice: 2800, storeCost: 1800, supplier: "Opalescence", hasExpiry: true, active: true },
+  { code: "MAT-009", name: "سلك تقويم", category: "تقويم", unit: "عبوة", sellingPrice: 3500, storeCost: 2400, supplier: "Ormco", hasExpiry: false, active: true },
+  { code: "MAT-010", name: "فرز دوارة", category: "أدوات", unit: "عبوة", sellingPrice: 2000, storeCost: 1300, supplier: "Mani", hasExpiry: false, active: true },
+  { code: "MAT-011", name: "مادة ضوئية UV", category: "حشوات", unit: "عبوة", sellingPrice: 4200, storeCost: 2900, supplier: "Ivoclar", hasExpiry: true, active: true },
+  { code: "MAT-012", name: "مادة تلميع", category: "تجميل", unit: "عبوة", sellingPrice: 1500, storeCost: 950, supplier: "Shofu", hasExpiry: true, active: false },
 ];
 
 export default function MaterialsPage() {
@@ -34,36 +34,36 @@ export default function MaterialsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="page-header">Materials</h1>
-        <p className="page-description">{mockMaterials.length} materials from external database · {mockMaterials.filter(m => m.active).length} active</p>
+        <h1 className="page-header">المواد والمستلزمات</h1>
+        <p className="page-description">{mockMaterials.length} مادة · {mockMaterials.filter(m => m.active).length} نشطة</p>
       </div>
 
       <DataToolbar
-        searchPlaceholder="Search materials..."
+        searchPlaceholder="بحث في المواد..."
         searchValue={search}
         onSearchChange={setSearch}
         filters={[
-          { label: "Category", value: "category", options: categories.map(c => ({ label: c, value: c })) },
+          { label: "التصنيف", value: "category", options: categories.map(c => ({ label: c, value: c })) },
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("materials", ["Code","Name","Category","Unit","Selling Price","Store Cost","Margin %","Supplier","Has Expiry","Active"], filtered.map(m => [m.code, m.name, m.category, m.unit, m.sellingPrice, m.storeCost, ((m.sellingPrice - m.storeCost) / m.sellingPrice * 100).toFixed(1), m.supplier, m.hasExpiry ? "Yes" : "No", m.active ? "Active" : "Inactive"]))}
+        onExport={() => exportToCsv("materials", ["الكود","الاسم","التصنيف","الوحدة","سعر البيع","التكلفة","الهامش %","المورد","صلاحية","نشط"], filtered.map(m => [m.code, m.name, m.category, m.unit, m.sellingPrice, m.storeCost, ((m.sellingPrice - m.storeCost) / m.sellingPrice * 100).toFixed(1), m.supplier, m.hasExpiry ? "نعم" : "لا", m.active ? "نشط" : "غير نشط"]))}
       />
 
       <div className="stat-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Code</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Material</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Category</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Unit</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">Selling Price</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">Store Cost</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">Margin</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Supplier</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Expiry</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Status</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الكود</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">المادة</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">التصنيف</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الوحدة</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">سعر البيع</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">التكلفة</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">الهامش</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">المورد</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">صلاحية</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الحالة</th>
             </tr>
           </thead>
           <tbody>
@@ -75,14 +75,14 @@ export default function MaterialsPage() {
                   <td className="py-3 px-3 font-medium">{mat.name}</td>
                   <td className="py-3 px-3"><span className="text-xs bg-muted px-2 py-0.5 rounded">{mat.category}</span></td>
                   <td className="py-3 px-3 text-muted-foreground">{mat.unit}</td>
-                  <td className="py-3 px-3 text-right font-medium">SAR {mat.sellingPrice}</td>
-                  <td className="py-3 px-3 text-right text-muted-foreground">SAR {mat.storeCost}</td>
+                  <td className="py-3 px-3 text-right font-medium">{mat.sellingPrice} ج.م</td>
+                  <td className="py-3 px-3 text-right text-muted-foreground">{mat.storeCost} ج.م</td>
                   <td className="py-3 px-3 text-right"><span className="text-success font-medium">{margin}%</span></td>
                   <td className="py-3 px-3 text-muted-foreground">{mat.supplier}</td>
-                  <td className="py-3 px-3">{mat.hasExpiry ? <Badge variant="secondary" className="text-xs">Tracked</Badge> : <span className="text-xs text-muted-foreground">N/A</span>}</td>
+                  <td className="py-3 px-3">{mat.hasExpiry ? <Badge variant="secondary" className="text-xs">متتبع</Badge> : <span className="text-xs text-muted-foreground">لا ينطبق</span>}</td>
                   <td className="py-3 px-3">
                     <Badge variant={mat.active ? "default" : "secondary"} className={mat.active ? "bg-success/10 text-success border-0" : ""}>
-                      {mat.active ? "Active" : "Inactive"}
+                      {mat.active ? "نشط" : "غير نشط"}
                     </Badge>
                   </td>
                 </tr>

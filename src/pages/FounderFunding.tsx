@@ -7,23 +7,23 @@ import { Button } from "@/components/ui/button";
 import { Landmark, Plus, TrendingUp, Wallet, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 
 const mockTransactions = [
-  { id: "TXN-001", date: "2025-03-05", founder: "Ahmed Al-Rashid", type: "Contribution", amount: 15000, method: "Bank Transfer", order: "—", notes: "Monthly capital injection", balance: 125000 },
-  { id: "TXN-002", date: "2025-03-05", founder: "Sara Al-Mansour", type: "Contribution", amount: 10000, method: "Bank Transfer", order: "—", notes: "Monthly capital injection", balance: 95000 },
-  { id: "TXN-003", date: "2025-03-04", founder: "Ahmed Al-Rashid", type: "Funding", amount: 8500, method: "From Pool", order: "ORD-047", notes: "Noor Restaurant order (50% share)", balance: 110000 },
-  { id: "TXN-004", date: "2025-03-04", founder: "Sara Al-Mansour", type: "Funding", amount: 4250, method: "From Pool", order: "ORD-047", notes: "Noor Restaurant order (25%)", balance: 85000 },
-  { id: "TXN-005", date: "2025-03-04", founder: "Omar Khalil", type: "Funding", amount: 4250, method: "From Pool", order: "ORD-047", notes: "Noor Restaurant order (25%)", balance: 75750 },
-  { id: "TXN-006", date: "2025-03-01", founder: "Ahmed Al-Rashid", type: "Withdrawal", amount: 10000, method: "Bank Transfer", order: "—", notes: "Profit withdrawal", balance: 118500 },
-  { id: "TXN-007", date: "2025-02-28", founder: "Omar Khalil", type: "Contribution", amount: 12000, method: "Cash", order: "—", notes: "Capital top-up", balance: 80000 },
-  { id: "TXN-008", date: "2025-02-25", founder: "Ahmed Al-Rashid", type: "Funding", amount: 3200, method: "From Pool", order: "ORD-048", notes: "Al Salam order (Equal split)", balance: 128500 },
-  { id: "TXN-009", date: "2025-02-25", founder: "Sara Al-Mansour", type: "Funding", amount: 3200, method: "From Pool", order: "ORD-048", notes: "Al Salam order (Equal split)", balance: 89250 },
-  { id: "TXN-010", date: "2025-02-25", founder: "Omar Khalil", type: "Funding", amount: 3200, method: "From Pool", order: "ORD-048", notes: "Al Salam order (Equal split)", balance: 68000 },
-  { id: "TXN-011", date: "2025-02-20", founder: "Sara Al-Mansour", type: "Withdrawal", amount: 5000, method: "Bank Transfer", order: "—", notes: "Profit withdrawal", balance: 92450 },
+  { id: "TXN-001", date: "2025-03-05", founder: "أحمد الراشد", type: "مساهمة", amount: 150000, method: "تحويل بنكي", order: "—", notes: "ضخ رأسمال شهري", balance: 1250000 },
+  { id: "TXN-002", date: "2025-03-05", founder: "سارة المنصور", type: "مساهمة", amount: 100000, method: "تحويل بنكي", order: "—", notes: "ضخ رأسمال شهري", balance: 950000 },
+  { id: "TXN-003", date: "2025-03-04", founder: "أحمد الراشد", type: "تمويل", amount: 85000, method: "من الصندوق", order: "ORD-047", notes: "طلب مركز نور (50% حصة)", balance: 1100000 },
+  { id: "TXN-004", date: "2025-03-04", founder: "سارة المنصور", type: "تمويل", amount: 42500, method: "من الصندوق", order: "ORD-047", notes: "طلب مركز نور (25%)", balance: 850000 },
+  { id: "TXN-005", date: "2025-03-04", founder: "عمر خليل", type: "تمويل", amount: 42500, method: "من الصندوق", order: "ORD-047", notes: "طلب مركز نور (25%)", balance: 757500 },
+  { id: "TXN-006", date: "2025-03-01", founder: "أحمد الراشد", type: "سحب", amount: 100000, method: "تحويل بنكي", order: "—", notes: "سحب أرباح", balance: 1185000 },
+  { id: "TXN-007", date: "2025-02-28", founder: "عمر خليل", type: "مساهمة", amount: 120000, method: "كاش", order: "—", notes: "زيادة رأسمال", balance: 800000 },
+  { id: "TXN-008", date: "2025-02-25", founder: "أحمد الراشد", type: "تمويل", amount: 32000, method: "من الصندوق", order: "ORD-048", notes: "طلب د. أحمد (تقسيم متساوي)", balance: 1285000 },
+  { id: "TXN-009", date: "2025-02-25", founder: "سارة المنصور", type: "تمويل", amount: 32000, method: "من الصندوق", order: "ORD-048", notes: "طلب د. أحمد (تقسيم متساوي)", balance: 892500 },
+  { id: "TXN-010", date: "2025-02-25", founder: "عمر خليل", type: "تمويل", amount: 32000, method: "من الصندوق", order: "ORD-048", notes: "طلب د. أحمد (تقسيم متساوي)", balance: 680000 },
+  { id: "TXN-011", date: "2025-02-20", founder: "سارة المنصور", type: "سحب", amount: 50000, method: "تحويل بنكي", order: "—", notes: "سحب أرباح", balance: 924500 },
 ];
 
 const typeStyles: Record<string, { icon: typeof ArrowUpRight; color: string }> = {
-  "Contribution": { icon: ArrowUpRight, color: "text-success" },
-  "Funding": { icon: ArrowDownLeft, color: "text-info" },
-  "Withdrawal": { icon: ArrowDownLeft, color: "text-warning" },
+  "مساهمة": { icon: ArrowUpRight, color: "text-success" },
+  "تمويل": { icon: ArrowDownLeft, color: "text-info" },
+  "سحب": { icon: ArrowDownLeft, color: "text-warning" },
 };
 
 export default function FounderFundingPage() {
@@ -39,56 +39,56 @@ export default function FounderFundingPage() {
     return matchSearch && matchType && matchFounder;
   });
 
-  const totalContributions = mockTransactions.filter(t => t.type === "Contribution").reduce((s, t) => s + t.amount, 0);
-  const totalFunding = mockTransactions.filter(t => t.type === "Funding").reduce((s, t) => s + t.amount, 0);
-  const totalWithdrawals = mockTransactions.filter(t => t.type === "Withdrawal").reduce((s, t) => s + t.amount, 0);
+  const totalContributions = mockTransactions.filter(t => t.type === "مساهمة").reduce((s, t) => s + t.amount, 0);
+  const totalFunding = mockTransactions.filter(t => t.type === "تمويل").reduce((s, t) => s + t.amount, 0);
+  const totalWithdrawals = mockTransactions.filter(t => t.type === "سحب").reduce((s, t) => s + t.amount, 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="page-header">Founder Funding</h1>
-          <p className="page-description">Track founder capital contributions, order funding, and withdrawals</p>
+          <h1 className="page-header">تمويل المؤسسين</h1>
+          <p className="page-description">تتبع مساهمات رأسمال المؤسسين وتمويل الطلبات والسحوبات</p>
         </div>
-        <Button size="sm"><Plus className="h-3.5 w-3.5 mr-1.5" />Record Transaction</Button>
+        <Button size="sm"><Plus className="h-3.5 w-3.5 mr-1.5" />تسجيل معاملة</Button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Contributions" value={`SAR ${(totalContributions / 1000).toFixed(0)}K`} change={`${mockTransactions.filter(t => t.type === "Contribution").length} transactions`} changeType="positive" icon={Wallet} />
-        <StatCard title="Order Funding" value={`SAR ${(totalFunding / 1000).toFixed(1)}K`} change="Deployed to orders" changeType="neutral" icon={Landmark} />
-        <StatCard title="Withdrawals" value={`SAR ${(totalWithdrawals / 1000).toFixed(0)}K`} change="Profit taken" changeType="neutral" icon={TrendingUp} />
+        <StatCard title="إجمالي المساهمات" value={`${(totalContributions / 1000).toFixed(0)} ألف ج.م`} change={`${mockTransactions.filter(t => t.type === "مساهمة").length} معاملة`} changeType="positive" icon={Wallet} />
+        <StatCard title="تمويل الطلبات" value={`${(totalFunding / 1000).toFixed(1)} ألف ج.م`} change="تم توزيعها على الطلبات" changeType="neutral" icon={Landmark} />
+        <StatCard title="السحوبات" value={`${(totalWithdrawals / 1000).toFixed(0)} ألف ج.م`} change="أرباح مسحوبة" changeType="neutral" icon={TrendingUp} />
       </div>
 
       <DataToolbar
-        searchPlaceholder="Search transactions..."
+        searchPlaceholder="بحث في المعاملات..."
         searchValue={search}
         onSearchChange={setSearch}
         filters={[
-          { label: "Type", value: "type", options: [
-            { label: "Contribution", value: "Contribution" },
-            { label: "Funding", value: "Funding" },
-            { label: "Withdrawal", value: "Withdrawal" },
+          { label: "النوع", value: "type", options: [
+            { label: "مساهمة", value: "مساهمة" },
+            { label: "تمويل", value: "تمويل" },
+            { label: "سحب", value: "سحب" },
           ]},
-          { label: "Founder", value: "founder", options: founders.map(f => ({ label: f, value: f })) },
+          { label: "المؤسس", value: "founder", options: founders.map(f => ({ label: f, value: f })) },
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("founder_funding", ["ID","Date","Founder","Type","Amount","Method","Order","Notes","Balance"], filtered.map(t => [t.id, t.date, t.founder, t.type, t.amount, t.method, t.order, t.notes, t.balance]))}
+        onExport={() => exportToCsv("founder_funding", ["الكود","التاريخ","المؤسس","النوع","المبلغ","الطريقة","الطلب","ملاحظات","الرصيد"], filtered.map(t => [t.id, t.date, t.founder, t.type, t.amount, t.method, t.order, t.notes, t.balance]))}
       />
 
       <div className="stat-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">ID</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Date</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Founder</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Type</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">Amount</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Method</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Order</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Notes</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">Balance</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الكود</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">التاريخ</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">المؤسس</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">النوع</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">المبلغ</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الطريقة</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الطلب</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">ملاحظات</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">الرصيد</th>
             </tr>
           </thead>
           <tbody>
@@ -107,13 +107,13 @@ export default function FounderFundingPage() {
                   </td>
                   <td className="py-3 px-3 text-right font-semibold">
                     <span className={style?.color}>
-                      {t.type === "Contribution" ? "+" : t.type === "Withdrawal" ? "−" : "−"}SAR {t.amount.toLocaleString()}
+                      {t.type === "مساهمة" ? "+" : "−"}{t.amount.toLocaleString()} ج.م
                     </span>
                   </td>
                   <td className="py-3 px-3 text-xs text-muted-foreground">{t.method}</td>
                   <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{t.order}</td>
                   <td className="py-3 px-3 text-xs text-muted-foreground max-w-[200px] truncate">{t.notes}</td>
-                  <td className="py-3 px-3 text-right font-medium">SAR {t.balance.toLocaleString()}</td>
+                  <td className="py-3 px-3 text-right font-medium">{t.balance.toLocaleString()} ج.م</td>
                 </tr>
               );
             })}
