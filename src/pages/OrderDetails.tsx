@@ -6,6 +6,7 @@ import { ArrowLeft, Truck, Upload, Printer } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { ordersList } from "@/data/store";
+import { printInvoice } from "@/lib/printInvoice";
 
 const orderData = {
   id: "ORD-047", client: "مركز نور لطب الأسنان", clientId: "C002",
