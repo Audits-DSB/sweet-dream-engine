@@ -125,44 +125,58 @@ export default function RefillPage() {
       />
 
       <div className="stat-card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="py-3 px-3 w-10"><input type="checkbox" className="rounded" onChange={(e) => e.target.checked ? selectAllNeedRefill() : setSelected(new Set())} /></th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.currentStock}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.avgPerWeek}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.coverage}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.reorderPoint}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.suggestedQty}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.priority}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((r) => (
-              <tr key={r.id} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${selected.has(r.id) ? "bg-primary/5" : ""}`}>
-                <td className="py-3 px-3">{r.suggestedQty > 0 && <input type="checkbox" className="rounded" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} />}</td>
-                <td className="py-3 px-3 font-medium hover:text-primary cursor-pointer" onClick={() => navigate(`/clients/${r.clientId}`)}>{r.client}</td>
-                <td className="py-3 px-3 hover:text-primary cursor-pointer" onClick={() => navigate("/materials")}>{r.material} <span className="text-muted-foreground text-xs">({r.unit})</span></td>
-                <td className="py-3 px-3 text-end font-medium">{r.currentStock}</td>
-                <td className="py-3 px-3 text-end text-muted-foreground">{r.avgWeeklyUsage}</td>
-                <td className="py-3 px-3 text-end">
-                  <span className={r.coverageWeeks < 2 ? "text-destructive font-medium" : r.coverageWeeks < 4 ? "text-warning" : "text-muted-foreground"}>
-                    {r.coverageWeeks.toFixed(1)} {t.weeks}
-                  </span>
-                </td>
-                <td className="py-3 px-3 text-end text-muted-foreground">{r.reorderPoint}</td>
-                <td className="py-3 px-3 text-end font-semibold">{r.suggestedQty > 0 ? r.suggestedQty : "—"}</td>
-                <td className="py-3 px-3">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${priorityStyles[r.priority]}`}>
-                    {priorityLabel(r.priority)}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {Object.entries(groupedData).map(([groupKey, items]) => (
+          <div key={groupKey} className="mb-6">
+            <div className="flex items-center gap-2 mb-3 p-3 bg-muted/30 rounded-lg">
+              {groupBy === "client" ? <Users className="h-4 w-4" /> : <Package2 className="h-4 w-4" />}
+              <h3 className="font-semibold text-sm">{groupKey}</h3>
+              <span className="text-xs text-muted-foreground">({items.length} {t.items || "عنصر"})</span>
+            </div>
+            
+            <table className="w-full text-sm mb-6">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="py-3 px-3 w-10"><input type="checkbox" className="rounded" onChange={(e) => e.target.checked ? selectAllNeedRefill() : setSelected(new Set())} /></th>
+                  {groupBy === "material" && <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>}
+                  {groupBy === "client" && <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>}
+                  <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.currentStock}</th>
+                  <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.avgPerWeek}</th>
+                  <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.coverage}</th>
+                  <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.reorderPoint}</th>
+                  <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.suggestedQty}</th>
+                  <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.priority}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((r) => (
+                  <tr key={r.id} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${selected.has(r.id) ? "bg-primary/5" : ""}`}>
+                    <td className="py-3 px-3">{r.suggestedQty > 0 && <input type="checkbox" className="rounded" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} />}</td>
+                    {groupBy === "material" && (
+                      <td className="py-3 px-3 font-medium hover:text-primary cursor-pointer" onClick={() => navigate(`/clients/${r.clientId}`)}>{r.client}</td>
+                    )}
+                    {groupBy === "client" && (
+                      <td className="py-3 px-3 hover:text-primary cursor-pointer" onClick={() => navigate("/materials")}>{r.material} <span className="text-muted-foreground text-xs">({r.unit})</span></td>
+                    )}
+                    <td className="py-3 px-3 text-end font-medium">{r.currentStock}</td>
+                    <td className="py-3 px-3 text-end text-muted-foreground">{r.avgWeeklyUsage}</td>
+                    <td className="py-3 px-3 text-end">
+                      <span className={r.coverageWeeks < 2 ? "text-destructive font-medium" : r.coverageWeeks < 4 ? "text-warning" : "text-muted-foreground"}>
+                        {r.coverageWeeks.toFixed(1)} {t.weeks}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-end text-muted-foreground">{r.reorderPoint}</td>
+                    <td className="py-3 px-3 text-end font-semibold">{r.suggestedQty > 0 ? r.suggestedQty : "—"}</td>
+                    <td className="py-3 px-3">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${priorityStyles[r.priority]}`}>
+                        {priorityLabel(r.priority)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
       </div>
     </div>
   );
