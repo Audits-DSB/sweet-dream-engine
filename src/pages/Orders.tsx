@@ -97,15 +97,15 @@ export default function OrdersPage() {
   const usedMaterialCodes = orderItems.map(i => i.materialCode);
 
   const filteredMaterials = useMemo(() => {
-    return materialsList.filter(m => {
+    return realMaterials.filter(m => {
       if (!m.active) return false;
       if (usedMaterialCodes.includes(m.code)) return false;
       if (!materialSearch) return true;
       return m.name.toLowerCase().includes(materialSearch.toLowerCase()) || m.code.toLowerCase().includes(materialSearch.toLowerCase()) || m.category.toLowerCase().includes(materialSearch.toLowerCase());
     });
-  }, [materialSearch, usedMaterialCodes]);
+  }, [materialSearch, usedMaterialCodes, realMaterials]);
 
-  const addMaterialDirectly = (mat: typeof materialsList[0]) => {
+  const addMaterialDirectly = (mat: MaterialItem) => {
     setOrderItems([...orderItems, { materialCode: mat.code, name: mat.name, quantity: 1, sellingPrice: mat.sellingPrice, costPrice: mat.storeCost }]);
     setMaterialSearch("");
   };
