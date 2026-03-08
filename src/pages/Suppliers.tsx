@@ -137,7 +137,7 @@ export default function SuppliersPage() {
                 {sup.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{sup.phone}</span>}
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-border">
-                <span className="text-xs text-muted-foreground flex items-center gap-1"><Package className="h-3 w-3" />{mats.length} {t.materialsCount}</span>
+                <span className="text-xs text-muted-foreground flex items-center gap-1"><Package className="h-3 w-3" />{materialsLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : mats.length} {t.materialsCount}</span>
                 <span className="text-xs text-muted-foreground">{sup.paymentTerms}</span>
               </div>
             </div>
