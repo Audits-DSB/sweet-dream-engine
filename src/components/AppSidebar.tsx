@@ -16,6 +16,7 @@ import {
   FileText,
   Boxes,
   LogOut,
+  ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { NavLink } from "@/components/NavLink";
