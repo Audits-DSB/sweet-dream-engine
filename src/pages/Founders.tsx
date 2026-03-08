@@ -24,6 +24,9 @@ export default function FoundersPage() {
   const navigate = useNavigate();
   const [founders, setFounders] = useState(initialFounders);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingFounder, setEditingFounder] = useState<typeof initialFounders[0] | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", alias: "", email: "", phone: "" });
   const [form, setForm] = useState(emptyFounder);
 
   const totalContributed = founders.reduce((s, f) => s + f.totalContributed, 0);
@@ -63,7 +66,7 @@ export default function FoundersPage() {
                 <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center"><span className="text-lg font-bold text-primary">{f.name.charAt(0)}</span></div>
                 <div><p className="font-semibold">{f.name}</p><p className="text-xs text-muted-foreground">{f.alias} · {f.email}</p></div>
               </div>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => toast.info(`${t.edit} ${f.name}`)}><Pencil className="h-3.5 w-3.5" /></Button>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setEditingFounder(f); setEditForm({ name: f.name, alias: f.alias, email: f.email, phone: f.phone }); setEditDialogOpen(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
             </div>
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div className="p-2.5 rounded-lg bg-muted/50 text-center"><p className="text-muted-foreground">{t.contribution}</p><p className="font-bold mt-0.5">{(f.totalContributed / 1000).toFixed(0)} {t.thousand}</p></div>
@@ -100,6 +103,27 @@ export default function FoundersPage() {
             </div>
             <div><Label className="text-xs">{t.initialContribution} ({t.currency})</Label><Input className="h-9 mt-1" type="number" value={form.totalContributed} onChange={(e) => setForm({ ...form, totalContributed: e.target.value })} /></div>
             <Button className="w-full" onClick={handleAdd}>{t.addFounder}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Founder Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{t.edit || "تعديل"} — {editingFounder?.name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-xs">{t.name} *</Label><Input className="h-9 mt-1" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /></div>
+            <div><Label className="text-xs">{t.jobTitle}</Label><Input className="h-9 mt-1" value={editForm.alias} onChange={(e) => setEditForm({ ...editForm, alias: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
+              <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /></div>
+            </div>
+            <Button className="w-full" onClick={() => {
+              if (!editingFounder || !editForm.name) return;
+              setFounders(founders.map(f => f.id === editingFounder.id ? { ...f, name: editForm.name, alias: editForm.alias, email: editForm.email, phone: editForm.phone } : f));
+              setEditDialogOpen(false);
+              toast.success(t.founderUpdated || "تم تحديث بيانات المؤسس");
+            }}>{t.save || "حفظ"}</Button>
           </div>
         </DialogContent>
       </Dialog>

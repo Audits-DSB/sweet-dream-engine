@@ -684,4 +684,8 @@ export const en = {
   paymentLinkedToTreasury: "Payment linked to treasury",
   enterValidAmount: "Please enter a valid amount",
   amountExceedsRemaining: "Amount exceeds remaining balance",
+  clientUpdated: "Client updated successfully",
+  noEmail: "No email available",
+  noPhone: "No phone number available",
+  founderUpdated: "Founder updated successfully",
 };
