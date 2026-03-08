@@ -429,6 +429,8 @@ export const en = {
   searchRefill: "Search materials or clients...",
   priority: "Priority",
   critical: "Critical",
+  groupBy: "Group by",
+  items: "items",
   urgent: "Urgent",
   normal: "Normal",
   ok: "OK",
