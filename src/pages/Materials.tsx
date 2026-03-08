@@ -5,35 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus } from "lucide-react";
+import { Plus, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-
-const initialMaterials = [
-  { code: "MAT-001", name: "حشو كمبوزيت ضوئي", category: "حشوات", unit: "عبوة", sellingPrice: 1200, storeCost: 800, supplier: "3M ESPE", hasExpiry: true, active: true },
-  { code: "MAT-002", name: "إبر تخدير", category: "تخدير", unit: "علبة", sellingPrice: 950, storeCost: 600, supplier: "Septodont", hasExpiry: true, active: true },
-  { code: "MAT-003", name: "مادة طبع سيليكون", category: "طبعات", unit: "عبوة", sellingPrice: 450, storeCost: 280, supplier: "Zhermack", hasExpiry: true, active: true },
-  { code: "MAT-004", name: "جلاس أيونومر", category: "حشوات", unit: "عبوة", sellingPrice: 850, storeCost: 550, supplier: "GC Corporation", hasExpiry: true, active: true },
-  { code: "MAT-005", name: "قفازات لاتكس", category: "مستهلكات", unit: "كرتونة", sellingPrice: 400, storeCost: 280, supplier: "Supermax", hasExpiry: true, active: true },
-  { code: "MAT-006", name: "بوند لاصق", category: "حشوات", unit: "زجاجة", sellingPrice: 1800, storeCost: 1200, supplier: "Kerr Dental", hasExpiry: true, active: true },
-  { code: "MAT-007", name: "خيط خياطة جراحي", category: "جراحة", unit: "علبة", sellingPrice: 2200, storeCost: 1500, supplier: "Ethicon", hasExpiry: true, active: true },
-  { code: "MAT-008", name: "مبيض أسنان", category: "تجميل", unit: "عبوة", sellingPrice: 2800, storeCost: 1800, supplier: "Opalescence", hasExpiry: true, active: true },
-  { code: "MAT-009", name: "سلك تقويم", category: "تقويم", unit: "عبوة", sellingPrice: 3500, storeCost: 2400, supplier: "Ormco", hasExpiry: false, active: true },
-  { code: "MAT-010", name: "فرز دوارة", category: "أدوات", unit: "عبوة", sellingPrice: 2000, storeCost: 1300, supplier: "Mani", hasExpiry: false, active: true },
-  { code: "MAT-011", name: "مادة ضوئية UV", category: "حشوات", unit: "عبوة", sellingPrice: 4200, storeCost: 2900, supplier: "Ivoclar", hasExpiry: true, active: true },
-  { code: "MAT-012", name: "مادة تلميع", category: "تجميل", unit: "عبوة", sellingPrice: 1500, storeCost: 950, supplier: "Shofu", hasExpiry: true, active: false },
-];
-
-const emptyMaterial = { name: "", category: "حشوات", unit: "عبوة", sellingPrice: "", storeCost: "", supplier: "", hasExpiry: true, active: true };
+import { materialsList as initialMaterialsData } from "@/data/store";
 
 export default function MaterialsPage() {
-  const [materials, setMaterials] = useState(initialMaterials);
+  const [materials, setMaterials] = useState(initialMaterialsData);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState(emptyMaterial);
+  const [detailItem, setDetailItem] = useState<typeof initialMaterialsData[0] | null>(null);
+  const [form, setForm] = useState({ name: "", category: "حشوات", unit: "عبوة", sellingPrice: "", storeCost: "", supplier: "", hasExpiry: true, active: true });
 
   const categories = [...new Set(materials.map(m => m.category))];
 
@@ -44,14 +29,11 @@ export default function MaterialsPage() {
   });
 
   const handleAdd = () => {
-    if (!form.name || !form.sellingPrice) {
-      toast.error("يرجى إدخال اسم المادة وسعر البيع");
-      return;
-    }
+    if (!form.name || !form.sellingPrice) { toast.error("يرجى إدخال اسم المادة وسعر البيع"); return; }
     const num = materials.length + 1;
     const newCode = `MAT-${String(num).padStart(3, "0")}`;
     setMaterials([...materials, { ...form, code: newCode, sellingPrice: Number(form.sellingPrice), storeCost: Number(form.storeCost) }]);
-    setForm(emptyMaterial);
+    setForm({ name: "", category: "حشوات", unit: "عبوة", sellingPrice: "", storeCost: "", supplier: "", hasExpiry: true, active: true });
     setDialogOpen(false);
     toast.success("تم إضافة المادة بنجاح");
   };
@@ -67,9 +49,7 @@ export default function MaterialsPage() {
         searchPlaceholder="بحث في المواد..."
         searchValue={search}
         onSearchChange={setSearch}
-        filters={[
-          { label: "التصنيف", value: "category", options: categories.map(c => ({ label: c, value: c })) },
-        ]}
+        filters={[{ label: "التصنيف", value: "category", options: categories.map(c => ({ label: c, value: c })) }]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
         onExport={() => exportToCsv("materials", ["الكود","الاسم","التصنيف","الوحدة","سعر البيع","التكلفة","الهامش %","المورد","صلاحية","نشط"], filtered.map(m => [m.code, m.name, m.category, m.unit, m.sellingPrice, m.storeCost, ((m.sellingPrice - m.storeCost) / m.sellingPrice * 100).toFixed(1), m.supplier, m.hasExpiry ? "نعم" : "لا", m.active ? "نشط" : "غير نشط"]))}
@@ -96,7 +76,7 @@ export default function MaterialsPage() {
             {filtered.map((mat) => {
               const margin = ((mat.sellingPrice - mat.storeCost) / mat.sellingPrice * 100).toFixed(1);
               return (
-                <tr key={mat.code} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                <tr key={mat.code} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetailItem(mat)}>
                   <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{mat.code}</td>
                   <td className="py-3 px-3 font-medium">{mat.name}</td>
                   <td className="py-3 px-3"><span className="text-xs bg-muted px-2 py-0.5 rounded">{mat.category}</span></td>
@@ -118,6 +98,26 @@ export default function MaterialsPage() {
         </table>
       </div>
 
+      {/* Detail Dialog */}
+      <Dialog open={!!detailItem} onOpenChange={() => setDetailItem(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{detailItem?.code} — {detailItem?.name}</DialogTitle></DialogHeader>
+          {detailItem && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">التصنيف</p><p className="font-semibold">{detailItem.category}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">الوحدة</p><p className="font-semibold">{detailItem.unit}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">سعر البيع</p><p className="font-semibold">{detailItem.sellingPrice} ج.م</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">التكلفة</p><p className="font-semibold">{detailItem.storeCost} ج.م</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">المورد</p><p className="font-semibold">{detailItem.supplier}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">الهامش</p><p className="font-semibold text-success">{((detailItem.sellingPrice - detailItem.storeCost) / detailItem.sellingPrice * 100).toFixed(1)}%</p></div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>إضافة مادة جديدة</DialogTitle></DialogHeader>
