@@ -31,9 +31,14 @@ const avgMargin = ((totalProfit / totalRevenue) * 100).toFixed(1);
 export default function CompanyProfitPage() {
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="page-header">Company Profit</h1>
-        <p className="page-description">Company profit ledger and performance analytics (last 6 months)</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="page-header">Company Profit</h1>
+          <p className="page-description">Company profit ledger and performance analytics (last 6 months)</p>
+        </div>
+        <Button variant="outline" size="sm" className="h-9" onClick={() => exportToCsv("company_profit", ["Month","Revenue","Cost","Profit","Company Share","Founder Share"], monthlyPnL.map(m => [m.month, m.revenue, m.cost, m.profit, m.companyShare, m.founderShare]))}>
+          <Download className="h-3.5 w-3.5 mr-1.5" />Export
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
