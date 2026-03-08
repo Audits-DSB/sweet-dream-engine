@@ -1,138 +1,96 @@
 import {
-  Users,
-  ShoppingCart,
-  FileText,
-  Truck,
-  Receipt,
-  AlertTriangle,
-  TrendingUp,
-  Building2,
-  Clock,
-  Package,
+  Users, ShoppingCart, FileText, Truck, Receipt, AlertTriangle, TrendingUp, Building2, Clock, Package,
 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, LineChart, Line,
 } from "recharts";
-
-const revenueData = [
-  { month: "يناير", revenue: 124000, cost: 82000 },
-  { month: "فبراير", revenue: 158000, cost: 96000 },
-  { month: "مارس", revenue: 182000, cost: 112000 },
-  { month: "أبريل", revenue: 146000, cost: 98000 },
-  { month: "مايو", revenue: 210000, cost: 124000 },
-  { month: "يونيو", revenue: 192000, cost: 118000 },
-];
-
-const collectionData = [
-  { name: "مدفوع", value: 68, color: "hsl(152, 60%, 40%)" },
-  { name: "جزئي", value: 18, color: "hsl(38, 92%, 50%)" },
-  { name: "متأخر", value: 14, color: "hsl(0, 72%, 51%)" },
-];
-
-const consumptionTrend = [
-  { week: "أ1", consumption: 320 },
-  { week: "أ2", consumption: 450 },
-  { week: "أ3", consumption: 380 },
-  { week: "أ4", consumption: 520 },
-  { week: "أ5", consumption: 490 },
-  { week: "أ6", consumption: 610 },
-];
-
-const recentOrders = [
-  { id: "ORD-001", client: "عيادة د. أحمد", status: "تم التسليم", total: "32,000 ج.م" },
-  { id: "ORD-002", client: "مركز نور لطب الأسنان", status: "في انتظار التسليم", total: "58,000 ج.م" },
-  { id: "ORD-003", client: "عيادة جرين فالي", status: "مسودة", total: "21,000 ج.م" },
-  { id: "ORD-004", client: "المركز الملكي للأسنان", status: "مؤكد", total: "45,000 ج.م" },
-  { id: "ORD-005", client: "عيادة سمايل هاوس", status: "تسليم جزئي", total: "19,000 ج.م" },
-];
-
-const statusColors: Record<string, string> = {
-  "تم التسليم": "bg-success/10 text-success",
-  "في انتظار التسليم": "bg-warning/10 text-warning",
-  "مسودة": "bg-muted text-muted-foreground",
-  "مؤكد": "bg-info/10 text-info",
-  "تسليم جزئي": "bg-primary/10 text-primary",
-};
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function Dashboard() {
+  const { t } = useLanguage();
+
+  const revenueData = [
+    { month: t.jan, revenue: 124000, cost: 82000 },
+    { month: t.feb, revenue: 158000, cost: 96000 },
+    { month: t.mar, revenue: 182000, cost: 112000 },
+    { month: t.apr, revenue: 146000, cost: 98000 },
+    { month: t.may, revenue: 210000, cost: 124000 },
+    { month: t.jun, revenue: 192000, cost: 118000 },
+  ];
+
+  const collectionData = [
+    { name: t.paid, value: 68, color: "hsl(152, 60%, 40%)" },
+    { name: t.partial, value: 18, color: "hsl(38, 92%, 50%)" },
+    { name: t.overdue, value: 14, color: "hsl(0, 72%, 51%)" },
+  ];
+
+  const consumptionTrend = [
+    { week: "W1", consumption: 320 },
+    { week: "W2", consumption: 450 },
+    { week: "W3", consumption: 380 },
+    { week: "W4", consumption: 520 },
+    { week: "W5", consumption: 490 },
+    { week: "W6", consumption: 610 },
+  ];
+
+  const recentOrders = [
+    { id: "ORD-001", client: "عيادة د. أحمد", status: t.delivered, total: "32,000 ج.م" },
+    { id: "ORD-002", client: "مركز نور لطب الأسنان", status: t.awaitingDelivery, total: "58,000 ج.م" },
+    { id: "ORD-003", client: "عيادة جرين فالي", status: t.draft, total: "21,000 ج.م" },
+    { id: "ORD-004", client: "المركز الملكي للأسنان", status: t.confirmed, total: "45,000 ج.م" },
+    { id: "ORD-005", client: "عيادة سمايل هاوس", status: t.partialDelivery, total: "19,000 ج.م" },
+  ];
+
+  const statusColors: Record<string, string> = {
+    [t.delivered]: "bg-success/10 text-success",
+    [t.awaitingDelivery]: "bg-warning/10 text-warning",
+    [t.draft]: "bg-muted text-muted-foreground",
+    [t.confirmed]: "bg-info/10 text-info",
+    [t.partialDelivery]: "bg-primary/10 text-primary",
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="page-header">لوحة التحكم</h1>
-        <p className="page-description">نظرة عامة على العمليات والماليات</p>
+        <h1 className="page-header">{t.dashboardTitle}</h1>
+        <p className="page-description">{t.dashboardDesc}</p>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-        <StatCard title="العملاء النشطين" value={24} change="+3 هذا الشهر" changeType="positive" icon={Users} />
-        <StatCard title="طلبات معلقة" value={8} change="5 بحاجة مراجعة" changeType="neutral" icon={FileText} />
-        <StatCard title="أوامر نشطة" value={12} change="+2 اليوم" changeType="positive" icon={ShoppingCart} />
-        <StatCard title="تحصيلات متأخرة" value={3} change="84,000 ج.م إجمالي" changeType="negative" icon={Receipt} />
-        <StatCard title="الأرباح المحققة" value="425 ألف ج.م" change="+12% مقارنة بالشهر الماضي" changeType="positive" icon={TrendingUp} />
+        <StatCard title={t.activeClients} value={24} change={`+3 ${t.thisMonth}`} changeType="positive" icon={Users} />
+        <StatCard title={t.pendingRequests} value={8} change={`5 ${t.needsReview}`} changeType="neutral" icon={FileText} />
+        <StatCard title={t.activeOrders} value={12} change={`+2 ${t.today}`} changeType="positive" icon={ShoppingCart} />
+        <StatCard title={t.overdueCollections} value={3} change={`84,000 ج.م ${t.total}`} changeType="negative" icon={Receipt} />
+        <StatCard title={t.profitRealized} value="425K" change={`+12% ${t.vsLastMonth}`} changeType="positive" icon={TrendingUp} />
       </div>
 
-      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Revenue Chart */}
         <div className="stat-card lg:col-span-2">
-          <h3 className="font-semibold text-sm mb-4">الإيرادات مقابل التكلفة (6 أشهر)</h3>
+          <h3 className="font-semibold text-sm mb-4">{t.revenueVsCost}</h3>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={revenueData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                }}
-              />
-              <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="الإيرادات" />
-              <Bar dataKey="cost" fill="hsl(var(--muted-foreground) / 0.3)" radius={[4, 4, 0, 0]} name="التكلفة" />
+              <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
+              <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name={t.revenue} />
+              <Bar dataKey="cost" fill="hsl(var(--muted-foreground) / 0.3)" radius={[4, 4, 0, 0]} name={t.cost} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Collection Status */}
         <div className="stat-card">
-          <h3 className="font-semibold text-sm mb-4">حالة التحصيل</h3>
+          <h3 className="font-semibold text-sm mb-4">{t.collectionStatus}</h3>
           <ResponsiveContainer width="100%" height={180}>
             <PieChart>
-              <Pie
-                data={collectionData}
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={75}
-                paddingAngle={4}
-                dataKey="value"
-              >
+              <Pie data={collectionData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={4} dataKey="value">
                 {collectionData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                }}
-              />
+              <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
             </PieChart>
           </ResponsiveContainer>
           <div className="flex justify-center gap-4 mt-2">
@@ -146,19 +104,17 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Second row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Recent Orders */}
         <div className="stat-card lg:col-span-2">
-          <h3 className="font-semibold text-sm mb-4">أحدث الطلبات</h3>
+          <h3 className="font-semibold text-sm mb-4">{t.recentOrders}</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">رقم الطلب</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">العميل</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">الحالة</th>
-                  <th className="text-right py-2.5 px-3 text-xs font-medium text-muted-foreground">الإجمالي</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.orderNumber}</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
+                  <th className="text-right py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.totalAmount}</th>
                 </tr>
               </thead>
               <tbody>
@@ -179,37 +135,28 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Consumption Trend */}
         <div className="stat-card">
-          <h3 className="font-semibold text-sm mb-4">معدل الاستهلاك الأسبوعي</h3>
+          <h3 className="font-semibold text-sm mb-4">{t.weeklyConsumption}</h3>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={consumptionTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="week" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                }}
-              />
+              <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
               <Line type="monotone" dataKey="consumption" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: "hsl(var(--primary))", r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Alerts Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="stat-card flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
             <Clock className="h-5 w-5 text-warning" />
           </div>
           <div>
-            <p className="text-sm font-semibold">5 توصيلات معلقة</p>
-            <p className="text-xs text-muted-foreground">2 متأخرة بأكثر من 3 أيام</p>
+            <p className="text-sm font-semibold">5 {t.pendingDeliveries}</p>
+            <p className="text-xs text-muted-foreground">2 {t.delayedMore3Days}</p>
           </div>
         </div>
         <div className="stat-card flex items-center gap-3">
@@ -217,8 +164,8 @@ export default function Dashboard() {
             <AlertTriangle className="h-5 w-5 text-destructive" />
           </div>
           <div>
-            <p className="text-sm font-semibold">7 أصناف قاربت على الانتهاء</p>
-            <p className="text-xs text-muted-foreground">خلال الـ 14 يوم القادمة</p>
+            <p className="text-sm font-semibold">7 {t.itemsExpiringSoon}</p>
+            <p className="text-xs text-muted-foreground">{t.within14Days}</p>
           </div>
         </div>
         <div className="stat-card flex items-center gap-3">
@@ -226,8 +173,8 @@ export default function Dashboard() {
             <Package className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <p className="text-sm font-semibold">12 صنف يحتاج إعادة تعبئة</p>
-            <p className="text-xs text-muted-foreground">أقل من حد الأمان</p>
+            <p className="text-sm font-semibold">12 {t.itemsNeedRefill}</p>
+            <p className="text-xs text-muted-foreground">{t.belowSafety}</p>
           </div>
         </div>
       </div>

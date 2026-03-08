@@ -1,72 +1,58 @@
 import { useNavigate } from "react-router-dom";
 import {
-  LayoutDashboard,
-  Users,
-  ShoppingCart,
-  Package,
-  Truck,
-  Warehouse,
-  ClipboardCheck,
-  Receipt,
-  Landmark,
-  UserCog,
-  Building2,
-  Bell,
-  BarChart3,
-  Settings,
-  FileText,
-  Boxes,
-  LogOut,
-  ShieldCheck,
+  LayoutDashboard, Users, ShoppingCart, Package, Truck, Warehouse,
+  ClipboardCheck, Receipt, Landmark, UserCog, Building2, Bell,
+  BarChart3, Settings, FileText, Boxes, LogOut, ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarHeader,
-  SidebarFooter,
-  useSidebar,
+  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
+  SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
+  SidebarHeader, SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
-const mainItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Clients", url: "/clients", icon: Users },
-  { title: "Client Requests", url: "/requests", icon: FileText },
-  { title: "Materials", url: "/materials", icon: Boxes },
-  { title: "Orders", url: "/orders", icon: ShoppingCart },
-  { title: "Deliveries", url: "/deliveries", icon: Truck },
-];
+function useNavItems() {
+  const { t } = useLanguage();
 
-const inventoryItems = [
-  { title: "Client Inventory", url: "/inventory", icon: Warehouse },
-  { title: "Audits", url: "/audits", icon: ClipboardCheck },
-  { title: "Refill Planning", url: "/refill", icon: Package },
-];
+  const mainItems = [
+    { title: t.dashboard, url: "/", icon: LayoutDashboard },
+    { title: t.clients, url: "/clients", icon: Users },
+    { title: t.clientRequests, url: "/requests", icon: FileText },
+    { title: t.materials, url: "/materials", icon: Boxes },
+    { title: t.orders, url: "/orders", icon: ShoppingCart },
+    { title: t.deliveries, url: "/deliveries", icon: Truck },
+  ];
 
-const financeItems = [
-  { title: "Collections", url: "/collections", icon: Receipt },
-  { title: "Founders", url: "/founders", icon: UserCog },
-  { title: "Company Profit", url: "/company-profit", icon: Building2 },
-  { title: "Founder Funding", url: "/founder-funding", icon: Landmark },
-];
+  const inventoryItems = [
+    { title: t.clientInventory, url: "/inventory", icon: Warehouse },
+    { title: t.audits, url: "/audits", icon: ClipboardCheck },
+    { title: t.refillPlanning, url: "/refill", icon: Package },
+  ];
 
-const systemItems = [
-  { title: "Alerts", url: "/alerts", icon: Bell },
-  { title: "Reports", url: "/reports", icon: BarChart3 },
-  { title: "User Management", url: "/user-management", icon: ShieldCheck },
-  { title: "Settings", url: "/settings", icon: Settings },
-];
+  const financeItems = [
+    { title: t.collections, url: "/collections", icon: Receipt },
+    { title: t.founders, url: "/founders", icon: UserCog },
+    { title: t.companyProfit, url: "/company-profit", icon: Building2 },
+    { title: t.founderFunding, url: "/founder-funding", icon: Landmark },
+  ];
 
-function NavGroup({ label, items, collapsed }: { label: string; items: typeof mainItems; collapsed: boolean }) {
+  const systemItems = [
+    { title: t.alerts, url: "/alerts", icon: Bell },
+    { title: t.reports, url: "/reports", icon: BarChart3 },
+    { title: t.userManagement, url: "/user-management", icon: ShieldCheck },
+    { title: t.settings, url: "/settings", icon: Settings },
+  ];
+
+  return { mainItems, inventoryItems, financeItems, systemItems };
+}
+
+type NavItem = { title: string; url: string; icon: any };
+
+function NavGroup({ label, items, collapsed }: { label: string; items: NavItem[]; collapsed: boolean }) {
   const location = useLocation();
   const isActive = (path: string) => location.pathname === path;
 
@@ -76,14 +62,9 @@ function NavGroup({ label, items, collapsed }: { label: string; items: typeof ma
       <SidebarGroupContent>
         <SidebarMenu>
           {items.map((item) => (
-            <SidebarMenuItem key={item.title}>
+            <SidebarMenuItem key={item.url}>
               <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                <NavLink
-                  to={item.url}
-                  end={item.url === "/"}
-                  className="hover:bg-accent"
-                  activeClassName="bg-accent text-accent-foreground font-medium"
-                >
+                <NavLink to={item.url} end={item.url === "/"} className="hover:bg-accent" activeClassName="bg-accent text-accent-foreground font-medium">
                   <item.icon className="h-4 w-4 shrink-0" />
                   {!collapsed && <span>{item.title}</span>}
                 </NavLink>
@@ -100,7 +81,9 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { profile, signOut } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
+  const { mainItems, inventoryItems, financeItems, systemItems } = useNavItems();
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
@@ -111,8 +94,8 @@ export function AppSidebar() {
               <span className="text-primary-foreground font-bold text-sm">OP</span>
             </div>
             <div>
-              <h2 className="font-semibold text-sm text-foreground leading-none">OpsHub</h2>
-              <p className="text-[11px] text-muted-foreground mt-0.5">أدوات طب الأسنان</p>
+              <h2 className="font-semibold text-sm text-foreground leading-none">{t.appName}</h2>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{t.appDesc}</p>
             </div>
           </div>
         ) : (
@@ -123,10 +106,10 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="px-2">
-        <NavGroup label="Main" items={mainItems} collapsed={collapsed} />
-        <NavGroup label="Inventory & Audits" items={inventoryItems} collapsed={collapsed} />
-        <NavGroup label="Finance" items={financeItems} collapsed={collapsed} />
-        <NavGroup label="System" items={systemItems} collapsed={collapsed} />
+        <NavGroup label={t.main} items={mainItems} collapsed={collapsed} />
+        <NavGroup label={t.inventoryAudits} items={inventoryItems} collapsed={collapsed} />
+        <NavGroup label={t.finance} items={financeItems} collapsed={collapsed} />
+        <NavGroup label={t.system} items={systemItems} collapsed={collapsed} />
       </SidebarContent>
 
       <SidebarFooter className="p-3 border-t border-sidebar-border space-y-2">
@@ -137,7 +120,7 @@ export function AppSidebar() {
         )}
         <div className={collapsed ? "flex justify-center" : "flex items-center justify-between"}>
           <ThemeToggle />
-          <button onClick={signOut} className="text-muted-foreground hover:text-destructive transition-colors" title="Sign out">
+          <button onClick={signOut} className="text-muted-foreground hover:text-destructive transition-colors" title={t.signOut}>
             <LogOut className="h-4 w-4" />
           </button>
         </div>

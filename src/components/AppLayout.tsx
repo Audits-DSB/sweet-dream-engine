@@ -2,12 +2,15 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Outlet } from "react-router-dom";
 import { NotificationBell } from "@/components/NotificationBell";
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useNavigate } from "react-router-dom";
 
 export function AppLayout() {
   const { profile } = useAuth();
+  const { dir } = useLanguage();
   const navigate = useNavigate();
 
   const initials = profile?.full_name
@@ -16,7 +19,7 @@ export function AppLayout() {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full" dir={dir}>
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-14 flex items-center justify-between border-b border-border px-4 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
@@ -24,6 +27,7 @@ export function AppLayout() {
               <SidebarTrigger className="h-8 w-8" />
             </div>
             <div className="flex items-center gap-2">
+              <LanguageToggle />
               <NotificationBell />
               <button onClick={() => navigate("/profile")} className="cursor-pointer">
                 <Avatar className="h-8 w-8">
