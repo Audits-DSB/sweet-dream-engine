@@ -1,11 +1,19 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Outlet } from "react-router-dom";
-import { Bell } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { NotificationBell } from "@/components/NotificationBell";
+import { useAuth } from "@/contexts/AuthContext";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useNavigate } from "react-router-dom";
 
 export function AppLayout() {
+  const { profile } = useAuth();
+  const navigate = useNavigate();
+
+  const initials = profile?.full_name
+    ? profile.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+    : "??";
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
@@ -16,15 +24,13 @@ export function AppLayout() {
               <SidebarTrigger className="h-8 w-8" />
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="relative h-9 w-9">
-                <Bell className="h-4 w-4" />
-                <Badge className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[10px] bg-destructive text-destructive-foreground border-0">
-                  3
-                </Badge>
-              </Button>
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-xs font-semibold text-primary">A</span>
-              </div>
+              <NotificationBell />
+              <button onClick={() => navigate("/profile")} className="cursor-pointer">
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={profile?.avatar_url || undefined} />
+                  <AvatarFallback className="text-xs font-semibold">{initials}</AvatarFallback>
+                </Avatar>
+              </button>
             </div>
           </header>
           <main className="flex-1 p-6 overflow-auto">
