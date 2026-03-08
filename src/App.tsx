@@ -17,6 +17,7 @@ import OrdersPage from "./pages/Orders";
 import OrderDetails from "./pages/OrderDetails";
 import DeliveriesPage from "./pages/Deliveries";
 import InventoryPage from "./pages/Inventory";
+import InventoryDetail from "./pages/InventoryDetail";
 import AuditsPage from "./pages/Audits";
 import RefillPage from "./pages/Refill";
 import CollectionsPage from "./pages/Collections";
