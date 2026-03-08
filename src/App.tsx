@@ -25,6 +25,7 @@ import FounderFundingPage from "./pages/FounderFunding";
 import AlertsPage from "./pages/Alerts";
 import ReportsPage from "./pages/Reports";
 import SettingsPage from "./pages/Settings";
+import UserManagementPage from "./pages/UserManagement";
 import LoginPage from "./pages/Login";
 import SignupPage from "./pages/Signup";
 import ForgotPasswordPage from "./pages/ForgotPassword";
@@ -68,6 +69,7 @@ const App = () => (
                 <Route path="/alerts" element={<AlertsPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/user-management" element={<UserManagementPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

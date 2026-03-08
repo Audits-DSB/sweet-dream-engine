@@ -16,6 +16,7 @@ import {
   FileText,
   Boxes,
   LogOut,
+  ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { NavLink } from "@/components/NavLink";
@@ -60,6 +61,7 @@ const financeItems = [
 const systemItems = [
   { title: "Alerts", url: "/alerts", icon: Bell },
   { title: "Reports", url: "/reports", icon: BarChart3 },
+  { title: "User Management", url: "/user-management", icon: ShieldCheck },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
