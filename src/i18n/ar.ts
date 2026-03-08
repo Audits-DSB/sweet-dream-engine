@@ -591,4 +591,9 @@ export const ar = {
   paymentTerms: "شروط الدفع",
   addNewSupplier: "إضافة مورد جديد",
   noMaterials: "لا توجد مواد مرتبطة",
+
+  // Inventory Detail
+  inventoryValue: "قيمة المخزون",
+  totalCost: "إجمالي التكلفة",
+  suggestedQty: "الكمية المقترحة",
 };

@@ -591,4 +591,9 @@ export const en = {
   paymentTerms: "Payment Terms",
   addNewSupplier: "Add New Supplier",
   noMaterials: "No linked materials",
+
+  // Inventory Detail
+  inventoryValue: "Inventory Value",
+  totalCost: "Total Cost",
+  suggestedQty: "Suggested Qty",
 };
