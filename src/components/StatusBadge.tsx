@@ -51,6 +51,12 @@ const statusVariantMap: Record<string, string> = {
   "Low Stock": "warning",
   "Expired": "destructive",
   "Depleted": "muted",
+
+  // Audits
+  "Completed": "success",
+  "Discrepancy": "warning",
+  "Scheduled": "info",
+  "In Progress": "primary",
 };
 
 export function StatusBadge({ status, variant }: StatusBadgeProps) {
