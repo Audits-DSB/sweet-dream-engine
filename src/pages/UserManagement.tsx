@@ -5,7 +5,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Shield, ShieldCheck, Eye } from "lucide-react";
+import { Shield, ShieldCheck, Eye, Users } from "lucide-react";
 import { Navigate } from "react-router-dom";
 
 type AppRole = "admin" | "founder" | "viewer";
@@ -23,9 +23,11 @@ const roleColors: Record<AppRole, string> = {
 
 export default function UserManagementPage() {
   const { t } = useLanguage();
-  const { isAdmin, loading: authLoading, user } = useAuth();
+  const { isAdmin, hasRole, loading: authLoading, user } = useAuth();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const canAccess = isAdmin || hasRole("founder");
 
   const roleLabels: Record<AppRole, string> = { admin: t.admin, founder: t.founderRole, viewer: t.viewer };
 
@@ -41,7 +43,7 @@ export default function UserManagementPage() {
     setLoading(false);
   };
 
-  useEffect(() => { if (isAdmin) fetchUsers(); }, [isAdmin]);
+  useEffect(() => { if (canAccess) fetchUsers(); }, [canAccess]);
 
   const updateRole = async (userId: string, newRole: AppRole) => {
     const { error: deleteError } = await supabase.from("user_roles").delete().eq("user_id", userId);
@@ -53,18 +55,25 @@ export default function UserManagementPage() {
   };
 
   if (authLoading) return null;
-  if (!isAdmin) return <Navigate to="/" replace />;
+  if (!canAccess) return <Navigate to="/" replace />;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="page-header">{t.userManagementTitle}</h1>
-        <p className="page-description">{users.length} {t.usersCount} · {t.adminsOnly}</p>
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+          <Users className="h-5 w-5 text-primary" />
+        </div>
+        <div>
+          <h1 className="page-header">{t.userManagementTitle}</h1>
+          <p className="page-description">{users.length} {t.usersCount}</p>
+        </div>
       </div>
 
       <div className="stat-card overflow-x-auto">
         {loading ? (
           <div className="text-center py-12 text-muted-foreground text-sm">{t.loadingUsers}</div>
+        ) : users.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground text-sm">{t.noData || "لا توجد بيانات"}</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
