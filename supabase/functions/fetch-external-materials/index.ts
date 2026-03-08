@@ -20,21 +20,15 @@ Deno.serve(async (req) => {
     }
 
     const ext = createClient(extUrl, extKey);
-
-    // Try all three table names
-    const tables = ["materials", "products", "items"];
-    const results: Record<string, any> = {};
-
-    for (const table of tables) {
-      const { data, error } = await ext.from(table).select("*").limit(5);
-      if (!error && data) {
-        results[table] = { count: data.length, sample: data, columns: data.length > 0 ? Object.keys(data[0]) : [] };
-      } else {
-        results[table] = { error: error?.message };
-      }
+    const { data, error } = await ext.from("products").select("*").order("created_at");
+    
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    return new Response(JSON.stringify(results, null, 2), {
+    return new Response(JSON.stringify({ products: data, count: data?.length ?? 0 }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
