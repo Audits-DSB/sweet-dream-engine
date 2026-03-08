@@ -1,24 +1,28 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Eye } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { materialsList as initialMaterialsData } from "@/data/store";
+import { materialsList as initialMaterialsData, suppliersList } from "@/data/store";
 
 export default function MaterialsPage() {
+  const { t } = useLanguage();
+  const navigate = useNavigate();
   const [materials, setMaterials] = useState(initialMaterialsData);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailItem, setDetailItem] = useState<typeof initialMaterialsData[0] | null>(null);
-  const [form, setForm] = useState({ name: "", category: "حشوات", unit: "عبوة", sellingPrice: "", storeCost: "", supplier: "", hasExpiry: true, active: true });
+  const [form, setForm] = useState({ name: "", category: "حشوات", unit: "عبوة", sellingPrice: "", storeCost: "", supplier: "", supplierId: "", manufacturer: "", hasExpiry: true, active: true });
 
   const categories = [...new Set(materials.map(m => m.category))];
 
@@ -29,47 +33,49 @@ export default function MaterialsPage() {
   });
 
   const handleAdd = () => {
-    if (!form.name || !form.sellingPrice) { toast.error("يرجى إدخال اسم المادة وسعر البيع"); return; }
+    if (!form.name || !form.sellingPrice) { toast.error(t.enterMaterialAndPrice); return; }
     const num = materials.length + 1;
     const newCode = `MAT-${String(num).padStart(3, "0")}`;
-    setMaterials([...materials, { ...form, code: newCode, sellingPrice: Number(form.sellingPrice), storeCost: Number(form.storeCost) }]);
-    setForm({ name: "", category: "حشوات", unit: "عبوة", sellingPrice: "", storeCost: "", supplier: "", hasExpiry: true, active: true });
+    const sup = suppliersList.find(s => s.id === form.supplierId);
+    setMaterials([...materials, { ...form, code: newCode, sellingPrice: Number(form.sellingPrice), storeCost: Number(form.storeCost), supplier: sup?.name || form.supplier, supplierId: form.supplierId }]);
+    setForm({ name: "", category: "حشوات", unit: "عبوة", sellingPrice: "", storeCost: "", supplier: "", supplierId: "", manufacturer: "", hasExpiry: true, active: true });
     setDialogOpen(false);
-    toast.success("تم إضافة المادة بنجاح");
+    toast.success(t.materialAdded);
   };
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="page-header">المواد والمستلزمات</h1>
-        <p className="page-description">{materials.length} مادة · {materials.filter(m => m.active).length} نشطة</p>
+        <h1 className="page-header">{t.materialsTitle}</h1>
+        <p className="page-description">{materials.length} {t.materialCount} · {materials.filter(m => m.active).length} {t.activeMaterials}</p>
       </div>
 
       <DataToolbar
-        searchPlaceholder="بحث في المواد..."
+        searchPlaceholder={t.searchMaterials}
         searchValue={search}
         onSearchChange={setSearch}
-        filters={[{ label: "التصنيف", value: "category", options: categories.map(c => ({ label: c, value: c })) }]}
+        filters={[{ label: t.category, value: "category", options: categories.map(c => ({ label: c, value: c })) }]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("materials", ["الكود","الاسم","التصنيف","الوحدة","سعر البيع","التكلفة","الهامش %","المورد","صلاحية","نشط"], filtered.map(m => [m.code, m.name, m.category, m.unit, m.sellingPrice, m.storeCost, ((m.sellingPrice - m.storeCost) / m.sellingPrice * 100).toFixed(1), m.supplier, m.hasExpiry ? "نعم" : "لا", m.active ? "نشط" : "غير نشط"]))}
-        actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />إضافة مادة</Button>}
+        onExport={() => exportToCsv("materials", [t.materialCode, t.materialName, t.category, t.unit, t.sellingPrice, t.storeCost, t.margin, t.supplier, t.manufacturer, t.expiry, t.status], filtered.map(m => [m.code, m.name, m.category, m.unit, m.sellingPrice, m.storeCost, ((m.sellingPrice - m.storeCost) / m.sellingPrice * 100).toFixed(1), m.supplier, m.manufacturer, m.hasExpiry ? t.yes : t.no, m.active ? t.active : t.inactive]))}
+        actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addMaterial}</Button>}
       />
 
       <div className="stat-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الكود</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">المادة</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">التصنيف</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الوحدة</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">سعر البيع</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">التكلفة</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">الهامش</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">المورد</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">صلاحية</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الحالة</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.materialCode}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.materialName}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.category}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.unit}</th>
+              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.sellingPrice}</th>
+              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.storeCost}</th>
+              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.margin}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.supplier}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.manufacturer}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.expiry}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
             </tr>
           </thead>
           <tbody>
@@ -81,14 +87,15 @@ export default function MaterialsPage() {
                   <td className="py-3 px-3 font-medium">{mat.name}</td>
                   <td className="py-3 px-3"><span className="text-xs bg-muted px-2 py-0.5 rounded">{mat.category}</span></td>
                   <td className="py-3 px-3 text-muted-foreground">{mat.unit}</td>
-                  <td className="py-3 px-3 text-right font-medium">{mat.sellingPrice} ج.م</td>
-                  <td className="py-3 px-3 text-right text-muted-foreground">{mat.storeCost} ج.م</td>
-                  <td className="py-3 px-3 text-right"><span className="text-success font-medium">{margin}%</span></td>
-                  <td className="py-3 px-3 text-muted-foreground">{mat.supplier}</td>
-                  <td className="py-3 px-3">{mat.hasExpiry ? <Badge variant="secondary" className="text-xs">متتبع</Badge> : <span className="text-xs text-muted-foreground">لا ينطبق</span>}</td>
+                  <td className="py-3 px-3 text-end font-medium">{mat.sellingPrice} {t.currency}</td>
+                  <td className="py-3 px-3 text-end text-muted-foreground">{mat.storeCost} {t.currency}</td>
+                  <td className="py-3 px-3 text-end"><span className="text-success font-medium">{margin}%</span></td>
+                  <td className="py-3 px-3 text-muted-foreground cursor-pointer hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate("/suppliers"); }}>{mat.supplier}</td>
+                  <td className="py-3 px-3 text-muted-foreground text-xs">{mat.manufacturer}</td>
+                  <td className="py-3 px-3">{mat.hasExpiry ? <Badge variant="secondary" className="text-xs">{t.tracked}</Badge> : <span className="text-xs text-muted-foreground">{t.notApplicable}</span>}</td>
                   <td className="py-3 px-3">
                     <Badge variant={mat.active ? "default" : "secondary"} className={mat.active ? "bg-success/10 text-success border-0" : ""}>
-                      {mat.active ? "نشط" : "غير نشط"}
+                      {mat.active ? t.active : t.inactive}
                     </Badge>
                   </td>
                 </tr>
@@ -105,12 +112,13 @@ export default function MaterialsPage() {
           {detailItem && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">التصنيف</p><p className="font-semibold">{detailItem.category}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">الوحدة</p><p className="font-semibold">{detailItem.unit}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">سعر البيع</p><p className="font-semibold">{detailItem.sellingPrice} ج.م</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">التكلفة</p><p className="font-semibold">{detailItem.storeCost} ج.م</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">المورد</p><p className="font-semibold">{detailItem.supplier}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">الهامش</p><p className="font-semibold text-success">{((detailItem.sellingPrice - detailItem.storeCost) / detailItem.sellingPrice * 100).toFixed(1)}%</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.category}</p><p className="font-semibold">{detailItem.category}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.unit}</p><p className="font-semibold">{detailItem.unit}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.sellingPrice}</p><p className="font-semibold">{detailItem.sellingPrice} {t.currency}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.storeCost}</p><p className="font-semibold">{detailItem.storeCost} {t.currency}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setDetailItem(null); navigate("/suppliers"); }}><p className="text-xs text-muted-foreground">{t.supplier}</p><p className="font-semibold text-primary">{detailItem.supplier}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.manufacturer}</p><p className="font-semibold">{detailItem.manufacturer}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.margin}</p><p className="font-semibold text-success">{((detailItem.sellingPrice - detailItem.storeCost) / detailItem.sellingPrice * 100).toFixed(1)}%</p></div>
               </div>
             </div>
           )}
@@ -120,12 +128,12 @@ export default function MaterialsPage() {
       {/* Add Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>إضافة مادة جديدة</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t.addNewMaterial}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div><Label className="text-xs">اسم المادة *</Label><Input className="h-9 mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+            <div><Label className="text-xs">{t.materialName} *</Label><Input className="h-9 mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs">التصنيف</Label>
+                <Label className="text-xs">{t.category}</Label>
                 <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
                   <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -133,18 +141,27 @@ export default function MaterialsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label className="text-xs">الوحدة</Label><Input className="h-9 mt-1" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} /></div>
+              <div><Label className="text-xs">{t.unit}</Label><Input className="h-9 mt-1" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">سعر البيع *</Label><Input className="h-9 mt-1" type="number" value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} /></div>
-              <div><Label className="text-xs">التكلفة</Label><Input className="h-9 mt-1" type="number" value={form.storeCost} onChange={(e) => setForm({ ...form, storeCost: e.target.value })} /></div>
+              <div><Label className="text-xs">{t.sellingPrice} *</Label><Input className="h-9 mt-1" type="number" value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} /></div>
+              <div><Label className="text-xs">{t.storeCost}</Label><Input className="h-9 mt-1" type="number" value={form.storeCost} onChange={(e) => setForm({ ...form, storeCost: e.target.value })} /></div>
             </div>
-            <div><Label className="text-xs">المورد</Label><Input className="h-9 mt-1" value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} /></div>
+            <div>
+              <Label className="text-xs">{t.supplier}</Label>
+              <Select value={form.supplierId} onValueChange={(v) => { const s = suppliersList.find(s => s.id === v); setForm({ ...form, supplierId: v, supplier: s?.name || "" }); }}>
+                <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t.selectClientPlaceholder} /></SelectTrigger>
+                <SelectContent>
+                  {suppliersList.filter(s => s.active).map(s => <SelectItem key={s.id} value={s.id}>{s.name} — {s.country}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label className="text-xs">{t.manufacturer}</Label><Input className="h-9 mt-1" value={form.manufacturer} onChange={(e) => setForm({ ...form, manufacturer: e.target.value })} /></div>
             <div className="flex items-center justify-between">
-              <Label className="text-xs">تتبع الصلاحية</Label>
+              <Label className="text-xs">{t.trackExpiry}</Label>
               <Switch checked={form.hasExpiry} onCheckedChange={(v) => setForm({ ...form, hasExpiry: v })} />
             </div>
-            <Button className="w-full" onClick={handleAdd}>إضافة المادة</Button>
+            <Button className="w-full" onClick={handleAdd}>{t.addMaterial}</Button>
           </div>
         </DialogContent>
       </Dialog>
