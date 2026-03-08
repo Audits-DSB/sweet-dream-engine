@@ -83,7 +83,7 @@ export default function RequestsPage() {
     setRequests([newReq, ...requests]);
     setForm({ clientId: "", items: "", expectedTotal: "", notes: "" });
     setDialogOpen(false);
-    toast.success(t.requestAdded || "تم إضافة الطلب بنجاح");
+    toast.success(t.materialAdded);
     sendNotification("New request created", `${newReq.id} - ${client.name}`, "info");
   };
 
