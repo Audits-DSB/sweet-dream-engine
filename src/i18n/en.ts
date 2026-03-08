@@ -688,6 +688,4 @@ export const en = {
   noEmail: "No email available",
   noPhone: "No phone number available",
   founderUpdated: "Founder updated successfully",
-  address: "Address",
-  save: "Save",
 };

@@ -688,6 +688,4 @@ export const ar = {
   noEmail: "لا يوجد بريد إلكتروني",
   noPhone: "لا يوجد رقم هاتف",
   founderUpdated: "تم تحديث بيانات المؤسس",
-  address: "العنوان",
-  save: "حفظ",
 };
