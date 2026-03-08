@@ -33,6 +33,7 @@ export default function RefillPage() {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [groupBy, setGroupBy] = useState<"client" | "material">("client");
 
   const clients = [...new Set(mockRefills.map(r => r.client))];
   const priorityLabel = (p: string) => p === "Critical" ? t.critical : p === "Urgent" ? t.urgent : p === "Normal" ? t.normal : t.ok;
