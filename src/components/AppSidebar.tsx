@@ -100,7 +100,7 @@ export function AppSidebar() {
           </div>
         ) : (
           <img src="/images/dsb-logo.png" alt="DSB" className="h-8 w-8 rounded-lg object-contain mx-auto" />
-        )
+        )}
       </SidebarHeader>
 
       <SidebarContent className="px-2">
