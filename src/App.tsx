@@ -7,9 +7,11 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppLayout } from "@/components/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import ClientsPage from "./pages/Clients";
+import ClientProfile from "./pages/ClientProfile";
 import RequestsPage from "./pages/Requests";
 import MaterialsPage from "./pages/Materials";
 import OrdersPage from "./pages/Orders";
+import OrderDetails from "./pages/OrderDetails";
 import DeliveriesPage from "./pages/Deliveries";
 import InventoryPage from "./pages/Inventory";
 import AuditsPage from "./pages/Audits";
@@ -36,9 +38,11 @@ const App = () => (
             <Route element={<AppLayout />}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/clients" element={<ClientsPage />} />
+              <Route path="/clients/:id" element={<ClientProfile />} />
               <Route path="/requests" element={<RequestsPage />} />
               <Route path="/materials" element={<MaterialsPage />} />
               <Route path="/orders" element={<OrdersPage />} />
+              <Route path="/orders/:id" element={<OrderDetails />} />
               <Route path="/deliveries" element={<DeliveriesPage />} />
               <Route path="/inventory" element={<InventoryPage />} />
               <Route path="/audits" element={<AuditsPage />} />
