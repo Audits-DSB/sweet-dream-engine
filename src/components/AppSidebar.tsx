@@ -96,6 +96,7 @@ function NavGroup({ label, items, collapsed }: { label: string; items: typeof ma
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
+  const { profile, signOut } = useAuth();
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
@@ -124,9 +125,15 @@ export function AppSidebar() {
         <NavGroup label="System" items={systemItems} collapsed={collapsed} />
       </SidebarContent>
 
-      <SidebarFooter className="p-3 border-t border-sidebar-border">
+      <SidebarFooter className="p-3 border-t border-sidebar-border space-y-2">
+        {!collapsed && profile?.full_name && (
+          <p className="text-xs text-muted-foreground truncate px-1">{profile.full_name}</p>
+        )}
         <div className={collapsed ? "flex justify-center" : "flex items-center justify-between"}>
           <ThemeToggle />
+          <button onClick={signOut} className="text-muted-foreground hover:text-destructive transition-colors" title="Sign out">
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
       </SidebarFooter>
     </Sidebar>
