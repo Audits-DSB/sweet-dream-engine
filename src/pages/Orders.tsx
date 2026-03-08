@@ -46,7 +46,46 @@ export default function OrdersPage() {
   const [form, setForm] = useState({ splitMode: "equal", deliveryFee: "500" });
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [materialSearch, setMaterialSearch] = useState("");
+  const [realMaterials, setRealMaterials] = useState<MaterialItem[]>([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Fetch materials from the same external API as Materials page
+  useEffect(() => {
+    const fetchMaterials = async () => {
+      setMaterialsLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-external-materials`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
+            },
+          }
+        );
+        const json = await res.json();
+        if (json.products) {
+          setRealMaterials(json.products.map((p: any) => ({
+            code: p.sku || p.id?.slice(0, 8) || "",
+            name: p.name,
+            category: p.category || "General",
+            unit: "unit",
+            sellingPrice: p.price_retail || 0,
+            storeCost: p.price_wholesale || 0,
+            active: true,
+          })));
+        }
+      } catch (err) {
+        console.error("Failed to fetch materials for orders:", err);
+      }
+      setMaterialsLoading(false);
+    };
+    fetchMaterials();
+  }, []);
 
   const filtered = orders.filter((o) => {
     const q = search.toLowerCase().trim();
