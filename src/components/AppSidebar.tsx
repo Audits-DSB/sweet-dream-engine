@@ -2,11 +2,12 @@ import { useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, ShoppingCart, Package, Truck, Warehouse,
   ClipboardCheck, Receipt, Landmark, UserCog, Building2, Bell,
-  BarChart3, Settings, FileText, Boxes, LogOut, ShieldCheck,
+  BarChart3, Settings, FileText, Boxes, LogOut, ShieldCheck, Factory,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { NavLink } from "@/components/NavLink";
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { useLocation } from "react-router-dom";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -23,6 +24,7 @@ function useNavItems() {
     { title: t.clients, url: "/clients", icon: Users },
     { title: t.clientRequests, url: "/requests", icon: FileText },
     { title: t.materials, url: "/materials", icon: Boxes },
+    { title: t.suppliers, url: "/suppliers", icon: Factory },
     { title: t.orders, url: "/orders", icon: ShoppingCart },
     { title: t.deliveries, url: "/deliveries", icon: Truck },
   ];
@@ -114,11 +116,12 @@ export function AppSidebar() {
 
       <SidebarFooter className="p-3 border-t border-sidebar-border space-y-2">
         {!collapsed && profile?.full_name && (
-          <button onClick={() => navigate("/profile")} className="text-xs text-muted-foreground truncate px-1 hover:text-foreground transition-colors text-right w-full">
+          <button onClick={() => navigate("/profile")} className="text-xs text-muted-foreground truncate px-1 hover:text-foreground transition-colors text-start w-full">
             {profile.full_name}
           </button>
         )}
-        <div className={collapsed ? "flex justify-center" : "flex items-center justify-between"}>
+        <div className={collapsed ? "flex justify-center gap-1" : "flex items-center justify-between"}>
+          <LanguageToggle />
           <ThemeToggle />
           <button onClick={signOut} className="text-muted-foreground hover:text-destructive transition-colors" title={t.signOut}>
             <LogOut className="h-4 w-4" />
