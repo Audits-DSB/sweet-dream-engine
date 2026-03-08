@@ -246,93 +246,103 @@ export default function RequestsPage() {
 
       {/* New Request Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader><DialogTitle>{t.newRequest}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-xs">{t.client} *</Label>
-              <Select value={form.clientId} onValueChange={v => setForm(f => ({ ...f, clientId: v }))}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder={t.selectClientPlaceholder} /></SelectTrigger>
-                <SelectContent>
-                  {clientsList.filter(c => c.status === "Active").map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.name} — {c.city}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Material Selector */}
-            <div>
-              <Label className="text-xs">{t.materials || "المواد"} *</Label>
-              <div className="mt-1 relative">
-                <Search className="absolute start-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  className="ps-9"
-                  placeholder={t.searchMaterials || "ابحث عن مادة..."}
-                  value={matSearch}
-                  onChange={e => setMatSearch(e.target.value)}
-                />
-              </div>
-              <ScrollArea className="h-40 mt-2 border border-border rounded-md">
-                {loadingMats ? (
-                  <div className="flex items-center justify-center h-full text-sm text-muted-foreground">جاري التحميل...</div>
-                ) : filteredMats.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-sm text-muted-foreground">{t.noResults}</div>
-                ) : (
-                  <div className="p-1 space-y-0.5">
-                    {filteredMats.slice(0, 50).map(mat => (
-                      <button
-                        key={mat.code}
-                        type="button"
-                        onClick={() => addMaterial(mat)}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-accent/50 transition-colors text-start"
-                      >
-                        <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="truncate flex-1">{mat.name}</span>
-                        <span className="text-xs text-muted-foreground shrink-0">{mat.sellingPrice.toLocaleString()} {t.currency}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </ScrollArea>
-            </div>
-
-            {/* Selected Items */}
-            {selectedItems.length > 0 && (
+          <ScrollArea className="flex-1 -mx-6 px-6">
+            <div className="space-y-4 pb-2">
               <div>
-                <Label className="text-xs">{t.items} ({selectedItems.length})</Label>
-                <div className="mt-1 space-y-1.5 border border-border rounded-md p-2">
-                  {selectedItems.map(item => (
-                    <div key={item.materialCode} className="flex items-center gap-2 text-sm">
-                      <span className="flex-1 truncate">{item.materialName}</span>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={item.qty}
-                        onChange={e => updateQty(item.materialCode, Number(e.target.value))}
-                        className="w-16 h-7 text-center text-xs"
-                      />
-                      <span className="text-xs text-muted-foreground w-20 text-end">
-                        {(item.qty * item.unitPrice).toLocaleString()} {t.currency}
-                      </span>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeMaterial(item.materialCode)}>
-                        <X className="h-3 w-3" />
-                      </Button>
+                <Label className="text-xs">{t.client} *</Label>
+                <Select value={form.clientId} onValueChange={v => setForm(f => ({ ...f, clientId: v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder={t.selectClientPlaceholder} /></SelectTrigger>
+                  <SelectContent>
+                    {clientsList.filter(c => c.status === "Active").map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name} — {c.city}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Material Selector */}
+              <div>
+                <Label className="text-xs">{t.materials || "المواد"} *</Label>
+                <div className="mt-1 relative">
+                  <Search className="absolute start-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    className="ps-9"
+                    placeholder={t.searchMaterials || "ابحث عن مادة..."}
+                    value={matSearch}
+                    onChange={e => setMatSearch(e.target.value)}
+                  />
+                </div>
+                <ScrollArea className="h-52 mt-2 border border-border rounded-md">
+                  {loadingMats ? (
+                    <div className="flex items-center justify-center h-full text-sm text-muted-foreground py-8">جاري التحميل...</div>
+                  ) : filteredMats.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-sm text-muted-foreground py-8">{t.noResults}</div>
+                  ) : (
+                    <div className="p-1 space-y-0.5">
+                      {filteredMats.slice(0, 80).map(mat => (
+                        <button
+                          key={mat.code}
+                          type="button"
+                          onClick={() => addMaterial(mat)}
+                          className="w-full flex items-center gap-2.5 px-2 py-2 text-sm rounded hover:bg-accent/50 transition-colors text-start"
+                        >
+                          {mat.image_url ? (
+                            <img
+                              src={mat.image_url}
+                              alt={mat.name}
+                              className="h-8 w-8 rounded object-cover shrink-0 bg-muted"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                            />
+                          ) : null}
+                          <Package className={`h-8 w-8 p-1.5 text-muted-foreground shrink-0 rounded bg-muted ${mat.image_url ? 'hidden' : ''}`} />
+                          <span className="truncate flex-1">{mat.name}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">{mat.sellingPrice.toLocaleString()} {t.currency}</span>
+                        </button>
+                      ))}
                     </div>
-                  ))}
-                  <div className="border-t border-border pt-1.5 flex justify-between text-xs font-medium">
-                    <span>{t.expectedTotal}</span>
-                    <span>{calcTotal(selectedItems).toLocaleString()} {t.currency}</span>
+                  )}
+                </ScrollArea>
+              </div>
+
+              {/* Selected Items */}
+              {selectedItems.length > 0 && (
+                <div>
+                  <Label className="text-xs">{t.items} ({selectedItems.length})</Label>
+                  <div className="mt-1 space-y-1.5 border border-border rounded-md p-2 max-h-48 overflow-y-auto">
+                    {selectedItems.map(item => (
+                      <div key={item.materialCode} className="flex items-center gap-2 text-sm">
+                        <span className="flex-1 truncate">{item.materialName}</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={item.qty}
+                          onChange={e => updateQty(item.materialCode, Number(e.target.value))}
+                          className="w-16 h-7 text-center text-xs"
+                        />
+                        <span className="text-xs text-muted-foreground w-20 text-end">
+                          {(item.qty * item.unitPrice).toLocaleString()} {t.currency}
+                        </span>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeMaterial(item.materialCode)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                    <div className="border-t border-border pt-1.5 flex justify-between text-xs font-medium">
+                      <span>{t.expectedTotal}</span>
+                      <span>{calcTotal(selectedItems).toLocaleString()} {t.currency}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <div>
-              <Label className="text-xs">{t.notes}</Label>
-              <Textarea className="mt-1" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+              <div>
+                <Label className="text-xs">{t.notes}</Label>
+                <Textarea className="mt-1" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+              </div>
             </div>
-          </div>
+          </ScrollArea>
           <DialogFooter>
             <Button onClick={handleAdd}>{t.add || "إضافة"}</Button>
           </DialogFooter>
