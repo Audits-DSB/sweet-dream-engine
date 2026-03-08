@@ -92,18 +92,14 @@ export function AppSidebar() {
       <SidebarHeader className="p-4">
         {!collapsed ? (
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">OP</span>
-            </div>
+            <img src="/images/dsb-logo.png" alt="DSB" className="h-9 w-9 rounded-lg object-contain" />
             <div>
-              <h2 className="font-semibold text-sm text-foreground leading-none">{t.appName}</h2>
-              <p className="text-[11px] text-muted-foreground mt-0.5">{t.appDesc}</p>
+              <h2 className="font-semibold text-sm text-foreground leading-none">Dental Smart Box</h2>
+              <p className="text-[11px] text-muted-foreground mt-0.5">DSB</p>
             </div>
           </div>
         ) : (
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center mx-auto">
-            <span className="text-primary-foreground font-bold text-sm">O</span>
-          </div>
+          <img src="/images/dsb-logo.png" alt="DSB" className="h-8 w-8 rounded-lg object-contain mx-auto" />
         )}
       </SidebarHeader>
 
