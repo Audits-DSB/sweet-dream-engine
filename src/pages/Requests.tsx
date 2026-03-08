@@ -5,6 +5,9 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Plus, Eye, MoreHorizontal, CheckCircle, XCircle, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -24,6 +27,18 @@ const mockRequests = [
 export default function RequestsPage() {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const { user } = useAuth();
+  const { t } = useLanguage();
+
+  const sendNotification = async (title: string, body: string, type: string = "info") => {
+    if (!user) return;
+    await supabase.from("notifications").insert({
+      user_id: user.id,
+      title,
+      body,
+      type,
+    });
+  };
 
   const filtered = mockRequests.filter((r) => {
     const matchSearch = !search || r.client.toLowerCase().includes(search.toLowerCase()) || r.id.toLowerCase().includes(search.toLowerCase());
@@ -34,42 +49,42 @@ export default function RequestsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="page-header">طلبات العملاء</h1>
-        <p className="page-description">{mockRequests.length} طلب · {mockRequests.filter(r => r.status === "Pending Review").length} بانتظار المراجعة</p>
+        <h1 className="page-header">{t.requestsTitle}</h1>
+        <p className="page-description">{mockRequests.length} {t.requestCount} · {mockRequests.filter(r => r.status === "Pending Review").length} {t.awaitingReview}</p>
       </div>
 
       <DataToolbar
-        searchPlaceholder="بحث في الطلبات..."
+        searchPlaceholder={t.searchRequests}
         searchValue={search}
         onSearchChange={setSearch}
         filters={[
-          { label: "الحالة", value: "status", options: [
-            { label: "طلب عميل", value: "Client Requested" },
-            { label: "بانتظار المراجعة", value: "Pending Review" },
-            { label: "موافق عليه", value: "Approved" },
-            { label: "مرفوض", value: "Rejected" },
-            { label: "تم تحويله لطلب", value: "Converted to Order" },
-            { label: "ملغي", value: "Cancelled" },
+          { label: t.status, value: "status", options: [
+            { label: t.clientRequested, value: "Client Requested" },
+            { label: t.pendingReview, value: "Pending Review" },
+            { label: t.approved, value: "Approved" },
+            { label: t.rejected, value: "Rejected" },
+            { label: t.convertedToOrder, value: "Converted to Order" },
+            { label: t.cancelled, value: "Cancelled" },
           ]},
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("requests", ["الكود","العميل","التاريخ","البنود","الإجمالي المتوقع","الحالة","ملاحظات"], filtered.map(r => [r.id, r.client, r.date, r.items, r.expectedTotal, r.status, r.notes]))}
-        actions={<Button size="sm" className="h-9" onClick={() => toast.info("نموذج طلب جديد قريباً")}><Plus className="h-3.5 w-3.5 mr-1.5" />طلب جديد</Button>}
+        onExport={() => exportToCsv("requests", [t.code, t.client, t.date, t.items, t.expectedTotal, t.status, t.notes], filtered.map(r => [r.id, r.client, r.date, r.items, r.expectedTotal, r.status, r.notes]))}
+        actions={<Button size="sm" className="h-9" onClick={() => toast.info(t.newRequestFormSoon)}><Plus className="h-3.5 w-3.5 mr-1.5" />{t.newRequest}</Button>}
       />
 
       <div className="stat-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الكود</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">العميل</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">التاريخ</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">البنود</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">الإجمالي المتوقع</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الحالة</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">ملاحظات</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">إجراءات</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">{t.code}</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">{t.date}</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">{t.items}</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">{t.expectedTotal}</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
+              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">{t.notes}</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">{t.actions}</th>
             </tr>
           </thead>
           <tbody>
@@ -88,10 +103,19 @@ export default function RequestsPage() {
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => toast.info(`عرض ${req.id}`)}><Eye className="h-3.5 w-3.5 mr-2" />عرض التفاصيل</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => { toast.success(`تمت الموافقة على ${req.id}`); }}><CheckCircle className="h-3.5 w-3.5 mr-2" />موافقة</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => { toast.error(`تم رفض ${req.id}`); }}><XCircle className="h-3.5 w-3.5 mr-2" />رفض</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => { toast.success(`تم تحويل ${req.id} لطلب`); }}><ArrowRight className="h-3.5 w-3.5 mr-2" />تحويل لطلب</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toast.info(`${t.viewDetails}: ${req.id}`)}><Eye className="h-3.5 w-3.5 mr-2" />{t.viewDetails}</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        toast.success(`${t.requestApproved}: ${req.id}`);
+                        sendNotification(t.requestApproved, `${req.id} - ${req.client}`, "success");
+                      }}><CheckCircle className="h-3.5 w-3.5 mr-2" />{t.approve}</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        toast.error(`${t.requestRejected}: ${req.id}`);
+                        sendNotification(t.requestRejected, `${req.id} - ${req.client}`, "warning");
+                      }}><XCircle className="h-3.5 w-3.5 mr-2" />{t.reject}</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        toast.success(`${t.requestConverted}: ${req.id}`);
+                        sendNotification(t.requestConverted, `${req.id} - ${req.client}`, "info");
+                      }}><ArrowRight className="h-3.5 w-3.5 mr-2" />{t.convertToOrder}</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>
@@ -100,7 +124,7 @@ export default function RequestsPage() {
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground text-sm">لا توجد طلبات مطابقة للبحث.</div>
+          <div className="text-center py-12 text-muted-foreground text-sm">{t.noMatchingRequests}</div>
         )}
       </div>
     </div>
