@@ -100,6 +100,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
