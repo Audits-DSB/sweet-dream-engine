@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DataToolbar } from "@/components/DataToolbar";
+import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
@@ -67,7 +68,7 @@ export default function CollectionsPage() {
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => {}}
+        onExport={() => exportToCsv("collections", ["Invoice ID","Order","Client","Issue Date","Due Date","Total","Paid","Remaining","Status"], filtered.map(c => [c.id, c.order, c.client, c.issueDate, c.dueDate, c.total, c.paid, c.remaining, c.status]))}
       />
 
       <div className="stat-card overflow-x-auto">

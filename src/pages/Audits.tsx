@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DataToolbar } from "@/components/DataToolbar";
+import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/StatCard";
@@ -81,7 +82,7 @@ export default function AuditsPage() {
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => {}}
+        onExport={() => exportToCsv("audits", ["Audit ID","Client","Date","Auditor","Total Items","Matched","Shortage","Surplus","Status","Notes"], filtered.map(a => [a.id, a.client, a.date, a.auditor, a.totalItems, a.matched, a.shortage, a.surplus, a.status, a.notes]))}
         actions={<Button size="sm" className="h-9"><Plus className="h-3.5 w-3.5 mr-1.5" />New Audit</Button>}
       />
 
