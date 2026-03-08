@@ -120,7 +120,7 @@ export default function OrderDetails() {
               </thead>
               <tbody>
                 {order.lines.map((line, idx) => (
-                  <tr key={idx} className="border-b border-border/50 hover:bg-muted/30 cursor-pointer" onClick={() => navigate("/materials")}>
+                  <tr key={idx} className="border-b border-border/50 hover:bg-muted/30 cursor-pointer" onClick={() => navigate(`/materials?search=${encodeURIComponent(line.code)}`)}>
                     <td className="py-2.5 px-3 font-medium">{line.material}</td>
                     <td className="py-2.5 px-3 font-mono text-xs text-muted-foreground">{line.code}</td>
                     <td className="py-2.5 px-3 text-muted-foreground">{line.unit}</td>

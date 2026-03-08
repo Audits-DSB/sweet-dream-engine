@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
@@ -79,9 +79,10 @@ function mapProduct(p: ExternalProduct): Material {
 export default function MaterialsPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchParams.get("search") || "");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailItem, setDetailItem] = useState<Material | null>(null);
