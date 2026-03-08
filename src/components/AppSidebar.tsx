@@ -41,6 +41,7 @@ function useNavItems() {
     { title: t.founders, url: "/founders", icon: UserCog },
     { title: t.companyProfit, url: "/company-profit", icon: Building2 },
     { title: t.founderFunding, url: "/founder-funding", icon: Landmark },
+    { title: t.finReport, url: "/financial-report", icon: FileBarChart },
   ];
 
   const systemItems = [
