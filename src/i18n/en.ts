@@ -678,7 +678,6 @@ export const en = {
   // Collection-Treasury link
   recordPaymentDialog: "Record Payment",
   paymentAmount: "Payment Amount",
-  paymentMethod: "Payment Method",
   treasuryAccountForPayment: "Treasury Account",
   linkToTreasury: "Auto-link to Treasury",
   paymentRecorded: "Payment recorded successfully",

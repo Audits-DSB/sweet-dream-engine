@@ -678,7 +678,6 @@ export const ar = {
   // Collection-Treasury link
   recordPaymentDialog: "تسجيل دفعة",
   paymentAmount: "مبلغ الدفعة",
-  paymentMethod: "طريقة الدفع",
   treasuryAccountForPayment: "حساب الخزينة",
   linkToTreasury: "ربط بالخزينة تلقائياً",
   paymentRecorded: "تم تسجيل الدفعة بنجاح",
