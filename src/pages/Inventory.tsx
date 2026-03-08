@@ -98,7 +98,7 @@ export default function InventoryPage() {
               const daysToExpiry = lot.expiry ? Math.ceil((new Date(lot.expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
               const isNearExpiry = daysToExpiry !== null && daysToExpiry > 0 && daysToExpiry <= 30;
               return (
-                <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/inventory/${lot.id}`)}>
+                <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetailItem(lot)}>
                   <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{lot.id}</td>
                   <td className="py-3 px-3 font-medium hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${lot.clientId}`); }}>{lot.client}</td>
                   <td className="py-3 px-3 hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate("/materials"); }}>{lot.material}</td>

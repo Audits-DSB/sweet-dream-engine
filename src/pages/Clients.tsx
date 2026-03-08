@@ -111,8 +111,8 @@ export default function ClientsPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => navigate(`/clients/${client.id}`)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewProfile}</DropdownMenuItem>
-                      <DropdownMenuItem><Mail className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.sendEmail}</DropdownMenuItem>
-                      <DropdownMenuItem><Phone className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.call}</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { if (client.email) { window.open(`mailto:${client.email}`); } else { toast.info(t.noEmail || "لا يوجد بريد إلكتروني"); } }}><Mail className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.sendEmail}</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { if (client.phone) { window.open(`tel:${client.phone}`); } else { toast.info(t.noPhone || "لا يوجد رقم هاتف"); } }}><Phone className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.call}</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>

@@ -106,6 +106,27 @@ export default function FoundersPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Founder Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{t.edit || "تعديل"} — {editingFounder?.name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-xs">{t.name} *</Label><Input className="h-9 mt-1" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /></div>
+            <div><Label className="text-xs">{t.jobTitle}</Label><Input className="h-9 mt-1" value={editForm.alias} onChange={(e) => setEditForm({ ...editForm, alias: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
+              <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /></div>
+            </div>
+            <Button className="w-full" onClick={() => {
+              if (!editingFounder || !editForm.name) return;
+              setFounders(founders.map(f => f.id === editingFounder.id ? { ...f, name: editForm.name, alias: editForm.alias, email: editForm.email, phone: editForm.phone } : f));
+              setEditDialogOpen(false);
+              toast.success(t.founderUpdated || "تم تحديث بيانات المؤسس");
+            }}>{t.save || "حفظ"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

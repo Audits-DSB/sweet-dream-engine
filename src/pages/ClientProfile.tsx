@@ -1,11 +1,17 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ArrowLeft, Mail, Phone, MapPin, Calendar, Package, Receipt, ClipboardCheck, TrendingUp } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { clientsList } from "@/data/store";
+import { toast } from "sonner";
 
 const clientData: Record<string, any> = {
   "C001": {
@@ -32,17 +38,27 @@ export default function ClientProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const [editOpen, setEditOpen] = useState(false);
 
   // Build default from clientsList if not in detailed data
   const detailed = clientData[id || ""];
   const basic = clientsList.find(c => c.id === id);
-  const client = detailed || {
+  const clientBase = detailed || {
     id: basic?.id || id, name: basic?.name || "—", contact: basic?.contact || "—", email: basic?.email || "",
     phone: basic?.phone || "", city: basic?.city || "", address: "", status: basic?.status || "Active",
     joinDate: basic?.joinDate || "", totalOrders: basic?.totalOrders || 0, totalDelivered: 0,
     outstanding: basic?.outstanding || 0, totalPaid: 0, currentInventoryValue: 0,
     consumptionData: [{ week: "W1", value: 0 }],
     recentOrders: [], inventoryItems: [],
+  };
+
+  const [client, setClient] = useState(clientBase);
+  const [editForm, setEditForm] = useState({ name: client.name, contact: client.contact, email: client.email, phone: client.phone, city: client.city, address: client.address || "", status: client.status });
+
+  const handleEditSave = () => {
+    setClient({ ...client, ...editForm });
+    setEditOpen(false);
+    toast.success(t.clientUpdated || "تم تحديث بيانات العميل");
   };
 
   const stats = [
@@ -60,7 +76,7 @@ export default function ClientProfile() {
           <div className="flex items-center gap-3"><h1 className="page-header">{client.name}</h1><StatusBadge status={client.status} /></div>
           <p className="page-description">{client.id} · {t.clientProfileJoined} {client.joinDate}</p>
         </div>
-        <Button variant="outline" size="sm">{t.editClient}</Button>
+        <Button variant="outline" size="sm" onClick={() => { setEditForm({ name: client.name, contact: client.contact, email: client.email, phone: client.phone, city: client.city, address: client.address || "", status: client.status }); setEditOpen(true); }}>{t.editClient}</Button>
       </div>
 
       <div className="stat-card">
@@ -155,6 +171,38 @@ export default function ClientProfile() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Edit Client Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{t.editClient}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-xs">{t.clientName} *</Label><Input className="h-9 mt-1" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} /></div>
+            <div><Label className="text-xs">{t.contactPerson}</Label><Input className="h-9 mt-1" value={editForm.contact} onChange={e => setEditForm({ ...editForm, contact: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} /></div>
+              <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">{t.city}</Label><Input className="h-9 mt-1" value={editForm.city} onChange={e => setEditForm({ ...editForm, city: e.target.value })} /></div>
+              <div>
+                <Label className="text-xs">{t.status}</Label>
+                <Select value={editForm.status} onValueChange={v => setEditForm({ ...editForm, status: v })}>
+                  <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Active">{t.active}</SelectItem>
+                    <SelectItem value="Inactive">{t.inactive}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div><Label className="text-xs">{t.address || "العنوان"}</Label><Input className="h-9 mt-1" value={editForm.address} onChange={e => setEditForm({ ...editForm, address: e.target.value })} /></div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleEditSave}>{t.save || "حفظ"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
