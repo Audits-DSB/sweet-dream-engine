@@ -212,8 +212,8 @@ export default function SettingsPage() {
                     <td className="py-2.5 px-3"><Badge variant={actor.active ? "default" : "secondary"} className={actor.active ? "bg-success/10 text-success border-0" : ""}>{actor.active ? t.active : t.inactive}</Badge></td>
                     <td className="py-2.5 px-3 text-end">
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => toggleActorStatus(actor.id)}><Pencil className="h-3 w-3" /></Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => deleteActor(actor.id)}><Trash2 className="h-3 w-3" /></Button>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => editActor(actor)}><Pencil className="h-3 w-3" /></Button>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => toggleActorStatus(actor.id)}><Switch checked={actor.active} className="scale-75" /></Button>
                       </div>
                     </td>
                   </tr>
