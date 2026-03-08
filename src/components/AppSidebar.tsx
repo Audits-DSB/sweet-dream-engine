@@ -37,6 +37,7 @@ function useNavItems() {
 
   const financeItems = [
     { title: t.collections, url: "/collections", icon: Receipt },
+    { title: t.treasury, url: "/treasury", icon: Vault },
     { title: t.founders, url: "/founders", icon: UserCog },
     { title: t.companyProfit, url: "/company-profit", icon: Building2 },
     { title: t.founderFunding, url: "/founder-funding", icon: Landmark },
