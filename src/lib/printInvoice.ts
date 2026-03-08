@@ -21,109 +21,463 @@ export function printInvoice(data: {
   <meta charset="utf-8" />
   <title>${data.title} - ${company}</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
+    
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 32px 40px; color: #1a1a1a; direction: rtl; background: #fff; }
     
-    .top-bar { height: 4px; background: linear-gradient(90deg, #1a6b8a, #2a9bc0, #1a6b8a); margin: -32px -40px 24px -40px; }
-    
-    .header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 2px solid #e8e8e8; }
-    .brand { display: flex; align-items: center; gap: 14px; }
-    .brand img { width: 64px; height: 64px; object-fit: contain; }
-    .brand-text .company { font-size: 22px; font-weight: 700; color: #1a6b8a; letter-spacing: -0.3px; }
-    .brand-text .abbr { font-size: 11px; font-weight: 600; color: #999; letter-spacing: 2px; text-transform: uppercase; }
-    .brand-text .contact { font-size: 10px; color: #888; margin-top: 4px; line-height: 1.6; }
-    
-    .invoice-info { text-align: left; background: #f8fafb; border: 1px solid #e8eef1; border-radius: 8px; padding: 14px 18px; min-width: 220px; }
-    .invoice-info .doc-type { font-size: 16px; font-weight: 700; color: #1a6b8a; margin-bottom: 8px; }
-    .invoice-info .row { display: flex; justify-content: space-between; font-size: 12px; line-height: 2; }
-    .invoice-info .row .label { color: #888; }
-    .invoice-info .row .val { font-weight: 600; color: #333; }
-    
-    table { width: 100%; border-collapse: collapse; margin: 24px 0 16px; font-size: 12px; }
-    thead { background: #1a6b8a; color: #fff; }
-    th { padding: 10px 14px; text-align: start; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
-    th:first-child { border-radius: 0 6px 0 0; }
-    th:last-child { border-radius: 6px 0 0 0; }
-    td { padding: 9px 14px; border-bottom: 1px solid #f0f0f0; }
-    tbody tr:hover { background: #f8fafb; }
-    tbody tr:nth-child(even) { background: #fafbfc; }
-    
-    .totals-section { display: flex; justify-content: flex-start; margin-top: 16px; }
-    .totals-box { background: #f8fafb; border: 1px solid #e8eef1; border-radius: 8px; padding: 14px 20px; min-width: 260px; }
-    .total-row { display: flex; justify-content: space-between; font-size: 13px; line-height: 2.2; }
-    .total-row .label { color: #666; }
-    .total-row .val { font-weight: 600; }
-    .total-row.final { font-weight: 700; font-size: 15px; color: #1a6b8a; border-top: 2px solid #1a6b8a; padding-top: 6px; margin-top: 4px; }
-    
-    .terms { margin-top: 32px; padding: 14px 18px; background: #fefefe; border: 1px solid #eee; border-radius: 6px; }
-    .terms h4 { font-size: 11px; font-weight: 700; color: #1a6b8a; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .terms ul { list-style: none; font-size: 10px; color: #777; line-height: 2; }
-    .terms ul li::before { content: "•"; color: #1a6b8a; margin-left: 6px; font-weight: bold; }
-    
-    .footer-bar { margin-top: 40px; text-align: center; padding-top: 16px; border-top: 2px solid #e8e8e8; }
-    .footer-bar .thanks { font-size: 13px; font-weight: 600; color: #1a6b8a; margin-bottom: 4px; }
-    .footer-bar .sub { font-size: 10px; color: #aaa; }
-    
+    body { 
+      font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; 
+      color: #1a1a2e; 
+      direction: rtl; 
+      background: #fff;
+      padding: 0;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .page {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 48px;
+    }
+
+    /* === Top accent bar === */
+    .accent-bar {
+      height: 6px;
+      background: linear-gradient(90deg, #0f4c75 0%, #1b9aaa 50%, #0f4c75 100%);
+    }
+
+    /* === Header === */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 32px 0 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .brand img {
+      width: 72px;
+      height: 72px;
+      object-fit: contain;
+      border-radius: 12px;
+    }
+
+    .brand-info .company-name {
+      font-size: 24px;
+      font-weight: 800;
+      color: #0f4c75;
+      letter-spacing: -0.5px;
+      line-height: 1.2;
+    }
+
+    .brand-info .tagline {
+      font-size: 11px;
+      font-weight: 600;
+      color: #1b9aaa;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .brand-info .contact-line {
+      font-size: 10px;
+      color: #8899a6;
+      margin-top: 6px;
+      line-height: 1.8;
+    }
+
+    /* === Invoice Meta Card === */
+    .meta-card {
+      background: linear-gradient(135deg, #f8fbfd 0%, #eef5f9 100%);
+      border: 1px solid #d4e4ed;
+      border-radius: 12px;
+      padding: 18px 22px;
+      min-width: 240px;
+    }
+
+    .meta-card .doc-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: #0f4c75;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #0f4c75;
+    }
+
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      padding: 4px 0;
+    }
+
+    .meta-row .meta-label {
+      color: #8899a6;
+      font-weight: 500;
+    }
+
+    .meta-row .meta-value {
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    /* === Divider === */
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent 0%, #d4e4ed 20%, #d4e4ed 80%, transparent 100%);
+      margin: 8px 0 24px;
+    }
+
+    /* === Client Info Bar === */
+    .client-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #f8fbfd;
+      border-radius: 8px;
+      padding: 12px 18px;
+      margin-bottom: 24px;
+      border-right: 4px solid #1b9aaa;
+    }
+
+    .client-bar .client-label {
+      font-size: 11px;
+      color: #8899a6;
+      font-weight: 600;
+    }
+
+    .client-bar .client-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f4c75;
+    }
+
+    /* === Table === */
+    .items-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin: 0 0 24px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #e2ecf1;
+    }
+
+    .items-table thead {
+      background: linear-gradient(135deg, #0f4c75 0%, #1b6d8a 100%);
+    }
+
+    .items-table th {
+      padding: 12px 16px;
+      text-align: start;
+      font-weight: 700;
+      font-size: 11px;
+      color: #fff;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .items-table td {
+      padding: 11px 16px;
+      border-bottom: 1px solid #f0f4f7;
+      font-size: 12px;
+      color: #2c3e50;
+    }
+
+    .items-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .items-table tbody tr:nth-child(even) {
+      background: #fafcfd;
+    }
+
+    .items-table tbody tr:hover {
+      background: #f0f7fb;
+    }
+
+    /* Numeric cells align */
+    .items-table th:nth-last-child(-n+2),
+    .items-table td:nth-last-child(-n+2) {
+      text-align: left;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Row number */
+    .row-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      background: #e8f0f5;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #0f4c75;
+    }
+
+    /* === Totals === */
+    .totals-wrapper {
+      display: flex;
+      justify-content: flex-start;
+      margin-bottom: 28px;
+    }
+
+    .totals-box {
+      background: linear-gradient(135deg, #f8fbfd 0%, #eef5f9 100%);
+      border: 1px solid #d4e4ed;
+      border-radius: 12px;
+      padding: 18px 24px;
+      min-width: 300px;
+    }
+
+    .total-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      font-size: 13px;
+    }
+
+    .total-line .t-label {
+      color: #5a6c7d;
+      font-weight: 500;
+    }
+
+    .total-line .t-value {
+      font-weight: 700;
+      color: #1a1a2e;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .total-line.grand {
+      margin-top: 8px;
+      padding-top: 12px;
+      border-top: 2px solid #0f4c75;
+      font-size: 16px;
+    }
+
+    .total-line.grand .t-label {
+      color: #0f4c75;
+      font-weight: 800;
+    }
+
+    .total-line.grand .t-value {
+      color: #0f4c75;
+      font-weight: 800;
+      font-size: 17px;
+    }
+
+    /* === Terms === */
+    .terms-section {
+      background: #fafcfd;
+      border: 1px solid #e8eef2;
+      border-radius: 10px;
+      padding: 18px 22px;
+      margin-bottom: 32px;
+    }
+
+    .terms-section h4 {
+      font-size: 12px;
+      font-weight: 800;
+      color: #0f4c75;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .terms-section h4::before {
+      content: "📋";
+      font-size: 14px;
+    }
+
+    .terms-section ul {
+      list-style: none;
+      font-size: 10.5px;
+      color: #5a6c7d;
+      line-height: 2.2;
+    }
+
+    .terms-section ul li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .terms-section ul li::before {
+      content: "";
+      width: 5px;
+      height: 5px;
+      background: #1b9aaa;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* === Signature Area === */
+    .signatures {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 32px;
+      gap: 40px;
+    }
+
+    .sig-block {
+      flex: 1;
+      text-align: center;
+    }
+
+    .sig-block .sig-label {
+      font-size: 11px;
+      color: #8899a6;
+      font-weight: 600;
+      margin-bottom: 40px;
+    }
+
+    .sig-block .sig-line {
+      border-top: 1px dashed #c0cdd6;
+      padding-top: 8px;
+      font-size: 10px;
+      color: #8899a6;
+    }
+
+    /* === Footer === */
+    .footer {
+      text-align: center;
+      padding-top: 20px;
+      border-top: 2px solid #e8eef2;
+    }
+
+    .footer .thank-you {
+      font-size: 15px;
+      font-weight: 800;
+      color: #0f4c75;
+      margin-bottom: 4px;
+    }
+
+    .footer .sub-note {
+      font-size: 10px;
+      color: #aab7c4;
+      line-height: 1.8;
+    }
+
+    .footer .powered {
+      margin-top: 12px;
+      font-size: 9px;
+      color: #c8d3dc;
+      letter-spacing: 1px;
+    }
+
+    /* === Print Styles === */
     @media print { 
-      body { padding: 16px 24px; } 
-      .top-bar { margin: -16px -24px 16px -24px; }
+      body { padding: 0; }
+      .page { padding: 24px 32px; max-width: none; }
+      .accent-bar { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .items-table thead { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .meta-card, .client-bar, .totals-box, .terms-section { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
     }
   </style>
 </head>
 <body>
-  <div class="top-bar"></div>
-  
-  <div class="header">
-    <div class="brand">
-      <img src="${logoUrl}" alt="DSB Logo" />
-      <div class="brand-text">
-        <div class="company">${company}</div>
-        <div class="abbr">DSB</div>
-        <div class="contact">
-          إدارة مستلزمات طب الأسنان<br/>
-          info@dentalsmartbox.com
+  <div class="accent-bar"></div>
+  <div class="page">
+
+    <div class="header">
+      <div class="brand">
+        <img src="${logoUrl}" alt="Logo" />
+        <div class="brand-info">
+          <div class="company-name">${company}</div>
+          <div class="tagline">DSB</div>
+          <div class="contact-line">
+            إدارة مستلزمات طب الأسنان<br/>
+            info@dentalsmartbox.com · +20 100 000 0000
+          </div>
         </div>
       </div>
+      <div class="meta-card">
+        <div class="doc-title">${data.title}</div>
+        <div class="meta-row"><span class="meta-label">رقم المستند</span><span class="meta-value">${data.invoiceNumber}</span></div>
+        <div class="meta-row"><span class="meta-label">التاريخ</span><span class="meta-value">${data.date}</span></div>
+        ${data.subtitle ? `<div class="meta-row"><span class="meta-label">ملاحظة</span><span class="meta-value">${data.subtitle}</span></div>` : ''}
+      </div>
     </div>
-    <div class="invoice-info">
-      <div class="doc-type">${data.title}</div>
-      <div class="row"><span class="label">رقم المستند:</span><span class="val">${data.invoiceNumber}</span></div>
-      <div class="row"><span class="label">العميل:</span><span class="val">${data.clientName}</span></div>
-      <div class="row"><span class="label">التاريخ:</span><span class="val">${data.date}</span></div>
-      ${data.subtitle ? `<div class="row"><span class="label">ملاحظة:</span><span class="val">${data.subtitle}</span></div>` : ''}
+
+    <div class="divider"></div>
+
+    <div class="client-bar">
+      <span class="client-label">العميل:</span>
+      <span class="client-name">${data.clientName}</span>
     </div>
-  </div>
 
-  <table>
-    <thead><tr>${data.columns.map(c => `<th>${c}</th>`).join('')}</tr></thead>
-    <tbody>${data.rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody>
-  </table>
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="width: 40px">#</th>
+          ${data.columns.map(c => `<th>${c}</th>`).join('')}
+        </tr>
+      </thead>
+      <tbody>
+        ${data.rows.map((row, i) => `
+          <tr>
+            <td><span class="row-num">${i + 1}</span></td>
+            ${row.map(cell => `<td>${cell}</td>`).join('')}
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
 
-  ${data.totals ? `
-  <div class="totals-section">
-    <div class="totals-box">
-      ${data.totals.map((t, i) => `<div class="total-row ${i === data.totals!.length - 1 ? 'final' : ''}"><span class="label">${t.label}</span><span class="val">${t.value}</span></div>`).join('')}
+    ${data.totals ? `
+    <div class="totals-wrapper">
+      <div class="totals-box">
+        ${data.totals.map((t, i) => `
+          <div class="total-line ${i === data.totals!.length - 1 ? 'grand' : ''}">
+            <span class="t-label">${t.label}</span>
+            <span class="t-value">${t.value}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>` : ''}
+
+    ${data.terms && data.terms.length > 0 ? `
+    <div class="terms-section">
+      <h4>الشروط والأحكام</h4>
+      <ul>${data.terms.map(t => `<li>${t}</li>`).join('')}</ul>
+    </div>` : `
+    <div class="terms-section">
+      <h4>الشروط والأحكام</h4>
+      <ul>
+        <li>جميع الأسعار بالجنيه المصري وشاملة الضريبة ما لم يُذكر خلاف ذلك</li>
+        <li>يرجى مراجعة الكميات خلال 48 ساعة من استلام الفاتورة</li>
+        <li>المواد المستلمة لا تُرد إلا في حالة وجود عيب مصنعي</li>
+        <li>السداد مطلوب خلال 30 يوماً من تاريخ الفاتورة</li>
+      </ul>
+    </div>`}
+
+    <div class="signatures">
+      <div class="sig-block">
+        <div class="sig-label">توقيع المسؤول</div>
+        <div class="sig-line">الاسم / التاريخ</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-label">توقيع العميل</div>
+        <div class="sig-line">الاسم / التاريخ</div>
+      </div>
     </div>
-  </div>` : ''}
 
-  ${data.terms && data.terms.length > 0 ? `
-  <div class="terms">
-    <h4>الشروط والأحكام</h4>
-    <ul>${data.terms.map(t => `<li>${t}</li>`).join('')}</ul>
-  </div>` : `
-  <div class="terms">
-    <h4>الشروط والأحكام</h4>
-    <ul>
-      <li>جميع الأسعار بالجنيه المصري وشاملة الضريبة ما لم يُذكر خلاف ذلك</li>
-      <li>يرجى مراجعة الكميات خلال 48 ساعة من استلام الفاتورة</li>
-      <li>المواد المستلمة لا تُرد إلا في حالة وجود عيب مصنعي</li>
-      <li>السداد مطلوب خلال 30 يوماً من تاريخ الفاتورة</li>
-    </ul>
-  </div>`}
+    <div class="footer">
+      <div class="thank-you">شكراً لتعاملكم مع ${company}</div>
+      <div class="sub-note">${data.footer || 'هذا المستند صادر إلكترونياً ولا يحتاج إلى توقيع'}</div>
+      <div class="powered">Powered by OpsHub</div>
+    </div>
 
-  <div class="footer-bar">
-    <div class="thanks">شكراً لتعاملكم مع Dental Smart Box</div>
-    <div class="sub">${data.footer || 'هذا المستند صادر إلكترونياً ولا يحتاج إلى توقيع'}</div>
   </div>
 </body>
 </html>`;

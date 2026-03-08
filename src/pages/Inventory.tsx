@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Users, List, ChevronDown, ChevronUp } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const mockInventory = [
@@ -28,6 +28,8 @@ export default function InventoryPage() {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [detailItem, setDetailItem] = useState<typeof mockInventory[0] | null>(null);
+  const [viewMode, setViewMode] = useState<"client" | "item">("client");
+  const [expandedClient, setExpandedClient] = useState<string | null>(null);
 
   const clients = [...new Set(mockInventory.map(i => i.client))];
 
@@ -38,6 +40,18 @@ export default function InventoryPage() {
     return matchSearch && matchStatus && matchClient;
   });
 
+  // Group by client
+  const clientGroups = useMemo(() => {
+    const groups: Record<string, { clientId: string; items: typeof mockInventory }> = {};
+    filtered.forEach(item => {
+      if (!groups[item.client]) {
+        groups[item.client] = { clientId: item.clientId, items: [] };
+      }
+      groups[item.client].items.push(item);
+    });
+    return groups;
+  }, [filtered]);
+
   const lowStockCount = mockInventory.filter(i => i.status === "Low Stock").length;
   const expiredCount = mockInventory.filter(i => i.status === "Expired").length;
   const nearExpiryCount = mockInventory.filter(i => {
@@ -46,11 +60,25 @@ export default function InventoryPage() {
     return days > 0 && days <= 30 && i.status !== "Depleted" && i.status !== "Expired";
   }).length;
 
+  const toggleClient = (client: string) => {
+    setExpandedClient(expandedClient === client ? null : client);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="page-header">{t.inventoryTitle}</h1>
-        <p className="page-description">{mockInventory.length} {t.batchCount} {t.acrossClients} {clients.length} {t.clientsLabel}</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="page-header">{t.inventoryTitle}</h1>
+          <p className="page-description">{mockInventory.length} {t.batchCount} {t.acrossClients} {clients.length} {t.clientsLabel}</p>
+        </div>
+        <div className="flex gap-1 bg-muted rounded-lg p-0.5">
+          <Button variant={viewMode === "client" ? "default" : "ghost"} size="sm" className="h-7 text-xs gap-1.5" onClick={() => setViewMode("client")}>
+            <Users className="h-3.5 w-3.5" />{t.viewByClient}
+          </Button>
+          <Button variant={viewMode === "item" ? "default" : "ghost"} size="sm" className="h-7 text-xs gap-1.5" onClick={() => setViewMode("item")}>
+            <List className="h-3.5 w-3.5" />{t.viewByItem}
+          </Button>
+        </div>
       </div>
 
       {(lowStockCount > 0 || expiredCount > 0 || nearExpiryCount > 0) && (
@@ -77,49 +105,138 @@ export default function InventoryPage() {
         onExport={() => exportToCsv("inventory", [t.batchNumber, t.client, t.material, t.code, t.unit, t.deliveredQty, t.remainingQty, t.sellingPrice, t.storeCost, t.deliveryDate, t.expiryDate, t.sourceOrder, t.status], filtered.map(i => [i.id, i.client, i.material, i.code, i.unit, i.delivered, i.remaining, i.sellingPrice, i.storeCost, i.deliveryDate, i.expiry, i.sourceOrder, i.status]))}
       />
 
-      <div className="stat-card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.batchNumber}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.deliveredQty}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.remainingQty}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.unit}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.deliveryDate}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.expiryDate}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.sourceOrder}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((lot) => {
-              const daysToExpiry = lot.expiry ? Math.ceil((new Date(lot.expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
-              const isNearExpiry = daysToExpiry !== null && daysToExpiry > 0 && daysToExpiry <= 30;
-              return (
-                <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetailItem(lot)}>
-                  <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{lot.id}</td>
-                  <td className="py-3 px-3 font-medium hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${lot.clientId}`); }}>{lot.client}</td>
-                  <td className="py-3 px-3 hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate("/materials"); }}>{lot.material}</td>
-                  <td className="py-3 px-3 text-end">{lot.delivered}</td>
-                  <td className="py-3 px-3 text-end font-medium">{lot.remaining}</td>
-                  <td className="py-3 px-3 text-muted-foreground">{lot.unit}</td>
-                  <td className="py-3 px-3 text-muted-foreground text-xs">{lot.deliveryDate}</td>
-                  <td className="py-3 px-3 text-xs">
-                    <span className={isNearExpiry ? "text-warning font-medium" : "text-muted-foreground"}>
-                      {lot.expiry}{isNearExpiry && ` (${daysToExpiry} ${t.daysRemaining})`}
-                    </span>
-                  </td>
-                  <td className="py-3 px-3 font-mono text-xs text-muted-foreground hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${lot.sourceOrder}`); }}>{lot.sourceOrder}</td>
-                  <td className="py-3 px-3"><StatusBadge status={lot.status} /></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {filtered.length === 0 && <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>}
-      </div>
+      {viewMode === "client" ? (
+        /* ===== CLIENT VIEW ===== */
+        <div className="space-y-3">
+          {Object.entries(clientGroups).map(([clientName, group]) => {
+            const isExpanded = expandedClient === clientName;
+            const totalRemaining = group.items.reduce((s, i) => s + i.remaining * i.sellingPrice, 0);
+            const materialsCount = group.items.length;
+            const hasWarning = group.items.some(i => i.status === "Low Stock" || i.status === "Expired");
+
+            return (
+              <div key={clientName} className="stat-card overflow-hidden">
+                {/* Client Header */}
+                <div
+                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors"
+                  onClick={() => toggleClient(clientName)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
+                      {clientName.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-sm cursor-pointer hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${group.clientId}`); }}>{clientName}</h3>
+                        {hasWarning && <AlertTriangle className="h-3.5 w-3.5 text-warning" />}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{materialsCount} {t.materialsCount} · {t.remainingValue}: {totalRemaining.toLocaleString()} {t.currency}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex gap-1">
+                      {group.items.map(item => (
+                        <StatusBadge key={item.id} status={item.status} />
+                      ))}
+                    </div>
+                    {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                  </div>
+                </div>
+
+                {/* Expanded Items Table */}
+                {isExpanded && (
+                  <div className="border-t border-border overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/30">
+                          <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.batchNumber}</th>
+                          <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>
+                          <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.deliveredQty}</th>
+                          <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.remainingQty}</th>
+                          <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.unit}</th>
+                          <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.sellingPrice}</th>
+                          <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.expiryDate}</th>
+                          <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.sourceOrder}</th>
+                          <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.items.map(lot => {
+                          const daysToExpiry = lot.expiry ? Math.ceil((new Date(lot.expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+                          const isNearExpiry = daysToExpiry !== null && daysToExpiry > 0 && daysToExpiry <= 30;
+                          return (
+                            <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetailItem(lot)}>
+                              <td className="py-2.5 px-3 font-mono text-xs text-muted-foreground">{lot.id}</td>
+                              <td className="py-2.5 px-3 font-medium">{lot.material}</td>
+                              <td className="py-2.5 px-3 text-end">{lot.delivered}</td>
+                              <td className="py-2.5 px-3 text-end font-medium">{lot.remaining}</td>
+                              <td className="py-2.5 px-3 text-muted-foreground">{lot.unit}</td>
+                              <td className="py-2.5 px-3 text-end">{lot.sellingPrice} {t.currency}</td>
+                              <td className="py-2.5 px-3 text-xs">
+                                <span className={isNearExpiry ? "text-warning font-medium" : "text-muted-foreground"}>
+                                  {lot.expiry}{isNearExpiry && ` (${daysToExpiry} ${t.daysRemaining})`}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-xs text-muted-foreground hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${lot.sourceOrder}`); }}>{lot.sourceOrder}</td>
+                              <td className="py-2.5 px-3"><StatusBadge status={lot.status} /></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {Object.keys(clientGroups).length === 0 && <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>}
+        </div>
+      ) : (
+        /* ===== ITEM VIEW (original flat table) ===== */
+        <div className="stat-card overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.batchNumber}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>
+                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.deliveredQty}</th>
+                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.remainingQty}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.unit}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.deliveryDate}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.expiryDate}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.sourceOrder}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((lot) => {
+                const daysToExpiry = lot.expiry ? Math.ceil((new Date(lot.expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+                const isNearExpiry = daysToExpiry !== null && daysToExpiry > 0 && daysToExpiry <= 30;
+                return (
+                  <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetailItem(lot)}>
+                    <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{lot.id}</td>
+                    <td className="py-3 px-3 font-medium hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${lot.clientId}`); }}>{lot.client}</td>
+                    <td className="py-3 px-3 hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate("/materials"); }}>{lot.material}</td>
+                    <td className="py-3 px-3 text-end">{lot.delivered}</td>
+                    <td className="py-3 px-3 text-end font-medium">{lot.remaining}</td>
+                    <td className="py-3 px-3 text-muted-foreground">{lot.unit}</td>
+                    <td className="py-3 px-3 text-muted-foreground text-xs">{lot.deliveryDate}</td>
+                    <td className="py-3 px-3 text-xs">
+                      <span className={isNearExpiry ? "text-warning font-medium" : "text-muted-foreground"}>
+                        {lot.expiry}{isNearExpiry && ` (${daysToExpiry} ${t.daysRemaining})`}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 font-mono text-xs text-muted-foreground hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${lot.sourceOrder}`); }}>{lot.sourceOrder}</td>
+                    <td className="py-3 px-3"><StatusBadge status={lot.status} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {filtered.length === 0 && <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>}
+        </div>
+      )}
 
       {/* Detail Dialog */}
       <Dialog open={!!detailItem} onOpenChange={() => setDetailItem(null)}>

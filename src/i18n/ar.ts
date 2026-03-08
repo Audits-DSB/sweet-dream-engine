@@ -694,4 +694,13 @@ export const ar = {
   noEmail: "لا يوجد بريد إلكتروني",
   noPhone: "لا يوجد رقم هاتف",
   founderUpdated: "تم تحديث بيانات المؤسس",
+
+  // Inventory by client
+  viewByClient: "عرض حسب العميل",
+  viewByItem: "عرض حسب البند",
+  totalItems: "إجمالي الأصناف",
+  totalValue: "القيمة الإجمالية",
+  remainingValue: "قيمة المتبقي",
+  materialsCount: "عدد المواد",
+  viewDetails: "عرض التفاصيل",
 };
