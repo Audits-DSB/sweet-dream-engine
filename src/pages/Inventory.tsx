@@ -87,7 +87,7 @@ export default function InventoryPage() {
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => {}}
+        onExport={() => exportToCsv("inventory", ["Lot ID","Client","Material","Code","Unit","Delivered","Remaining","Selling Price","Store Cost","Delivery Date","Expiry","Source Order","Status"], filtered.map(i => [i.id, i.client, i.material, i.code, i.unit, i.delivered, i.remaining, i.sellingPrice, i.storeCost, i.deliveryDate, i.expiry, i.sourceOrder, i.status]))}
       />
 
       <div className="stat-card overflow-x-auto">

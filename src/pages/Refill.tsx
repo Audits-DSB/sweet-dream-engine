@@ -81,7 +81,7 @@ export default function RefillPage() {
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => {}}
+        onExport={() => exportToCsv("refill", ["Client","Material","Code","Unit","Current Stock","Avg Weekly Usage","Coverage Weeks","Lead Time","Safety Stock","Reorder Point","Suggested Qty","Priority"], filtered.map(r => [r.client, r.material, r.code, r.unit, r.currentStock, r.avgWeeklyUsage, r.coverageWeeks, r.leadTimeWeeks, r.safetyStock, r.reorderPoint, r.suggestedQty, r.priority]))}
         actions={
           <div className="flex gap-2">
             <Button size="sm" variant="outline" className="h-9" onClick={selectAllNeedRefill}>Select All Needs</Button>

@@ -47,7 +47,7 @@ export default function MaterialsPage() {
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => {}}
+        onExport={() => exportToCsv("materials", ["Code","Name","Category","Unit","Selling Price","Store Cost","Margin %","Supplier","Has Expiry","Active"], filtered.map(m => [m.code, m.name, m.category, m.unit, m.sellingPrice, m.storeCost, ((m.sellingPrice - m.storeCost) / m.sellingPrice * 100).toFixed(1), m.supplier, m.hasExpiry ? "Yes" : "No", m.active ? "Active" : "Inactive"]))}
       />
 
       <div className="stat-card overflow-x-auto">

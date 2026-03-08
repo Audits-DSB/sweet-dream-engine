@@ -58,7 +58,7 @@ export default function OrdersPage() {
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => {}}
+        onExport={() => exportToCsv("orders", ["Order ID","Client","Date","Lines","Selling","Cost","Split","Source","Status"], filtered.map(o => [o.id, o.client, o.date, o.lines, o.totalSelling, o.totalCost, o.splitMode, o.source, o.status]))}
         actions={<Button size="sm" className="h-9"><Plus className="h-3.5 w-3.5 mr-1.5" />New Order</Button>}
       />
 

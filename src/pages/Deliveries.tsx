@@ -55,7 +55,7 @@ export default function DeliveriesPage() {
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => {}}
+        onExport={() => exportToCsv("deliveries", ["ID","Order","Client","Requested Date","Actual Date","Actor","Items","Type","Status"], filtered.map(d => [d.id, d.order, d.client, d.requestedDate, d.actualDate, d.actor, d.items, d.type, d.status]))}
       />
 
       <div className="stat-card overflow-x-auto">

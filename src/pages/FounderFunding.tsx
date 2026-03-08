@@ -73,7 +73,7 @@ export default function FounderFundingPage() {
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => {}}
+        onExport={() => exportToCsv("founder_funding", ["ID","Date","Founder","Type","Amount","Method","Order","Notes","Balance"], filtered.map(t => [t.id, t.date, t.founder, t.type, t.amount, t.method, t.order, t.notes, t.balance]))}
       />
 
       <div className="stat-card overflow-x-auto">
