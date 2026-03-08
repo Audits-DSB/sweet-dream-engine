@@ -97,10 +97,10 @@ export default function OrdersPage() {
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem><Eye className="h-3.5 w-3.5 mr-2" />View Details</DropdownMenuItem>
-                      <DropdownMenuItem><Truck className="h-3.5 w-3.5 mr-2" />Record Delivery</DropdownMenuItem>
-                      <DropdownMenuItem><FileText className="h-3.5 w-3.5 mr-2" />Generate Invoice</DropdownMenuItem>
-                      <DropdownMenuItem><Copy className="h-3.5 w-3.5 mr-2" />Duplicate</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate(`/orders/${order.id}`)}><Eye className="h-3.5 w-3.5 mr-2" />View Details</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toast.success(`Delivery recorded for ${order.id}`)}><Truck className="h-3.5 w-3.5 mr-2" />Record Delivery</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toast.success(`Invoice generated for ${order.id}`)}><FileText className="h-3.5 w-3.5 mr-2" />Generate Invoice</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toast.success(`${order.id} duplicated`)}><Copy className="h-3.5 w-3.5 mr-2" />Duplicate</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>

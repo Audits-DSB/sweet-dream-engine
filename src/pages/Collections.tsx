@@ -106,7 +106,7 @@ export default function CollectionsPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => setSelectedInvoice(inv)}><Eye className="h-3.5 w-3.5 mr-2" />View Details</DropdownMenuItem>
-                      {inv.remaining > 0 && <DropdownMenuItem><DollarSign className="h-3.5 w-3.5 mr-2" />Record Payment</DropdownMenuItem>}
+                      {inv.remaining > 0 && <DropdownMenuItem onClick={() => toast.success(`Payment recorded for ${inv.id}`)}><DollarSign className="h-3.5 w-3.5 mr-2" />Record Payment</DropdownMenuItem>}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>

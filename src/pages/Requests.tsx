@@ -55,7 +55,7 @@ export default function RequestsPage() {
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
         onExport={() => exportToCsv("requests", ["ID","Client","Date","Items","Expected Total","Status","Notes"], filtered.map(r => [r.id, r.client, r.date, r.items, r.expectedTotal, r.status, r.notes]))}
-        actions={<Button size="sm" className="h-9"><Plus className="h-3.5 w-3.5 mr-1.5" />New Request</Button>}
+        actions={<Button size="sm" className="h-9" onClick={() => toast.info("New request form coming soon")}><Plus className="h-3.5 w-3.5 mr-1.5" />New Request</Button>}
       />
 
       <div className="stat-card overflow-x-auto">
