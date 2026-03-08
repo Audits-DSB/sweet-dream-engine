@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2 } from "lucide-react";
+import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -34,6 +34,7 @@ export default function OrdersPage() {
   const [selectedClient, setSelectedClient] = useState("");
   const [form, setForm] = useState({ splitMode: "equal", deliveryFee: "500" });
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [materialSearch, setMaterialSearch] = useState("");
   const navigate = useNavigate();
 
   const filtered = orders.filter((o) => {
@@ -42,20 +43,25 @@ export default function OrdersPage() {
     return matchSearch && matchStatus;
   });
 
-  const addItem = () => {
-    setOrderItems([...orderItems, { materialCode: "", name: "", quantity: 1, sellingPrice: 0, costPrice: 0 }]);
+  const usedMaterialCodes = orderItems.map(i => i.materialCode);
+
+  const filteredMaterials = useMemo(() => {
+    return materialsList.filter(m => {
+      if (!m.active) return false;
+      if (usedMaterialCodes.includes(m.code)) return false;
+      if (!materialSearch) return true;
+      return m.name.toLowerCase().includes(materialSearch.toLowerCase()) || m.code.toLowerCase().includes(materialSearch.toLowerCase()) || m.category.toLowerCase().includes(materialSearch.toLowerCase());
+    });
+  }, [materialSearch, usedMaterialCodes]);
+
+  const addMaterialDirectly = (mat: typeof materialsList[0]) => {
+    setOrderItems([...orderItems, { materialCode: mat.code, name: mat.name, quantity: 1, sellingPrice: mat.sellingPrice, costPrice: mat.storeCost }]);
+    setMaterialSearch("");
   };
 
   const updateItem = (index: number, field: keyof OrderItem, value: string | number) => {
     const updated = [...orderItems];
-    if (field === "materialCode") {
-      const mat = materialsList.find(m => m.code === value);
-      if (mat) {
-        updated[index] = { ...updated[index], materialCode: mat.code, name: mat.name, sellingPrice: mat.sellingPrice, costPrice: mat.storeCost };
-      }
-    } else {
-      (updated[index] as any)[field] = value;
-    }
+    (updated[index] as any)[field] = value;
     setOrderItems(updated);
   };
 
@@ -67,7 +73,7 @@ export default function OrdersPage() {
   const totalCost = orderItems.reduce((sum, item) => sum + item.costPrice * item.quantity, 0);
 
   const handleAdd = () => {
-    if (!selectedClient || orderItems.length === 0 || orderItems.some(i => !i.materialCode)) {
+    if (!selectedClient || orderItems.length === 0) {
       toast.error(t.selectClientAndTotal);
       return;
     }
@@ -95,8 +101,6 @@ export default function OrdersPage() {
     { label: t.partiallyDelivered, value: "Partially Delivered" }, { label: t.delivered, value: "Delivered" },
     { label: t.invoiced, value: "Invoiced" }, { label: t.closed, value: "Closed" }, { label: t.cancelled, value: "Cancelled" },
   ];
-
-  const usedMaterialCodes = orderItems.map(i => i.materialCode);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -151,7 +155,7 @@ export default function OrdersPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => navigate(`/orders/${order.id}`)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewDetails}</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => { navigate("/deliveries"); }}><Truck className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.registerDelivery}</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate("/deliveries")}><Truck className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.registerDelivery}</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => toast.success(`${t.createInvoice}: ${order.id}`)}><FileText className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.createInvoice}</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => toast.success(`${t.copy}: ${order.id}`)}><Copy className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.copy}</DropdownMenuItem>
                     </DropdownMenuContent>
@@ -164,7 +168,7 @@ export default function OrdersPage() {
         {filtered.length === 0 && <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>}
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setOrderItems([]); setSelectedClient(""); } }}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setOrderItems([]); setSelectedClient(""); setMaterialSearch(""); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader><DialogTitle>{t.newOrder}</DialogTitle></DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-2">
@@ -182,59 +186,77 @@ export default function OrdersPage() {
                 </Select>
               </div>
 
-              {/* Order Items */}
+              {/* Material Search & Add */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="text-xs font-medium">{t.orderItemsLabel} *</Label>
-                  <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={addItem}>
-                    <Plus className="h-3 w-3 ltr:mr-1 rtl:ml-1" />{t.addItem}
-                  </Button>
+                <Label className="text-xs font-medium mb-2 block">{t.orderItemsLabel} *</Label>
+                <div className="relative">
+                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    className="h-9 ps-9 text-xs"
+                    placeholder={t.searchMaterials}
+                    value={materialSearch}
+                    onChange={(e) => setMaterialSearch(e.target.value)}
+                  />
                 </div>
-
-                {orderItems.length === 0 ? (
-                  <div className="text-center py-6 border border-dashed border-border rounded-md text-muted-foreground text-xs">
-                    {t.noItemsAdded}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {orderItems.map((item, idx) => (
-                      <div key={idx} className="border border-border rounded-md p-3 space-y-2 bg-muted/20">
+                {materialSearch && filteredMaterials.length > 0 && (
+                  <div className="border border-border rounded-md mt-1 max-h-40 overflow-y-auto bg-background shadow-md">
+                    {filteredMaterials.slice(0, 8).map(mat => (
+                      <div
+                        key={mat.code}
+                        className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors"
+                        onClick={() => addMaterialDirectly(mat)}
+                      >
                         <div className="flex items-center gap-2">
-                          <div className="flex-1">
-                            <Select value={item.materialCode} onValueChange={(v) => updateItem(idx, "materialCode", v)}>
-                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t.selectMaterial} /></SelectTrigger>
-                              <SelectContent>
-                                {materialsList.filter(m => m.active && (!usedMaterialCodes.includes(m.code) || m.code === item.materialCode)).map(m => (
-                                  <SelectItem key={m.code} value={m.code}>
-                                    <span className="font-mono text-muted-foreground">{m.code}</span> — {m.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive hover:text-destructive" onClick={() => removeItem(idx)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          <span className="font-mono text-muted-foreground">{mat.code}</span>
+                          <span className="font-medium">{mat.name}</span>
+                          <span className="text-muted-foreground">({mat.category})</span>
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <div>
-                            <Label className="text-[10px] text-muted-foreground">{t.quantity}</Label>
-                            <Input className="h-7 text-xs mt-0.5" type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", parseInt(e.target.value) || 1)} />
-                          </div>
-                          <div>
-                            <Label className="text-[10px] text-muted-foreground">{t.sellingPrice}</Label>
-                            <Input className="h-7 text-xs mt-0.5" type="number" value={item.sellingPrice} onChange={(e) => updateItem(idx, "sellingPrice", parseFloat(e.target.value) || 0)} />
-                          </div>
-                          <div>
-                            <Label className="text-[10px] text-muted-foreground">{t.costPrice}</Label>
-                            <Input className="h-7 text-xs mt-0.5" type="number" value={item.costPrice} onChange={(e) => updateItem(idx, "costPrice", parseFloat(e.target.value) || 0)} />
-                          </div>
-                        </div>
+                        <span className="text-muted-foreground">{mat.sellingPrice} {t.currency}</span>
                       </div>
                     ))}
                   </div>
                 )}
+                {materialSearch && filteredMaterials.length === 0 && (
+                  <div className="text-center py-2 text-muted-foreground text-xs mt-1">{t.noResults}</div>
+                )}
               </div>
+
+              {/* Selected Items */}
+              {orderItems.length === 0 ? (
+                <div className="text-center py-6 border border-dashed border-border rounded-md text-muted-foreground text-xs">
+                  {t.noItemsAdded}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {orderItems.map((item, idx) => (
+                    <div key={idx} className="border border-border rounded-md p-3 space-y-2 bg-muted/20">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="font-mono text-muted-foreground">{item.materialCode}</span>
+                          <span className="font-medium">{item.name}</span>
+                        </div>
+                        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => removeItem(idx)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground">{t.quantity}</Label>
+                          <Input className="h-7 text-xs mt-0.5" type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", parseInt(e.target.value) || 1)} />
+                        </div>
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground">{t.sellingPrice}</Label>
+                          <Input className="h-7 text-xs mt-0.5" type="number" value={item.sellingPrice} onChange={(e) => updateItem(idx, "sellingPrice", parseFloat(e.target.value) || 0)} />
+                        </div>
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground">{t.costPrice}</Label>
+                          <Input className="h-7 text-xs mt-0.5" type="number" value={item.costPrice} onChange={(e) => updateItem(idx, "costPrice", parseFloat(e.target.value) || 0)} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Totals Summary */}
               {orderItems.length > 0 && (

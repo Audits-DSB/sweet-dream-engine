@@ -694,4 +694,11 @@ export const en = {
   noEmail: "No email available",
   noPhone: "No phone number available",
   founderUpdated: "Founder updated successfully",
+
+  // Inventory by client
+  viewByClient: "View by Client",
+  viewByItem: "View by Item",
+  totalItems: "Total Items",
+  totalValue: "Total Value",
+  remainingValue: "Remaining Value",
 };
