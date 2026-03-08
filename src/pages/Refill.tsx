@@ -36,6 +36,7 @@ export default function RefillPage() {
   const [groupBy, setGroupBy] = useState<"client" | "material">("client");
 
   const clients = [...new Set(mockRefills.map(r => r.client))];
+  const materials = [...new Set(mockRefills.map(r => r.material))];
   const priorityLabel = (p: string) => p === "Critical" ? t.critical : p === "Urgent" ? t.urgent : p === "Normal" ? t.normal : t.ok;
 
   const filtered = mockRefills.filter((r) => {
@@ -44,6 +45,14 @@ export default function RefillPage() {
     const matchClient = !filters.client || filters.client === "all" || r.client === filters.client;
     return matchSearch && matchPriority && matchClient;
   });
+
+  // Group filtered data based on groupBy selection
+  const groupedData = filtered.reduce((acc: Record<string, typeof filtered>, item) => {
+    const key = groupBy === "client" ? item.client : item.material;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(item);
+    return acc;
+  }, {});
 
   const criticalCount = mockRefills.filter(r => r.priority === "Critical").length;
   const urgentCount = mockRefills.filter(r => r.priority === "Urgent").length;
