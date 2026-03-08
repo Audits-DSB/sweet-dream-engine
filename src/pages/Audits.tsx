@@ -201,8 +201,34 @@ export default function AuditsPage() {
               </table>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => { toast.success(t.exportInvoice); }}>{t.exportInvoice}</Button>
-              <Button variant="outline" size="sm" onClick={() => { toast.success(t.exportPurchaseList); }}>{t.exportPurchaseList}</Button>
+              <Button variant="outline" size="sm" onClick={() => {
+                if (!selectedAudit) return;
+                printInvoice({
+                  title: t.exportInvoice,
+                  companyName: "OpsHub",
+                  subtitle: t.auditsTitle,
+                  clientName: selectedAudit.client,
+                  invoiceNumber: selectedAudit.id,
+                  date: selectedAudit.date,
+                  columns: [t.material, t.expected, t.actual, t.unit, t.result],
+                  rows: auditDetails.map(d => [d.material, d.expected, d.actual, d.unit, resultLabel(d.result)]),
+                  totals: [
+                    { label: t.matched, value: String(auditDetails.filter(d => d.result === "matched").length) },
+                    { label: t.shortage, value: String(auditDetails.filter(d => d.result === "shortage").length) },
+                    { label: t.surplus, value: String(auditDetails.filter(d => d.result === "surplus").length) },
+                  ],
+                  footer: `${t.auditor}: ${selectedAudit.auditor} — ${selectedAudit.date}`,
+                });
+              }}>{t.exportInvoice}</Button>
+              <Button variant="outline" size="sm" onClick={() => {
+                const shortages = auditDetails.filter(d => d.result === "shortage");
+                if (shortages.length === 0) { toast.info(t.noResults); return; }
+                exportToCsv(
+                  `purchase_list_${selectedAudit?.id}`,
+                  [t.material, t.unit, t.shortage, t.suggestedQty],
+                  shortages.map(d => [d.material, d.unit, d.expected - d.actual, d.expected - d.actual])
+                );
+              }}>{t.exportPurchaseList}</Button>
             </div>
           </div>
         </DialogContent>
