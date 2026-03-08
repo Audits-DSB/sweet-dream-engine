@@ -20,9 +20,11 @@ const emptyClient = { name: "", contact: "", email: "", phone: "", city: "", sta
 
 export default function ClientsPage() {
   const { t } = useLanguage();
+  const [searchParams] = useSearchParams();
+  const initialStatus = searchParams.get("status") || "";
   const [clients, setClients] = useState(initialData);
   const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, string>>(initialStatus ? { status: initialStatus } : {});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyClient);
   const navigate = useNavigate();
