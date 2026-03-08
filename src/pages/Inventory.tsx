@@ -5,7 +5,7 @@ import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Users, List, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertTriangle, Users, List, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const mockInventory = [
