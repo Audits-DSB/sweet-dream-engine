@@ -66,7 +66,7 @@ export default function RequestsPage() {
   const handleAdd = () => {
     const client = clientsList.find(c => c.id === form.clientId);
     if (!client || !form.items || !form.expectedTotal) {
-      toast.error(t.fillRequiredFields || "يرجى ملء الحقول المطلوبة");
+      toast.error(t.treasuryFillRequired);
       return;
     }
     const num = requests.length + 1;
