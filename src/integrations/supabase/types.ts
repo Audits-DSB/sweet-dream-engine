@@ -74,6 +74,117 @@ export type Database = {
         }
         Relationships: []
       }
+      treasury_accounts: {
+        Row: {
+          account_number: string | null
+          account_type: Database["public"]["Enums"]["treasury_account_type"]
+          balance: number
+          bank_name: string | null
+          created_at: string
+          custodian_name: string
+          custodian_user_id: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          account_number?: string | null
+          account_type?: Database["public"]["Enums"]["treasury_account_type"]
+          balance?: number
+          bank_name?: string | null
+          created_at?: string
+          custodian_name: string
+          custodian_user_id?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          account_number?: string | null
+          account_type?: Database["public"]["Enums"]["treasury_account_type"]
+          balance?: number
+          bank_name?: string | null
+          created_at?: string
+          custodian_name?: string
+          custodian_user_id?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      treasury_transactions: {
+        Row: {
+          account_id: string
+          amount: number
+          approved_by: string | null
+          balance_after: number
+          category:
+            | Database["public"]["Enums"]["treasury_expense_category"]
+            | null
+          created_at: string
+          description: string | null
+          id: string
+          linked_account_id: string | null
+          performed_by: string | null
+          reference_id: string | null
+          tx_type: Database["public"]["Enums"]["treasury_tx_type"]
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          approved_by?: string | null
+          balance_after?: number
+          category?:
+            | Database["public"]["Enums"]["treasury_expense_category"]
+            | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          linked_account_id?: string | null
+          performed_by?: string | null
+          reference_id?: string | null
+          tx_type: Database["public"]["Enums"]["treasury_tx_type"]
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          approved_by?: string | null
+          balance_after?: number
+          category?:
+            | Database["public"]["Enums"]["treasury_expense_category"]
+            | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          linked_account_id?: string | null
+          performed_by?: string | null
+          reference_id?: string | null
+          tx_type?: Database["public"]["Enums"]["treasury_tx_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treasury_transactions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_transactions_linked_account_id_fkey"
+            columns: ["linked_account_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -107,6 +218,29 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "founder" | "viewer"
+      treasury_account_type:
+        | "cashbox"
+        | "bank"
+        | "wallet"
+        | "founder_held"
+        | "other"
+      treasury_expense_category:
+        | "marketing"
+        | "operations"
+        | "salaries"
+        | "supplies"
+        | "rent"
+        | "utilities"
+        | "logistics"
+        | "maintenance"
+        | "other"
+      treasury_tx_type:
+        | "inflow"
+        | "withdrawal"
+        | "expense"
+        | "transfer_in"
+        | "transfer_out"
+        | "adjustment"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -235,6 +369,32 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "founder", "viewer"],
+      treasury_account_type: [
+        "cashbox",
+        "bank",
+        "wallet",
+        "founder_held",
+        "other",
+      ],
+      treasury_expense_category: [
+        "marketing",
+        "operations",
+        "salaries",
+        "supplies",
+        "rent",
+        "utilities",
+        "logistics",
+        "maintenance",
+        "other",
+      ],
+      treasury_tx_type: [
+        "inflow",
+        "withdrawal",
+        "expense",
+        "transfer_in",
+        "transfer_out",
+        "adjustment",
+      ],
     },
   },
 } as const

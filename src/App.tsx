@@ -29,6 +29,9 @@ import ReportsPage from "./pages/Reports";
 import SettingsPage from "./pages/Settings";
 import UserManagementPage from "./pages/UserManagement";
 import SuppliersPage from "./pages/Suppliers";
+import TreasuryDashboard from "./pages/Treasury";
+import TreasuryAccountsPage from "./pages/TreasuryAccounts";
+import TreasuryTransactionsPage from "./pages/TreasuryTransactions";
 import ProfilePage from "./pages/Profile";
 import LoginPage from "./pages/Login";
 import SignupPage from "./pages/Signup";
@@ -73,6 +76,9 @@ const App = () => (
                 <Route path="/company-profit" element={<CompanyProfitPage />} />
                 <Route path="/founder-funding" element={<FounderFundingPage />} />
                 <Route path="/suppliers" element={<SuppliersPage />} />
+                <Route path="/treasury" element={<TreasuryDashboard />} />
+                <Route path="/treasury/accounts" element={<TreasuryAccountsPage />} />
+                <Route path="/treasury/transactions" element={<TreasuryTransactionsPage />} />
                 <Route path="/alerts" element={<AlertsPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
