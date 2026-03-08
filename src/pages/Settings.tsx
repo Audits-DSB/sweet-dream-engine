@@ -252,6 +252,35 @@ export default function SettingsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={dialogMode === "editFounder"} onOpenChange={() => setDialogMode(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{t.edit} {t.founders}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-xs">{t.name} *</Label><Input className="h-9 mt-1" value={founderForm.name} onChange={(e) => setFounderForm({ ...founderForm, name: e.target.value })} /></div>
+            <div><Label className="text-xs">{t.jobTitle}</Label><Input className="h-9 mt-1" value={founderForm.alias} onChange={(e) => setFounderForm({ ...founderForm, alias: e.target.value })} /></div>
+            <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={founderForm.email} onChange={(e) => setFounderForm({ ...founderForm, email: e.target.value })} /></div>
+            <Button className="w-full" onClick={saveEditFounder}><Save className="h-4 w-4 ltr:mr-2 rtl:ml-2" />{t.saveChanges}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialogMode === "editActor"} onOpenChange={() => setDialogMode(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{t.edit} {t.deliveryActors}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-xs">{t.name} *</Label><Input className="h-9 mt-1" value={actorForm.name} onChange={(e) => setActorForm({ ...actorForm, name: e.target.value })} /></div>
+            <div><Label className="text-xs">{t.type}</Label>
+              <div className="flex gap-2 mt-1">
+                <Button size="sm" variant={actorForm.type === "founder" ? "default" : "outline"} onClick={() => setActorForm({ ...actorForm, type: "founder" })} className="flex-1 h-9">{t.founderType}</Button>
+                <Button size="sm" variant={actorForm.type === "external" ? "default" : "outline"} onClick={() => setActorForm({ ...actorForm, type: "external" })} className="flex-1 h-9">{t.externalType}</Button>
+              </div>
+            </div>
+            <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={actorForm.phone} onChange={(e) => setActorForm({ ...actorForm, phone: e.target.value })} /></div>
+            <Button className="w-full" onClick={saveEditActor}><Save className="h-4 w-4 ltr:mr-2 rtl:ml-2" />{t.saveChanges}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
