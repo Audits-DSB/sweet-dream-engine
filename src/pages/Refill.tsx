@@ -75,6 +75,32 @@ export default function RefillPage() {
         <StatCard title={t.needsRefill} value={needsRefill} change={`${mockRefills.length} ${t.ofTracked}`} changeType="neutral" icon={Package} />
       </div>
 
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">{t.groupBy || "تجميع حسب"}:</span>
+          <Select value={groupBy} onValueChange={(value: "client" | "material") => setGroupBy(value)}>
+            <SelectTrigger className="h-9 w-[140px]">
+              {groupBy === "client" ? <Users className="h-3.5 w-3.5 mr-1.5" /> : <Package2 className="h-3.5 w-3.5 mr-1.5" />}
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="client">
+                <div className="flex items-center">
+                  <Users className="h-3.5 w-3.5 mr-1.5" />
+                  {t.client || "العميل"}
+                </div>
+              </SelectItem>
+              <SelectItem value="material">
+                <div className="flex items-center">
+                  <Package2 className="h-3.5 w-3.5 mr-1.5" />
+                  {t.material || "المادة"}
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       <DataToolbar
         searchPlaceholder={t.searchRefill}
         searchValue={search}
