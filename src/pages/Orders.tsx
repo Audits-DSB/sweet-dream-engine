@@ -38,7 +38,8 @@ export default function OrdersPage() {
   const navigate = useNavigate();
 
   const filtered = orders.filter((o) => {
-    const matchSearch = !search || o.client.toLowerCase().includes(search.toLowerCase()) || o.id.toLowerCase().includes(search.toLowerCase());
+    const q = search.toLowerCase().trim();
+    const matchSearch = !q || o.client.toLowerCase().includes(q) || o.id.toLowerCase().includes(q) || o.date.includes(q) || o.source.toLowerCase().includes(q) || o.status.toLowerCase().includes(q) || o.splitMode.toLowerCase().includes(q);
     const matchStatus = !filters.status || filters.status === "all" || o.status === filters.status;
     return matchSearch && matchStatus;
   });
