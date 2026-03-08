@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Eye, MoreHorizontal, CheckCircle, XCircle, ArrowRight } from "lucide-react";
+import { Plus, Eye, MoreHorizontal, CheckCircle, XCircle, ArrowRight, X, Search, Package } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,28 +18,40 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { clientsList } from "@/data/store";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+
+type FetchedMaterial = {
+  code: string;
+  name: string;
+  sellingPrice: number;
+  image_url?: string | null;
+};
+
+type RequestItem = {
+  materialCode: string;
+  materialName: string;
+  qty: number;
+  unitPrice: number;
+};
 
 type Request = {
   id: string;
   client: string;
   clientId: string;
   date: string;
-  items: number;
+  items: RequestItem[];
   expectedTotal: string;
   status: string;
   notes: string;
 };
 
 const initialRequests: Request[] = [
-  { id: "REQ-001", client: "عيادة د. أحمد", clientId: "C001", date: "2025-03-06", items: 4, expectedTotal: "32,000", status: "Client Requested", notes: "عاجل - المخزون ينفذ" },
-  { id: "REQ-002", client: "مركز نور لطب الأسنان", clientId: "C002", date: "2025-03-05", items: 7, expectedTotal: "85,000", status: "Pending Review", notes: "" },
-  { id: "REQ-003", client: "عيادة جرين فالي", clientId: "C003", date: "2025-03-04", items: 3, expectedTotal: "21,000", status: "Approved", notes: "إعادة تخزين شهرية" },
-  { id: "REQ-004", client: "المركز الملكي للأسنان", clientId: "C004", date: "2025-03-03", items: 5, expectedTotal: "48,000", status: "Converted to Order", notes: "" },
-  { id: "REQ-005", client: "عيادة سمايل هاوس", clientId: "C005", date: "2025-03-02", items: 2, expectedTotal: "12,000", status: "Rejected", notes: "العميل غير نشط" },
-  { id: "REQ-006", client: "عيادة بلو مون", clientId: "C006", date: "2025-03-01", items: 6, expectedTotal: "56,000", status: "Pending Review", notes: "أصناف جديدة مطلوبة" },
-  { id: "REQ-007", client: "مركز سبايس جاردن", clientId: "C007", date: "2025-02-28", items: 3, expectedTotal: "24,000", status: "Approved", notes: "" },
-  { id: "REQ-008", client: "عيادة د. أحمد", clientId: "C001", date: "2025-02-25", items: 5, expectedTotal: "41,000", status: "Converted to Order", notes: "" },
-  { id: "REQ-009", client: "المركز الملكي للأسنان", clientId: "C004", date: "2025-02-22", items: 2, expectedTotal: "18,000", status: "Cancelled", notes: "العميل ألغى" },
+  { id: "REQ-001", client: "عيادة د. أحمد", clientId: "C001", date: "2025-03-06", items: [{ materialCode: "MAT-1", materialName: "Composite A2", qty: 2, unitPrice: 8000 }, { materialCode: "MAT-2", materialName: "Bonding Agent", qty: 2, unitPrice: 8000 }], expectedTotal: "32,000", status: "Client Requested", notes: "عاجل - المخزون ينفذ" },
+  { id: "REQ-002", client: "مركز نور لطب الأسنان", clientId: "C002", date: "2025-03-05", items: [{ materialCode: "MAT-3", materialName: "Alginate", qty: 7, unitPrice: 12143 }], expectedTotal: "85,000", status: "Pending Review", notes: "" },
+  { id: "REQ-003", client: "عيادة جرين فالي", clientId: "C003", date: "2025-03-04", items: [{ materialCode: "MAT-4", materialName: "Endo File", qty: 3, unitPrice: 7000 }], expectedTotal: "21,000", status: "Approved", notes: "إعادة تخزين شهرية" },
+  { id: "REQ-004", client: "المركز الملكي للأسنان", clientId: "C004", date: "2025-03-03", items: [{ materialCode: "MAT-5", materialName: "Ceramic Block", qty: 5, unitPrice: 9600 }], expectedTotal: "48,000", status: "Converted to Order", notes: "" },
+  { id: "REQ-005", client: "عيادة سمايل هاوس", clientId: "C005", date: "2025-03-02", items: [{ materialCode: "MAT-6", materialName: "Impression Tray", qty: 2, unitPrice: 6000 }], expectedTotal: "12,000", status: "Rejected", notes: "العميل غير نشط" },
 ];
 
 export default function RequestsPage() {
@@ -47,10 +59,45 @@ export default function RequestsPage() {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState({ clientId: "", items: "", expectedTotal: "", notes: "" });
+  const [form, setForm] = useState({ clientId: "", notes: "" });
+  const [selectedItems, setSelectedItems] = useState<RequestItem[]>([]);
+  const [materials, setMaterials] = useState<FetchedMaterial[]>([]);
+  const [matSearch, setMatSearch] = useState("");
+  const [loadingMats, setLoadingMats] = useState(false);
   const { user } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
+
+  const fetchMaterials = async () => {
+    if (materials.length > 0) return;
+    setLoadingMats(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-external-materials`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
+          },
+        }
+      );
+      const json = await res.json();
+      if (json.products) {
+        setMaterials(json.products.map((p: any) => ({
+          code: p.sku || p.id?.slice(0, 8) || "",
+          name: p.name,
+          sellingPrice: p.price_retail || 0,
+          image_url: p.image_url,
+        })));
+      }
+    } catch (err) {
+      console.error("Failed to fetch materials:", err);
+    }
+    setLoadingMats(false);
+  };
 
   const sendNotification = async (title: string, body: string, type: string = "info") => {
     if (!user) return;
@@ -63,33 +110,65 @@ export default function RequestsPage() {
     return matchSearch && matchStatus;
   });
 
+  const calcTotal = (items: RequestItem[]) =>
+    items.reduce((sum, i) => sum + i.qty * i.unitPrice, 0);
+
+  const addMaterial = (mat: FetchedMaterial) => {
+    const existing = selectedItems.find(i => i.materialCode === mat.code);
+    if (existing) {
+      setSelectedItems(prev => prev.map(i => i.materialCode === mat.code ? { ...i, qty: i.qty + 1 } : i));
+    } else {
+      setSelectedItems(prev => [...prev, { materialCode: mat.code, materialName: mat.name, qty: 1, unitPrice: mat.sellingPrice }]);
+    }
+  };
+
+  const removeMaterial = (code: string) => {
+    setSelectedItems(prev => prev.filter(i => i.materialCode !== code));
+  };
+
+  const updateQty = (code: string, qty: number) => {
+    if (qty < 1) return;
+    setSelectedItems(prev => prev.map(i => i.materialCode === code ? { ...i, qty } : i));
+  };
+
   const handleAdd = () => {
     const client = clientsList.find(c => c.id === form.clientId);
-    if (!client || !form.items || !form.expectedTotal) {
+    if (!client || selectedItems.length === 0) {
       toast.error(t.treasuryFillRequired);
       return;
     }
+    const total = calcTotal(selectedItems);
     const num = requests.length + 1;
     const newReq: Request = {
       id: `REQ-${String(num).padStart(3, "0")}`,
       client: client.name,
       clientId: client.id,
       date: new Date().toISOString().split("T")[0],
-      items: Number(form.items),
-      expectedTotal: Number(form.expectedTotal).toLocaleString(),
+      items: [...selectedItems],
+      expectedTotal: total.toLocaleString(),
       status: "Client Requested",
       notes: form.notes,
     };
     setRequests([newReq, ...requests]);
-    setForm({ clientId: "", items: "", expectedTotal: "", notes: "" });
+    setForm({ clientId: "", notes: "" });
+    setSelectedItems([]);
     setDialogOpen(false);
     toast.success(t.materialAdded);
     sendNotification("New request created", `${newReq.id} - ${client.name}`, "info");
   };
 
+  const openDialog = () => {
+    setDialogOpen(true);
+    fetchMaterials();
+  };
+
   const updateStatus = (id: string, newStatus: string) => {
     setRequests(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r));
   };
+
+  const filteredMats = materials.filter(m =>
+    !matSearch || m.name.toLowerCase().includes(matSearch.toLowerCase()) || m.code.toLowerCase().includes(matSearch.toLowerCase())
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -109,8 +188,8 @@ export default function RequestsPage() {
         ]}]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("requests", [t.code, t.client, t.date, t.items, t.expectedTotal, t.status, t.notes], filtered.map(r => [r.id, r.client, r.date, r.items, `${r.expectedTotal} ${t.currency}`, r.status, r.notes]))}
-        actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.newRequest}</Button>}
+        onExport={() => exportToCsv("requests", [t.code, t.client, t.date, t.items, t.expectedTotal, t.status, t.notes], filtered.map(r => [r.id, r.client, r.date, r.items.length, `${r.expectedTotal} ${t.currency}`, r.status, r.notes]))}
+        actions={<Button size="sm" className="h-9" onClick={openDialog}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.newRequest}</Button>}
       />
 
       <div className="stat-card overflow-x-auto">
@@ -120,7 +199,7 @@ export default function RequestsPage() {
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.code}</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.date}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.items}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.materials || "المواد"}</th>
               <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.expectedTotal}</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.notes}</th>
@@ -133,7 +212,15 @@ export default function RequestsPage() {
                 <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{req.id}</td>
                 <td className="py-3 px-3 font-medium hover:text-primary cursor-pointer" onClick={() => navigate(`/clients/${req.clientId}`)}>{req.client}</td>
                 <td className="py-3 px-3 text-muted-foreground">{req.date}</td>
-                <td className="py-3 px-3 text-end">{req.items}</td>
+                <td className="py-3 px-3">
+                  <div className="flex flex-wrap gap-1">
+                    {req.items.map((item, idx) => (
+                      <Badge key={idx} variant="secondary" className="text-xs font-normal">
+                        {item.materialName} ×{item.qty}
+                      </Badge>
+                    ))}
+                  </div>
+                </td>
                 <td className="py-3 px-3 text-end font-medium">{req.expectedTotal} {t.currency}</td>
                 <td className="py-3 px-3"><StatusBadge status={req.status} /></td>
                 <td className="py-3 px-3 text-xs text-muted-foreground max-w-[200px] truncate">{req.notes || "—"}</td>
@@ -159,7 +246,7 @@ export default function RequestsPage() {
 
       {/* New Request Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>{t.newRequest}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
@@ -173,19 +260,77 @@ export default function RequestsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">{t.items} *</Label>
-                <Input className="mt-1" type="number" min="1" value={form.items} onChange={e => setForm(f => ({ ...f, items: e.target.value }))} />
+
+            {/* Material Selector */}
+            <div>
+              <Label className="text-xs">{t.materials || "المواد"} *</Label>
+              <div className="mt-1 relative">
+                <Search className="absolute start-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="ps-9"
+                  placeholder={t.searchMaterials || "ابحث عن مادة..."}
+                  value={matSearch}
+                  onChange={e => setMatSearch(e.target.value)}
+                />
               </div>
-              <div>
-                <Label className="text-xs">{t.expectedTotal} ({t.currency}) *</Label>
-                <Input className="mt-1" type="number" min="0" value={form.expectedTotal} onChange={e => setForm(f => ({ ...f, expectedTotal: e.target.value }))} />
-              </div>
+              <ScrollArea className="h-40 mt-2 border border-border rounded-md">
+                {loadingMats ? (
+                  <div className="flex items-center justify-center h-full text-sm text-muted-foreground">جاري التحميل...</div>
+                ) : filteredMats.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-sm text-muted-foreground">{t.noResults}</div>
+                ) : (
+                  <div className="p-1 space-y-0.5">
+                    {filteredMats.slice(0, 50).map(mat => (
+                      <button
+                        key={mat.code}
+                        type="button"
+                        onClick={() => addMaterial(mat)}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-accent/50 transition-colors text-start"
+                      >
+                        <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="truncate flex-1">{mat.name}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{mat.sellingPrice.toLocaleString()} {t.currency}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
             </div>
+
+            {/* Selected Items */}
+            {selectedItems.length > 0 && (
+              <div>
+                <Label className="text-xs">{t.items} ({selectedItems.length})</Label>
+                <div className="mt-1 space-y-1.5 border border-border rounded-md p-2">
+                  {selectedItems.map(item => (
+                    <div key={item.materialCode} className="flex items-center gap-2 text-sm">
+                      <span className="flex-1 truncate">{item.materialName}</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={item.qty}
+                        onChange={e => updateQty(item.materialCode, Number(e.target.value))}
+                        className="w-16 h-7 text-center text-xs"
+                      />
+                      <span className="text-xs text-muted-foreground w-20 text-end">
+                        {(item.qty * item.unitPrice).toLocaleString()} {t.currency}
+                      </span>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeMaterial(item.materialCode)}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="border-t border-border pt-1.5 flex justify-between text-xs font-medium">
+                    <span>{t.expectedTotal}</span>
+                    <span>{calcTotal(selectedItems).toLocaleString()} {t.currency}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div>
               <Label className="text-xs">{t.notes}</Label>
-              <Textarea className="mt-1" rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+              <Textarea className="mt-1" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
             </div>
           </div>
           <DialogFooter>
