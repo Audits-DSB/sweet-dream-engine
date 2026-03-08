@@ -30,6 +30,12 @@ const roleColors: Record<AppRole, string> = {
   viewer: "bg-muted text-muted-foreground border-0",
 };
 
+const roleLabels: Record<AppRole, string> = {
+  admin: "مدير",
+  founder: "مؤسس",
+  viewer: "مشاهد",
+};
+
 export default function UserManagementPage() {
   const { isAdmin, loading: authLoading, user } = useAuth();
   const [users, setUsers] = useState<UserWithRole[]>([]);
@@ -55,19 +61,11 @@ export default function UserManagementPage() {
   }, [isAdmin]);
 
   const updateRole = async (userId: string, newRole: AppRole) => {
-    // Delete existing roles
     const { error: deleteError } = await supabase.from("user_roles").delete().eq("user_id", userId);
-    if (deleteError) {
-      toast.error("Failed to update role: " + deleteError.message);
-      return;
-    }
-    // Insert new role
+    if (deleteError) { toast.error("فشل تحديث الصلاحية: " + deleteError.message); return; }
     const { error: insertError } = await supabase.from("user_roles").insert({ user_id: userId, role: newRole });
-    if (insertError) {
-      toast.error("Failed to update role: " + insertError.message);
-      return;
-    }
-    toast.success("Role updated successfully");
+    if (insertError) { toast.error("فشل تحديث الصلاحية: " + insertError.message); return; }
+    toast.success("تم تحديث الصلاحية بنجاح");
     fetchUsers();
   };
 
@@ -77,21 +75,21 @@ export default function UserManagementPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="page-header">User Management</h1>
-        <p className="page-description">{users.length} users · Admin access only</p>
+        <h1 className="page-header">إدارة المستخدمين</h1>
+        <p className="page-description">{users.length} مستخدم · للمديرين فقط</p>
       </div>
 
       <div className="stat-card overflow-x-auto">
         {loading ? (
-          <div className="text-center py-12 text-muted-foreground text-sm">Loading users...</div>
+          <div className="text-center py-12 text-muted-foreground text-sm">جاري تحميل المستخدمين...</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">User</th>
-                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Joined</th>
-                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Current Role</th>
-                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Change Role</th>
+                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">المستخدم</th>
+                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">تاريخ الانضمام</th>
+                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الصلاحية الحالية</th>
+                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">تغيير الصلاحية</th>
               </tr>
             </thead>
             <tbody>
@@ -107,30 +105,30 @@ export default function UserManagementPage() {
                           {(u.full_name || "?")[0].toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-medium">{u.full_name || "Unnamed User"}</p>
+                          <p className="font-medium">{u.full_name || "مستخدم بدون اسم"}</p>
                           <p className="text-xs text-muted-foreground font-mono">{u.user_id.slice(0, 8)}...</p>
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 px-3 text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</td>
+                    <td className="py-3 px-3 text-muted-foreground">{new Date(u.created_at).toLocaleDateString("ar-EG")}</td>
                     <td className="py-3 px-3">
                       <Badge className={`${roleColors[currentRole]} gap-1`}>
                         <RoleIcon className="h-3 w-3" />
-                        {currentRole}
+                        {roleLabels[currentRole]}
                       </Badge>
                     </td>
                     <td className="py-3 px-3">
                       {isSelf ? (
-                        <span className="text-xs text-muted-foreground">Can't change own role</span>
+                        <span className="text-xs text-muted-foreground">لا يمكن تغيير صلاحيتك</span>
                       ) : (
                         <Select value={currentRole} onValueChange={(val) => updateRole(u.user_id, val as AppRole)}>
                           <SelectTrigger className="h-8 w-[130px]">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="admin">Admin</SelectItem>
-                            <SelectItem value="founder">Founder</SelectItem>
-                            <SelectItem value="viewer">Viewer</SelectItem>
+                            <SelectItem value="admin">مدير</SelectItem>
+                            <SelectItem value="founder">مؤسس</SelectItem>
+                            <SelectItem value="viewer">مشاهد</SelectItem>
                           </SelectContent>
                         </Select>
                       )}
