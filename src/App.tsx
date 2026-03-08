@@ -76,6 +76,9 @@ const App = () => (
                 <Route path="/company-profit" element={<CompanyProfitPage />} />
                 <Route path="/founder-funding" element={<FounderFundingPage />} />
                 <Route path="/suppliers" element={<SuppliersPage />} />
+                <Route path="/treasury" element={<TreasuryDashboard />} />
+                <Route path="/treasury/accounts" element={<TreasuryAccountsPage />} />
+                <Route path="/treasury/transactions" element={<TreasuryTransactionsPage />} />
                 <Route path="/alerts" element={<AlertsPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
