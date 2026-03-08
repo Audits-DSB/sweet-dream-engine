@@ -46,7 +46,7 @@ export default function TreasuryTransactionsPage() {
   const fetchAll = async () => {
     setLoading(true);
     const [txRes, accRes] = await Promise.all([
-      supabase.from("treasury_transactions").select("*, treasury_accounts(name)").order("created_at", { ascending: false }).limit(200),
+      supabase.from("treasury_transactions").select("*, treasury_accounts!account_id(name)").order("created_at", { ascending: false }).limit(200),
       supabase.from("treasury_accounts").select("id, name, balance, account_type").eq("is_active", true),
     ]);
     if (txRes.data) setTransactions(txRes.data as Tx[]);

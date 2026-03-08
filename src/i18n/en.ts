@@ -157,6 +157,7 @@ export const en = {
   loading: "Loading...",
   active: "Active",
   inactive: "Inactive",
+  description: "Description",
   name: "Name",
   email: "Email",
   phone: "Phone",

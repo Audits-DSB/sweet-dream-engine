@@ -66,7 +66,7 @@ export default function TreasuryDashboard() {
   const byCategoryData = useMemo(() => {
     const map: Record<string, number> = {};
     transactions.filter(tx => tx.tx_type === "expense" || tx.tx_type === "withdrawal").forEach(tx => {
-      const cat = tx.category ? (t[("treasury_cat_" + tx.category) as keyof typeof t] as string || tx.category) : t.treasuryOther;
+      const cat = tx.category ? (t[("treasury_cat_" + tx.category) as keyof typeof t] as string || tx.category) : t.treasury_cat_other;
       map[cat] = (map[cat] || 0) + Number(tx.amount);
     });
     return Object.entries(map).map(([name, value]) => ({ name, value }));

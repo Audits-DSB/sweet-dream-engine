@@ -157,6 +157,7 @@ export const ar = {
   loading: "جاري التحميل...",
   active: "نشط",
   inactive: "غير نشط",
+  description: "الوصف",
   name: "الاسم",
   email: "البريد الإلكتروني",
   phone: "الهاتف",
