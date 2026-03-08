@@ -1,21 +1,32 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search } from "lucide-react";
+import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { clientsList, ordersList as initialData, materialsList } from "@/data/store";
+import { clientsList, ordersList as initialData } from "@/data/store";
+import { supabase } from "@/integrations/supabase/client";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+
+type MaterialItem = {
+  code: string;
+  name: string;
+  category: string;
+  unit: string;
+  sellingPrice: number;
+  storeCost: number;
+  active: boolean;
+};
 
 interface OrderItem {
   materialCode: string;
@@ -35,7 +46,46 @@ export default function OrdersPage() {
   const [form, setForm] = useState({ splitMode: "equal", deliveryFee: "500" });
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [materialSearch, setMaterialSearch] = useState("");
+  const [realMaterials, setRealMaterials] = useState<MaterialItem[]>([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Fetch materials from the same external API as Materials page
+  useEffect(() => {
+    const fetchMaterials = async () => {
+      setMaterialsLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-external-materials`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
+            },
+          }
+        );
+        const json = await res.json();
+        if (json.products) {
+          setRealMaterials(json.products.map((p: any) => ({
+            code: p.sku || p.id?.slice(0, 8) || "",
+            name: p.name,
+            category: p.category || "General",
+            unit: "unit",
+            sellingPrice: p.price_retail || 0,
+            storeCost: p.price_wholesale || 0,
+            active: true,
+          })));
+        }
+      } catch (err) {
+        console.error("Failed to fetch materials for orders:", err);
+      }
+      setMaterialsLoading(false);
+    };
+    fetchMaterials();
+  }, []);
 
   const filtered = orders.filter((o) => {
     const q = search.toLowerCase().trim();
@@ -47,15 +97,15 @@ export default function OrdersPage() {
   const usedMaterialCodes = orderItems.map(i => i.materialCode);
 
   const filteredMaterials = useMemo(() => {
-    return materialsList.filter(m => {
+    return realMaterials.filter(m => {
       if (!m.active) return false;
       if (usedMaterialCodes.includes(m.code)) return false;
       if (!materialSearch) return true;
       return m.name.toLowerCase().includes(materialSearch.toLowerCase()) || m.code.toLowerCase().includes(materialSearch.toLowerCase()) || m.category.toLowerCase().includes(materialSearch.toLowerCase());
     });
-  }, [materialSearch, usedMaterialCodes]);
+  }, [materialSearch, usedMaterialCodes, realMaterials]);
 
-  const addMaterialDirectly = (mat: typeof materialsList[0]) => {
+  const addMaterialDirectly = (mat: MaterialItem) => {
     setOrderItems([...orderItems, { materialCode: mat.code, name: mat.name, quantity: 1, sellingPrice: mat.sellingPrice, costPrice: mat.storeCost }]);
     setMaterialSearch("");
   };
@@ -217,7 +267,10 @@ export default function OrdersPage() {
                     ))}
                   </div>
                 )}
-                {materialSearch && filteredMaterials.length === 0 && (
+                {materialsLoading && (
+                  <div className="text-center py-2 text-muted-foreground text-xs mt-1 flex items-center justify-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> جاري تحميل المواد...</div>
+                )}
+                {!materialsLoading && materialSearch && filteredMaterials.length === 0 && (
                   <div className="text-center py-2 text-muted-foreground text-xs mt-1">{t.noResults}</div>
                 )}
               </div>
