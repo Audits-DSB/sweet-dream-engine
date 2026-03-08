@@ -700,7 +700,4 @@ export const ar = {
   viewByItem: "عرض حسب البند",
   totalItems: "إجمالي الأصناف",
   totalValue: "القيمة الإجمالية",
-  remainingValue: "قيمة المتبقي",
-  materialsCount: "عدد المواد",
-  viewDetails: "عرض التفاصيل",
 };

@@ -700,7 +700,4 @@ export const en = {
   viewByItem: "View by Item",
   totalItems: "Total Items",
   totalValue: "Total Value",
-  remainingValue: "Remaining Value",
-  materialsCount: "Materials",
-  viewDetails: "View Details",
 };
