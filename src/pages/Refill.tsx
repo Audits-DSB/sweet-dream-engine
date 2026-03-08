@@ -5,7 +5,8 @@ import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
-import { Package, ShoppingCart, AlertTriangle, TrendingDown } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Package, ShoppingCart, AlertTriangle, TrendingDown, Users, Package2 } from "lucide-react";
 import { toast } from "sonner";
 
 const mockRefills = [
