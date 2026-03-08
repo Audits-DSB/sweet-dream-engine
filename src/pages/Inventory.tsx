@@ -133,6 +133,23 @@ export default function InventoryPage() {
                       <p className="text-xs text-muted-foreground">{materialsCount} {t.materialsCount} · {t.remainingValue}: {totalRemaining.toLocaleString()} {t.currency}</p>
                     </div>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs gap-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        exportToCsv(
+                          `inventory_${clientName}`,
+                          ["code", "material", "unit", "remaining"],
+                          group.items.map(i => [i.code, i.material, i.unit, i.remaining])
+                        );
+                      }}
+                    >
+                      <Download className="h-3.5 w-3.5" />{t.export || "Export"}
+                    </Button>
+                  </div>
                   <div className="flex items-center gap-3">
                     <div className="flex gap-1">
                       {group.items.map(item => (
