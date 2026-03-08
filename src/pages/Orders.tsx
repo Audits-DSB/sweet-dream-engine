@@ -1,21 +1,32 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search } from "lucide-react";
+import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { clientsList, ordersList as initialData, materialsList } from "@/data/store";
+import { clientsList, ordersList as initialData } from "@/data/store";
+import { supabase } from "@/integrations/supabase/client";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+
+type MaterialItem = {
+  code: string;
+  name: string;
+  category: string;
+  unit: string;
+  sellingPrice: number;
+  storeCost: number;
+  active: boolean;
+};
 
 interface OrderItem {
   materialCode: string;
