@@ -33,6 +33,20 @@ export default function OrderDetails() {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const order = orderData;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadedFile, setUploadedFile] = useState<string | null>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.includes("pdf") && !file.type.includes("image")) {
+      toast.error("PDF أو صورة فقط");
+      return;
+    }
+    setUploadedFile(file.name);
+    toast.success(`${t.uploadInvoice}: ${file.name}`);
+    e.target.value = "";
+  };
 
   const found = ordersList.find(o => o.id === id);
 
