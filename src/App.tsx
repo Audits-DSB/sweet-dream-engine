@@ -26,6 +26,7 @@ import AlertsPage from "./pages/Alerts";
 import ReportsPage from "./pages/Reports";
 import SettingsPage from "./pages/Settings";
 import UserManagementPage from "./pages/UserManagement";
+import ProfilePage from "./pages/Profile";
 import LoginPage from "./pages/Login";
 import SignupPage from "./pages/Signup";
 import ForgotPasswordPage from "./pages/ForgotPassword";
