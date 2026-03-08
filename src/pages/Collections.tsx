@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,9 +34,11 @@ export default function CollectionsPage() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const urlStatus = searchParams.get("status") || "";
   const [collections, setCollections] = useState(initialCollections);
   const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, string>>(urlStatus ? { status: urlStatus } : {});
   const [selectedInvoice, setSelectedInvoice] = useState<typeof initialCollections[0] | null>(null);
 
   // Payment dialog state

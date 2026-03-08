@@ -74,10 +74,10 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-        <div className="cursor-pointer" onClick={() => navigate("/clients")}><StatCard title={t.activeClients} value={clientsList.filter(c => c.status === "Active").length} change={`+3 ${t.thisMonth}`} changeType="positive" icon={Users} /></div>
-        <div className="cursor-pointer" onClick={() => navigate("/requests")}><StatCard title={t.pendingRequests} value={8} change={`5 ${t.needsReview}`} changeType="neutral" icon={FileText} /></div>
-        <div className="cursor-pointer" onClick={() => navigate("/orders")}><StatCard title={t.activeOrders} value={ordersList.filter(o => ["Draft","Confirmed","Ready for Delivery"].includes(o.status)).length} change={`+2 ${t.today}`} changeType="positive" icon={ShoppingCart} /></div>
-        <div className="cursor-pointer" onClick={() => navigate("/collections")}><StatCard title={t.overdueCollections} value={3} change={`84,000 ${t.currency} ${t.total}`} changeType="negative" icon={Receipt} /></div>
+        <div className="cursor-pointer" onClick={() => navigate("/clients?status=Active")}><StatCard title={t.activeClients} value={clientsList.filter(c => c.status === "Active").length} change={`+3 ${t.thisMonth}`} changeType="positive" icon={Users} /></div>
+        <div className="cursor-pointer" onClick={() => navigate("/requests?status=Pending")}><StatCard title={t.pendingRequests} value={8} change={`5 ${t.needsReview}`} changeType="neutral" icon={FileText} /></div>
+        <div className="cursor-pointer" onClick={() => navigate("/orders?status=active")}><StatCard title={t.activeOrders} value={ordersList.filter(o => ["Draft","Confirmed","Ready for Delivery"].includes(o.status)).length} change={`+2 ${t.today}`} changeType="positive" icon={ShoppingCart} /></div>
+        <div className="cursor-pointer" onClick={() => navigate("/collections?status=Overdue")}><StatCard title={t.overdueCollections} value={3} change={`84,000 ${t.currency} ${t.total}`} changeType="negative" icon={Receipt} /></div>
         <div className="cursor-pointer" onClick={() => navigate("/company-profit")}><StatCard title={t.profitRealized} value={`425${t.thousand}`} change={`+12% ${t.vsLastMonth}`} changeType="positive" icon={TrendingUp} /></div>
       </div>
 

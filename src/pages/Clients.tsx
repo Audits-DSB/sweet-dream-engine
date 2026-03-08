@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -20,9 +21,11 @@ const emptyClient = { name: "", contact: "", email: "", phone: "", city: "", sta
 
 export default function ClientsPage() {
   const { t } = useLanguage();
+  const [searchParams] = useSearchParams();
+  const initialStatus = searchParams.get("status") || "";
   const [clients, setClients] = useState(initialData);
   const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, string>>(initialStatus ? { status: initialStatus } : {});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyClient);
   const navigate = useNavigate();

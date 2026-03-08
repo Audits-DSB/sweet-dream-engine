@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { clientsList, ordersList as initialData } from "@/data/store";
@@ -38,9 +38,11 @@ interface OrderItem {
 
 export default function OrdersPage() {
   const { t } = useLanguage();
+  const [searchParams] = useSearchParams();
+  const urlStatus = searchParams.get("status") || "";
   const [orders, setOrders] = useState(initialData);
   const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, string>>(urlStatus ? { status: urlStatus } : {});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState("");
   const [form, setForm] = useState({ splitMode: "equal", deliveryFee: "500" });
@@ -90,7 +92,8 @@ export default function OrdersPage() {
   const filtered = orders.filter((o) => {
     const q = search.toLowerCase().trim();
     const matchSearch = !q || o.client.toLowerCase().includes(q) || o.id.toLowerCase().includes(q) || o.date.includes(q) || o.source.toLowerCase().includes(q) || o.status.toLowerCase().includes(q) || o.splitMode.toLowerCase().includes(q);
-    const matchStatus = !filters.status || filters.status === "all" || o.status === filters.status;
+    const activeStatuses = ["Draft", "Confirmed", "Ready for Delivery"];
+    const matchStatus = !filters.status || filters.status === "all" || (filters.status === "active" ? activeStatuses.includes(o.status) : o.status === filters.status);
     return matchSearch && matchStatus;
   });
 
