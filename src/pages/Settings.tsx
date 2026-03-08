@@ -31,7 +31,7 @@ const businessRules = {
   auditReminderEnabled: true, auditReminderDays: 7,
 };
 
-type DialogMode = "founder" | "actor" | null;
+type DialogMode = "founder" | "actor" | "editFounder" | "editActor" | null;
 
 export default function SettingsPage() {
   const { t } = useLanguage();
@@ -41,6 +41,33 @@ export default function SettingsPage() {
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [founderForm, setFounderForm] = useState({ name: "", alias: "", email: "" });
   const [actorForm, setActorForm] = useState({ name: "", type: "external", phone: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const editFounder = (founder: typeof initialFounders[0]) => {
+    setEditingId(founder.id);
+    setFounderForm({ name: founder.name, alias: founder.alias, email: founder.email });
+    setDialogMode("editFounder");
+  };
+
+  const saveEditFounder = () => {
+    if (!founderForm.name) { toast.error(t.enterFounderName); return; }
+    setFounders(founders.map(f => f.id === editingId ? { ...f, name: founderForm.name, alias: founderForm.alias, email: founderForm.email } : f));
+    setDialogMode(null); setEditingId(null);
+    toast.success(t.founderUpdated);
+  };
+
+  const editActor = (actor: typeof initialActors[0]) => {
+    setEditingId(actor.id);
+    setActorForm({ name: actor.name, type: actor.type, phone: actor.phone });
+    setDialogMode("editActor");
+  };
+
+  const saveEditActor = () => {
+    if (!actorForm.name) { toast.error(t.enterFounderName); return; }
+    setActors(actors.map(a => a.id === editingId ? { ...a, name: actorForm.name, type: actorForm.type, phone: actorForm.phone } : a));
+    setDialogMode(null); setEditingId(null);
+    toast.success(t.actorAdded);
+  };
 
   const addFounder = () => {
     if (!founderForm.name) { toast.error(t.enterFounderName); return; }
@@ -152,7 +179,7 @@ export default function SettingsPage() {
                   <div className="p-2 rounded bg-muted/50"><p className="text-muted-foreground">{t.profits}</p><p className="font-semibold mt-0.5">{founder.totalProfit.toLocaleString()} {t.currency}</p></div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => toast.info(`${t.edit} ${founder.name}`)}><Pencil className="h-3 w-3 ltr:mr-1 rtl:ml-1" />{t.edit}</Button>
+                  <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => editFounder(founder)}><Pencil className="h-3 w-3 ltr:mr-1 rtl:ml-1" />{t.edit}</Button>
                   <Button variant="outline" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => deleteFounder(founder.id)}><Trash2 className="h-3 w-3" /></Button>
                 </div>
               </div>
@@ -185,8 +212,8 @@ export default function SettingsPage() {
                     <td className="py-2.5 px-3"><Badge variant={actor.active ? "default" : "secondary"} className={actor.active ? "bg-success/10 text-success border-0" : ""}>{actor.active ? t.active : t.inactive}</Badge></td>
                     <td className="py-2.5 px-3 text-end">
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => toggleActorStatus(actor.id)}><Pencil className="h-3 w-3" /></Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => deleteActor(actor.id)}><Trash2 className="h-3 w-3" /></Button>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => editActor(actor)}><Pencil className="h-3 w-3" /></Button>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => toggleActorStatus(actor.id)}><Switch checked={actor.active} className="scale-75" /></Button>
                       </div>
                     </td>
                   </tr>
@@ -222,6 +249,35 @@ export default function SettingsPage() {
             </div>
             <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={actorForm.phone} onChange={(e) => setActorForm({ ...actorForm, phone: e.target.value })} /></div>
             <Button className="w-full" onClick={addActor}>{t.addActorBtn}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialogMode === "editFounder"} onOpenChange={() => setDialogMode(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{t.edit} {t.founders}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-xs">{t.name} *</Label><Input className="h-9 mt-1" value={founderForm.name} onChange={(e) => setFounderForm({ ...founderForm, name: e.target.value })} /></div>
+            <div><Label className="text-xs">{t.jobTitle}</Label><Input className="h-9 mt-1" value={founderForm.alias} onChange={(e) => setFounderForm({ ...founderForm, alias: e.target.value })} /></div>
+            <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={founderForm.email} onChange={(e) => setFounderForm({ ...founderForm, email: e.target.value })} /></div>
+            <Button className="w-full" onClick={saveEditFounder}><Save className="h-4 w-4 ltr:mr-2 rtl:ml-2" />{t.saveChanges}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialogMode === "editActor"} onOpenChange={() => setDialogMode(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{t.edit} {t.deliveryActors}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-xs">{t.name} *</Label><Input className="h-9 mt-1" value={actorForm.name} onChange={(e) => setActorForm({ ...actorForm, name: e.target.value })} /></div>
+            <div><Label className="text-xs">{t.type}</Label>
+              <div className="flex gap-2 mt-1">
+                <Button size="sm" variant={actorForm.type === "founder" ? "default" : "outline"} onClick={() => setActorForm({ ...actorForm, type: "founder" })} className="flex-1 h-9">{t.founderType}</Button>
+                <Button size="sm" variant={actorForm.type === "external" ? "default" : "outline"} onClick={() => setActorForm({ ...actorForm, type: "external" })} className="flex-1 h-9">{t.externalType}</Button>
+              </div>
+            </div>
+            <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={actorForm.phone} onChange={(e) => setActorForm({ ...actorForm, phone: e.target.value })} /></div>
+            <Button className="w-full" onClick={saveEditActor}><Save className="h-4 w-4 ltr:mr-2 rtl:ml-2" />{t.saveChanges}</Button>
           </div>
         </DialogContent>
       </Dialog>
