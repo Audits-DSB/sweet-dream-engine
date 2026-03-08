@@ -657,4 +657,32 @@ export const ar = {
   treasury_cat_logistics: "لوجستيك",
   treasury_cat_maintenance: "صيانة",
   treasury_cat_other: "أخرى",
+
+  // Financial Report
+  finReport: "التقرير المالي",
+  finReportTitle: "التقرير المالي الشامل",
+  finReportDesc: "ملخص شامل لأرباح الشركة وحركات الخزينة وتوزيعات المؤسسين",
+  finReportRevenue: "إجمالي الإيرادات",
+  finReportProfit: "صافي الأرباح",
+  finReportFounderDist: "توزيعات المؤسسين",
+  finReportRevVsProfit: "الإيرادات مقابل الأرباح",
+  finReportProfitSplit: "تقسيم الأرباح (شركة / مؤسسين)",
+  finReportCollections: "ملخص التحصيلات",
+  finReportTotalInvoiced: "إجمالي المفوتر",
+  finReportCollectionRate: "نسبة التحصيل",
+  finReportMetric: "المؤشر",
+  finReport3m: "3 أشهر",
+  finReport6m: "6 أشهر",
+  finReport1y: "سنة",
+
+  // Collection-Treasury link
+  recordPaymentDialog: "تسجيل دفعة",
+  paymentAmount: "مبلغ الدفعة",
+  paymentMethod: "طريقة الدفع",
+  treasuryAccountForPayment: "حساب الخزينة",
+  linkToTreasury: "ربط بالخزينة تلقائياً",
+  paymentRecorded: "تم تسجيل الدفعة بنجاح",
+  paymentLinkedToTreasury: "تم ربط الدفعة بالخزينة",
+  enterValidAmount: "يرجى إدخال مبلغ صحيح",
+  amountExceedsRemaining: "المبلغ يتجاوز المتبقي",
 };
