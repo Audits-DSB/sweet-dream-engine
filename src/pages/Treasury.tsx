@@ -40,7 +40,7 @@ export default function TreasuryDashboard() {
     setLoading(true);
     const [accRes, txRes] = await Promise.all([
       supabase.from("treasury_accounts").select("*").eq("is_active", true).order("created_at"),
-      supabase.from("treasury_transactions").select("*, treasury_accounts(name)").order("created_at", { ascending: false }).limit(20),
+      supabase.from("treasury_transactions").select("*, treasury_accounts!account_id(name)").order("created_at", { ascending: false }).limit(20),
     ]);
     if (accRes.data) setAccounts(accRes.data as Account[]);
     if (txRes.data) setTransactions(txRes.data as Tx[]);
