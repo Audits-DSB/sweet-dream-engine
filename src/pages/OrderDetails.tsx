@@ -54,7 +54,24 @@ export default function OrderDetails() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm"><Upload className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.uploadInvoice}</Button>
-          <Button variant="outline" size="sm" onClick={() => toast.success(t.printInvoice)}><Printer className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.print}</Button>
+          <Button variant="outline" size="sm" onClick={() => {
+            printInvoice({
+              title: t.printInvoice,
+              companyName: "OpsHub",
+              subtitle: t.ordersTitle,
+              clientName: found?.client || order.client,
+              invoiceNumber: id || order.id,
+              date: found?.date || order.date,
+              columns: [t.materialCol, t.codeCol, t.unitCol, t.qtyCol, `${t.sellingPerUnit} (${t.currency})`, `${t.lineTotalSelling} (${t.currency})`],
+              rows: order.lines.map(l => [l.material, l.code, l.unit, l.qty, l.sellingPrice, l.lineTotal.toLocaleString()]),
+              totals: [
+                { label: t.totalSelling, value: `${totalSelling.toLocaleString()} ${t.currency}` },
+                { label: `${t.subscriptionLabel} (${order.subscription.value}%)`, value: `${subscriptionAmt.toLocaleString()} ${t.currency}` },
+                { label: t.operatingRevenue, value: `${operatingRevenue.toLocaleString()} ${t.currency}` },
+              ],
+              footer: `${t.deliveryFeeDisplay}: ${order.deliveryFee} ${t.currency}`,
+            });
+          }}><Printer className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.print}</Button>
           <Button size="sm" onClick={() => navigate("/deliveries")}><Truck className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.registerDelivery}</Button>
         </div>
       </div>
