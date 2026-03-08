@@ -88,10 +88,10 @@ export default function RequestsPage() {
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem><Eye className="h-3.5 w-3.5 mr-2" />View Details</DropdownMenuItem>
-                      <DropdownMenuItem><CheckCircle className="h-3.5 w-3.5 mr-2" />Approve</DropdownMenuItem>
-                      <DropdownMenuItem><XCircle className="h-3.5 w-3.5 mr-2" />Reject</DropdownMenuItem>
-                      <DropdownMenuItem><ArrowRight className="h-3.5 w-3.5 mr-2" />Convert to Order</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toast.info(`Viewing ${req.id}`)}><Eye className="h-3.5 w-3.5 mr-2" />View Details</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { toast.success(`${req.id} approved`); }}><CheckCircle className="h-3.5 w-3.5 mr-2" />Approve</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { toast.error(`${req.id} rejected`); }}><XCircle className="h-3.5 w-3.5 mr-2" />Reject</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { toast.success(`${req.id} converted to order`); }}><ArrowRight className="h-3.5 w-3.5 mr-2" />Convert to Order</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>
