@@ -73,7 +73,7 @@ export default function UserManagementPage() {
         {loading ? (
           <div className="text-center py-12 text-muted-foreground text-sm">{t.loadingUsers}</div>
         ) : users.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground text-sm">{t.noData || "لا توجد بيانات"}</div>
+          <div className="text-center py-12 text-muted-foreground text-sm">لا توجد بيانات</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
