@@ -1,8 +1,9 @@
 import { useParams, useNavigate } from "react-router-dom";
+import { useRef, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { ordersList } from "@/data/store";
@@ -32,6 +33,20 @@ export default function OrderDetails() {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const order = orderData;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadedFile, setUploadedFile] = useState<string | null>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.includes("pdf") && !file.type.includes("image")) {
+      toast.error("PDF أو صورة فقط");
+      return;
+    }
+    setUploadedFile(file.name);
+    toast.success(`${t.uploadInvoice}: ${file.name}`);
+    e.target.value = "";
+  };
 
   const found = ordersList.find(o => o.id === id);
 
@@ -53,7 +68,11 @@ export default function OrderDetails() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm"><Upload className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.uploadInvoice}</Button>
+          <input type="file" ref={fileInputRef} className="hidden" accept=".pdf,image/*" onChange={handleFileUpload} />
+          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+            {uploadedFile ? <FileCheck className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5 text-success" /> : <Upload className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />}
+            {uploadedFile || t.uploadInvoice}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => {
             printInvoice({
               title: t.printInvoice,
