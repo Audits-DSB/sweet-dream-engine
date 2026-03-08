@@ -8,15 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { clientsList } from "@/data/store";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const initialOrders = [
   { id: "ORD-048", client: "عيادة د. أحمد", date: "2025-03-06", lines: 4, totalSelling: "32,000 ج.م", totalCost: "21,000 ج.م", splitMode: "متساوي", deliveryFee: 500, status: "Draft", source: "REQ-001" },
@@ -30,14 +27,13 @@ const initialOrders = [
   { id: "ORD-040", client: "المركز الملكي للأسنان", date: "2025-02-20", lines: 4, totalSelling: "36,000 ج.م", totalCost: "24,000 ج.م", splitMode: "بالمساهمة", deliveryFee: 750, status: "Cancelled", source: "يدوي" },
 ];
 
-const emptyOrder = { client: "", lines: "1", totalSelling: "", totalCost: "", splitMode: "متساوي", deliveryFee: "500", source: "يدوي" };
-
 export default function OrdersPage() {
   const [orders, setOrders] = useState(initialOrders);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState(emptyOrder);
+  const [selectedClient, setSelectedClient] = useState("");
+  const [form, setForm] = useState({ lines: "1", totalSelling: "", totalCost: "", splitMode: "متساوي", deliveryFee: "500" });
   const navigate = useNavigate();
 
   const filtered = orders.filter((o) => {
@@ -47,19 +43,19 @@ export default function OrdersPage() {
   });
 
   const handleAdd = () => {
-    if (!form.client || !form.totalSelling) {
-      toast.error("يرجى إدخال اسم العميل والإجمالي");
-      return;
-    }
+    if (!selectedClient || !form.totalSelling) { toast.error("يرجى اختيار العميل وإدخال الإجمالي"); return; }
+    const client = clientsList.find(c => c.id === selectedClient);
+    if (!client) return;
     const num = orders.length > 0 ? parseInt(orders[0].id.split("-")[1]) + 1 : 49;
     const newId = `ORD-${String(num).padStart(3, "0")}`;
     const today = new Date().toISOString().split("T")[0];
     setOrders([{
-      id: newId, client: form.client, date: today, lines: parseInt(form.lines) || 1,
+      id: newId, client: client.name, date: today, lines: parseInt(form.lines) || 1,
       totalSelling: `${Number(form.totalSelling).toLocaleString()} ج.م`, totalCost: `${Number(form.totalCost).toLocaleString()} ج.م`,
-      splitMode: form.splitMode, deliveryFee: parseInt(form.deliveryFee) || 0, status: "Draft", source: form.source,
+      splitMode: form.splitMode, deliveryFee: parseInt(form.deliveryFee) || 0, status: "Draft", source: "يدوي",
     }, ...orders]);
-    setForm(emptyOrder);
+    setForm({ lines: "1", totalSelling: "", totalCost: "", splitMode: "متساوي", deliveryFee: "500" });
+    setSelectedClient("");
     setDialogOpen(false);
     toast.success("تم إنشاء الطلب بنجاح");
   };
@@ -140,7 +136,17 @@ export default function OrdersPage() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>طلب جديد</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div><Label className="text-xs">العميل *</Label><Input className="h-9 mt-1" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} placeholder="اسم العميل" /></div>
+            <div>
+              <Label className="text-xs">العميل *</Label>
+              <Select value={selectedClient} onValueChange={setSelectedClient}>
+                <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="اختر العميل..." /></SelectTrigger>
+                <SelectContent>
+                  {clientsList.filter(c => c.status === "Active").map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name} — {c.city}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">إجمالي البيع *</Label><Input className="h-9 mt-1" type="number" value={form.totalSelling} onChange={(e) => setForm({ ...form, totalSelling: e.target.value })} /></div>
               <div><Label className="text-xs">إجمالي التكلفة</Label><Input className="h-9 mt-1" type="number" value={form.totalCost} onChange={(e) => setForm({ ...form, totalCost: e.target.value })} /></div>
