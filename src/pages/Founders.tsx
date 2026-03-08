@@ -9,27 +9,27 @@ import {
 
 const founders = [
   {
-    id: "1", name: "Ahmed Al-Rashid", alias: "CEO", email: "ahmed@opshub.com", phone: "+966 50 123 4567",
-    active: true, totalContributed: 125000, totalProfit: 42500, totalWithdrawn: 20000,
+    id: "1", name: "أحمد الراشد", alias: "المدير التنفيذي", email: "ahmed@opshub.com", phone: "+20 100 123 4567",
+    active: true, totalContributed: 1250000, totalProfit: 425000, totalWithdrawn: 200000,
     monthlyProfit: [
-      { month: "Oct", profit: 6200 }, { month: "Nov", profit: 7100 }, { month: "Dec", profit: 6800 },
-      { month: "Jan", profit: 7500 }, { month: "Feb", profit: 7800 }, { month: "Mar", profit: 7100 },
+      { month: "أكت", profit: 62000 }, { month: "نوف", profit: 71000 }, { month: "ديس", profit: 68000 },
+      { month: "ينا", profit: 75000 }, { month: "فبر", profit: 78000 }, { month: "مار", profit: 71000 },
     ],
   },
   {
-    id: "2", name: "Sara Al-Mansour", alias: "COO", email: "sara@opshub.com", phone: "+966 50 234 5678",
-    active: true, totalContributed: 95000, totalProfit: 38200, totalWithdrawn: 15000,
+    id: "2", name: "سارة المنصور", alias: "مدير العمليات", email: "sara@opshub.com", phone: "+20 111 234 5678",
+    active: true, totalContributed: 950000, totalProfit: 382000, totalWithdrawn: 150000,
     monthlyProfit: [
-      { month: "Oct", profit: 5800 }, { month: "Nov", profit: 6400 }, { month: "Dec", profit: 6100 },
-      { month: "Jan", profit: 6900 }, { month: "Feb", profit: 7000 }, { month: "Mar", profit: 6000 },
+      { month: "أكت", profit: 58000 }, { month: "نوف", profit: 64000 }, { month: "ديس", profit: 61000 },
+      { month: "ينا", profit: 69000 }, { month: "فبر", profit: 70000 }, { month: "مار", profit: 60000 },
     ],
   },
   {
-    id: "3", name: "Omar Khalil", alias: "CFO", email: "omar@opshub.com", phone: "+966 50 345 6789",
-    active: true, totalContributed: 80000, totalProfit: 31800, totalWithdrawn: 10000,
+    id: "3", name: "عمر خليل", alias: "المدير المالي", email: "omar@opshub.com", phone: "+20 122 345 6789",
+    active: true, totalContributed: 800000, totalProfit: 318000, totalWithdrawn: 100000,
     monthlyProfit: [
-      { month: "Oct", profit: 4800 }, { month: "Nov", profit: 5300 }, { month: "Dec", profit: 5100 },
-      { month: "Jan", profit: 5700 }, { month: "Feb", profit: 5800 }, { month: "Mar", profit: 5100 },
+      { month: "أكت", profit: 48000 }, { month: "نوف", profit: 53000 }, { month: "ديس", profit: 51000 },
+      { month: "ينا", profit: 57000 }, { month: "فبر", profit: 58000 }, { month: "مار", profit: 51000 },
     ],
   },
 ];
@@ -43,16 +43,16 @@ export default function FoundersPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="page-header">Founders</h1>
-          <p className="page-description">Founder profiles, contributions, and profit allocation</p>
+          <h1 className="page-header">المؤسسون</h1>
+          <p className="page-description">ملفات المؤسسين والمساهمات وتوزيع الأرباح</p>
         </div>
-        <Button size="sm"><Plus className="h-3.5 w-3.5 mr-1.5" />Add Founder</Button>
+        <Button size="sm"><Plus className="h-3.5 w-3.5 mr-1.5" />إضافة مؤسس</Button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Contributed" value={`SAR ${(totalContributed / 1000).toFixed(0)}K`} change={`${founders.length} founders`} changeType="neutral" icon={Wallet} />
-        <StatCard title="Total Profit Earned" value={`SAR ${(totalProfit / 1000).toFixed(1)}K`} change="+12% vs last quarter" changeType="positive" icon={TrendingUp} />
-        <StatCard title="Available Balance" value={`SAR ${(totalBalance / 1000).toFixed(1)}K`} change="After withdrawals" changeType="neutral" icon={Users} />
+        <StatCard title="إجمالي المساهمات" value={`${(totalContributed / 1000).toFixed(0)} ألف ج.م`} change={`${founders.length} مؤسسين`} changeType="neutral" icon={Wallet} />
+        <StatCard title="إجمالي الأرباح" value={`${(totalProfit / 1000).toFixed(1)} ألف ج.م`} change="+12% مقارنة بالربع السابق" changeType="positive" icon={TrendingUp} />
+        <StatCard title="الرصيد المتاح" value={`${(totalBalance / 1000).toFixed(1)} ألف ج.م`} change="بعد السحوبات" changeType="neutral" icon={Users} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -73,21 +73,21 @@ export default function FoundersPage() {
 
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div className="p-2.5 rounded-lg bg-muted/50 text-center">
-                <p className="text-muted-foreground">Contributed</p>
-                <p className="font-bold mt-0.5">SAR {(f.totalContributed / 1000).toFixed(0)}K</p>
+                <p className="text-muted-foreground">المساهمة</p>
+                <p className="font-bold mt-0.5">{(f.totalContributed / 1000).toFixed(0)} ألف ج.م</p>
               </div>
               <div className="p-2.5 rounded-lg bg-success/5 text-center">
-                <p className="text-muted-foreground">Profit</p>
-                <p className="font-bold text-success mt-0.5">SAR {(f.totalProfit / 1000).toFixed(1)}K</p>
+                <p className="text-muted-foreground">الأرباح</p>
+                <p className="font-bold text-success mt-0.5">{(f.totalProfit / 1000).toFixed(1)} ألف ج.م</p>
               </div>
               <div className="p-2.5 rounded-lg bg-primary/5 text-center">
-                <p className="text-muted-foreground">Balance</p>
-                <p className="font-bold text-primary mt-0.5">SAR {((f.totalProfit - f.totalWithdrawn) / 1000).toFixed(1)}K</p>
+                <p className="text-muted-foreground">الرصيد</p>
+                <p className="font-bold text-primary mt-0.5">{((f.totalProfit - f.totalWithdrawn) / 1000).toFixed(1)} ألف ج.م</p>
               </div>
             </div>
 
             <div>
-              <p className="text-xs text-muted-foreground mb-2">Monthly Profit (6 months)</p>
+              <p className="text-xs text-muted-foreground mb-2">الأرباح الشهرية (6 أشهر)</p>
               <ResponsiveContainer width="100%" height={100}>
                 <BarChart data={f.monthlyProfit}>
                   <XAxis dataKey="month" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
@@ -98,8 +98,8 @@ export default function FoundersPage() {
             </div>
 
             <div className="flex justify-between items-center text-xs text-muted-foreground pt-2 border-t border-border">
-              <span>Share: {((f.totalContributed / totalContributed) * 100).toFixed(1)}%</span>
-              <Badge variant="default" className="bg-success/10 text-success border-0">Active</Badge>
+              <span>الحصة: {((f.totalContributed / totalContributed) * 100).toFixed(1)}%</span>
+              <Badge variant="default" className="bg-success/10 text-success border-0">نشط</Badge>
             </div>
           </div>
         ))}
