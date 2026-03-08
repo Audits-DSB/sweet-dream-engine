@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { DataToolbar } from "@/components/DataToolbar";
@@ -7,10 +7,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Globe, Mail, Phone, ExternalLink, Package } from "lucide-react";
+import { Plus, Globe, Mail, Phone, ExternalLink, Package, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { suppliersList as initialSuppliers, materialsList } from "@/data/store";
+import { suppliersList as initialSuppliers } from "@/data/store";
+import { supabase } from "@/integrations/supabase/client";
+
+type RealMaterial = {
+  code: string;
+  name: string;
+  category: string;
+  sellingPrice: number;
+  storeCost: number;
+  supplier: string;
+  manufacturer: string;
+};
 
 export default function SuppliersPage() {
   const { t } = useLanguage();
@@ -20,13 +31,58 @@ export default function SuppliersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailItem, setDetailItem] = useState<typeof initialSuppliers[0] | null>(null);
   const [form, setForm] = useState({ name: "", country: "", email: "", phone: "", website: "", paymentTerms: "Net 30" });
+  const [realMaterials, setRealMaterials] = useState<RealMaterial[]>([]);
+  const [materialsLoading, setMaterialsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchMaterials = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-external-materials`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
+            },
+          }
+        );
+        const json = await res.json();
+        if (json.products) {
+          setRealMaterials(json.products.map((p: any) => {
+            const companyVariant = p.variants?.find((v: any) => v.name === "Company" || v.name === "Company()");
+            const manufacturer = companyVariant?.options?.[0]?.value || "";
+            return {
+              code: p.sku || p.id?.slice(0, 8) || "",
+              name: p.name,
+              category: p.category || "General",
+              sellingPrice: p.price_retail || 0,
+              storeCost: p.price_wholesale || 0,
+              supplier: manufacturer,
+              manufacturer,
+            };
+          }));
+        }
+      } catch (err) {
+        console.error("Failed to fetch materials:", err);
+      }
+      setMaterialsLoading(false);
+    };
+    fetchMaterials();
+  }, []);
 
   const filtered = suppliers.filter((s) => {
     return !search || s.name.toLowerCase().includes(search.toLowerCase()) || s.country.toLowerCase().includes(search.toLowerCase()) || s.id.toLowerCase().includes(search.toLowerCase());
   });
 
   const getMaterialsForSupplier = (supplierName: string) => {
-    return materialsList.filter(m => m.supplier === supplierName);
+    return realMaterials.filter(m => 
+      m.supplier.toLowerCase().includes(supplierName.toLowerCase()) || 
+      m.manufacturer.toLowerCase().includes(supplierName.toLowerCase()) ||
+      supplierName.toLowerCase().includes(m.supplier.toLowerCase())
+    );
   };
 
   const handleAdd = () => {
@@ -81,7 +137,7 @@ export default function SuppliersPage() {
                 {sup.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{sup.phone}</span>}
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-border">
-                <span className="text-xs text-muted-foreground flex items-center gap-1"><Package className="h-3 w-3" />{mats.length} {t.materialsCount}</span>
+                <span className="text-xs text-muted-foreground flex items-center gap-1"><Package className="h-3 w-3" />{materialsLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : mats.length} {t.materialsCount}</span>
                 <span className="text-xs text-muted-foreground">{sup.paymentTerms}</span>
               </div>
             </div>
