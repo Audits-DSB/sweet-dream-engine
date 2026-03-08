@@ -38,9 +38,11 @@ interface OrderItem {
 
 export default function OrdersPage() {
   const { t } = useLanguage();
+  const [searchParams] = useSearchParams();
+  const urlStatus = searchParams.get("status") || "";
   const [orders, setOrders] = useState(initialData);
   const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, string>>(urlStatus ? { status: urlStatus } : {});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState("");
   const [form, setForm] = useState({ splitMode: "equal", deliveryFee: "500" });
