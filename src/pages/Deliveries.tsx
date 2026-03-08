@@ -6,10 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Eye, MoreHorizontal, Truck, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { ordersList, deliveryActors } from "@/data/store";
+import { ordersList, deliveryActors, clientsList } from "@/data/store";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -18,13 +19,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 
 const initialDeliveries = [
-  { id: "DEL-035", order: "ORD-048", client: "عيادة د. أحمد", requestedDate: "2025-03-08", actualDate: "—", actor: "أحمد (مؤسس)", items: 4, type: "كامل", status: "Pending" },
-  { id: "DEL-034", order: "ORD-047", client: "مركز نور لطب الأسنان", requestedDate: "2025-03-07", actualDate: "—", actor: "DHL Express", items: 7, type: "كامل", status: "In Transit" },
-  { id: "DEL-033", order: "ORD-046", client: "عيادة جرين فالي", requestedDate: "2025-03-06", actualDate: "2025-03-06", actor: "شركة توصيل سريع", items: 3, type: "كامل", status: "Delivered" },
-  { id: "DEL-032", order: "ORD-044", client: "عيادة بلو مون", requestedDate: "2025-03-03", actualDate: "2025-03-03", actor: "سارة (مؤسس)", items: 4, type: "جزئي", status: "Delivered" },
-  { id: "DEL-031", order: "ORD-044", client: "عيادة بلو مون", requestedDate: "2025-03-05", actualDate: "—", actor: "أحمد (مؤسس)", items: 2, type: "جزئي", status: "Pending" },
-  { id: "DEL-030", order: "ORD-045", client: "المركز الملكي للأسنان", requestedDate: "2025-03-02", actualDate: "2025-03-02", actor: "DHL Express", items: 5, type: "كامل", status: "Delivered" },
-  { id: "DEL-029", order: "ORD-043", client: "عيادة سمايل هاوس", requestedDate: "2025-02-28", actualDate: "2025-03-01", actor: "أحمد (مؤسس)", items: 2, type: "كامل", status: "Delivered" },
+  { id: "DEL-035", order: "ORD-048", client: "عيادة د. أحمد", clientId: "C001", requestedDate: "2025-03-08", actualDate: "—", actor: "أحمد (مؤسس)", items: 4, type: "كامل", status: "Pending" },
+  { id: "DEL-034", order: "ORD-047", client: "مركز نور لطب الأسنان", clientId: "C002", requestedDate: "2025-03-07", actualDate: "—", actor: "DHL Express", items: 7, type: "كامل", status: "In Transit" },
+  { id: "DEL-033", order: "ORD-046", client: "عيادة جرين فالي", clientId: "C003", requestedDate: "2025-03-06", actualDate: "2025-03-06", actor: "شركة توصيل سريع", items: 3, type: "كامل", status: "Delivered" },
+  { id: "DEL-032", order: "ORD-044", client: "عيادة بلو مون", clientId: "C006", requestedDate: "2025-03-03", actualDate: "2025-03-03", actor: "سارة (مؤسس)", items: 4, type: "جزئي", status: "Delivered" },
+  { id: "DEL-031", order: "ORD-044", client: "عيادة بلو مون", clientId: "C006", requestedDate: "2025-03-05", actualDate: "—", actor: "أحمد (مؤسس)", items: 2, type: "جزئي", status: "Pending" },
+  { id: "DEL-030", order: "ORD-045", client: "المركز الملكي للأسنان", clientId: "C004", requestedDate: "2025-03-02", actualDate: "2025-03-02", actor: "DHL Express", items: 5, type: "كامل", status: "Delivered" },
+  { id: "DEL-029", order: "ORD-043", client: "عيادة سمايل هاوس", clientId: "C005", requestedDate: "2025-02-28", actualDate: "2025-03-01", actor: "أحمد (مؤسس)", items: 2, type: "كامل", status: "Delivered" },
 ];
 
 const deliveryStatusMap: Record<string, string> = {
@@ -32,6 +33,8 @@ const deliveryStatusMap: Record<string, string> = {
 };
 
 export default function DeliveriesPage() {
+  const { t } = useLanguage();
+  const navigate = useNavigate();
   const [deliveries, setDeliveries] = useState(initialDeliveries);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -39,10 +42,9 @@ export default function DeliveriesPage() {
   const [detailItem, setDetailItem] = useState<typeof initialDeliveries[0] | null>(null);
   const [selectedOrder, setSelectedOrder] = useState("");
   const [selectedActor, setSelectedActor] = useState("");
-  const [deliveryType, setDeliveryType] = useState("كامل");
+  const [deliveryType, setDeliveryType] = useState("full");
   const [requestedDate, setRequestedDate] = useState("");
   const { user } = useAuth();
-  const { t } = useLanguage();
 
   const sendNotification = async (title: string, body: string, type: string = "info") => {
     if (!user) return;
@@ -56,26 +58,27 @@ export default function DeliveriesPage() {
   });
 
   const handleAdd = () => {
-    if (!selectedOrder) { toast.error("يرجى اختيار الطلب"); return; }
+    if (!selectedOrder) { toast.error(t.pleaseSelectOrder); return; }
     const order = ordersList.find(o => o.id === selectedOrder);
     if (!order) return;
     const num = deliveries.length > 0 ? parseInt(deliveries[0].id.split("-")[1]) + 1 : 36;
     const newId = `DEL-${String(num).padStart(3, "0")}`;
     const today = requestedDate || new Date().toISOString().split("T")[0];
+    const typeLabel = deliveryType === "full" ? t.full : t.partialType;
     setDeliveries([{
-      id: newId, order: order.id, client: order.client, requestedDate: today,
-      actualDate: "—", actor: selectedActor || "—", items: order.lines, type: deliveryType, status: "Pending",
+      id: newId, order: order.id, client: order.client, clientId: order.clientId, requestedDate: today,
+      actualDate: "—", actor: selectedActor || "—", items: order.lines, type: typeLabel, status: "Pending",
     }, ...deliveries]);
-    sendNotification("توصيل جديد", `${newId} - ${order.client}`, "info");
-    setSelectedOrder(""); setSelectedActor(""); setDeliveryType("كامل"); setRequestedDate("");
+    sendNotification(t.newDelivery, `${newId} - ${order.client}`, "info");
+    setSelectedOrder(""); setSelectedActor(""); setDeliveryType("full"); setRequestedDate("");
     setDialogOpen(false);
-    toast.success("تم إنشاء التوصيل بنجاح");
+    toast.success(t.deliveryCreated);
   };
 
   const confirmDelivery = (del: typeof initialDeliveries[0]) => {
     setDeliveries(deliveries.map(d => d.id === del.id ? { ...d, status: "Delivered", actualDate: new Date().toISOString().split("T")[0] } : d));
-    toast.success(`تم تأكيد التوصيل: ${del.id}`);
-    sendNotification("تم التوصيل", `${del.id} - ${del.client}`, "success");
+    toast.success(`${t.deliveryConfirmedMsg}: ${del.id}`);
+    sendNotification(t.deliveryConfirmed, `${del.id} - ${del.client}`, "success");
   };
 
   return (
@@ -89,56 +92,52 @@ export default function DeliveriesPage() {
         searchPlaceholder={t.searchDeliveries}
         searchValue={search}
         onSearchChange={setSearch}
-        filters={[
-          { label: t.status, value: "status", options: [
-            { label: "قيد الانتظار", value: "Pending" },
-            { label: "في الطريق", value: "In Transit" },
-            { label: "تم التوصيل", value: "Delivered" },
-          ]},
-        ]}
+        filters={[{ label: t.status, value: "status", options: [
+          { label: t.pending, value: "Pending" }, { label: t.inTransit, value: "In Transit" }, { label: t.delivered, value: "Delivered" },
+        ]}]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("deliveries", ["الكود","الطلب","العميل","التاريخ المطلوب","التاريخ الفعلي","المنفذ","الأصناف","النوع","الحالة"], filtered.map(d => [d.id, d.order, d.client, d.requestedDate, d.actualDate, d.actor, d.items, d.type, d.status]))}
-        actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />توصيل جديد</Button>}
+        onExport={() => exportToCsv("deliveries", [t.code, t.order, t.client, t.requestedDate, t.actualDate, t.executor, t.items, t.type, t.status], filtered.map(d => [d.id, d.order, d.client, d.requestedDate, d.actualDate, d.actor, d.items, d.type, d.status]))}
+        actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.newDelivery}</Button>}
       />
 
       <div className="stat-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الكود</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الطلب</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">العميل</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">التاريخ المطلوب</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">التاريخ الفعلي</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">المنفذ</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">الأصناف</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">النوع</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">الحالة</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground">إجراءات</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.code}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.order}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.requestedDate}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.actualDate}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.executor}</th>
+              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.items}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.type}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
+              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.actions}</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((del) => (
               <tr key={del.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetailItem(del)}>
                 <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{del.id}</td>
-                <td className="py-3 px-3 font-mono text-xs">{del.order}</td>
-                <td className="py-3 px-3 font-medium">{del.client}</td>
+                <td className="py-3 px-3 font-mono text-xs hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${del.order}`); }}>{del.order}</td>
+                <td className="py-3 px-3 font-medium hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${del.clientId}`); }}>{del.client}</td>
                 <td className="py-3 px-3 text-muted-foreground text-xs">{del.requestedDate}</td>
                 <td className="py-3 px-3 text-xs">{del.actualDate}</td>
                 <td className="py-3 px-3 text-muted-foreground">{del.actor}</td>
-                <td className="py-3 px-3 text-right">{del.items}</td>
+                <td className="py-3 px-3 text-end">{del.items}</td>
                 <td className="py-3 px-3"><span className="text-xs bg-muted px-2 py-0.5 rounded">{del.type}</span></td>
                 <td className="py-3 px-3"><StatusBadge status={del.status} variant={deliveryStatusMap[del.status] as any} /></td>
-                <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
+                <td className="py-3 px-3 text-end" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setDetailItem(del)}><Eye className="h-3.5 w-3.5 mr-2" />عرض التفاصيل</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setDetailItem(del)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewDetails}</DropdownMenuItem>
                       {del.status !== "Delivered" && (
-                        <DropdownMenuItem onClick={() => confirmDelivery(del)}><Truck className="h-3.5 w-3.5 mr-2" />تأكيد التوصيل</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => confirmDelivery(del)}><Truck className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.confirmDelivery}</DropdownMenuItem>
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -147,6 +146,7 @@ export default function DeliveriesPage() {
             ))}
           </tbody>
         </table>
+        {filtered.length === 0 && <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>}
       </div>
 
       {/* Detail Dialog */}
@@ -156,20 +156,20 @@ export default function DeliveriesPage() {
           {detailItem && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">الطلب</p><p className="font-semibold">{detailItem.order}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">المنفذ</p><p className="font-semibold">{detailItem.actor}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">التاريخ المطلوب</p><p className="font-semibold">{detailItem.requestedDate}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">التاريخ الفعلي</p><p className="font-semibold">{detailItem.actualDate}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">الأصناف</p><p className="font-semibold">{detailItem.items}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">النوع</p><p className="font-semibold">{detailItem.type}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setDetailItem(null); navigate(`/orders/${detailItem.order}`); }}><p className="text-xs text-muted-foreground">{t.order}</p><p className="font-semibold text-primary">{detailItem.order}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.executor}</p><p className="font-semibold">{detailItem.actor}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.requestedDate}</p><p className="font-semibold">{detailItem.requestedDate}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.actualDate}</p><p className="font-semibold">{detailItem.actualDate}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.items}</p><p className="font-semibold">{detailItem.items}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.type}</p><p className="font-semibold">{detailItem.type}</p></div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">الحالة:</span>
+                <span className="text-sm text-muted-foreground">{t.status}:</span>
                 <StatusBadge status={detailItem.status} variant={deliveryStatusMap[detailItem.status] as any} />
               </div>
               {detailItem.status !== "Delivered" && (
                 <Button className="w-full" onClick={() => { confirmDelivery(detailItem); setDetailItem(null); }}>
-                  <Truck className="h-4 w-4 mr-2" />تأكيد التوصيل
+                  <Truck className="h-4 w-4 ltr:mr-2 rtl:ml-2" />{t.confirmDelivery}
                 </Button>
               )}
             </div>
@@ -180,12 +180,12 @@ export default function DeliveriesPage() {
       {/* New Delivery Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>توصيل جديد</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t.newDelivery}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label className="text-xs">اختر الطلب *</Label>
+              <Label className="text-xs">{t.selectOrder}</Label>
               <Select value={selectedOrder} onValueChange={setSelectedOrder}>
-                <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="اختر طلب..." /></SelectTrigger>
+                <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t.selectOrderPlaceholder} /></SelectTrigger>
                 <SelectContent>
                   {ordersList.filter(o => !["Cancelled", "Closed"].includes(o.status)).map(o => (
                     <SelectItem key={o.id} value={o.id}>{o.id} — {o.client} ({o.status})</SelectItem>
@@ -194,9 +194,9 @@ export default function DeliveriesPage() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs">المنفذ</Label>
+              <Label className="text-xs">{t.executorLabel}</Label>
               <Select value={selectedActor} onValueChange={setSelectedActor}>
-                <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="اختر منفذ التوصيل..." /></SelectTrigger>
+                <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t.selectExecutor} /></SelectTrigger>
                 <SelectContent>
                   {deliveryActors.map(a => (
                     <SelectItem key={a.id} value={a.name}>{a.name} ({a.type})</SelectItem>
@@ -206,18 +206,18 @@ export default function DeliveriesPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs">النوع</Label>
+                <Label className="text-xs">{t.typeLabel}</Label>
                 <Select value={deliveryType} onValueChange={setDeliveryType}>
                   <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="كامل">كامل</SelectItem>
-                    <SelectItem value="جزئي">جزئي</SelectItem>
+                    <SelectItem value="full">{t.full}</SelectItem>
+                    <SelectItem value="partial">{t.partialType}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label className="text-xs">التاريخ</Label><Input className="h-9 mt-1" type="date" value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} /></div>
+              <div><Label className="text-xs">{t.dateLabel}</Label><Input className="h-9 mt-1" type="date" value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} /></div>
             </div>
-            <Button className="w-full" onClick={handleAdd}>إنشاء التوصيل</Button>
+            <Button className="w-full" onClick={handleAdd}>{t.createDelivery}</Button>
           </div>
         </DialogContent>
       </Dialog>

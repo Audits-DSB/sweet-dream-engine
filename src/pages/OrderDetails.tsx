@@ -1,8 +1,11 @@
 import { useParams, useNavigate } from "react-router-dom";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, FileText, Upload, Printer } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
+import { ordersList } from "@/data/store";
 
 const orderData = {
   id: "ORD-047", client: "مركز نور لطب الأسنان", clientId: "C002",
@@ -20,15 +23,16 @@ const orderData = {
     { founder: "سارة المنصور", amount: 17000, percentage: 30.2 },
     { founder: "عمر خليل", amount: 11200, percentage: 19.9 },
   ],
-  deliveries: [
-    { id: "DEL-031", date: "2025-03-07", actor: "أحمد (مؤسس)", status: "Pending", items: "الطلب كامل" },
-  ],
+  deliveries: [{ id: "DEL-031", date: "2025-03-07", actor: "أحمد (مؤسس)", status: "Pending", items: "الطلب كامل" }],
 };
 
 export default function OrderDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const order = orderData;
+
+  const found = ordersList.find(o => o.id === id);
 
   const totalSelling = order.lines.reduce((s, l) => s + l.lineTotal, 0);
   const totalCost = order.lines.reduce((s, l) => s + l.lineCost, 0);
@@ -39,29 +43,27 @@ export default function OrderDetails() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate("/orders")}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate("/orders")}><ArrowLeft className="h-4 w-4" /></Button>
         <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="page-header">{id || order.id}</h1>
-            <StatusBadge status={order.status} />
-          </div>
-          <p className="page-description">{order.client} · {order.date} · المصدر: {order.source}</p>
+          <div className="flex items-center gap-3"><h1 className="page-header">{id || order.id}</h1><StatusBadge status={found?.status || order.status} /></div>
+          <p className="page-description">
+            <span className="cursor-pointer hover:text-primary" onClick={() => navigate(`/clients/${order.clientId}`)}>{found?.client || order.client}</span>
+            {" · "}{found?.date || order.date} · {t.orderDetailsSource}: {found?.source || order.source}
+          </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm"><Upload className="h-3.5 w-3.5 mr-1.5" />رفع فاتورة</Button>
-          <Button variant="outline" size="sm"><Printer className="h-3.5 w-3.5 mr-1.5" />طباعة</Button>
-          <Button size="sm"><Truck className="h-3.5 w-3.5 mr-1.5" />تسجيل تسليم</Button>
+          <Button variant="outline" size="sm"><Upload className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.uploadInvoice}</Button>
+          <Button variant="outline" size="sm" onClick={() => toast.success(t.printInvoice)}><Printer className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.print}</Button>
+          <Button size="sm" onClick={() => navigate("/deliveries")}><Truck className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.registerDelivery}</Button>
         </div>
       </div>
 
       <Tabs defaultValue="lines" className="space-y-4">
         <TabsList className="bg-muted">
-          <TabsTrigger value="lines">بنود الطلب</TabsTrigger>
-          <TabsTrigger value="financials">الماليات</TabsTrigger>
-          <TabsTrigger value="deliveries">التسليمات</TabsTrigger>
-          <TabsTrigger value="funding">تمويل المؤسسين</TabsTrigger>
+          <TabsTrigger value="lines">{t.orderLines}</TabsTrigger>
+          <TabsTrigger value="financials">{t.financials}</TabsTrigger>
+          <TabsTrigger value="deliveries">{t.deliveriesTab}</TabsTrigger>
+          <TabsTrigger value="funding">{t.fundingTab}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="lines">
@@ -69,27 +71,27 @@ export default function OrderDetails() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">المادة</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">الكود</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">الوحدة</th>
-                  <th className="text-right py-2.5 px-3 text-xs font-medium text-muted-foreground">الكمية</th>
-                  <th className="text-right py-2.5 px-3 text-xs font-medium text-muted-foreground">سعر البيع/وحدة</th>
-                  <th className="text-right py-2.5 px-3 text-xs font-medium text-muted-foreground">التكلفة/وحدة</th>
-                  <th className="text-right py-2.5 px-3 text-xs font-medium text-muted-foreground">إجمالي البيع</th>
-                  <th className="text-right py-2.5 px-3 text-xs font-medium text-muted-foreground">إجمالي التكلفة</th>
+                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.materialCol}</th>
+                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.codeCol}</th>
+                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.unitCol}</th>
+                  <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.qtyCol}</th>
+                  <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.sellingPerUnit}</th>
+                  <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.costPerUnit}</th>
+                  <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.lineTotalSelling}</th>
+                  <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.lineTotalCost}</th>
                 </tr>
               </thead>
               <tbody>
                 {order.lines.map((line, idx) => (
-                  <tr key={idx} className="border-b border-border/50">
+                  <tr key={idx} className="border-b border-border/50 hover:bg-muted/30 cursor-pointer" onClick={() => navigate("/materials")}>
                     <td className="py-2.5 px-3 font-medium">{line.material}</td>
                     <td className="py-2.5 px-3 font-mono text-xs text-muted-foreground">{line.code}</td>
                     <td className="py-2.5 px-3 text-muted-foreground">{line.unit}</td>
-                    <td className="py-2.5 px-3 text-right">{line.qty}</td>
-                    <td className="py-2.5 px-3 text-right">{line.sellingPrice} ج.م</td>
-                    <td className="py-2.5 px-3 text-right text-muted-foreground">{line.storeCost} ج.م</td>
-                    <td className="py-2.5 px-3 text-right font-medium">{line.lineTotal.toLocaleString()} ج.م</td>
-                    <td className="py-2.5 px-3 text-right text-muted-foreground">{line.lineCost.toLocaleString()} ج.م</td>
+                    <td className="py-2.5 px-3 text-end">{line.qty}</td>
+                    <td className="py-2.5 px-3 text-end">{line.sellingPrice} {t.currency}</td>
+                    <td className="py-2.5 px-3 text-end text-muted-foreground">{line.storeCost} {t.currency}</td>
+                    <td className="py-2.5 px-3 text-end font-medium">{line.lineTotal.toLocaleString()} {t.currency}</td>
+                    <td className="py-2.5 px-3 text-end text-muted-foreground">{line.lineCost.toLocaleString()} {t.currency}</td>
                   </tr>
                 ))}
               </tbody>
@@ -100,21 +102,21 @@ export default function OrderDetails() {
         <TabsContent value="financials">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="stat-card space-y-3">
-              <h3 className="font-semibold text-sm">الإيرادات المتوقعة</h3>
+              <h3 className="font-semibold text-sm">{t.expectedRevenue}</h3>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">إجمالي البيع</span><span className="font-medium">{totalSelling.toLocaleString()} ج.م</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">الاشتراك ({order.subscription.value}%)</span><span className="font-medium">{subscriptionAmt.toLocaleString()} ج.م</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">كاش باك</span><span className="font-medium">0 ج.م</span></div>
-                <div className="border-t border-border pt-2 flex justify-between font-semibold"><span>إيرادات التشغيل</span><span>{operatingRevenue.toLocaleString()} ج.م</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">{t.totalSelling}</span><span className="font-medium">{totalSelling.toLocaleString()} {t.currency}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">{t.subscriptionLabel} ({order.subscription.value}%)</span><span className="font-medium">{subscriptionAmt.toLocaleString()} {t.currency}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">{t.cashback}</span><span className="font-medium">0 {t.currency}</span></div>
+                <div className="border-t border-border pt-2 flex justify-between font-semibold"><span>{t.operatingRevenue}</span><span>{operatingRevenue.toLocaleString()} {t.currency}</span></div>
               </div>
             </div>
             <div className="stat-card space-y-3">
-              <h3 className="font-semibold text-sm">الربح المتوقع</h3>
+              <h3 className="font-semibold text-sm">{t.expectedProfit}</h3>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">إيرادات التشغيل</span><span className="font-medium">{operatingRevenue.toLocaleString()} ج.م</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">إجمالي التكلفة</span><span className="font-medium text-destructive">- {totalCost.toLocaleString()} ج.م</span></div>
-                <div className="border-t border-border pt-2 flex justify-between font-semibold"><span>الربح الإجمالي (متوقع)</span><span className="text-success">{grossProfit.toLocaleString()} ج.م</span></div>
-                <div className="flex justify-between text-muted-foreground"><span>رسوم التوصيل (عرض فقط)</span><span>{order.deliveryFee} ج.م</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">{t.operatingRevenue}</span><span className="font-medium">{operatingRevenue.toLocaleString()} {t.currency}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">{t.totalCost}</span><span className="font-medium text-destructive">- {totalCost.toLocaleString()} {t.currency}</span></div>
+                <div className="border-t border-border pt-2 flex justify-between font-semibold"><span>{t.grossProfit}</span><span className="text-success">{grossProfit.toLocaleString()} {t.currency}</span></div>
+                <div className="flex justify-between text-muted-foreground"><span>{t.deliveryFeeDisplay}</span><span>{order.deliveryFee} {t.currency}</span></div>
               </div>
             </div>
           </div>
@@ -125,17 +127,17 @@ export default function OrderDetails() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">رقم التسليم</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">التاريخ</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">المنفذ</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">البنود</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">الحالة</th>
+                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.deliveryId}</th>
+                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.date}</th>
+                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.executor}</th>
+                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.deliveryItems}</th>
+                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
                 </tr>
               </thead>
               <tbody>
                 {order.deliveries.map((del) => (
-                  <tr key={del.id} className="border-b border-border/50">
-                    <td className="py-2.5 px-3 font-mono text-xs">{del.id}</td>
+                  <tr key={del.id} className="border-b border-border/50 cursor-pointer hover:bg-muted/30" onClick={() => navigate("/deliveries")}>
+                    <td className="py-2.5 px-3 font-mono text-xs text-primary">{del.id}</td>
                     <td className="py-2.5 px-3">{del.date}</td>
                     <td className="py-2.5 px-3">{del.actor}</td>
                     <td className="py-2.5 px-3 text-muted-foreground">{del.items}</td>
@@ -150,15 +152,15 @@ export default function OrderDetails() {
         <TabsContent value="funding">
           <div className="stat-card">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-sm">مساهمات المؤسسين (تقسيم {order.splitMode})</h3>
-              <span className="text-xs text-muted-foreground">إجمالي التكلفة: {totalCost.toLocaleString()} ج.م</span>
+              <h3 className="font-semibold text-sm">{t.founderContributions} ({order.splitMode})</h3>
+              <span className="text-xs text-muted-foreground">{t.totalCost}: {totalCost.toLocaleString()} {t.currency}</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {order.founderContributions.map((fc) => (
-                <div key={fc.founder} className="p-4 rounded-lg bg-muted/50 space-y-1">
+                <div key={fc.founder} className="p-4 rounded-lg bg-muted/50 space-y-1 cursor-pointer hover:bg-muted/70" onClick={() => navigate("/founders")}>
                   <p className="font-medium text-sm">{fc.founder}</p>
-                  <p className="text-xl font-bold">{fc.amount.toLocaleString()} ج.م</p>
-                  <p className="text-xs text-muted-foreground">{fc.percentage}% حصة</p>
+                  <p className="text-xl font-bold">{fc.amount.toLocaleString()} {t.currency}</p>
+                  <p className="text-xs text-muted-foreground">{fc.percentage}% {t.sharePercent}</p>
                 </div>
               ))}
             </div>
