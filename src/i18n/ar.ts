@@ -429,6 +429,8 @@ export const ar = {
   searchRefill: "بحث في المواد أو العملاء...",
   priority: "الأولوية",
   critical: "حرج",
+  groupBy: "تجميع حسب",
+  items: "عناصر",
   urgent: "عاجل",
   normal: "عادي",
   ok: "جيد",
