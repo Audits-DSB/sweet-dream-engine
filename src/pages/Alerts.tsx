@@ -61,8 +61,15 @@ const severityStyles: Record<string, { bg: string; icon: typeof AlertTriangle }>
 export default function AlertsPage() {
   const { t, lang } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [alerts, setAlerts] = useState(mockAlerts);
   const [filter, setFilter] = useState<"all" | "active" | "dismissed">("active");
+  const [typeFilter, setTypeFilter] = useState<string>(() => searchParams.get("type") || "all");
+
+  useEffect(() => {
+    const type = searchParams.get("type");
+    if (type) setTypeFilter(type === "expiring" ? "expiry" : type);
+  }, [searchParams]);
 
   const typeLabels: Record<string, string> = {
     low_stock: t.stockAlert, expiry: t.expiryAlert, overdue: t.overdueAlert, audit: t.auditAlert, delivery: t.deliveryAlert,
