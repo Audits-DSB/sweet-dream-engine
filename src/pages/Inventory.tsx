@@ -195,7 +195,7 @@ export default function InventoryPage() {
             const totalRemaining = group.items.reduce((s, i) => s + i.remaining * i.sellingPrice, 0);
             const materialsCount = group.items.length;
             const hasWarning = group.items.some(i => i.status === "Low Stock" || i.status === "Expired" || i.status === "Depleted");
-            const canConvert = getClientItemsToConvert(clientName).length > 0;
+            const canConvert = getClientItems(clientName).length > 0;
 
             return (
               <div key={clientName} className="stat-card overflow-hidden">
