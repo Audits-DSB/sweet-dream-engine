@@ -82,10 +82,17 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="stat-card lg:col-span-2 cursor-pointer" onClick={() => navigate("/company-profit")}>
+        <div className="stat-card lg:col-span-2">
           <h3 className="font-semibold text-sm mb-4">{t.revenueVsCost}</h3>
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={revenueData}>
+            <BarChart 
+              data={revenueData}
+              onClick={(data) => {
+                if (data && data.activeLabel) {
+                  navigate(`/monthly-report?month=${encodeURIComponent(data.activeLabel)}`);
+                }
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
@@ -98,12 +105,14 @@ export default function Dashboard() {
                 fill="hsl(var(--primary))" 
                 radius={[4, 4, 0, 0]} 
                 name={t.revenue}
+                className="cursor-pointer"
               />
               <Bar 
                 dataKey="cost" 
                 fill="hsl(var(--muted-foreground) / 0.3)" 
                 radius={[4, 4, 0, 0]} 
                 name={t.cost}
+                className="cursor-pointer"
               />
             </BarChart>
           </ResponsiveContainer>
