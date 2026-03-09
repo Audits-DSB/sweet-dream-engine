@@ -282,7 +282,7 @@ export default function Dashboard() {
           {activeWeek !== null && consumptionTrend[activeWeek] && (
             <div className="mx-auto max-w-[280px] rounded-lg border border-primary p-3 mt-2 transition-all animate-fade-in">
               <div className="text-center">
-                <div className="text-sm font-bold text-primary">{t.week} {consumptionTrend[activeWeek].week}</div>
+                <div className="text-sm font-bold text-primary">الأسبوع {consumptionTrend[activeWeek].week}</div>
                 <div className="text-lg font-extrabold mt-0.5">{consumptionTrend[activeWeek].consumption} {t.unit}</div>
                 <div className="text-xs text-muted-foreground">{consumptionTrend[activeWeek].totalOrders} {t.orders}</div>
               </div>
