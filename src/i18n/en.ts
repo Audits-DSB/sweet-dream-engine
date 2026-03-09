@@ -703,4 +703,8 @@ export const en = {
   totalItems: "Total Items",
   totalValue: "Total Value",
   remainingValue: "Remaining Value",
+  totalBalance: "Total Balance",
+  accountsCount: "accounts",
+  monthsLabel: "months",
+  noDataPeriod: "No data for this period",
 };
