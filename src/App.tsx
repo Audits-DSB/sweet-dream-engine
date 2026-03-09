@@ -40,6 +40,7 @@ import LoginPage from "./pages/Login";
 import SignupPage from "./pages/Signup";
 import ForgotPasswordPage from "./pages/ForgotPassword";
 import ResetPasswordPage from "./pages/ResetPassword";
+import Walkthrough from "./pages/Walkthrough";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
