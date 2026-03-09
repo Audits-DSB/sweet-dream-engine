@@ -311,7 +311,7 @@ export function printInvoice(data: {
           <div class="tagline">Dental Smart Box</div>
           <div class="contact-line">
             إدارة مستلزمات طب الأسنان<br/>
-            info@dentalsmartbox.com · +20 100 000 0000
+            dsbs.store · +20 11 0229 7174
           </div>
         </div>
       </div>
