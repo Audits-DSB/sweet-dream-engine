@@ -13,6 +13,8 @@ import { WorkflowBanner } from "@/components/WorkflowBanner";
 import { clientsList, ordersList } from "@/data/store";
 
 export default function Dashboard() {
+  const { t } = useLanguage();
+  const navigate = useNavigate();
   const [activeSlice, setActiveSlice] = useState<number | null>(null);
   const [activeWeek, setActiveWeek] = useState<number | null>(null);
 
