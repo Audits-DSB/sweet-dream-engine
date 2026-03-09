@@ -84,7 +84,7 @@ export default function Walkthrough() {
             {requests.slice(0, 3).map(req => (
               <div key={req.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
                 <div className="flex items-center gap-2">
-                  <FileText className="h-3 w-3 text-info" />
+                  <FileText className="h-3 w-3 text-primary" />
                   <span className="text-sm font-medium">{req.id}</span>
                   <span className="text-sm text-muted-foreground">{req.client}</span>
                 </div>
