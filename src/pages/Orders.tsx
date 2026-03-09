@@ -108,7 +108,7 @@ export default function OrdersPage() {
           // If all items belong to the same client, auto-select that client
           const uniqueClients = [...new Set(data.items.map((item: any) => item.clientId))];
           if (uniqueClients.length === 1) {
-            setSelectedClient(uniqueClients[0]);
+            setSelectedClient(String(uniqueClients[0]));
           }
           
           setOrderItems(refillOrderItems);
