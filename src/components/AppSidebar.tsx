@@ -86,7 +86,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { profile, signOut } = useAuth();
-  const { t } = useLanguage();
+  const { t, dir } = useLanguage();
   const navigate = useNavigate();
   const { mainItems, inventoryItems, financeItems, systemItems } = useNavItems();
 
