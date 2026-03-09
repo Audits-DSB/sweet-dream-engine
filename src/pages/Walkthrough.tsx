@@ -180,8 +180,8 @@ export default function Walkthrough() {
       title: "التحصيل (Collections)",
       subtitle: "المرحلة الأخيرة - تحصيل المدفوعات",
       icon: Receipt,
-      color: "text-purple-600",
-      bgColor: "bg-purple-100",
+      color: "text-secondary",
+      bgColor: "bg-secondary/10",
       content: (
         <div className="space-y-4">
           <p className="text-muted-foreground">
