@@ -1,4 +1,20 @@
-export function printInvoice(data: {
+// Convert logo to base64 for reliable printing in new windows
+async function getLogoBase64(): Promise<string> {
+  try {
+    const response = await fetch('/images/dsb-logo.png');
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve('/images/dsb-logo.png');
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return '/images/dsb-logo.png';
+  }
+}
+
+export async function printInvoice(data: {
   title: string;
   subtitle?: string;
   companyName?: string;
@@ -11,7 +27,7 @@ export function printInvoice(data: {
   footer?: string;
   terms?: string[];
 }) {
-  const logoUrl = window.location.origin + '/images/dsb-logo.png';
+  const logoUrl = await getLogoBase64();
   const company = data.companyName || 'DSB';
   
   const html = `
