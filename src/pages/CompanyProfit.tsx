@@ -298,7 +298,7 @@ export default function CompanyProfitPage() {
                   <Textarea value={expenseForm.description} onChange={(e) => setExpenseForm(f => ({ ...f, description: e.target.value }))} placeholder={t.optionalDesc} />
                 </div>
                 <Button onClick={handleAddExpense} disabled={submitting} className="w-full">
-                  {submitting ? t.saving : t.addExpense}
+                  {submitting ? t.loading : t.addExpense}
                 </Button>
               </div>
             </DialogContent>
