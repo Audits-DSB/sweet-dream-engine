@@ -52,7 +52,7 @@ export function DataToolbar({
           <Select
             key={filter.value}
             value={filterValues[filter.value] || "all"}
-            onValueChange={(val) => onFilterChange?.(filter.value, val)}
+            onValueChange={(val) => onFilterChange?.(filter.value, val === "" ? "all" : val)}
           >
             <SelectTrigger className="h-9 w-[140px]">
               <Filter className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
@@ -60,7 +60,7 @@ export function DataToolbar({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All {filter.label}</SelectItem>
-              {filter.options.map((opt) => (
+              {filter.options.filter(opt => opt.value && opt.value.trim() !== "").map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
                 </SelectItem>
