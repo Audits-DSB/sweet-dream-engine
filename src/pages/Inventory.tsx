@@ -113,7 +113,7 @@ export default function InventoryPage() {
   };
 
   const handleCreateOrder = () => {
-    const selectedItems = mockInventory.filter(item => selectedLots[item.id]);
+    const selectedItems = inventory.filter(item => selectedLots[item.id]);
     
     if (selectedItems.length === 0) {
       toast.error("يرجى اختيار مادة واحدة على الأقل");
@@ -134,10 +134,15 @@ export default function InventoryPage() {
       orderItems
     );
 
+    // Update audit status to Complete for converted items
+    setInventory(prev => prev.map(item => 
+      selectedLots[item.id] ? { ...item, auditStatus: "Complete" } : item
+    ));
+
     setConvertDialogOpen(false);
     setSelectedLots({});
     
-    toast.success(`تم إنشاء الأوردر ${newOrder.id} بنجاح`, {
+    toast.success(`تم إنشاء الأوردر ${newOrder.id} وتحديث حالة الجرد`, {
       action: {
         label: "عرض الأوردرات",
         onClick: () => navigate("/orders")
