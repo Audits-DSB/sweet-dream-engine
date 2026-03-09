@@ -163,9 +163,9 @@ export default function CompanyProfitPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="3">3 {t.months || "months"}</SelectItem>
-              <SelectItem value="6">6 {t.months || "months"}</SelectItem>
-              <SelectItem value="12">12 {t.months || "months"}</SelectItem>
+              <SelectItem value="3">3 {t.monthsLabel}</SelectItem>
+              <SelectItem value="6">6 {t.monthsLabel}</SelectItem>
+              <SelectItem value="12">12 {t.monthsLabel}</SelectItem>
             </SelectContent>
           </Select>
           <Button variant="outline" size="sm" className="h-9" onClick={() => exportToCsv("company_profit", [t.month, t.revenue, t.cost, t.profit, t.companyCol, t.foundersCol], monthlyPnL.map(m => [m.month, m.revenue, m.cost, m.profit, m.companyShare, m.founderShare]))}>
