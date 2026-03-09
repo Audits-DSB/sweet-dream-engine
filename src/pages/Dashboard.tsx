@@ -248,17 +248,61 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="stat-card cursor-pointer" onClick={() => navigate("/inventory")}>
+        <div className="stat-card">
           <h3 className="font-semibold text-sm mb-4">{t.weeklyConsumption}</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={consumptionTrend}>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={consumptionTrend} onClick={(e) => {
+              if (e && e.activeTooltipIndex !== undefined) {
+                setActiveWeek(prev => prev === e.activeTooltipIndex ? null : e.activeTooltipIndex!);
+              }
+            }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="week" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
-              <Line type="monotone" dataKey="consumption" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: "hsl(var(--primary))", r: 3 }} />
+              <Line 
+                type="monotone" dataKey="consumption" stroke="hsl(var(--primary))" strokeWidth={2} 
+                dot={(props: any) => {
+                  const isActive = activeWeek === props.index;
+                  return (
+                    <circle 
+                      cx={props.cx} cy={props.cy} 
+                      r={isActive ? 7 : 4} 
+                      fill={isActive ? "hsl(var(--primary))" : "hsl(var(--background))"}
+                      stroke="hsl(var(--primary))" strokeWidth={2}
+                      className="cursor-pointer"
+                    />
+                  );
+                }}
+                activeDot={{ r: 7, fill: "hsl(var(--primary))", stroke: "hsl(var(--primary-foreground))", strokeWidth: 2, className: "cursor-pointer" }}
+              />
             </LineChart>
           </ResponsiveContainer>
+
+          {activeWeek !== null && consumptionTrend[activeWeek] && (
+            <div className="mx-auto max-w-[280px] rounded-lg border border-primary p-3 mt-2 transition-all animate-fade-in">
+              <div className="text-center">
+                <div className="text-sm font-bold text-primary">{t.week} {consumptionTrend[activeWeek].week}</div>
+                <div className="text-lg font-extrabold mt-0.5">{consumptionTrend[activeWeek].consumption} {t.unit}</div>
+                <div className="text-xs text-muted-foreground">{consumptionTrend[activeWeek].totalOrders} {t.orders}</div>
+              </div>
+              <div className="mt-2 pt-2 border-t border-border space-y-1.5">
+                <div className="text-xs font-semibold text-muted-foreground mb-1">الأكثر استهلاكاً:</div>
+                {consumptionTrend[activeWeek].topMaterials.map((m, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs gap-2">
+                    <span className="font-medium">{m.name}</span>
+                    <span className="text-muted-foreground">{m.qty} {t.unit}</span>
+                  </div>
+                ))}
+              </div>
+              <button 
+                className="w-full mt-2 text-xs font-semibold py-1.5 rounded-md transition-colors bg-primary text-primary-foreground hover:opacity-90"
+                onClick={() => navigate("/inventory")}
+              >
+                عرض المخزون ←
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
