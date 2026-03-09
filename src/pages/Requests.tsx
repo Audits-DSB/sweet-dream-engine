@@ -114,6 +114,12 @@ export default function RequestsPage() {
   const calcTotal = (items: RequestItem[]) =>
     items.reduce((sum, i) => sum + i.qty * i.unitPrice, 0);
 
+  // Compute expectedTotal dynamically for display
+  const getDisplayTotal = (req: Request) => {
+    const computed = calcTotal(req.items);
+    return computed.toLocaleString();
+  };
+
   const addMaterial = (mat: FetchedMaterial) => {
     const existing = selectedItems.find(i => i.materialCode === mat.code);
     if (existing) {
@@ -236,7 +242,7 @@ export default function RequestsPage() {
                     ))}
                   </div>
                 </td>
-                <td className="py-3 px-3 text-end font-medium">{req.expectedTotal} {t.currency}</td>
+                <td className="py-3 px-3 text-end font-medium">{getDisplayTotal(req)} {t.currency}</td>
                 <td className="py-3 px-3"><StatusBadge status={req.status} /></td>
                 <td className="py-3 px-3 text-xs text-muted-foreground max-w-[200px] truncate">{req.notes || "—"}</td>
                 <td className="py-3 px-3 text-end">
