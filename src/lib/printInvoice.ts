@@ -57,7 +57,7 @@ export function printInvoice(data: {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      padding: 32px 0 24px;
+      padding: 24px 0 16px;
     }
 
     .brand {
