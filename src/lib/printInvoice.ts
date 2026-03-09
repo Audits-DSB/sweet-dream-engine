@@ -82,19 +82,19 @@ export function printInvoice(data: {
     }
 
     .brand-info .tagline {
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 600;
       color: #1b9aaa;
-      letter-spacing: 3px;
+      letter-spacing: 2px;
       text-transform: uppercase;
       margin-top: 2px;
     }
 
     .brand-info .contact-line {
-      font-size: 10px;
+      font-size: 9px;
       color: #8899a6;
-      margin-top: 6px;
-      line-height: 1.8;
+      margin-top: 4px;
+      line-height: 1.7;
     }
 
     /* === Invoice Meta Card === */
