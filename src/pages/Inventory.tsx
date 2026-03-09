@@ -1,12 +1,15 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useWorkflow } from "@/contexts/WorkflowContext";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Users, List, ChevronDown, ChevronUp, Download } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertTriangle, Users, List, ChevronDown, ChevronUp, Download, ShoppingCart, Plus, Minus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
 
 const mockInventory = [
   { id: "LOT-001", client: "عيادة د. أحمد", clientId: "C001", material: "حشو كمبوزيت ضوئي", code: "MAT-001", unit: "عبوة", delivered: 50, remaining: 45, sellingPrice: 1200, storeCost: 800, deliveryDate: "2025-02-20", expiry: "2025-06-15", sourceOrder: "ORD-042", status: "In Stock" },
@@ -25,11 +28,17 @@ const mockInventory = [
 export default function InventoryPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const { createOrderFromInventory } = useWorkflow();
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [detailItem, setDetailItem] = useState<typeof mockInventory[0] | null>(null);
   const [viewMode, setViewMode] = useState<"client" | "item">("client");
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
+  
+  // Convert to order dialog state
+  const [convertDialogOpen, setConvertDialogOpen] = useState(false);
+  const [convertClient, setConvertClient] = useState("");
+  const [selectedLots, setSelectedLots] = useState<Record<string, number>>({});
 
   const clients = [...new Set(mockInventory.map(i => i.client))];
 
@@ -54,6 +63,7 @@ export default function InventoryPage() {
 
   const lowStockCount = mockInventory.filter(i => i.status === "Low Stock").length;
   const expiredCount = mockInventory.filter(i => i.status === "Expired").length;
+  const depletedCount = mockInventory.filter(i => i.status === "Depleted").length;
   const nearExpiryCount = mockInventory.filter(i => {
     if (!i.expiry) return false;
     const days = (new Date(i.expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
@@ -62,6 +72,76 @@ export default function InventoryPage() {
 
   const toggleClient = (client: string) => {
     setExpandedClient(expandedClient === client ? null : client);
+  };
+
+  // Convert to order functions
+  const getClientItemsToConvert = (clientName: string) => {
+    return mockInventory.filter(item => 
+      item.client === clientName && (item.status === "Depleted" || item.status === "Low Stock")
+    );
+  };
+
+  const openConvertDialog = (clientName: string) => {
+    const items = getClientItemsToConvert(clientName);
+    const preSelected: Record<string, number> = {};
+    items.forEach(item => {
+      preSelected[item.id] = item.delivered;
+    });
+    setSelectedLots(preSelected);
+    setConvertClient(clientName);
+    setConvertDialogOpen(true);
+  };
+
+  const toggleLotSelection = (lotId: string, defaultQuantity: number) => {
+    setSelectedLots(prev => {
+      const newSelected = { ...prev };
+      if (newSelected[lotId]) {
+        delete newSelected[lotId];
+      } else {
+        newSelected[lotId] = defaultQuantity;
+      }
+      return newSelected;
+    });
+  };
+
+  const adjustQuantity = (lotId: string, delta: number) => {
+    setSelectedLots(prev => ({
+      ...prev,
+      [lotId]: Math.max(1, (prev[lotId] || 1) + delta)
+    }));
+  };
+
+  const handleCreateOrder = () => {
+    const selectedItems = mockInventory.filter(item => selectedLots[item.id]);
+    
+    if (selectedItems.length === 0) {
+      toast.error("يرجى اختيار مادة واحدة على الأقل");
+      return;
+    }
+
+    const orderItems = selectedItems.map(item => ({
+      id: item.id,
+      name: item.material,
+      quantity: selectedLots[item.id],
+      unitPrice: item.storeCost
+    }));
+
+    const clientItem = selectedItems[0];
+    const newOrder = createOrderFromInventory(
+      clientItem.clientId,
+      convertClient,
+      orderItems
+    );
+
+    setConvertDialogOpen(false);
+    setSelectedLots({});
+    
+    toast.success(`تم إنشاء الأوردر ${newOrder.id} بنجاح`, {
+      action: {
+        label: "عرض الأوردرات",
+        onClick: () => navigate("/orders")
+      }
+    });
   };
 
   return (
@@ -81,9 +161,10 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {(lowStockCount > 0 || expiredCount > 0 || nearExpiryCount > 0) && (
+      {(lowStockCount > 0 || expiredCount > 0 || depletedCount > 0 || nearExpiryCount > 0) && (
         <div className="flex flex-wrap gap-3">
           {lowStockCount > 0 && <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-warning/10 text-warning text-sm cursor-pointer" onClick={() => setFilters({ ...filters, status: "Low Stock" })}><AlertTriangle className="h-4 w-4" />{lowStockCount} {t.lowStockItems}</div>}
+          {depletedCount > 0 && <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-sm cursor-pointer" onClick={() => setFilters({ ...filters, status: "Depleted" })}><AlertTriangle className="h-4 w-4" />{depletedCount} مادة نفذت</div>}
           {expiredCount > 0 && <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-sm cursor-pointer" onClick={() => setFilters({ ...filters, status: "Expired" })}><AlertTriangle className="h-4 w-4" />{expiredCount} {t.expiredItems}</div>}
           {nearExpiryCount > 0 && <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-warning/10 text-warning text-sm"><AlertTriangle className="h-4 w-4" />{nearExpiryCount} {t.expiringIn30}</div>}
         </div>
@@ -112,7 +193,8 @@ export default function InventoryPage() {
             const isExpanded = expandedClient === clientName;
             const totalRemaining = group.items.reduce((s, i) => s + i.remaining * i.sellingPrice, 0);
             const materialsCount = group.items.length;
-            const hasWarning = group.items.some(i => i.status === "Low Stock" || i.status === "Expired");
+            const hasWarning = group.items.some(i => i.status === "Low Stock" || i.status === "Expired" || i.status === "Depleted");
+            const canConvert = getClientItemsToConvert(clientName).length > 0;
 
             return (
               <div key={clientName} className="stat-card overflow-hidden">
@@ -134,6 +216,20 @@ export default function InventoryPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {canConvert && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1.5"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openConvertDialog(clientName);
+                        }}
+                      >
+                        <ShoppingCart className="h-3.5 w-3.5" />
+                        تحويل لأوردر
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -152,8 +248,8 @@ export default function InventoryPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="flex gap-1">
-                      {group.items.map(item => (
-                        <StatusBadge key={item.id} status={item.status} />
+                      {[...new Set(group.items.map(item => item.status))].map(status => (
+                        <StatusBadge key={status} status={status} />
                       ))}
                     </div>
                     {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
@@ -257,26 +353,127 @@ export default function InventoryPage() {
 
       {/* Detail Dialog */}
       <Dialog open={!!detailItem} onOpenChange={() => setDetailItem(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>{detailItem?.id} — {detailItem?.material}</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{detailItem?.material}</DialogTitle>
+            <DialogDescription>تفاصيل الدفعة {detailItem?.id}</DialogDescription>
+          </DialogHeader>
           {detailItem && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setDetailItem(null); navigate(`/clients/${detailItem.clientId}`); }}><p className="text-xs text-muted-foreground">{t.client}</p><p className="font-semibold text-primary">{detailItem.client}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setDetailItem(null); navigate(`/orders/${detailItem.sourceOrder}`); }}><p className="text-xs text-muted-foreground">{t.sourceOrder}</p><p className="font-semibold text-primary">{detailItem.sourceOrder}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.deliveredQty}</p><p className="font-semibold">{detailItem.delivered} {detailItem.unit}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.remainingQty}</p><p className="font-semibold">{detailItem.remaining} {detailItem.unit}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.sellingPrice}</p><p className="font-semibold">{detailItem.sellingPrice} {t.currency}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.storeCost}</p><p className="font-semibold">{detailItem.storeCost} {t.currency}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.deliveryDate}</p><p className="font-semibold">{detailItem.deliveryDate}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.expiryDate}</p><p className="font-semibold">{detailItem.expiry}</p></div>
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-2">
+                <div><span className="text-muted-foreground">العميل:</span> {detailItem.client}</div>
+                <div><span className="text-muted-foreground">الكود:</span> {detailItem.code}</div>
+                <div><span className="text-muted-foreground">الوحدة:</span> {detailItem.unit}</div>
+                <div><span className="text-muted-foreground">المسلّم:</span> {detailItem.delivered}</div>
+                <div><span className="text-muted-foreground">المتبقي:</span> {detailItem.remaining}</div>
+                <div><span className="text-muted-foreground">سعر البيع:</span> {detailItem.sellingPrice} {t.currency}</div>
+                <div><span className="text-muted-foreground">تكلفة المخزن:</span> {detailItem.storeCost} {t.currency}</div>
+                <div><span className="text-muted-foreground">تاريخ التسليم:</span> {detailItem.deliveryDate}</div>
+                <div><span className="text-muted-foreground">تاريخ الانتهاء:</span> {detailItem.expiry}</div>
+                <div><span className="text-muted-foreground">الأوردر المصدر:</span> {detailItem.sourceOrder}</div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">{t.status}:</span>
+              <div className="pt-2">
                 <StatusBadge status={detailItem.status} />
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Convert to Order Dialog */}
+      <Dialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>تحويل الجرد لأوردر - {convertClient}</DialogTitle>
+            <DialogDescription>
+              اختر المواد والكميات المطلوبة لإنشاء أوردر جديد
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-96 overflow-y-auto">
+            <div className="space-y-4">
+              {mockInventory
+                .filter(item => item.client === convertClient && (item.status === "Depleted" || item.status === "Low Stock"))
+                .map((item) => {
+                  const isSelected = selectedLots[item.id];
+                  const quantity = selectedLots[item.id] || item.delivered;
+                  
+                  return (
+                    <div key={item.id} className="flex items-center gap-4 p-3 border rounded-lg">
+                      <Checkbox
+                        checked={!!isSelected}
+                        onCheckedChange={() => toggleLotSelection(item.id, item.delivered)}
+                      />
+                      
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium">{item.material}</h4>
+                          <StatusBadge status={item.status} />
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          الكود: {item.code} | الوحدة: {item.unit}
+                        </p>
+                      </div>
+
+                      {isSelected && (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => adjustQuantity(item.id, -1)}
+                            disabled={quantity <= 1}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="w-12 text-center font-medium">{quantity}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => adjustQuantity(item.id, 1)}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+
+                      {isSelected && (
+                        <div className="text-left">
+                          <div className="text-sm font-medium">
+                            {(quantity * item.storeCost).toLocaleString()} جنيه
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {item.storeCost} × {quantity}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+
+          {Object.keys(selectedLots).length > 0 && (
+            <div className="border-t pt-4">
+              <div className="flex justify-between items-center">
+                <span className="font-medium">الإجمالي:</span>
+                <span className="text-lg font-bold text-primary">
+                  {Object.entries(selectedLots).reduce((total, [lotId, quantity]) => {
+                    const item = mockInventory.find(i => i.id === lotId);
+                    return total + (quantity * (item?.storeCost || 0));
+                  }, 0).toLocaleString()} جنيه
+                </span>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConvertDialogOpen(false)}>
+              إلغاء
+            </Button>
+            <Button onClick={handleCreateOrder} disabled={Object.keys(selectedLots).length === 0}>
+              إنشاء الأوردر
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

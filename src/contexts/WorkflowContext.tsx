@@ -20,6 +20,7 @@ interface WorkflowContextType {
   updateDeliveryStatus: (id: string, status: string) => void;
   updateCollectionStatus: (id: string, status: string) => void;
   refreshData: () => void;
+  createOrderFromInventory: (clientId: string, clientName: string, items: Array<{ id: string; name: string; quantity: number; unitPrice: number }>) => any;
 }
 
 const WorkflowContext = createContext<WorkflowContextType | undefined>(undefined);
@@ -99,6 +100,33 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     setNotifications([newNotification, ...notifications]);
   };
 
+  const createOrderFromInventory = (clientId: string, clientName: string, items: Array<{ id: string; name: string; quantity: number; unitPrice: number }>) => {
+    const totalCost = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    const totalSelling = Math.round(totalCost * 1.4); // 40% markup
+    
+    const newOrder = {
+      id: `ORD-${String(orders.length + 50).padStart(3, '0')}`,
+      client: clientName,
+      clientId,
+      date: new Date().toISOString().split('T')[0],
+      lines: items.length,
+      totalSelling: `${totalSelling.toLocaleString()} ج.م`,
+      totalCost: `${totalCost.toLocaleString()} ج.م`,
+      splitMode: "متساوي",
+      deliveryFee: totalCost > 30000 ? 0 : 500,
+      status: "Draft",
+      source: "من الجرد"
+    };
+
+    const updated = [newOrder, ...orders];
+    setOrders(updated);
+    localStorage.setItem('workflow_orders', JSON.stringify(updated));
+    
+    addNotification(`تم إنشاء أوردر جديد ${newOrder.id} من الجرد`, "success");
+    
+    return newOrder;
+  };
+
   const refreshData = () => {
     setRequests(initialRequests);
     setOrders(initialOrders);
@@ -127,6 +155,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         updateDeliveryStatus,
         updateCollectionStatus,
         refreshData,
+        createOrderFromInventory,
       }}
     >
       {children}
