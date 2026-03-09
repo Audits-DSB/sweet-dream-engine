@@ -154,6 +154,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         updateDeliveryStatus,
         updateCollectionStatus,
         refreshData,
+        createOrderFromInventory,
       }}
     >
       {children}
