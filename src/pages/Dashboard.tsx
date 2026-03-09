@@ -172,13 +172,31 @@ export default function Dashboard() {
             </PieChart>
           </ResponsiveContainer>
 
-          {/* Detail panel when a slice is selected */}
           {activeSlice !== null && (
-            <div className="mx-auto max-w-[240px] rounded-lg border border-border p-3 mb-2 text-center transition-all animate-fade-in" style={{ borderColor: collectionData[activeSlice].color }}>
-              <div className="text-sm font-bold" style={{ color: collectionData[activeSlice].color }}>{collectionData[activeSlice].name}</div>
-              <div className="text-lg font-extrabold mt-1">{collectionData[activeSlice].value}%</div>
-              <div className="text-xs text-muted-foreground mt-1">{collectionData[activeSlice].amount}</div>
-              <div className="text-xs text-muted-foreground">{collectionData[activeSlice].clients} {t.client}</div>
+            <div className="mx-auto max-w-[280px] rounded-lg border border-border p-3 mb-2 transition-all animate-fade-in" style={{ borderColor: collectionData[activeSlice].color }}>
+              <div className="text-center">
+                <div className="text-sm font-bold" style={{ color: collectionData[activeSlice].color }}>{collectionData[activeSlice].name}</div>
+                <div className="text-lg font-extrabold mt-0.5">{collectionData[activeSlice].value}%</div>
+                <div className="text-xs text-muted-foreground">{collectionData[activeSlice].amount} · {collectionData[activeSlice].clients} {t.client}</div>
+              </div>
+              <div className="mt-2 pt-2 border-t border-border space-y-1.5">
+                {collectionData[activeSlice].details.map((d, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs gap-2">
+                    <span 
+                      className="font-medium text-primary cursor-pointer hover:underline truncate"
+                      onClick={() => navigate(`/clients/${d.clientId}`)}
+                    >{d.client}</span>
+                    <span className="text-muted-foreground whitespace-nowrap">{d.amount}</span>
+                  </div>
+                ))}
+              </div>
+              <button 
+                className="w-full mt-2 text-xs font-semibold py-1.5 rounded-md transition-colors hover:opacity-80 text-white"
+                style={{ backgroundColor: collectionData[activeSlice].color }}
+                onClick={() => navigate(`/collections?status=${collectionData[activeSlice].statusFilter}`)}
+              >
+                عرض الكل ←
+              </button>
             </div>
           )}
 
