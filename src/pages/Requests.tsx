@@ -215,7 +215,12 @@ export default function RequestsPage() {
                 <td className="py-3 px-3">
                   <div className="flex flex-wrap gap-1">
                     {req.items.map((item, idx) => (
-                      <Badge key={idx} variant="secondary" className="text-xs font-normal">
+                      <Badge
+                        key={idx}
+                        variant="secondary"
+                        className="text-xs font-normal cursor-pointer hover:bg-secondary/80 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/materials?code=${item.materialCode}`); }}
+                      >
                         {item.materialName} ×{item.qty}
                       </Badge>
                     ))}
