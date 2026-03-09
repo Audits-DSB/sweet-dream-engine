@@ -91,7 +91,7 @@ export function AppSidebar() {
   const { mainItems, inventoryItems, financeItems, systemItems } = useNavItems();
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+    <Sidebar collapsible="icon" side={dir === "rtl" ? "right" : "left"} className={dir === "rtl" ? "border-l border-sidebar-border" : "border-r border-sidebar-border"}>
       <SidebarHeader className="p-4">
         {!collapsed ? (
           <div className="flex items-center gap-2.5">
