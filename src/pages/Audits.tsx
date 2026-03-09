@@ -347,7 +347,7 @@ export default function AuditsPage() {
                 <td className="py-3 px-3 text-end text-success font-medium">{audit.matched}</td>
                 <td className="py-3 px-3 text-end">{audit.shortage > 0 ? <span className="text-destructive font-medium">{audit.shortage}</span> : "—"}</td>
                 <td className="py-3 px-3 text-end">{audit.surplus > 0 ? <span className="text-warning font-medium">{audit.surplus}</span> : "—"}</td>
-                <td className="py-3 px-3"><StatusBadge status={audit.status} /></td>
+                <td className="py-3 px-3"><StatusBadge status={statusLabel(audit.status)} /></td>
                 <td className="py-3 px-3 text-end" onClick={e => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
