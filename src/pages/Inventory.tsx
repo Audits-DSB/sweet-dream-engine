@@ -394,7 +394,7 @@ export default function InventoryPage() {
           <div className="max-h-96 overflow-y-auto">
             <div className="space-y-4">
               {mockInventory
-                .filter(item => item.client === convertClient && (item.status === "Depleted" || item.status === "Low Stock"))
+                .filter(item => item.client === convertClient && item.status !== "Expired")
                 .map((item) => {
                   const isSelected = selectedLots[item.id];
                   const quantity = selectedLots[item.id] || item.delivered;
