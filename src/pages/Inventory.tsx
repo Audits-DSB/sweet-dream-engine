@@ -75,17 +75,18 @@ export default function InventoryPage() {
   };
 
   // Convert to order functions
-  const getClientItemsToConvert = (clientName: string) => {
-    return mockInventory.filter(item => 
-      item.client === clientName && (item.status === "Depleted" || item.status === "Low Stock")
-    );
+  const getClientItems = (clientName: string) => {
+    return mockInventory.filter(item => item.client === clientName && item.status !== "Expired");
   };
 
   const openConvertDialog = (clientName: string) => {
-    const items = getClientItemsToConvert(clientName);
+    // Pre-select only depleted/low stock items, but show all
+    const items = getClientItems(clientName);
     const preSelected: Record<string, number> = {};
     items.forEach(item => {
-      preSelected[item.id] = item.delivered;
+      if (item.status === "Depleted" || item.status === "Low Stock") {
+        preSelected[item.id] = item.delivered;
+      }
     });
     setSelectedLots(preSelected);
     setConvertClient(clientName);
@@ -194,7 +195,7 @@ export default function InventoryPage() {
             const totalRemaining = group.items.reduce((s, i) => s + i.remaining * i.sellingPrice, 0);
             const materialsCount = group.items.length;
             const hasWarning = group.items.some(i => i.status === "Low Stock" || i.status === "Expired" || i.status === "Depleted");
-            const canConvert = getClientItemsToConvert(clientName).length > 0;
+            const canConvert = getClientItems(clientName).length > 0;
 
             return (
               <div key={clientName} className="stat-card overflow-hidden">
@@ -393,7 +394,7 @@ export default function InventoryPage() {
           <div className="max-h-96 overflow-y-auto">
             <div className="space-y-4">
               {mockInventory
-                .filter(item => item.client === convertClient && (item.status === "Depleted" || item.status === "Low Stock"))
+                .filter(item => item.client === convertClient && item.status !== "Expired")
                 .map((item) => {
                   const isSelected = selectedLots[item.id];
                   const quantity = selectedLots[item.id] || item.delivered;
