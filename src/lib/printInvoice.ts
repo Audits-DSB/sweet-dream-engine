@@ -12,7 +12,7 @@ export function printInvoice(data: {
   terms?: string[];
 }) {
   const logoUrl = window.location.origin + '/images/dsb-logo.png';
-  const company = data.companyName || 'Dental Smart Box';
+  const company = data.companyName || 'DSB';
   
   const html = `
 <!DOCTYPE html>
