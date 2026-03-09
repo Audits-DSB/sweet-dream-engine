@@ -155,7 +155,7 @@ export default function InventoryPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-header">{t.inventoryTitle}</h1>
-          <p className="page-description">{mockInventory.length} {t.batchCount} {t.acrossClients} {clients.length} {t.clientsLabel}</p>
+          <p className="page-description">{inventory.length} {t.batchCount} {t.acrossClients} {clients.length} {t.clientsLabel}</p>
         </div>
         <div className="flex gap-1 bg-muted rounded-lg p-0.5">
           <Button variant={viewMode === "client" ? "default" : "ghost"} size="sm" className="h-7 text-xs gap-1.5" onClick={() => setViewMode("client")}>
