@@ -87,26 +87,18 @@ export default function Dashboard() {
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={revenueData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis 
-                dataKey="month" 
-                tick={{ fontSize: 12 }} 
-                stroke="hsl(var(--muted-foreground))" 
-                style={{ cursor: "pointer" }}
-                onClick={(data) => {
-                  if (data && data.payload && data.payload.month) {
-                    navigate(`/financial-report?month=${data.payload.month}`);
-                  }
-                }}
-              />
+              <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-              <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
+              <Tooltip 
+                contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
+                cursor={{ fill: "hsl(var(--muted) / 0.1)" }}
+              />
               <Bar 
                 dataKey="revenue" 
                 fill="hsl(var(--primary))" 
                 radius={[4, 4, 0, 0]} 
                 name={t.revenue}
-                style={{ cursor: "pointer" }}
-                onClick={(data) => {
+                onMouseDown={(data) => {
                   if (data && data.month) {
                     navigate(`/financial-report?month=${data.month}`);
                   }
@@ -117,8 +109,7 @@ export default function Dashboard() {
                 fill="hsl(var(--muted-foreground) / 0.3)" 
                 radius={[4, 4, 0, 0]} 
                 name={t.cost}
-                style={{ cursor: "pointer" }}
-                onClick={(data) => {
+                onMouseDown={(data) => {
                   if (data && data.month) {
                     navigate(`/financial-report?month=${data.month}`);
                   }
