@@ -132,21 +132,47 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        <div className="stat-card cursor-pointer" onClick={() => navigate("/collections")}>
+        <div className="stat-card">
           <h3 className="font-semibold text-sm mb-4">{t.collectionStatus}</h3>
           <ResponsiveContainer width="100%" height={180}>
             <PieChart>
-              <Pie data={collectionData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={4} dataKey="value">
+              <Pie 
+                data={collectionData} 
+                cx="50%" cy="50%" 
+                innerRadius={50} outerRadius={75} 
+                paddingAngle={4} dataKey="value"
+                activeIndex={activeSlice !== null ? activeSlice : undefined}
+                activeShape={renderActiveShape}
+                onMouseEnter={(_, index) => setActiveSlice(index)}
+                onClick={(_, index) => setActiveSlice(prev => prev === index ? null : index)}
+                className="cursor-pointer outline-none"
+              >
                 {collectionData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
+                  <Cell key={`cell-${index}`} fill={entry.color} opacity={activeSlice !== null && activeSlice !== index ? 0.4 : 1} />
                 ))}
               </Pie>
               <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
             </PieChart>
           </ResponsiveContainer>
+
+          {/* Detail panel when a slice is selected */}
+          {activeSlice !== null && (
+            <div className="mx-auto max-w-[240px] rounded-lg border border-border p-3 mb-2 text-center transition-all animate-fade-in" style={{ borderColor: collectionData[activeSlice].color }}>
+              <div className="text-sm font-bold" style={{ color: collectionData[activeSlice].color }}>{collectionData[activeSlice].name}</div>
+              <div className="text-lg font-extrabold mt-1">{collectionData[activeSlice].value}%</div>
+              <div className="text-xs text-muted-foreground mt-1">{collectionData[activeSlice].amount}</div>
+              <div className="text-xs text-muted-foreground">{collectionData[activeSlice].clients} {t.client}</div>
+            </div>
+          )}
+
           <div className="flex justify-center gap-4 mt-2">
-            {collectionData.map((item) => (
-              <div key={item.name} className="flex items-center gap-1.5 text-xs">
+            {collectionData.map((item, idx) => (
+              <div 
+                key={item.name} 
+                className="flex items-center gap-1.5 text-xs cursor-pointer transition-opacity"
+                style={{ opacity: activeSlice !== null && activeSlice !== idx ? 0.4 : 1 }}
+                onClick={() => setActiveSlice(prev => prev === idx ? null : idx)}
+              >
                 <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
                 <span className="text-muted-foreground">{item.name} ({item.value}%)</span>
               </div>
