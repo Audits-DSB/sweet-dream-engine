@@ -34,6 +34,7 @@ export default function InventoryPage() {
   const [detailItem, setDetailItem] = useState<typeof mockInventory[0] | null>(null);
   const [viewMode, setViewMode] = useState<"client" | "item">("client");
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
+  const [inventory, setInventory] = useState(mockInventory);
   
   // Convert to order dialog state
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
