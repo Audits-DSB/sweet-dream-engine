@@ -62,7 +62,7 @@ function NavGroup({ label, items, collapsed }: { label: string; items: NavItem[]
 
   return (
     <SidebarGroup>
-      {!collapsed && <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">{label}</SidebarGroupLabel>}
+      {!collapsed && <SidebarGroupLabel className="text-[11px] uppercase font-semibold text-muted-foreground/70">{label}</SidebarGroupLabel>}
       <SidebarGroupContent>
         <SidebarMenu>
           {items.map((item) => (
