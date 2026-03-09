@@ -169,7 +169,7 @@ export function printInvoice(data: {
       width: 100%;
       border-collapse: separate;
       border-spacing: 0;
-      margin: 0 0 24px;
+      margin: 0 0 18px;
       border-radius: 10px;
       overflow: hidden;
       border: 1px solid #e2ecf1;
