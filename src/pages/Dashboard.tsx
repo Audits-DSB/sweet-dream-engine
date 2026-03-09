@@ -16,6 +16,7 @@ export default function Dashboard() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const [activeSlice, setActiveSlice] = useState<number | null>(null);
+  const [activeWeek, setActiveWeek] = useState<number | null>(null);
 
   const revenueData = [
     { month: t.jan, revenue: 124000, cost: 82000 },
@@ -60,12 +61,12 @@ export default function Dashboard() {
   };
 
   const consumptionTrend = [
-    { week: "W1", consumption: 320 },
-    { week: "W2", consumption: 450 },
-    { week: "W3", consumption: 380 },
-    { week: "W4", consumption: 520 },
-    { week: "W5", consumption: 490 },
-    { week: "W6", consumption: 610 },
+    { week: "W1", consumption: 320, topMaterials: [{ name: "حشو كمبوزيت", qty: 45 }, { name: "إبر تخدير", qty: 30 }], totalOrders: 4 },
+    { week: "W2", consumption: 450, topMaterials: [{ name: "قفازات لاتكس", qty: 60 }, { name: "حشو كمبوزيت", qty: 38 }], totalOrders: 6 },
+    { week: "W3", consumption: 380, topMaterials: [{ name: "إبر تخدير", qty: 42 }, { name: "مواد تعقيم", qty: 35 }], totalOrders: 5 },
+    { week: "W4", consumption: 520, topMaterials: [{ name: "حشو كمبوزيت", qty: 55 }, { name: "قفازات لاتكس", qty: 48 }], totalOrders: 7 },
+    { week: "W5", consumption: 490, topMaterials: [{ name: "مواد تعقيم", qty: 50 }, { name: "إبر تخدير", qty: 40 }], totalOrders: 6 },
+    { week: "W6", consumption: 610, topMaterials: [{ name: "حشو كمبوزيت", qty: 70 }, { name: "قفازات لاتكس", qty: 55 }], totalOrders: 8 },
   ];
 
   const recentOrders = ordersList.slice(0, 5).map(o => {
@@ -247,17 +248,61 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="stat-card cursor-pointer" onClick={() => navigate("/inventory")}>
+        <div className="stat-card">
           <h3 className="font-semibold text-sm mb-4">{t.weeklyConsumption}</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={consumptionTrend}>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={consumptionTrend} onClick={(e) => {
+              if (e && e.activeTooltipIndex !== undefined) {
+                setActiveWeek(prev => prev === e.activeTooltipIndex ? null : e.activeTooltipIndex!);
+              }
+            }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="week" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
-              <Line type="monotone" dataKey="consumption" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: "hsl(var(--primary))", r: 3 }} />
+              <Line 
+                type="monotone" dataKey="consumption" stroke="hsl(var(--primary))" strokeWidth={2} 
+                dot={(props: any) => {
+                  const isActive = activeWeek === props.index;
+                  return (
+                    <circle 
+                      cx={props.cx} cy={props.cy} 
+                      r={isActive ? 7 : 4} 
+                      fill={isActive ? "hsl(var(--primary))" : "hsl(var(--background))"}
+                      stroke="hsl(var(--primary))" strokeWidth={2}
+                      className="cursor-pointer"
+                    />
+                  );
+                }}
+                activeDot={{ r: 7, fill: "hsl(var(--primary))", stroke: "hsl(var(--primary-foreground))", strokeWidth: 2, className: "cursor-pointer" }}
+              />
             </LineChart>
           </ResponsiveContainer>
+
+          {activeWeek !== null && consumptionTrend[activeWeek] && (
+            <div className="mx-auto max-w-[280px] rounded-lg border border-primary p-3 mt-2 transition-all animate-fade-in">
+              <div className="text-center">
+                <div className="text-sm font-bold text-primary">الأسبوع {consumptionTrend[activeWeek].week}</div>
+                <div className="text-lg font-extrabold mt-0.5">{consumptionTrend[activeWeek].consumption} {t.unit}</div>
+                <div className="text-xs text-muted-foreground">{consumptionTrend[activeWeek].totalOrders} {t.orders}</div>
+              </div>
+              <div className="mt-2 pt-2 border-t border-border space-y-1.5">
+                <div className="text-xs font-semibold text-muted-foreground mb-1">الأكثر استهلاكاً:</div>
+                {consumptionTrend[activeWeek].topMaterials.map((m, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs gap-2">
+                    <span className="font-medium">{m.name}</span>
+                    <span className="text-muted-foreground">{m.qty} {t.unit}</span>
+                  </div>
+                ))}
+              </div>
+              <button 
+                className="w-full mt-2 text-xs font-semibold py-1.5 rounded-md transition-colors bg-primary text-primary-foreground hover:opacity-90"
+                onClick={() => navigate("/inventory")}
+              >
+                عرض المخزون ←
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
