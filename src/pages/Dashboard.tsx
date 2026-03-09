@@ -307,33 +307,47 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="stat-card flex items-center gap-3 cursor-pointer" onClick={() => navigate("/deliveries?status=Pending")}>
-          <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
-            <Clock className="h-5 w-5 text-warning" />
+        {[
+          {
+            icon: Clock,
+            iconClass: "text-warning",
+            bgClass: "bg-warning/10",
+            title: `5 ${t.pendingDeliveries}`,
+            sub: `2 ${t.delayedMore3Days}`,
+            href: "/deliveries?status=Pending",
+          },
+          {
+            icon: AlertTriangle,
+            iconClass: "text-destructive",
+            bgClass: "bg-destructive/10",
+            title: `7 ${t.itemsExpiringSoon}`,
+            sub: t.within14Days,
+            href: "/alerts?type=expiring",
+          },
+          {
+            icon: Package,
+            iconClass: "text-primary",
+            bgClass: "bg-primary/10",
+            title: `12 ${t.itemsNeedRefill}`,
+            sub: t.belowSafety,
+            href: "/refill?filter=low_stock",
+          },
+        ].map((card) => (
+          <div
+            key={card.href}
+            className="stat-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 transition-colors group"
+            onClick={() => navigate(card.href)}
+          >
+            <div className={`h-10 w-10 rounded-lg ${card.bgClass} flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
+              <card.icon className={`h-5 w-5 ${card.iconClass}`} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold">{card.title}</p>
+              <p className="text-xs text-muted-foreground">{card.sub}</p>
+            </div>
+            <div className="text-muted-foreground/40 group-hover:text-muted-foreground transition-colors text-lg ltr:ml-auto rtl:mr-auto">›</div>
           </div>
-          <div>
-            <p className="text-sm font-semibold">5 {t.pendingDeliveries}</p>
-            <p className="text-xs text-muted-foreground">2 {t.delayedMore3Days}</p>
-          </div>
-        </div>
-        <div className="stat-card flex items-center gap-3 cursor-pointer" onClick={() => navigate("/alerts?type=expiring")}>
-          <div className="h-10 w-10 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
-            <AlertTriangle className="h-5 w-5 text-destructive" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold">7 {t.itemsExpiringSoon}</p>
-            <p className="text-xs text-muted-foreground">{t.within14Days}</p>
-          </div>
-        </div>
-        <div className="stat-card flex items-center gap-3 cursor-pointer" onClick={() => navigate("/refill?filter=low_stock")}>
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-            <Package className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold">12 {t.itemsNeedRefill}</p>
-            <p className="text-xs text-muted-foreground">{t.belowSafety}</p>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );
