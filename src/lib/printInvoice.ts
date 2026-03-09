@@ -147,9 +147,9 @@ export function printInvoice(data: {
       gap: 12px;
       background: #f8fbfd;
       border-radius: 8px;
-      padding: 12px 18px;
-      margin-bottom: 24px;
-      border-right: 4px solid #1b9aaa;
+      padding: 10px 14px;
+      margin-bottom: 18px;
+      border-right: 3px solid #1b9aaa;
     }
 
     .client-bar .client-label {
