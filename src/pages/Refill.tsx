@@ -159,7 +159,30 @@ export default function RefillPage() {
           <div className="flex gap-2">
             <Button size="sm" variant="outline" className="h-9" onClick={selectAllNeedRefill}>{t.selectAll}</Button>
             {selected.size > 0 && (
-              <Button size="sm" className="h-9" onClick={() => { navigate("/orders"); toast.success(t.createOrderFromSelection); }}><ShoppingCart className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.createOrderFromSelection} ({selected.size})</Button>
+              <Button size="sm" className="h-9" onClick={() => {
+                // Prepare refill order data
+                const refillItems = filtered.filter(r => selected.has(r.id) && r.suggestedQty > 0);
+                const refillOrderData = {
+                  items: refillItems.map(item => ({
+                    materialCode: item.code,
+                    materialName: item.material,
+                    quantity: item.suggestedQty,
+                    unit: item.unit,
+                    client: item.client,
+                    clientId: item.clientId,
+                    currentStock: item.currentStock,
+                    reorderPoint: item.reorderPoint,
+                    priority: item.priority
+                  })),
+                  createdAt: Date.now()
+                };
+                
+                // Store data for Orders page
+                localStorage.setItem('refillOrderData', JSON.stringify(refillOrderData));
+                
+                navigate("/orders"); 
+                toast.success(t.createOrderFromSelection);
+              }}><ShoppingCart className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.createOrderFromSelection} ({selected.size})</Button>
             )}
           </div>
         }

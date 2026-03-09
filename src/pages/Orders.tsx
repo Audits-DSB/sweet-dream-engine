@@ -175,10 +175,14 @@ export default function OrdersPage() {
     const newId = `ORD-${String(num).padStart(3, "0")}`;
     const today = new Date().toISOString().split("T")[0];
     const splitLabel = form.splitMode === "equal" ? t.equal : t.byContribution;
+    // Check if this order was created from refill
+    const wasFromRefill = localStorage.getItem('refillOrderData') !== null;
+    const source = wasFromRefill ? "تعبئة" : t.manual;
+    
     setOrders([{
       id: newId, client: client.name, clientId: client.id, date: today, lines: orderItems.length,
       totalSelling: `${totalSelling.toLocaleString()} ${t.currency}`, totalCost: `${totalCost.toLocaleString()} ${t.currency}`,
-      splitMode: splitLabel, deliveryFee: parseInt(form.deliveryFee) || 0, status: "Draft", source: t.manual,
+      splitMode: splitLabel, deliveryFee: parseInt(form.deliveryFee) || 0, status: "Draft", source: source,
     }, ...orders]);
     setForm({ splitMode: "equal", deliveryFee: "500" });
     setSelectedClient("");
