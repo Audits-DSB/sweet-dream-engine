@@ -76,7 +76,7 @@ export default function OrderDetails() {
           <Button variant="outline" size="sm" onClick={() => {
             printInvoice({
               title: t.printInvoice,
-              companyName: "OpsHub",
+              companyName: "DSB",
               subtitle: t.ordersTitle,
               clientName: found?.client || order.client,
               invoiceNumber: id || order.id,

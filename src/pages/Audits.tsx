@@ -462,7 +462,7 @@ export default function AuditsPage() {
                         <Button variant="outline" size="sm" onClick={() => {
                           printInvoice({
                             title: t.exportInvoice,
-                            companyName: "OpsHub",
+                            companyName: "DSB",
                             subtitle: t.auditsTitle,
                             clientName: selectedAudit.client,
                             invoiceNumber: selectedAudit.id,
