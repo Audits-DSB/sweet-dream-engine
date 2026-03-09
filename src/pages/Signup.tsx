@@ -53,7 +53,7 @@ export default function SignupPage() {
             <span className="text-primary-foreground font-bold text-xl">OP</span>
           </div>
           <h1 className="text-2xl font-bold text-foreground">Create Account</h1>
-          <p className="text-muted-foreground mt-1">Get started with OpsHub</p>
+          <p className="text-muted-foreground mt-1">Get started with DSB</p>
         </div>
 
         <div className="stat-card p-6 space-y-6">

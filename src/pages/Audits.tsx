@@ -212,7 +212,7 @@ export default function AuditsPage() {
     if (shortages.length === 0) { toast.info(t.noResults); return; }
     printInvoice({
       title: "فاتورة مواد جديدة للعميل",
-      companyName: "OpsHub",
+      companyName: "DSB",
       subtitle: `جرد ${audit.id} — مواد مطلوب توصيلها`,
       clientName: audit.client,
       invoiceNumber: `INV-${audit.id}`,
@@ -462,7 +462,7 @@ export default function AuditsPage() {
                         <Button variant="outline" size="sm" onClick={() => {
                           printInvoice({
                             title: t.exportInvoice,
-                            companyName: "OpsHub",
+                            companyName: "DSB",
                             subtitle: t.auditsTitle,
                             clientName: selectedAudit.client,
                             invoiceNumber: selectedAudit.id,

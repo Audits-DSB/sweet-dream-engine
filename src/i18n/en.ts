@@ -1,7 +1,7 @@
 export const en = {
   dir: "ltr" as "rtl" | "ltr",
   // App
-  appName: "OpsHub",
+  appName: "DSB",
   appDesc: "Dental Supplies",
 
   // Sidebar groups

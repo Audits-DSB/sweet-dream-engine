@@ -45,7 +45,7 @@ export default function LoginPage() {
           <div className="h-14 w-14 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4">
             <span className="text-primary-foreground font-bold text-xl">OP</span>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Welcome to OpsHub</h1>
+          <h1 className="text-2xl font-bold text-foreground">Welcome to DSB</h1>
           <p className="text-muted-foreground mt-1">Sign in to your account</p>
         </div>
 
