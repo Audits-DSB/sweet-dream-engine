@@ -165,7 +165,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="stat-card flex items-center gap-3 cursor-pointer" onClick={() => navigate("/deliveries")}>
+        <div className="stat-card flex items-center gap-3 cursor-pointer" onClick={() => navigate("/deliveries?status=Pending")}>
           <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
             <Clock className="h-5 w-5 text-warning" />
           </div>
