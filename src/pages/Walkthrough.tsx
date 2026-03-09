@@ -193,7 +193,7 @@ export default function Walkthrough() {
             {collections.slice(0, 3).map(collection => (
               <div key={collection.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
                 <div className="flex items-center gap-2">
-                  <Receipt className="h-3 w-3 text-purple-600" />
+                  <Receipt className="h-3 w-3 text-secondary" />
                   <span className="text-sm font-medium">{collection.id}</span>
                   <span className="text-sm text-muted-foreground">{collection.client}</span>
                 </div>
