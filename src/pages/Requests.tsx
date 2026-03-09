@@ -90,18 +90,23 @@ export default function RequestsPage() {
         );
         const json = await res.json();
         if (json.products) {
-          const priceMap = new Map<string, number>();
+          const priceByName = new Map<string, number>();
+          const priceBySku = new Map<string, number>();
           json.products.forEach((p: any) => {
-            priceMap.set(p.name.toLowerCase(), p.price_retail || 0);
+            priceByName.set(p.name.toLowerCase(), p.price_retail || 0);
+            if (p.sku) priceBySku.set(p.sku.toUpperCase(), p.price_retail || 0);
           });
           // Update requests with real prices
-          setRequests(prev => prev.map(req => ({
-            ...req,
-            items: req.items.map(item => {
-              const realPrice = priceMap.get(item.materialName.toLowerCase());
-              return realPrice !== undefined ? { ...item, unitPrice: realPrice } : item;
-            }),
-          })));
+          setRequests(prev => prev.map(req => {
+            const updatedItems = req.items.map(item => {
+              const realPrice = priceByName.get(item.materialName.toLowerCase()) 
+                ?? priceBySku.get(item.materialCode.toUpperCase()) 
+                ?? item.unitPrice;
+              return { ...item, unitPrice: realPrice };
+            });
+            const total = updatedItems.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+            return { ...req, items: updatedItems, expectedTotal: total.toLocaleString() };
+          }));
           setPricesLoaded(true);
         }
       } catch (err) {
