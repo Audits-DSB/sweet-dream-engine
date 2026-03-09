@@ -82,20 +82,48 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="stat-card lg:col-span-2">
+        <div className="stat-card lg:col-span-2 cursor-pointer" onClick={() => navigate("/company-profit")}>
           <h3 className="font-semibold text-sm mb-4">{t.revenueVsCost}</h3>
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={revenueData} onClick={(data) => {
-              if (data && data.activeLabel) {
-                navigate(`/financial-report?month=${data.activeLabel}`);
-              }
-            }}>
+            <BarChart data={revenueData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+              <XAxis 
+                dataKey="month" 
+                tick={{ fontSize: 12 }} 
+                stroke="hsl(var(--muted-foreground))" 
+                style={{ cursor: "pointer" }}
+                onClick={(data) => {
+                  if (data && data.payload && data.payload.month) {
+                    navigate(`/financial-report?month=${data.payload.month}`);
+                  }
+                }}
+              />
               <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
-              <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name={t.revenue} className="cursor-pointer" />
-              <Bar dataKey="cost" fill="hsl(var(--muted-foreground) / 0.3)" radius={[4, 4, 0, 0]} name={t.cost} className="cursor-pointer" />
+              <Bar 
+                dataKey="revenue" 
+                fill="hsl(var(--primary))" 
+                radius={[4, 4, 0, 0]} 
+                name={t.revenue}
+                style={{ cursor: "pointer" }}
+                onClick={(data) => {
+                  if (data && data.month) {
+                    navigate(`/financial-report?month=${data.month}`);
+                  }
+                }}
+              />
+              <Bar 
+                dataKey="cost" 
+                fill="hsl(var(--muted-foreground) / 0.3)" 
+                radius={[4, 4, 0, 0]} 
+                name={t.cost}
+                style={{ cursor: "pointer" }}
+                onClick={(data) => {
+                  if (data && data.month) {
+                    navigate(`/financial-report?month=${data.month}`);
+                  }
+                }}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
