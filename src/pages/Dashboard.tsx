@@ -1,10 +1,11 @@
+import { useState } from "react";
 import {
   Users, ShoppingCart, FileText, Truck, Receipt, AlertTriangle, TrendingUp, Building2, Clock, Package,
 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line,
+  PieChart, Pie, Cell, LineChart, Line, Sector,
 } from "recharts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
@@ -14,6 +15,7 @@ import { clientsList, ordersList } from "@/data/store";
 export default function Dashboard() {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const [activeSlice, setActiveSlice] = useState<number | null>(null);
 
   const revenueData = [
     { month: t.jan, revenue: 124000, cost: 82000 },
@@ -25,10 +27,20 @@ export default function Dashboard() {
   ];
 
   const collectionData = [
-    { name: t.paid, value: 68, color: "hsl(152, 60%, 40%)" },
-    { name: t.partial, value: 18, color: "hsl(38, 92%, 50%)" },
-    { name: t.overdue, value: 14, color: "hsl(0, 72%, 51%)" },
+    { name: t.paid, value: 68, color: "hsl(152, 60%, 40%)", amount: "523,400 EGP", clients: 12 },
+    { name: t.partial, value: 18, color: "hsl(38, 92%, 50%)", amount: "138,600 EGP", clients: 4 },
+    { name: t.overdue, value: 14, color: "hsl(0, 72%, 51%)", amount: "107,800 EGP", clients: 3 },
   ];
+
+  const renderActiveShape = (props: any) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+    return (
+      <g>
+        <Sector cx={cx} cy={cy} innerRadius={innerRadius - 4} outerRadius={outerRadius + 8} startAngle={startAngle} endAngle={endAngle} fill={fill} opacity={0.9} />
+        <Sector cx={cx} cy={cy} innerRadius={outerRadius + 10} outerRadius={outerRadius + 14} startAngle={startAngle} endAngle={endAngle} fill={fill} />
+      </g>
+    );
+  };
 
   const consumptionTrend = [
     { week: "W1", consumption: 320 },
@@ -120,21 +132,47 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        <div className="stat-card cursor-pointer" onClick={() => navigate("/collections")}>
+        <div className="stat-card">
           <h3 className="font-semibold text-sm mb-4">{t.collectionStatus}</h3>
           <ResponsiveContainer width="100%" height={180}>
             <PieChart>
-              <Pie data={collectionData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={4} dataKey="value">
+              <Pie 
+                data={collectionData} 
+                cx="50%" cy="50%" 
+                innerRadius={50} outerRadius={75} 
+                paddingAngle={4} dataKey="value"
+                activeIndex={activeSlice !== null ? activeSlice : undefined}
+                activeShape={renderActiveShape}
+                onMouseEnter={(_, index) => setActiveSlice(index)}
+                onClick={(_, index) => setActiveSlice(prev => prev === index ? null : index)}
+                className="cursor-pointer outline-none"
+              >
                 {collectionData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
+                  <Cell key={`cell-${index}`} fill={entry.color} opacity={activeSlice !== null && activeSlice !== index ? 0.4 : 1} />
                 ))}
               </Pie>
               <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
             </PieChart>
           </ResponsiveContainer>
+
+          {/* Detail panel when a slice is selected */}
+          {activeSlice !== null && (
+            <div className="mx-auto max-w-[240px] rounded-lg border border-border p-3 mb-2 text-center transition-all animate-fade-in" style={{ borderColor: collectionData[activeSlice].color }}>
+              <div className="text-sm font-bold" style={{ color: collectionData[activeSlice].color }}>{collectionData[activeSlice].name}</div>
+              <div className="text-lg font-extrabold mt-1">{collectionData[activeSlice].value}%</div>
+              <div className="text-xs text-muted-foreground mt-1">{collectionData[activeSlice].amount}</div>
+              <div className="text-xs text-muted-foreground">{collectionData[activeSlice].clients} {t.client}</div>
+            </div>
+          )}
+
           <div className="flex justify-center gap-4 mt-2">
-            {collectionData.map((item) => (
-              <div key={item.name} className="flex items-center gap-1.5 text-xs">
+            {collectionData.map((item, idx) => (
+              <div 
+                key={item.name} 
+                className="flex items-center gap-1.5 text-xs cursor-pointer transition-opacity"
+                style={{ opacity: activeSlice !== null && activeSlice !== idx ? 0.4 : 1 }}
+                onClick={() => setActiveSlice(prev => prev === idx ? null : idx)}
+              >
                 <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
                 <span className="text-muted-foreground">{item.name} ({item.value}%)</span>
               </div>
