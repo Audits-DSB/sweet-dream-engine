@@ -43,7 +43,7 @@ export default function InventoryPage() {
 
   const clients = [...new Set(mockInventory.map(i => i.client))];
 
-  const filtered = mockInventory.filter((i) => {
+  const filtered = inventory.filter((i) => {
     const matchSearch = !search || i.material.toLowerCase().includes(search.toLowerCase()) || i.client.toLowerCase().includes(search.toLowerCase()) || i.id.toLowerCase().includes(search.toLowerCase());
     const matchStatus = !filters.status || filters.status === "all" || i.status === filters.status;
     const matchClient = !filters.client || filters.client === "all" || i.client === filters.client;
