@@ -27,9 +27,26 @@ export default function Dashboard() {
   ];
 
   const collectionData = [
-    { name: t.paid, value: 68, color: "hsl(152, 60%, 40%)", amount: "523,400 EGP", clients: 12 },
-    { name: t.partial, value: 18, color: "hsl(38, 92%, 50%)", amount: "138,600 EGP", clients: 4 },
-    { name: t.overdue, value: 14, color: "hsl(0, 72%, 51%)", amount: "107,800 EGP", clients: 3 },
+    { name: t.paid, value: 68, color: "hsl(152, 60%, 40%)", amount: "523,400 EGP", clients: 12, statusFilter: "Paid",
+      details: [
+        { client: "عيادة جرين فالي", clientId: "C003", order: "ORD-046", amount: "21,000 EGP" },
+        { client: "عيادة سمايل هاوس", clientId: "C005", order: "ORD-043", amount: "12,000 EGP" },
+        { client: "عيادة د. أحمد", clientId: "C001", order: "ORD-042", amount: "41,000 EGP" },
+      ]
+    },
+    { name: t.partial, value: 18, color: "hsl(38, 92%, 50%)", amount: "138,600 EGP", clients: 4, statusFilter: "Partially Paid",
+      details: [
+        { client: "مركز نور لطب الأسنان", clientId: "C002", order: "ORD-047", amount: "45,000 EGP متبقي" },
+        { client: "المركز الملكي للأسنان", clientId: "C004", order: "ORD-045", amount: "32,000 EGP متبقي" },
+      ]
+    },
+    { name: t.overdue, value: 14, color: "hsl(0, 72%, 51%)", amount: "107,800 EGP", clients: 3, statusFilter: "Overdue",
+      details: [
+        { client: "عيادة بلو مون", clientId: "C006", order: "ORD-044", amount: "56,000 EGP" },
+        { client: "مركز سبايس جاردن", clientId: "C007", order: "ORD-041", amount: "16,000 EGP متبقي" },
+        { client: "عيادة د. أحمد", clientId: "C001", order: "ORD-048", amount: "32,000 EGP" },
+      ]
+    },
   ];
 
   const renderActiveShape = (props: any) => {
@@ -155,13 +172,31 @@ export default function Dashboard() {
             </PieChart>
           </ResponsiveContainer>
 
-          {/* Detail panel when a slice is selected */}
           {activeSlice !== null && (
-            <div className="mx-auto max-w-[240px] rounded-lg border border-border p-3 mb-2 text-center transition-all animate-fade-in" style={{ borderColor: collectionData[activeSlice].color }}>
-              <div className="text-sm font-bold" style={{ color: collectionData[activeSlice].color }}>{collectionData[activeSlice].name}</div>
-              <div className="text-lg font-extrabold mt-1">{collectionData[activeSlice].value}%</div>
-              <div className="text-xs text-muted-foreground mt-1">{collectionData[activeSlice].amount}</div>
-              <div className="text-xs text-muted-foreground">{collectionData[activeSlice].clients} {t.client}</div>
+            <div className="mx-auto max-w-[280px] rounded-lg border border-border p-3 mb-2 transition-all animate-fade-in" style={{ borderColor: collectionData[activeSlice].color }}>
+              <div className="text-center">
+                <div className="text-sm font-bold" style={{ color: collectionData[activeSlice].color }}>{collectionData[activeSlice].name}</div>
+                <div className="text-lg font-extrabold mt-0.5">{collectionData[activeSlice].value}%</div>
+                <div className="text-xs text-muted-foreground">{collectionData[activeSlice].amount} · {collectionData[activeSlice].clients} {t.client}</div>
+              </div>
+              <div className="mt-2 pt-2 border-t border-border space-y-1.5">
+                {collectionData[activeSlice].details.map((d, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs gap-2">
+                    <span 
+                      className="font-medium text-primary cursor-pointer hover:underline truncate"
+                      onClick={() => navigate(`/clients/${d.clientId}`)}
+                    >{d.client}</span>
+                    <span className="text-muted-foreground whitespace-nowrap">{d.amount}</span>
+                  </div>
+                ))}
+              </div>
+              <button 
+                className="w-full mt-2 text-xs font-semibold py-1.5 rounded-md transition-colors hover:opacity-80 text-white"
+                style={{ backgroundColor: collectionData[activeSlice].color }}
+                onClick={() => navigate(`/collections?status=${collectionData[activeSlice].statusFilter}`)}
+              >
+                عرض الكل ←
+              </button>
             </div>
           )}
 
