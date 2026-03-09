@@ -242,7 +242,7 @@ export default function RequestsPage() {
                     ))}
                   </div>
                 </td>
-                <td className="py-3 px-3 text-end font-medium">{req.expectedTotal} {t.currency}</td>
+                <td className="py-3 px-3 text-end font-medium">{getDisplayTotal(req)} {t.currency}</td>
                 <td className="py-3 px-3"><StatusBadge status={req.status} /></td>
                 <td className="py-3 px-3 text-xs text-muted-foreground max-w-[200px] truncate">{req.notes || "—"}</td>
                 <td className="py-3 px-3 text-end">
