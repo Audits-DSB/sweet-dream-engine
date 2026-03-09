@@ -82,7 +82,10 @@ export default function AlertsPage() {
   const dismiss = (id: string) => setAlerts(alerts.map(a => a.id === id ? { ...a, dismissed: true } : a));
   const dismissAll = () => setAlerts(alerts.map(a => ({ ...a, dismissed: true })));
 
-  const shown = filter === "all" ? alerts : filter === "active" ? alerts.filter(a => !a.dismissed) : alerts.filter(a => a.dismissed);
+  let shown = filter === "all" ? alerts : filter === "active" ? alerts.filter(a => !a.dismissed) : alerts.filter(a => a.dismissed);
+  if (typeFilter && typeFilter !== "all") {
+    shown = shown.filter(a => a.type === typeFilter);
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
