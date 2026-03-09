@@ -98,22 +98,12 @@ export default function Dashboard() {
                 fill="hsl(var(--primary))" 
                 radius={[4, 4, 0, 0]} 
                 name={t.revenue}
-                onMouseDown={(data) => {
-                  if (data && data.month) {
-                    navigate(`/financial-report?month=${data.month}`);
-                  }
-                }}
               />
               <Bar 
                 dataKey="cost" 
                 fill="hsl(var(--muted-foreground) / 0.3)" 
                 radius={[4, 4, 0, 0]} 
                 name={t.cost}
-                onMouseDown={(data) => {
-                  if (data && data.month) {
-                    navigate(`/financial-report?month=${data.month}`);
-                  }
-                }}
               />
             </BarChart>
           </ResponsiveContainer>
