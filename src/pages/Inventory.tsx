@@ -350,6 +350,7 @@ export default function InventoryPage() {
                     </td>
                     <td className="py-3 px-3 font-mono text-xs text-muted-foreground hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${lot.sourceOrder}`); }}>{lot.sourceOrder}</td>
                     <td className="py-3 px-3"><StatusBadge status={lot.status} /></td>
+                    <td className="py-3 px-3"><StatusBadge status={lot.auditStatus} /></td>
                   </tr>
                 );
               })}
