@@ -715,4 +715,7 @@ export const en = {
   expenseAdded: "Expense added successfully",
   invalidAmount: "Invalid amount",
   fillRequiredFields: "Please fill required fields",
+  clickForDetails: "Click for details",
+  details: "Details",
+  expenses: "Expenses",
 };

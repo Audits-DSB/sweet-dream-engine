@@ -715,4 +715,7 @@ export const ar = {
   expenseAdded: "تم إضافة المصروف بنجاح",
   invalidAmount: "المبلغ غير صالح",
   fillRequiredFields: "يرجى ملء الحقول المطلوبة",
+  clickForDetails: "اضغط لعرض التفاصيل",
+  details: "التفاصيل",
+  expenses: "المصروفات",
 };
