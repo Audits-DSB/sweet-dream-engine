@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
+import { WorkflowBanner } from "@/components/WorkflowBanner";
 import { clientsList, ordersList } from "@/data/store";
 
 export default function Dashboard() {
