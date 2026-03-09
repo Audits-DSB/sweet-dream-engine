@@ -32,9 +32,9 @@ export default function Walkthrough() {
             كيفية سير العمل من استلام طلبات العملاء وحتى تحصيل المدفوعات.
           </p>
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-info/10 p-3 rounded-lg">
+            <div className="bg-primary/10 p-3 rounded-lg">
               <div className="flex items-center gap-2 mb-1">
-                <FileText className="h-4 w-4 text-info" />
+                <FileText className="h-4 w-4 text-primary" />
                 <span className="font-medium text-sm">الطلبات</span>
               </div>
               <p className="text-xs text-muted-foreground">استقبال ومراجعة طلبات العملاء</p>
@@ -53,9 +53,9 @@ export default function Walkthrough() {
               </div>
               <p className="text-xs text-muted-foreground">إدارة عملية التوصيل للعملاء</p>
             </div>
-            <div className="bg-purple-100 p-3 rounded-lg">
+            <div className="bg-secondary/10 p-3 rounded-lg">
               <div className="flex items-center gap-2 mb-1">
-                <Receipt className="h-4 w-4 text-purple-600" />
+                <Receipt className="h-4 w-4 text-secondary" />
                 <span className="font-medium text-sm">التحصيل</span>
               </div>
               <p className="text-xs text-muted-foreground">متابعة وتحصيل المدفوعات</p>
