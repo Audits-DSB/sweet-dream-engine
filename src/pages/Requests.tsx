@@ -218,8 +218,17 @@ export default function RequestsPage() {
                       <Badge
                         key={idx}
                         variant="secondary"
-                        className="text-xs font-normal cursor-pointer hover:bg-secondary/80 transition-colors"
-                        onClick={(e) => { e.stopPropagation(); navigate(`/materials?search=${encodeURIComponent(item.materialName)}`); }}
+                        className="text-xs font-normal cursor-pointer hover:bg-primary/20 hover:text-primary transition-colors"
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          toast(item.materialName, {
+                            description: `الكود: ${item.materialCode} · الكمية: ${item.qty} · السعر: ${item.unitPrice.toLocaleString()} ${t.currency}`,
+                            action: {
+                              label: "فتح المواد",
+                              onClick: () => navigate(`/materials?search=${encodeURIComponent(item.materialName)}`)
+                            }
+                          });
+                        }}
                       >
                         {item.materialName} ×{item.qty}
                       </Badge>

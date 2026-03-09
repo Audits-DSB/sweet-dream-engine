@@ -89,23 +89,9 @@ export default function MaterialsPage() {
   const [form, setForm] = useState({ name: "", category: "", unit: "unit", sellingPrice: "", storeCost: "", supplier: "", supplierId: "", manufacturer: "", hasExpiry: false, active: true });
   const [imgErrors, setImgErrors] = useState<Set<string>>(new Set());
 
-  const codeParam = searchParams.get("code");
-
   useEffect(() => {
     fetchMaterials();
   }, []);
-
-  // Auto-open detail when ?code= param is present
-  useEffect(() => {
-    if (codeParam && materials.length > 0) {
-      const mat = materials.find(m => 
-        m.code === codeParam || 
-        m.name.toLowerCase() === codeParam.toLowerCase() ||
-        m.name.toLowerCase().includes(codeParam.toLowerCase())
-      );
-      if (mat) setDetailItem(mat);
-    }
-  }, [codeParam, materials]);
 
   const fetchMaterials = async () => {
     setLoading(true);
