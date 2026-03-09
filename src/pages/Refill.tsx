@@ -80,6 +80,18 @@ export default function RefillPage() {
 
   const toggleSelect = (id: number) => { const next = new Set(selected); if (next.has(id)) next.delete(id); else next.add(id); setSelected(next); };
   const selectAllNeedRefill = () => setSelected(new Set(filtered.filter(r => r.suggestedQty > 0).map(r => r.id)));
+  
+  const toggleSelectGroup = (items: typeof mockRefills) => {
+    const refillItems = items.filter(r => r.suggestedQty > 0);
+    const allSelected = refillItems.every(r => selected.has(r.id));
+    const next = new Set(selected);
+    if (allSelected) {
+      refillItems.forEach(r => next.delete(r.id));
+    } else {
+      refillItems.forEach(r => next.add(r.id));
+    }
+    setSelected(next);
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -217,6 +229,17 @@ export default function RefillPage() {
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-warning/10 text-warning">
                     <TrendingDown className="h-3 w-3" /> {groupUrgent} {t.urgent}
                   </span>
+                )}
+                <div className="flex-1" />
+                {items.some(r => r.suggestedQty > 0) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => toggleSelectGroup(items)}
+                  >
+                    {items.filter(r => r.suggestedQty > 0).every(r => selected.has(r.id)) ? "إلغاء تحديد الكل" : "تحديد الكل"}
+                  </Button>
                 )}
               </div>
               
