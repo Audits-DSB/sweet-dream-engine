@@ -328,7 +328,7 @@ export default function InventoryPage() {
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.expiryDate}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.sourceOrder}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
-              </tr>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">حالة الجرد</th>
             </thead>
             <tbody>
               {filtered.map((lot) => {
