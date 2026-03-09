@@ -48,11 +48,11 @@ type Request = {
 
 // Updated prices to match external database
 const initialRequests: Request[] = [
-  { id: "REQ-001", client: "عيادة د. أحمد", clientId: "C001", date: "2025-03-06", items: [{ materialCode: "MAT-1", materialName: "Composite A2", qty: 2, unitPrice: 150 }, { materialCode: "MAT-2", materialName: "Bonding Agent", qty: 2, unitPrice: 220 }], expectedTotal: "740", status: "Client Requested", notes: "عاجل - المخزون ينفذ" },
-  { id: "REQ-002", client: "مركز نور لطب الأسنان", clientId: "C002", date: "2025-03-05", items: [{ materialCode: "MAT-3", materialName: "Alginate", qty: 7, unitPrice: 85 }], expectedTotal: "595", status: "Pending Review", notes: "" },
-  { id: "REQ-003", client: "عيادة جرين فالي", clientId: "C003", date: "2025-03-04", items: [{ materialCode: "MAT-4", materialName: "Endo File", qty: 3, unitPrice: 120 }], expectedTotal: "360", status: "Approved", notes: "إعادة تخزين شهرية" },
-  { id: "REQ-004", client: "المركز الملكي للأسنان", clientId: "C004", date: "2025-03-03", items: [{ materialCode: "MAT-5", materialName: "Ceramic Block", qty: 5, unitPrice: 950 }], expectedTotal: "4,750", status: "Converted to Order", notes: "" },
-  { id: "REQ-005", client: "عيادة سمايل هاوس", clientId: "C005", date: "2025-03-02", items: [{ materialCode: "MAT-6", materialName: "Impression Tray", qty: 2, unitPrice: 65 }], expectedTotal: "130", status: "Rejected", notes: "العميل غير نشط" },
+  { id: "REQ-001", client: "عيادة د. أحمد", clientId: "C001", date: "2025-03-06", items: [{ materialCode: "COMPOSITE-GUN", materialName: "Composite gun", qty: 2, unitPrice: 0 }, { materialCode: "COTTON-ROLLS", materialName: "Cotton rolls", qty: 2, unitPrice: 0 }], expectedTotal: "0", status: "Client Requested", notes: "عاجل - المخزون ينفذ" },
+  { id: "REQ-002", client: "مركز نور لطب الأسنان", clientId: "C002", date: "2025-03-05", items: [{ materialCode: "AMALGAM-CAPSULE", materialName: "Amalgam capsules", qty: 7, unitPrice: 0 }], expectedTotal: "0", status: "Pending Review", notes: "" },
+  { id: "REQ-003", client: "عيادة جرين فالي", clientId: "C003", date: "2025-03-04", items: [{ materialCode: "FISSURE-BUR", materialName: "Fissure bur stone", qty: 3, unitPrice: 0 }], expectedTotal: "0", status: "Approved", notes: "إعادة تخزين شهرية" },
+  { id: "REQ-004", client: "المركز الملكي للأسنان", clientId: "C004", date: "2025-03-03", items: [{ materialCode: "ROTARY-ENDODONT", materialName: "Rotary endodontic motor", qty: 5, unitPrice: 0 }], expectedTotal: "0", status: "Converted to Order", notes: "" },
+  { id: "REQ-005", client: "عيادة سمايل هاوس", clientId: "C005", date: "2025-03-02", items: [{ materialCode: "WAX-BLOCKS", materialName: "Wax blocks", qty: 2, unitPrice: 0 }], expectedTotal: "0", status: "Rejected", notes: "العميل غير نشط" },
 ];
 
 export default function RequestsPage() {
