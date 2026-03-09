@@ -1,10 +1,11 @@
+import { useState } from "react";
 import {
   Users, ShoppingCart, FileText, Truck, Receipt, AlertTriangle, TrendingUp, Building2, Clock, Package,
 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line,
+  PieChart, Pie, Cell, LineChart, Line, Sector,
 } from "recharts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
