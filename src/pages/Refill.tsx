@@ -230,6 +230,17 @@ export default function RefillPage() {
                     <TrendingDown className="h-3 w-3" /> {groupUrgent} {t.urgent}
                   </span>
                 )}
+                <div className="flex-1" />
+                {items.some(r => r.suggestedQty > 0) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => toggleSelectGroup(items)}
+                  >
+                    {items.filter(r => r.suggestedQty > 0).every(r => selected.has(r.id)) ? "إلغاء تحديد الكل" : "تحديد الكل"}
+                  </Button>
+                )}
               </div>
               
               <table className="w-full text-sm mb-6">
