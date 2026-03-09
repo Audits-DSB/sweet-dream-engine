@@ -391,8 +391,28 @@ export default function InventoryPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="max-h-96 overflow-y-auto">
-            <div className="space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-muted-foreground">{mockInventory.filter(item => item.client === convertClient && item.status !== "Expired").length} مادة متاحة</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => {
+                const items = mockInventory.filter(item => item.client === convertClient && item.status !== "Expired");
+                const allSelected = items.every(item => selectedLots[item.id]);
+                if (allSelected) {
+                  setSelectedLots({});
+                } else {
+                  const all: Record<string, number> = {};
+                  items.forEach(item => { all[item.id] = selectedLots[item.id] || item.delivered; });
+                  setSelectedLots(all);
+                }
+              }}
+            >
+              {mockInventory.filter(item => item.client === convertClient && item.status !== "Expired").every(item => selectedLots[item.id]) ? "إلغاء تحديد الكل" : "تحديد الكل"}
+            </Button>
+          </div>
+          <div className="space-y-4">
               {mockInventory
                 .filter(item => item.client === convertClient && item.status !== "Expired")
                 .map((item) => {
