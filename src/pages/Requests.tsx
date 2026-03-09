@@ -209,7 +209,7 @@ export default function RequestsPage() {
           </thead>
           <tbody>
             {filtered.map((req) => (
-              <tr key={req.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+              <tr key={req.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetailReq(req)}>
                 <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{req.id}</td>
                 <td className="py-3 px-3 font-medium hover:text-primary cursor-pointer" onClick={() => navigate(`/clients/${req.clientId}`)}>{req.client}</td>
                 <td className="py-3 px-3 text-muted-foreground">{req.date}</td>
