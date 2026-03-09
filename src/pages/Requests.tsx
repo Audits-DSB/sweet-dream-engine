@@ -219,7 +219,7 @@ export default function RequestsPage() {
                         key={idx}
                         variant="secondary"
                         className="text-xs font-normal cursor-pointer hover:bg-secondary/80 transition-colors"
-                        onClick={(e) => { e.stopPropagation(); navigate(`/materials?code=${item.materialCode}`); }}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/materials?code=${encodeURIComponent(item.materialName)}`); }}
                       >
                         {item.materialName} ×{item.qty}
                       </Badge>
