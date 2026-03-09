@@ -98,7 +98,7 @@ export default function MaterialsPage() {
   // Auto-open detail when ?code= param is present
   useEffect(() => {
     if (codeParam && materials.length > 0) {
-      const mat = materials.find(m => m.code === codeParam);
+      const mat = materials.find(m => m.code === codeParam || m.name.toLowerCase() === codeParam.toLowerCase());
       if (mat) setDetailItem(mat);
     }
   }, [codeParam, materials]);
