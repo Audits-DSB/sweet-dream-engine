@@ -31,14 +31,19 @@ export function printInvoice(data: {
       direction: rtl; 
       background: #fff;
       padding: 0;
-      font-size: 13px;
-      line-height: 1.6;
+      font-size: 12px;
+      line-height: 1.5;
     }
 
     .page {
       max-width: 800px;
       margin: 0 auto;
-      padding: 40px 48px;
+      padding: 28px 40px;
+    }
+
+    @page {
+      size: A4;
+      margin: 10mm;
     }
 
     /* === Top accent bar === */
