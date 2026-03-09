@@ -62,7 +62,7 @@ function NavGroup({ label, items, collapsed }: { label: string; items: NavItem[]
 
   return (
     <SidebarGroup>
-      {!collapsed && <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">{label}</SidebarGroupLabel>}
+      {!collapsed && <SidebarGroupLabel className="text-[11px] uppercase font-semibold text-muted-foreground/70">{label}</SidebarGroupLabel>}
       <SidebarGroupContent>
         <SidebarMenu>
           {items.map((item) => (
@@ -85,12 +85,12 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { profile, signOut } = useAuth();
-  const { t } = useLanguage();
+  const { t, dir } = useLanguage();
   const navigate = useNavigate();
   const { mainItems, inventoryItems, financeItems, systemItems } = useNavItems();
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+    <Sidebar collapsible="icon" side={dir === "rtl" ? "right" : "left"} className={dir === "rtl" ? "border-l border-sidebar-border" : "border-r border-sidebar-border"}>
       <SidebarHeader className="p-4">
         {!collapsed ? (
           <div className="flex items-center gap-2.5">

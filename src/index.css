@@ -160,6 +160,7 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
+
 }
 
 @layer utilities {
@@ -172,10 +173,18 @@
   }
 
   .page-header {
-    @apply text-2xl font-bold tracking-tight text-foreground;
+    @apply text-2xl font-bold text-foreground;
   }
 
   .page-description {
     @apply text-sm text-muted-foreground mt-1;
   }
+}
+
+/* RTL Arabic fixes - MUST be after all @layer blocks */
+[dir="rtl"],
+[dir="rtl"] * {
+  font-family: 'IBM Plex Sans Arabic', 'Roboto', ui-sans-serif, system-ui, sans-serif !important;
+  letter-spacing: 0em !important;
+  word-spacing: normal !important;
 }
