@@ -66,9 +66,50 @@ export default function RequestsPage() {
   const [materials, setMaterials] = useState<FetchedMaterial[]>([]);
   const [matSearch, setMatSearch] = useState("");
   const [loadingMats, setLoadingMats] = useState(false);
+  const [pricesLoaded, setPricesLoaded] = useState(false);
   const { user } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
+
+  // Fetch real prices on mount and update initial requests
+  useEffect(() => {
+    if (pricesLoaded) return;
+    const loadRealPrices = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-external-materials`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
+            },
+          }
+        );
+        const json = await res.json();
+        if (json.products) {
+          const priceMap = new Map<string, number>();
+          json.products.forEach((p: any) => {
+            priceMap.set(p.name.toLowerCase(), p.price_retail || 0);
+          });
+          // Update requests with real prices
+          setRequests(prev => prev.map(req => ({
+            ...req,
+            items: req.items.map(item => {
+              const realPrice = priceMap.get(item.materialName.toLowerCase());
+              return realPrice !== undefined ? { ...item, unitPrice: realPrice } : item;
+            }),
+          })));
+          setPricesLoaded(true);
+        }
+      } catch (err) {
+        console.error("Failed to fetch prices:", err);
+      }
+    };
+    loadRealPrices();
+  }, [pricesLoaded]);
 
   const fetchMaterials = async () => {
     if (materials.length > 0) return;
