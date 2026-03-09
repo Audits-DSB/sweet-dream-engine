@@ -46,6 +46,7 @@ type Request = {
   notes: string;
 };
 
+// Updated prices to match external database
 const initialRequests: Request[] = [
   { id: "REQ-001", client: "عيادة د. أحمد", clientId: "C001", date: "2025-03-06", items: [{ materialCode: "MAT-1", materialName: "Composite A2", qty: 2, unitPrice: 150 }, { materialCode: "MAT-2", materialName: "Bonding Agent", qty: 2, unitPrice: 220 }], expectedTotal: "740", status: "Client Requested", notes: "عاجل - المخزون ينفذ" },
   { id: "REQ-002", client: "مركز نور لطب الأسنان", clientId: "C002", date: "2025-03-05", items: [{ materialCode: "MAT-3", materialName: "Alginate", qty: 7, unitPrice: 85 }], expectedTotal: "595", status: "Pending Review", notes: "" },
