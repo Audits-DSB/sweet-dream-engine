@@ -36,9 +36,13 @@ const deliveryStatusMap: Record<string, string> = {
 export default function DeliveriesPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [deliveries, setDeliveries] = useState(initialDeliveries);
   const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, string>>(() => {
+    const status = searchParams.get("status");
+    return status ? { status } : {};
+  });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailItem, setDetailItem] = useState<typeof initialDeliveries[0] | null>(null);
   const [selectedOrder, setSelectedOrder] = useState("");
