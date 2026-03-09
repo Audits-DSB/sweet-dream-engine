@@ -174,7 +174,7 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground">2 {t.delayedMore3Days}</p>
           </div>
         </div>
-        <div className="stat-card flex items-center gap-3 cursor-pointer" onClick={() => navigate("/alerts")}>
+        <div className="stat-card flex items-center gap-3 cursor-pointer" onClick={() => navigate("/alerts?type=expiring")}>
           <div className="h-10 w-10 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
             <AlertTriangle className="h-5 w-5 text-destructive" />
           </div>
