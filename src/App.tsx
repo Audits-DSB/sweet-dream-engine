@@ -96,6 +96,7 @@ const App = () => (
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </WorkflowProvider>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
