@@ -703,4 +703,8 @@ export const ar = {
   totalItems: "إجمالي الأصناف",
   totalValue: "القيمة الإجمالية",
   remainingValue: "قيمة المتبقي",
+  totalBalance: "إجمالي الرصيد",
+  accountsCount: "حسابات",
+  monthsLabel: "أشهر",
+  noDataPeriod: "لا توجد بيانات لهذه الفترة",
 };

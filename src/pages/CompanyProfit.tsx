@@ -235,7 +235,7 @@ export default function CompanyProfitPage() {
       <div className="stat-card overflow-x-auto">
         <h3 className="font-semibold text-sm mb-4">{t.monthlyPnL}</h3>
         {monthlyPnL.length === 0 ? (
-          <p className="text-muted-foreground text-sm text-center py-8">{t.noData || "No data for this period"}</p>
+          <p className="text-muted-foreground text-sm text-center py-8">{t.noDataPeriod}</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
