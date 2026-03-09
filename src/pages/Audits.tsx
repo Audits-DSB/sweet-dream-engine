@@ -255,6 +255,17 @@ export default function AuditsPage() {
   };
 
   const resultLabel = (r: string) => r === "matched" ? t.matched : r === "shortage" ? t.shortage : t.surplus;
+  
+  // Status translation helper
+  const statusLabel = (status: string) => {
+    const map: Record<string, string> = {
+      "Completed": t.completed,
+      "Discrepancy": t.discrepancy,
+      "Scheduled": t.scheduled,
+      "In Progress": t.inProgress,
+    };
+    return map[status] || status;
+  };
 
   const initManualEntry = () => {
     if (clientInventory.length === 0) { toast.error("لا يوجد مخزون لهذا العميل"); return; }
