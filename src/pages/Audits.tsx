@@ -281,9 +281,15 @@ export default function AuditsPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title={t.completedAudits} value={completedCount} change={t.thisQuarter} changeType="neutral" icon={CheckCircle2} />
-        <StatCard title={t.discrepancies} value={discrepancyCount} change={`${((discrepancyCount / audits.length) * 100).toFixed(0)}% ${t.ofAudits}`} changeType="negative" icon={AlertTriangle} />
-        <StatCard title={t.scheduledInProgress} value={scheduledCount} change={t.upcoming} changeType="neutral" icon={ClipboardCheck} />
+        <div className="cursor-pointer" onClick={() => setFilters({ ...filters, status: "Completed" })}>
+          <StatCard title={t.completedAudits} value={completedCount} change={t.thisQuarter} changeType="neutral" icon={CheckCircle2} />
+        </div>
+        <div className="cursor-pointer" onClick={() => setFilters({ ...filters, status: "Discrepancies" })}>
+          <StatCard title={t.discrepancies} value={discrepancyCount} change={`${((discrepancyCount / audits.length) * 100).toFixed(0)}% ${t.ofAudits}`} changeType="negative" icon={AlertTriangle} />
+        </div>
+        <div className="cursor-pointer" onClick={() => setFilters({ ...filters, status: "Scheduled" })}>
+          <StatCard title={t.scheduledInProgress} value={scheduledCount} change={t.upcoming} changeType="neutral" icon={ClipboardCheck} />
+        </div>
       </div>
 
       <DataToolbar
