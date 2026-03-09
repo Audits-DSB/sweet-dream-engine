@@ -45,15 +45,11 @@ export default function RefillPage() {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [groupBy, setGroupBy] = useState<"client" | "material">("client");
-  const [activePriorities, setActivePriorities] = useState<Set<string>>(() => {
-    const f = searchParams.get("filter");
-    if (f === "low_stock") return new Set(["Critical", "Urgent"]);
-    return new Set();
-  });
+  const [activePriorities, setActivePriorities] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const f = searchParams.get("filter");
-    if (f === "low_stock") setActivePriorities(new Set(["Critical", "Urgent"]));
+    if (!f) setActivePriorities(new Set());
   }, [searchParams]);
 
   const clients = [...new Set(mockRefills.map(r => r.client))];
