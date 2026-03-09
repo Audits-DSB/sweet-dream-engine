@@ -255,6 +255,17 @@ export default function AuditsPage() {
   };
 
   const resultLabel = (r: string) => r === "matched" ? t.matched : r === "shortage" ? t.shortage : t.surplus;
+  
+  // Status translation helper
+  const statusLabel = (status: string) => {
+    const map: Record<string, string> = {
+      "Completed": t.completed,
+      "Discrepancy": t.discrepancy,
+      "Scheduled": t.scheduled,
+      "In Progress": t.inProgress,
+    };
+    return map[status] || status;
+  };
 
   const initManualEntry = () => {
     if (clientInventory.length === 0) { toast.error("لا يوجد مخزون لهذا العميل"); return; }
@@ -336,7 +347,7 @@ export default function AuditsPage() {
                 <td className="py-3 px-3 text-end text-success font-medium">{audit.matched}</td>
                 <td className="py-3 px-3 text-end">{audit.shortage > 0 ? <span className="text-destructive font-medium">{audit.shortage}</span> : "—"}</td>
                 <td className="py-3 px-3 text-end">{audit.surplus > 0 ? <span className="text-warning font-medium">{audit.surplus}</span> : "—"}</td>
-                <td className="py-3 px-3"><StatusBadge status={audit.status} /></td>
+                <td className="py-3 px-3"><StatusBadge status={statusLabel(audit.status)} /></td>
                 <td className="py-3 px-3 text-end" onClick={e => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -369,7 +380,7 @@ export default function AuditsPage() {
                   <div className="cursor-pointer" onClick={() => { setSelectedAudit(null); navigate(`/clients/${selectedAudit.clientId}`); }}>
                     <span className="text-muted-foreground">{t.client}:</span> <span className="font-medium text-primary">{selectedAudit.client}</span>
                   </div>
-                  <StatusBadge status={selectedAudit.status} />
+                  <StatusBadge status={statusLabel(selectedAudit.status)} />
                 </div>
 
                 {selectedAudit.notes && (
