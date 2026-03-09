@@ -175,8 +175,8 @@ export default function CompanyProfitPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard title={t.totalBalance || "Total Balance"} value={`${fmtNum(totalBalance)} ${t.currency}`} change={`${accounts?.length || 0} ${t.accounts || "accounts"}`} changeType="neutral" icon={Wallet} />
-        <StatCard title={t.totalRevenue} value={`${fmtNum(totals.revenue)} ${t.currency}`} change={`${monthsFilter} ${t.months || "months"}`} changeType="neutral" icon={DollarSign} />
+        <StatCard title={t.totalBalance} value={`${fmtNum(totalBalance)} ${t.currency}`} change={`${accounts?.length || 0} ${t.accountsCount}`} changeType="neutral" icon={Wallet} />
+        <StatCard title={t.totalRevenue} value={`${fmtNum(totals.revenue)} ${t.currency}`} change={`${monthsFilter} ${t.monthsLabel}`} changeType="neutral" icon={DollarSign} />
         <StatCard title={t.totalProfitsCompany} value={`${fmtNum(totals.profit)} ${t.currency}`} change={`${t.marginPercent} ${totals.margin}%`} changeType="positive" icon={TrendingUp} />
         <StatCard title={t.companyShare} value={`${fmtNum(totals.companyShare)} ${t.currency}`} change={t.retained} changeType="positive" icon={Percent} />
         <StatCard title={t.totalCostCompany} value={`${fmtNum(totals.cost)} ${t.currency}`} change={`${totals.revenue > 0 ? ((totals.cost / totals.revenue) * 100).toFixed(0) : 0}% ${t.ofRevenue}`} changeType="negative" icon={TrendingDown} />
