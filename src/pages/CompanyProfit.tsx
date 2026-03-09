@@ -123,14 +123,14 @@ export default function CompanyProfitPage() {
 
   const categoryLabel = (key: string) => {
     const map: Record<string, string> = {
-      marketing: t.marketing || "Marketing",
+      marketing: t.treasury_cat_marketing,
       operations: t.operations,
-      salaries: t.salaries || "Salaries",
-      supplies: t.supplies || "Supplies",
-      rent: t.rent || "Rent",
-      utilities: t.utilities || "Utilities",
+      salaries: t.treasury_cat_salaries,
+      supplies: t.treasury_cat_supplies,
+      rent: t.treasury_cat_rent,
+      utilities: t.treasury_cat_utilities,
       logistics: t.deliveryCost,
-      maintenance: t.maintenance || "Maintenance",
+      maintenance: t.treasury_cat_maintenance,
       other: t.other,
     };
     return map[key] || key;
