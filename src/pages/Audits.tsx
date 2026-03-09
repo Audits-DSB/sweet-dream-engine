@@ -284,7 +284,7 @@ export default function AuditsPage() {
         <div className="cursor-pointer" onClick={() => setFilters({ ...filters, status: "Completed" })}>
           <StatCard title={t.completedAudits} value={completedCount} change={t.thisQuarter} changeType="neutral" icon={CheckCircle2} />
         </div>
-        <div className="cursor-pointer" onClick={() => setFilters({ ...filters, status: "Discrepancies" })}>
+        <div className="cursor-pointer" onClick={() => setFilters({ ...filters, status: "Discrepancy" })}>
           <StatCard title={t.discrepancies} value={discrepancyCount} change={`${((discrepancyCount / audits.length) * 100).toFixed(0)}% ${t.ofAudits}`} changeType="negative" icon={AlertTriangle} />
         </div>
         <div className="cursor-pointer" onClick={() => setFilters({ ...filters, status: "Scheduled" })}>
