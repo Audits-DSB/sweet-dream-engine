@@ -163,13 +163,6 @@
 
 }
 
-/* RTL Arabic fixes - outside @layer for highest specificity */
-[dir="rtl"],
-[dir="rtl"] * {
-  font-family: 'IBM Plex Sans Arabic', 'Roboto', ui-sans-serif, system-ui, sans-serif !important;
-  letter-spacing: 0em !important;
-}
-
 @layer utilities {
   .glass {
     @apply bg-card/80 backdrop-blur-md border border-border/50;
@@ -180,10 +173,18 @@
   }
 
   .page-header {
-    @apply text-2xl font-bold tracking-tight text-foreground;
+    @apply text-2xl font-bold text-foreground;
   }
 
   .page-description {
     @apply text-sm text-muted-foreground mt-1;
   }
+}
+
+/* RTL Arabic fixes - MUST be after all @layer blocks */
+[dir="rtl"],
+[dir="rtl"] * {
+  font-family: 'IBM Plex Sans Arabic', 'Roboto', ui-sans-serif, system-ui, sans-serif !important;
+  letter-spacing: 0em !important;
+  word-spacing: normal !important;
 }
