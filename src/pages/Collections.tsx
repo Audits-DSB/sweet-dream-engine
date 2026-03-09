@@ -129,10 +129,18 @@ export default function CollectionsPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title={t.totalCollected} value={`${totalCollected.toLocaleString()} ${t.currency}`} change={`${paidCount} ${t.fullyPaid}`} changeType="positive" icon={CheckCircle2} />
-        <StatCard title={t.outstandingAmount} value={`${totalOutstanding.toLocaleString()} ${t.currency}`} change={`${collections.filter(c => c.remaining > 0).length} ${t.invoiceCount}`} changeType="neutral" icon={Clock} />
-        <StatCard title={t.overdueAmount} value={`${overdueAmount.toLocaleString()} ${t.currency}`} change={`${collections.filter(c => c.status === "Overdue").length} ${t.invoiceCount}`} changeType="negative" icon={AlertTriangle} />
-        <StatCard title={t.invoicesLabel} value={collections.length} change={t.totalIssued} changeType="neutral" icon={Receipt} />
+        <div className="cursor-pointer" onClick={() => setFilters({ ...filters, status: "Paid" })}>
+          <StatCard title={t.totalCollected} value={`${totalCollected.toLocaleString()} ${t.currency}`} change={`${paidCount} ${t.fullyPaid}`} changeType="positive" icon={CheckCircle2} />
+        </div>
+        <div className="cursor-pointer" onClick={() => setFilters({ ...filters, status: "Partial" })}>
+          <StatCard title={t.outstandingAmount} value={`${totalOutstanding.toLocaleString()} ${t.currency}`} change={`${collections.filter(c => c.remaining > 0).length} ${t.invoiceCount}`} changeType="neutral" icon={Clock} />
+        </div>
+        <div className="cursor-pointer" onClick={() => setFilters({ ...filters, status: "Overdue" })}>
+          <StatCard title={t.overdueAmount} value={`${overdueAmount.toLocaleString()} ${t.currency}`} change={`${collections.filter(c => c.status === "Overdue").length} ${t.invoiceCount}`} changeType="negative" icon={AlertTriangle} />
+        </div>
+        <div className="cursor-pointer" onClick={() => setFilters({ ...filters, status: "all" })}>
+          <StatCard title={t.invoicesLabel} value={collections.length} change={t.totalIssued} changeType="neutral" icon={Receipt} />
+        </div>
       </div>
 
       <DataToolbar

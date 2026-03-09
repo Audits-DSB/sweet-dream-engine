@@ -89,9 +89,15 @@ export default function RefillPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title={t.criticalItems} value={criticalCount} change={t.belowSafetyLevel} changeType="negative" icon={AlertTriangle} />
-        <StatCard title={t.urgentItems} value={urgentCount} change={t.stockRunningOut} changeType="negative" icon={TrendingDown} />
-        <StatCard title={t.needsRefill} value={needsRefill} change={`${mockRefills.length} ${t.ofTracked}`} changeType="neutral" icon={Package} />
+        <div className="cursor-pointer" onClick={() => setActivePriorities(new Set(["Critical"]))}>
+          <StatCard title={t.criticalItems} value={criticalCount} change={t.belowSafetyLevel} changeType="negative" icon={AlertTriangle} />
+        </div>
+        <div className="cursor-pointer" onClick={() => setActivePriorities(new Set(["Urgent"]))}>
+          <StatCard title={t.urgentItems} value={urgentCount} change={t.stockRunningOut} changeType="negative" icon={TrendingDown} />
+        </div>
+        <div className="cursor-pointer" onClick={() => setActivePriorities(new Set(["Critical", "Urgent", "Normal"]))}>
+          <StatCard title={t.needsRefill} value={needsRefill} change={`${mockRefills.length} ${t.ofTracked}`} changeType="neutral" icon={Package} />
+        </div>
       </div>
 
       {/* Priority filter chips */}
