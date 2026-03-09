@@ -412,7 +412,8 @@ export default function InventoryPage() {
               {mockInventory.filter(item => item.client === convertClient && item.status !== "Expired").every(item => selectedLots[item.id]) ? "إلغاء تحديد الكل" : "تحديد الكل"}
             </Button>
           </div>
-          <div className="space-y-4">
+          <div className="max-h-96 overflow-y-auto">
+            <div className="space-y-4">
               {mockInventory
                 .filter(item => item.client === convertClient && item.status !== "Expired")
                 .map((item) => {
