@@ -80,6 +80,18 @@ export default function RefillPage() {
 
   const toggleSelect = (id: number) => { const next = new Set(selected); if (next.has(id)) next.delete(id); else next.add(id); setSelected(next); };
   const selectAllNeedRefill = () => setSelected(new Set(filtered.filter(r => r.suggestedQty > 0).map(r => r.id)));
+  
+  const toggleSelectGroup = (items: typeof mockRefills) => {
+    const refillItems = items.filter(r => r.suggestedQty > 0);
+    const allSelected = refillItems.every(r => selected.has(r.id));
+    const next = new Set(selected);
+    if (allSelected) {
+      refillItems.forEach(r => next.delete(r.id));
+    } else {
+      refillItems.forEach(r => next.add(r.id));
+    }
+    setSelected(next);
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
