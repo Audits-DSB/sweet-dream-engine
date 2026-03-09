@@ -137,7 +137,7 @@ export function printInvoice(data: {
     .divider {
       height: 1px;
       background: linear-gradient(90deg, transparent 0%, #d4e4ed 20%, #d4e4ed 80%, transparent 100%);
-      margin: 8px 0 24px;
+      margin: 6px 0 18px;
     }
 
     /* === Client Info Bar === */
