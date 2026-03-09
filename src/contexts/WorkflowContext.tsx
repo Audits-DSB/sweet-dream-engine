@@ -20,6 +20,7 @@ interface WorkflowContextType {
   updateDeliveryStatus: (id: string, status: string) => void;
   updateCollectionStatus: (id: string, status: string) => void;
   refreshData: () => void;
+  createOrderFromInventory: (clientId: string, clientName: string, items: Array<{ id: string; name: string; quantity: number; unitPrice: number }>) => any;
 }
 
 const WorkflowContext = createContext<WorkflowContextType | undefined>(undefined);
