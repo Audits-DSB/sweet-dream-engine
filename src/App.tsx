@@ -92,6 +92,7 @@ const App = () => (
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/user-management" element={<UserManagementPage />} />
+                <Route path="/walkthrough" element={<Walkthrough />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
