@@ -59,6 +59,7 @@ export default function RequestsPage() {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [detailReq, setDetailReq] = useState<Request | null>(null);
   const [form, setForm] = useState({ clientId: "", notes: "" });
   const [selectedItems, setSelectedItems] = useState<RequestItem[]>([]);
   const [materials, setMaterials] = useState<FetchedMaterial[]>([]);
