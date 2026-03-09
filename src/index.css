@@ -160,6 +160,24 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
+
+  /* RTL Arabic fixes */
+  [dir="rtl"] {
+    font-family: 'IBM Plex Sans Arabic', 'Roboto', ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0 !important;
+  }
+
+  [dir="rtl"] * {
+    letter-spacing: 0 !important;
+  }
+
+  [dir="rtl"] .text-left {
+    text-align: right;
+  }
+
+  [dir="rtl"] .text-right {
+    text-align: left;
+  }
 }
 
 @layer utilities {
