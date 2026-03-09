@@ -78,7 +78,7 @@ export default function InventoryPage() {
   // Convert to order functions
   const getClientItemsToConvert = (clientName: string) => {
     return inventory.filter(item => 
-      item.client === clientName && (item.status === "Depleted" || item.status === "Low Stock")
+      item.client === clientName && item.auditStatus === "Pending" && (item.status === "Depleted" || item.status === "Low Stock")
     );
   };
 
