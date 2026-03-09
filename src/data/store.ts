@@ -136,3 +136,41 @@ export function findClientByName(name: string) {
 export function findOrderById(id: string) {
   return ordersList.find(o => o.id === id);
 }
+
+// Helper to find request by id
+export function findRequestById(id: string) {
+  return requestsList.find(r => r.id === id);
+}
+
+// Helper to find delivery by order id
+export function findDeliveryByOrderId(orderId: string) {
+  return deliveriesList.find(d => d.orderId === orderId);
+}
+
+// Helper to find collection by order id  
+export function findCollectionByOrderId(orderId: string) {
+  return collectionsList.find(c => c.orderId === orderId);
+}
+
+// Helper to get workflow step for order
+export function getWorkflowStep(orderId: string) {
+  const order = findOrderById(orderId);
+  const delivery = findDeliveryByOrderId(orderId);
+  const collection = findCollectionByOrderId(orderId);
+  
+  if (!order) return { step: 0, status: "Not Found" };
+  
+  if (["Draft", "Confirmed", "Ready for Delivery"].includes(order.status)) {
+    return { step: 1, status: order.status };
+  }
+  
+  if (delivery && ["Scheduled", "In Transit", "Delivered"].includes(delivery.status)) {
+    return { step: 2, status: delivery.status };
+  }
+  
+  if (collection) {
+    return { step: 3, status: collection.status };
+  }
+  
+  return { step: 1, status: order.status };
+}
