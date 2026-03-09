@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -61,8 +61,15 @@ const severityStyles: Record<string, { bg: string; icon: typeof AlertTriangle }>
 export default function AlertsPage() {
   const { t, lang } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [alerts, setAlerts] = useState(mockAlerts);
   const [filter, setFilter] = useState<"all" | "active" | "dismissed">("active");
+  const [typeFilter, setTypeFilter] = useState<string>(() => searchParams.get("type") || "all");
+
+  useEffect(() => {
+    const type = searchParams.get("type");
+    if (type) setTypeFilter(type === "expiring" ? "expiry" : type);
+  }, [searchParams]);
 
   const typeLabels: Record<string, string> = {
     low_stock: t.stockAlert, expiry: t.expiryAlert, overdue: t.overdueAlert, audit: t.auditAlert, delivery: t.deliveryAlert,
@@ -75,7 +82,10 @@ export default function AlertsPage() {
   const dismiss = (id: string) => setAlerts(alerts.map(a => a.id === id ? { ...a, dismissed: true } : a));
   const dismissAll = () => setAlerts(alerts.map(a => ({ ...a, dismissed: true })));
 
-  const shown = filter === "all" ? alerts : filter === "active" ? alerts.filter(a => !a.dismissed) : alerts.filter(a => a.dismissed);
+  let shown = filter === "all" ? alerts : filter === "active" ? alerts.filter(a => !a.dismissed) : alerts.filter(a => a.dismissed);
+  if (typeFilter && typeFilter !== "all") {
+    shown = shown.filter(a => a.type === typeFilter);
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">

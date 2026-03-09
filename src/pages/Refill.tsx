@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
@@ -40,11 +40,17 @@ const priorityOrder = ["Critical", "Urgent", "Normal", "OK"];
 export default function RefillPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [groupBy, setGroupBy] = useState<"client" | "material">("client");
   const [activePriorities, setActivePriorities] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const f = searchParams.get("filter");
+    if (!f) setActivePriorities(new Set());
+  }, [searchParams]);
 
   const clients = [...new Set(mockRefills.map(r => r.client))];
   const priorityLabel = (p: string) => p === "Critical" ? t.critical : p === "Urgent" ? t.urgent : p === "Normal" ? t.normal : t.ok;
@@ -61,10 +67,12 @@ export default function RefillPage() {
   };
 
   const filtered = mockRefills.filter((r) => {
+    const quickFilter = searchParams.get("filter");
+    const matchQuickFilter = quickFilter !== "low_stock" || r.suggestedQty > 0;
     const matchSearch = !search || r.client.toLowerCase().includes(search.toLowerCase()) || r.material.toLowerCase().includes(search.toLowerCase());
     const matchPriority = activePriorities.size === 0 || activePriorities.has(r.priority);
     const matchClient = !filters.client || filters.client === "all" || r.client === filters.client;
-    return matchSearch && matchPriority && matchClient;
+    return matchQuickFilter && matchSearch && matchPriority && matchClient;
   });
 
   const groupedData = filtered.reduce((acc: Record<string, typeof filtered>, item) => {

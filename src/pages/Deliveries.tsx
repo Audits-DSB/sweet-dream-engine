@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Eye, MoreHorizontal, Truck, Plus } from "lucide-react";
@@ -35,9 +36,13 @@ const deliveryStatusMap: Record<string, string> = {
 export default function DeliveriesPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [deliveries, setDeliveries] = useState(initialDeliveries);
   const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, string>>(() => {
+    const status = searchParams.get("status");
+    return status ? { status } : {};
+  });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailItem, setDetailItem] = useState<typeof initialDeliveries[0] | null>(null);
   const [selectedOrder, setSelectedOrder] = useState("");
@@ -45,6 +50,11 @@ export default function DeliveriesPage() {
   const [deliveryType, setDeliveryType] = useState("full");
   const [requestedDate, setRequestedDate] = useState("");
   const { user } = useAuth();
+
+  useEffect(() => {
+    const status = searchParams.get("status");
+    setFilters(status ? { status } : {});
+  }, [searchParams]);
 
   const sendNotification = async (title: string, body: string, type: string = "info") => {
     if (!user) return;
