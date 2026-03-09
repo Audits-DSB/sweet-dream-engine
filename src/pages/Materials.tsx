@@ -214,7 +214,7 @@ export default function MaterialsPage() {
 
       {/* Detail Dialog */}
       <Dialog open={!!detailItem} onOpenChange={() => setDetailItem(null)}>
-        <DialogContent className="max-w-md p-0 overflow-hidden max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-lg p-0 overflow-hidden">
           {detailItem && (
             <>
               {/* Header with image */}
