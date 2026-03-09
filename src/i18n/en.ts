@@ -718,5 +718,4 @@ export const en = {
   clickForDetails: "Click for details",
   details: "Details",
   expenses: "Expenses",
-  viewDetails: "View details",
 };

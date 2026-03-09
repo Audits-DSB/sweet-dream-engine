@@ -718,5 +718,4 @@ export const ar = {
   clickForDetails: "اضغط لعرض التفاصيل",
   details: "التفاصيل",
   expenses: "المصروفات",
-  viewDetails: "عرض التفاصيل",
 };
