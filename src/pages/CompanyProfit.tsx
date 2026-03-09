@@ -1,24 +1,42 @@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
 import { StatCard } from "@/components/StatCard";
-import { TrendingUp, TrendingDown, DollarSign, Percent, Download, Wallet, Plus, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
+import {
+  TrendingUp, TrendingDown, DollarSign, Percent, Download, Wallet,
+  Plus, ArrowUpRight, ArrowDownRight, Minus, ShoppingCart, Receipt, X
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { exportToCsv } from "@/lib/exportCsv";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, PieChart, Pie, Cell } from "recharts";
+import {
+  ResponsiveContainer, LineChart, Line, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, PieChart, Pie, Cell
+} from "recharts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo, useState } from "react";
 import { subMonths, format, parseISO } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
 const EXPENSE_CATEGORIES = ["marketing", "operations", "salaries", "supplies", "rent", "utilities", "logistics", "maintenance", "other"] as const;
+
+type MonthDetail = {
+  month: string;
+  monthKey: string;
+  revenue: number;
+  cost: number;
+  profit: number;
+  orders: Array<{ id: string; order_number: string; client_name: string; total_cost: number; status: string; created_at: string }>;
+  expenses: Array<{ id: string; amount: number; category: string | null; description: string | null; created_at: string }>;
+};
 
 export default function CompanyProfitPage() {
   const { t, lang } = useLanguage();
@@ -28,10 +46,10 @@ export default function CompanyProfitPage() {
   const queryClient = useQueryClient();
   const [monthsFilter, setMonthsFilter] = useState("6");
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<MonthDetail | null>(null);
   const [expenseForm, setExpenseForm] = useState({ amount: "", category: "operations" as typeof EXPENSE_CATEGORIES[number], description: "", accountId: "" });
   const [submitting, setSubmitting] = useState(false);
 
-  // Fetch treasury accounts for total balance
   const { data: accounts, isLoading: loadingAccounts } = useQuery({
     queryKey: ["treasury_accounts"],
     queryFn: async () => {
@@ -41,7 +59,6 @@ export default function CompanyProfitPage() {
     },
   });
 
-  // Fetch transactions
   const { data: transactions, isLoading: loadingTx } = useQuery({
     queryKey: ["treasury_transactions"],
     queryFn: async () => {
@@ -51,7 +68,6 @@ export default function CompanyProfitPage() {
     },
   });
 
-  // Fetch orders for revenue
   const { data: orders, isLoading: loadingOrders } = useQuery({
     queryKey: ["orders"],
     queryFn: async () => {
@@ -66,34 +82,44 @@ export default function CompanyProfitPage() {
     return accounts.reduce((sum, a) => sum + (a.balance || 0), 0);
   }, [accounts]);
 
-  const { monthlyPnL, totals, expenseBreakdown, comparison } = useMemo(() => {
+  const { monthlyPnL, totals, expenseBreakdown, comparison, monthDetails } = useMemo(() => {
     const cutoff = subMonths(new Date(), parseInt(monthsFilter));
-    const monthlyData: Record<string, { revenue: number; cost: number; expenses: Record<string, number> }> = {};
+    const monthlyData: Record<string, {
+      revenue: number;
+      cost: number;
+      expCats: Record<string, number>;
+      orders: typeof orders;
+      expenses: typeof transactions;
+    }> = {};
 
-    // Process orders as revenue
+    const ensureMonth = (key: string) => {
+      if (!monthlyData[key]) monthlyData[key] = { revenue: 0, cost: 0, expCats: {}, orders: [], expenses: [] };
+    };
+
     (orders || []).forEach((o) => {
       const d = parseISO(o.created_at);
       if (d < cutoff) return;
       const key = format(d, "yyyy-MM");
-      if (!monthlyData[key]) monthlyData[key] = { revenue: 0, cost: 0, expenses: {} };
+      ensureMonth(key);
       monthlyData[key].revenue += o.total_cost || 0;
+      monthlyData[key].orders = [...(monthlyData[key].orders || []), o];
     });
 
-    // Process transactions as costs/expenses
     (transactions || []).forEach((tx) => {
       const d = parseISO(tx.created_at);
       if (d < cutoff) return;
       const key = format(d, "yyyy-MM");
-      if (!monthlyData[key]) monthlyData[key] = { revenue: 0, cost: 0, expenses: {} };
+      ensureMonth(key);
       if (tx.tx_type === "expense" || tx.tx_type === "withdrawal") {
         monthlyData[key].cost += Math.abs(tx.amount);
         const cat = tx.category || "other";
-        monthlyData[key].expenses[cat] = (monthlyData[key].expenses[cat] || 0) + Math.abs(tx.amount);
+        monthlyData[key].expCats[cat] = (monthlyData[key].expCats[cat] || 0) + Math.abs(tx.amount);
+        monthlyData[key].expenses = [...(monthlyData[key].expenses || []), tx];
       }
     });
 
-    // Build sorted array
     const sorted = Object.entries(monthlyData).sort(([a], [b]) => a.localeCompare(b));
+
     const pnl = sorted.map(([key, d]) => {
       const profit = d.revenue - d.cost;
       return {
@@ -107,11 +133,25 @@ export default function CompanyProfitPage() {
       };
     });
 
-    // Monthly comparison
+    const details: Record<string, MonthDetail> = {};
+    sorted.forEach(([key, d]) => {
+      const profit = d.revenue - d.cost;
+      details[key] = {
+        month: format(parseISO(key + "-01"), "MMM yyyy"),
+        monthKey: key,
+        revenue: d.revenue,
+        cost: d.cost,
+        profit,
+        orders: (d.orders || []) as MonthDetail["orders"],
+        expenses: ((d.expenses || []) as MonthDetail["expenses"]),
+      };
+    });
+
     const comparisonData = pnl.map((m, i) => {
       const prev = i > 0 ? pnl[i - 1] : null;
       return {
         month: m.month,
+        monthKey: m.monthKey,
         revenue: m.revenue,
         cost: m.cost,
         profit: m.profit,
@@ -124,10 +164,9 @@ export default function CompanyProfitPage() {
       };
     });
 
-    // Aggregate expenses for pie
     const expAgg: Record<string, number> = {};
     sorted.forEach(([, d]) => {
-      Object.entries(d.expenses).forEach(([cat, val]) => {
+      Object.entries(d.expCats).forEach(([cat, val]) => {
         expAgg[cat] = (expAgg[cat] || 0) + val;
       });
     });
@@ -149,12 +188,14 @@ export default function CompanyProfitPage() {
       totals: { revenue: tRev, cost: tCost, profit: tProfit, companyShare: tCompany, margin: tRev > 0 ? ((tProfit / tRev) * 100).toFixed(1) : "0" },
       expenseBreakdown: breakdown.length > 0 ? breakdown : [{ name: "other", value: 100, color: colors[0] }],
       comparison: comparisonData,
+      monthDetails: details,
     };
   }, [orders, transactions, monthsFilter]);
 
   const isLoading = loadingAccounts || loadingTx || loadingOrders;
 
-  const categoryLabel = (key: string) => {
+  const categoryLabel = (key: string | null) => {
+    if (!key) return t.other;
     const map: Record<string, string> = {
       marketing: t.treasury_cat_marketing,
       operations: t.operations,
@@ -171,6 +212,16 @@ export default function CompanyProfitPage() {
 
   const fmtNum = (n: number) => n.toLocaleString(lang === "ar" ? "ar-EG" : "en-US");
 
+  const handleChartClick = (data: { activePayload?: Array<{ payload: { monthKey: string } }> }) => {
+    if (!data?.activePayload?.[0]) return;
+    const key = data.activePayload[0].payload.monthKey;
+    if (monthDetails[key]) setSelectedMonth(monthDetails[key]);
+  };
+
+  const handleBarClick = (data: { monthKey: string }) => {
+    if (data?.monthKey && monthDetails[data.monthKey]) setSelectedMonth(monthDetails[data.monthKey]);
+  };
+
   const handleAddExpense = async () => {
     if (!expenseForm.amount || !expenseForm.accountId) {
       toast({ title: t.error, description: t.fillRequiredFields, variant: "destructive" });
@@ -181,13 +232,11 @@ export default function CompanyProfitPage() {
       toast({ title: t.error, description: t.invalidAmount, variant: "destructive" });
       return;
     }
-
     const account = accounts?.find(a => a.id === expenseForm.accountId);
     if (!account) return;
 
     setSubmitting(true);
     try {
-      // Insert transaction
       const { error: txError } = await supabase.from("treasury_transactions").insert({
         account_id: expenseForm.accountId,
         amount: -amount,
@@ -199,7 +248,6 @@ export default function CompanyProfitPage() {
       });
       if (txError) throw txError;
 
-      // Update account balance
       const { error: accError } = await supabase.from("treasury_accounts").update({ balance: account.balance - amount }).eq("id", expenseForm.accountId);
       if (accError) throw accError;
 
@@ -219,7 +267,7 @@ export default function CompanyProfitPage() {
     if (value === 0) return <span className="text-muted-foreground"><Minus className="h-3 w-3 inline" /></span>;
     const isPositive = value > 0;
     return (
-      <span className={`inline-flex items-center gap-0.5 text-xs ${isPositive ? "text-success" : "text-destructive"}`}>
+      <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${isPositive ? "text-success" : "text-destructive"}`}>
         {isPositive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
         {Math.abs(percent).toFixed(1)}%
       </span>
@@ -240,6 +288,7 @@ export default function CompanyProfitPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="page-header">{t.companyProfitTitle}</h1>
@@ -309,6 +358,7 @@ export default function CompanyProfitPage() {
         </div>
       </div>
 
+      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard title={t.totalBalance} value={`${fmtNum(totalBalance)} ${t.currency}`} change={`${accounts?.length || 0} ${t.accountsCount}`} changeType="neutral" icon={Wallet} />
         <StatCard title={t.totalRevenue} value={`${fmtNum(totals.revenue)} ${t.currency}`} change={`${monthsFilter} ${t.monthsLabel}`} changeType="neutral" icon={DollarSign} />
@@ -317,7 +367,7 @@ export default function CompanyProfitPage() {
         <StatCard title={t.totalCostCompany} value={`${fmtNum(totals.cost)} ${t.currency}`} change={`${totals.revenue > 0 ? ((totals.cost / totals.revenue) * 100).toFixed(0) : 0}% ${t.ofRevenue}`} changeType="negative" icon={TrendingDown} />
       </div>
 
-      {/* Monthly Comparison Report */}
+      {/* Monthly Comparison */}
       <div className="stat-card overflow-x-auto">
         <h3 className="font-semibold text-sm mb-4">{t.monthlyComparison}</h3>
         {comparison.length === 0 ? (
@@ -333,11 +383,12 @@ export default function CompanyProfitPage() {
                 <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.change}</th>
                 <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.profit}</th>
                 <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.change}</th>
+                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground"></th>
               </tr>
             </thead>
             <tbody>
               {comparison.map((m, i) => (
-                <tr key={m.month} className="border-b border-border/50 hover:bg-muted/30">
+                <tr key={m.month} className="border-b border-border/50 hover:bg-muted/30 cursor-pointer" onClick={() => monthDetails[m.monthKey] && setSelectedMonth(monthDetails[m.monthKey])}>
                   <td className="py-2.5 px-3 font-medium">{m.month}</td>
                   <td className="py-2.5 px-3 text-end">{fmtNum(m.revenue)} {t.currency}</td>
                   <td className="py-2.5 px-3 text-end">{i > 0 ? <ChangeIndicator value={m.revenueChange} percent={m.revenueChangePercent} /> : "-"}</td>
@@ -345,6 +396,7 @@ export default function CompanyProfitPage() {
                   <td className="py-2.5 px-3 text-end">{i > 0 ? <ChangeIndicator value={-m.costChange} percent={-m.costChangePercent} /> : "-"}</td>
                   <td className="py-2.5 px-3 text-end font-medium text-success">{fmtNum(m.profit)} {t.currency}</td>
                   <td className="py-2.5 px-3 text-end">{i > 0 ? <ChangeIndicator value={m.profitChange} percent={m.profitChangePercent} /> : "-"}</td>
+                  <td className="py-2.5 px-3 text-end text-xs text-muted-foreground">{t.viewDetails} →</td>
                 </tr>
               ))}
             </tbody>
@@ -352,17 +404,21 @@ export default function CompanyProfitPage() {
         )}
       </div>
 
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="stat-card lg:col-span-2">
-          <h3 className="font-semibold text-sm mb-4">{t.revenueProfitTrend}</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-sm">{t.revenueProfitTrend}</h3>
+            <span className="text-xs text-muted-foreground">{t.clickForDetails}</span>
+          </div>
           <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={monthlyPnL}>
+            <LineChart data={monthlyPnL} onClick={handleChartClick} className="cursor-pointer">
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <ReTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
-              <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} name={t.revenue} />
-              <Line type="monotone" dataKey="profit" stroke="hsl(var(--chart-2))" strokeWidth={2} name={t.profit} />
+              <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} name={t.revenue} dot={{ r: 4, cursor: "pointer" }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey="profit" stroke="hsl(var(--chart-2))" strokeWidth={2} name={t.profit} dot={{ r: 4, cursor: "pointer" }} activeDot={{ r: 6 }} />
               <Line type="monotone" dataKey="cost" stroke="hsl(var(--muted-foreground))" strokeWidth={1} strokeDasharray="5 5" name={t.cost} />
             </LineChart>
           </ResponsiveContainer>
@@ -388,20 +444,27 @@ export default function CompanyProfitPage() {
         </div>
       </div>
 
-      <div className="stat-card cursor-pointer" onClick={() => navigate("/founders")}>
-        <h3 className="font-semibold text-sm mb-4">{t.profitDistribution}</h3>
+      {/* Profit Distribution Bar */}
+      <div className="stat-card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-sm">{t.profitDistribution}</h3>
+          <span className="text-xs text-muted-foreground">{t.clickForDetails}</span>
+        </div>
         <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={monthlyPnL}>
+          <BarChart data={monthlyPnL} onClick={handleChartClick} className="cursor-pointer">
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
             <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
             <ReTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
             <Bar dataKey="companyShare" stackId="a" fill="hsl(var(--primary))" name={t.company15} />
-            <Bar dataKey="founderShare" stackId="a" fill="hsl(var(--chart-2))" name={t.founders85} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="founderShare" stackId="a" fill="hsl(var(--chart-2))" name={t.founders85} radius={[4, 4, 0, 0]}
+              onClick={handleBarClick}
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
+      {/* Monthly PnL Table */}
       <div className="stat-card overflow-x-auto">
         <h3 className="font-semibold text-sm mb-4">{t.monthlyPnL}</h3>
         {monthlyPnL.length === 0 ? (
@@ -421,7 +484,7 @@ export default function CompanyProfitPage() {
             </thead>
             <tbody>
               {monthlyPnL.map((m) => (
-                <tr key={m.month} className="border-b border-border/50 hover:bg-muted/30">
+                <tr key={m.month} className="border-b border-border/50 hover:bg-muted/30 cursor-pointer" onClick={() => monthDetails[m.monthKey] && setSelectedMonth(monthDetails[m.monthKey])}>
                   <td className="py-2.5 px-3 font-medium">{m.month}</td>
                   <td className="py-2.5 px-3 text-end">{fmtNum(m.revenue)} {t.currency}</td>
                   <td className="py-2.5 px-3 text-end text-muted-foreground">{fmtNum(m.cost)} {t.currency}</td>
@@ -435,6 +498,85 @@ export default function CompanyProfitPage() {
           </table>
         )}
       </div>
+
+      {/* Month Detail Sheet */}
+      <Sheet open={!!selectedMonth} onOpenChange={(o) => !o && setSelectedMonth(null)}>
+        <SheetContent side={lang === "ar" ? "left" : "right"} className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center justify-between">
+              <span>{selectedMonth?.month} — {t.details}</span>
+            </SheetTitle>
+          </SheetHeader>
+          {selectedMonth && (
+            <div className="mt-4 space-y-6">
+              {/* Summary */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="stat-card p-3 text-center">
+                  <p className="text-xs text-muted-foreground">{t.revenue}</p>
+                  <p className="font-semibold text-sm mt-1">{fmtNum(selectedMonth.revenue)}</p>
+                </div>
+                <div className="stat-card p-3 text-center">
+                  <p className="text-xs text-muted-foreground">{t.cost}</p>
+                  <p className="font-semibold text-sm mt-1 text-destructive">{fmtNum(selectedMonth.cost)}</p>
+                </div>
+                <div className="stat-card p-3 text-center">
+                  <p className="text-xs text-muted-foreground">{t.profit}</p>
+                  <p className="font-semibold text-sm mt-1 text-success">{fmtNum(selectedMonth.profit)}</p>
+                </div>
+              </div>
+
+              {/* Orders */}
+              <div>
+                <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                  <ShoppingCart className="h-4 w-4 text-primary" />
+                  {t.orders} ({selectedMonth.orders.length})
+                </h4>
+                {selectedMonth.orders.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">{t.noDataPeriod}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedMonth.orders.map((o) => (
+                      <div key={o.id} className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-muted/20 cursor-pointer hover:bg-muted/40" onClick={() => navigate(`/orders/${o.id}`)}>
+                        <div>
+                          <p className="text-xs font-medium">{o.order_number}</p>
+                          <p className="text-xs text-muted-foreground">{o.client_name}</p>
+                        </div>
+                        <div className="text-end">
+                          <p className="text-xs font-semibold">{fmtNum(o.total_cost)} {t.currency}</p>
+                          <Badge variant="outline" className="text-xs mt-0.5">{o.status}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Expenses */}
+              <div>
+                <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                  <Receipt className="h-4 w-4 text-destructive" />
+                  {t.expenses || t.totalCostCompany} ({selectedMonth.expenses.length})
+                </h4>
+                {selectedMonth.expenses.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">{t.noDataPeriod}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedMonth.expenses.map((e) => (
+                      <div key={e.id} className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-muted/20">
+                        <div>
+                          <p className="text-xs font-medium">{categoryLabel(e.category)}</p>
+                          {e.description && <p className="text-xs text-muted-foreground">{e.description}</p>}
+                        </div>
+                        <p className="text-xs font-semibold text-destructive">-{fmtNum(Math.abs(e.amount))} {t.currency}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
