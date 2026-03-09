@@ -380,7 +380,7 @@ export default function AuditsPage() {
                   <div className="cursor-pointer" onClick={() => { setSelectedAudit(null); navigate(`/clients/${selectedAudit.clientId}`); }}>
                     <span className="text-muted-foreground">{t.client}:</span> <span className="font-medium text-primary">{selectedAudit.client}</span>
                   </div>
-                  <StatusBadge status={selectedAudit.status} />
+                  <StatusBadge status={statusLabel(selectedAudit.status)} />
                 </div>
 
                 {selectedAudit.notes && (
