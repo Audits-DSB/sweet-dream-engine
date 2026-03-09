@@ -61,12 +61,12 @@ export default function Dashboard() {
   };
 
   const consumptionTrend = [
-    { week: "W1", consumption: 320 },
-    { week: "W2", consumption: 450 },
-    { week: "W3", consumption: 380 },
-    { week: "W4", consumption: 520 },
-    { week: "W5", consumption: 490 },
-    { week: "W6", consumption: 610 },
+    { week: "W1", consumption: 320, topMaterials: [{ name: "حشو كمبوزيت", qty: 45 }, { name: "إبر تخدير", qty: 30 }], totalOrders: 4 },
+    { week: "W2", consumption: 450, topMaterials: [{ name: "قفازات لاتكس", qty: 60 }, { name: "حشو كمبوزيت", qty: 38 }], totalOrders: 6 },
+    { week: "W3", consumption: 380, topMaterials: [{ name: "إبر تخدير", qty: 42 }, { name: "مواد تعقيم", qty: 35 }], totalOrders: 5 },
+    { week: "W4", consumption: 520, topMaterials: [{ name: "حشو كمبوزيت", qty: 55 }, { name: "قفازات لاتكس", qty: 48 }], totalOrders: 7 },
+    { week: "W5", consumption: 490, topMaterials: [{ name: "مواد تعقيم", qty: 50 }, { name: "إبر تخدير", qty: 40 }], totalOrders: 6 },
+    { week: "W6", consumption: 610, topMaterials: [{ name: "حشو كمبوزيت", qty: 70 }, { name: "قفازات لاتكس", qty: 55 }], totalOrders: 8 },
   ];
 
   const recentOrders = ordersList.slice(0, 5).map(o => {
