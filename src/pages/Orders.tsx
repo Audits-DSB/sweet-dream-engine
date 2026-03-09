@@ -89,6 +89,44 @@ export default function OrdersPage() {
     fetchMaterials();
   }, []);
 
+  // Check for refill order data
+  useEffect(() => {
+    const refillData = localStorage.getItem('refillOrderData');
+    if (refillData) {
+      try {
+        const data = JSON.parse(refillData);
+        // Check if data is recent (within 5 minutes)
+        if (Date.now() - data.createdAt < 5 * 60 * 1000) {
+          const refillOrderItems = data.items.map((item: any) => ({
+            materialCode: item.materialCode,
+            name: item.materialName,
+            quantity: item.quantity,
+            sellingPrice: 0, // Will need to be set manually
+            costPrice: 0 // Will need to be set manually
+          }));
+          
+          // If all items belong to the same client, auto-select that client
+          const uniqueClients = [...new Set(data.items.map((item: any) => item.clientId))];
+          if (uniqueClients.length === 1) {
+            setSelectedClient(uniqueClients[0]);
+          }
+          
+          setOrderItems(refillOrderItems);
+          setDialogOpen(true);
+          
+          // Remove the data to prevent reuse
+          localStorage.removeItem('refillOrderData');
+        } else {
+          // Remove expired data
+          localStorage.removeItem('refillOrderData');
+        }
+      } catch (err) {
+        console.error("Failed to parse refill order data:", err);
+        localStorage.removeItem('refillOrderData');
+      }
+    }
+  }, []);
+
   const filtered = orders.filter((o) => {
     const q = search.toLowerCase().trim();
     const matchSearch = !q || o.client.toLowerCase().includes(q) || o.id.toLowerCase().includes(q) || o.date.includes(q) || o.source.toLowerCase().includes(q) || o.status.toLowerCase().includes(q) || o.splitMode.toLowerCase().includes(q);
