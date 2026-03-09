@@ -62,10 +62,10 @@ export default function InventoryPage() {
     return groups;
   }, [filtered]);
 
-  const lowStockCount = mockInventory.filter(i => i.status === "Low Stock").length;
-  const expiredCount = mockInventory.filter(i => i.status === "Expired").length;
-  const depletedCount = mockInventory.filter(i => i.status === "Depleted").length;
-  const nearExpiryCount = mockInventory.filter(i => {
+  const lowStockCount = inventory.filter(i => i.status === "Low Stock").length;
+  const expiredCount = inventory.filter(i => i.status === "Expired").length;
+  const depletedCount = inventory.filter(i => i.status === "Depleted").length;
+  const nearExpiryCount = inventory.filter(i => {
     if (!i.expiry) return false;
     const days = (new Date(i.expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
     return days > 0 && days <= 30 && i.status !== "Depleted" && i.status !== "Expired";
