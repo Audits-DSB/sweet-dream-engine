@@ -51,6 +51,11 @@ export default function DeliveriesPage() {
   const [requestedDate, setRequestedDate] = useState("");
   const { user } = useAuth();
 
+  useEffect(() => {
+    const status = searchParams.get("status");
+    setFilters(status ? { status } : {});
+  }, [searchParams]);
+
   const sendNotification = async (title: string, body: string, type: string = "info") => {
     if (!user) return;
     await supabase.from("notifications").insert({ user_id: user.id, title, body, type });

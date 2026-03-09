@@ -71,10 +71,12 @@ export default function RefillPage() {
   };
 
   const filtered = mockRefills.filter((r) => {
+    const quickFilter = searchParams.get("filter");
+    const matchQuickFilter = quickFilter !== "low_stock" || r.suggestedQty > 0;
     const matchSearch = !search || r.client.toLowerCase().includes(search.toLowerCase()) || r.material.toLowerCase().includes(search.toLowerCase());
     const matchPriority = activePriorities.size === 0 || activePriorities.has(r.priority);
     const matchClient = !filters.client || filters.client === "all" || r.client === filters.client;
-    return matchSearch && matchPriority && matchClient;
+    return matchQuickFilter && matchSearch && matchPriority && matchClient;
   });
 
   const groupedData = filtered.reduce((acc: Record<string, typeof filtered>, item) => {
