@@ -363,6 +363,83 @@ export default function RequestsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Request Detail Dialog */}
+      <Dialog open={!!detailReq} onOpenChange={() => setDetailReq(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="font-mono">{detailReq?.id}</span>
+              {detailReq && <StatusBadge status={detailReq.status} />}
+            </DialogTitle>
+          </DialogHeader>
+          {detailReq && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="p-3 rounded-lg bg-muted/50">
+                  <p className="text-xs text-muted-foreground">{t.client}</p>
+                  <p className="font-semibold cursor-pointer hover:text-primary" onClick={() => { setDetailReq(null); navigate(`/clients/${detailReq.clientId}`); }}>{detailReq.client}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-muted/50">
+                  <p className="text-xs text-muted-foreground">{t.date}</p>
+                  <p className="font-semibold">{detailReq.date}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-muted/50">
+                  <p className="text-xs text-muted-foreground">{t.expectedTotal}</p>
+                  <p className="font-semibold">{detailReq.expectedTotal} {t.currency}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-muted/50">
+                  <p className="text-xs text-muted-foreground">{t.status}</p>
+                  <StatusBadge status={detailReq.status} />
+                </div>
+              </div>
+
+              {detailReq.notes && (
+                <div className="p-3 rounded-lg bg-muted/50 text-sm">
+                  <p className="text-xs text-muted-foreground mb-1">{t.notes}</p>
+                  <p>{detailReq.notes}</p>
+                </div>
+              )}
+
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2">{t.materials || "المواد"} ({detailReq.items.length})</p>
+                <div className="space-y-2">
+                  {detailReq.items.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20">
+                      <div>
+                        <p className="font-medium text-sm">{item.materialName}</p>
+                        <p className="text-xs text-muted-foreground">{t.code}: {item.materialCode}</p>
+                      </div>
+                      <div className="text-end">
+                        <p className="font-semibold text-sm">{(item.qty * item.unitPrice).toLocaleString()} {t.currency}</p>
+                        <p className="text-xs text-muted-foreground">{item.qty} × {item.unitPrice.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                {detailReq.status !== "Approved" && detailReq.status !== "Converted to Order" && detailReq.status !== "Rejected" && (
+                  <>
+                    <Button size="sm" className="flex-1" onClick={() => { updateStatus(detailReq.id, "Approved"); setDetailReq({ ...detailReq, status: "Approved" }); toast.success(`${t.requestApproved}: ${detailReq.id}`); }}>
+                      <CheckCircle className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.approve}
+                    </Button>
+                    <Button size="sm" variant="destructive" className="flex-1" onClick={() => { updateStatus(detailReq.id, "Rejected"); setDetailReq({ ...detailReq, status: "Rejected" }); toast.error(`${t.requestRejected}: ${detailReq.id}`); }}>
+                      <XCircle className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.reject}
+                    </Button>
+                  </>
+                )}
+                {(detailReq.status === "Approved" || detailReq.status === "Client Requested" || detailReq.status === "Pending Review") && (
+                  <Button size="sm" variant="outline" className="flex-1" onClick={() => { updateStatus(detailReq.id, "Converted to Order"); setDetailReq(null); navigate("/orders"); toast.success(`${t.requestConverted}: ${detailReq.id}`); }}>
+                    <ArrowRight className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.convertToOrder}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
