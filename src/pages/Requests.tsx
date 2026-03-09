@@ -114,6 +114,12 @@ export default function RequestsPage() {
   const calcTotal = (items: RequestItem[]) =>
     items.reduce((sum, i) => sum + i.qty * i.unitPrice, 0);
 
+  // Compute expectedTotal dynamically for display
+  const getDisplayTotal = (req: Request) => {
+    const computed = calcTotal(req.items);
+    return computed.toLocaleString();
+  };
+
   const addMaterial = (mat: FetchedMaterial) => {
     const existing = selectedItems.find(i => i.materialCode === mat.code);
     if (existing) {
