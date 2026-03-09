@@ -707,4 +707,12 @@ export const ar = {
   accountsCount: "حسابات",
   monthsLabel: "أشهر",
   noDataPeriod: "لا توجد بيانات لهذه الفترة",
+  monthlyComparison: "مقارنة شهرية",
+  change: "التغيير",
+  addExpense: "إضافة مصروف",
+  selectAccount: "اختر الحساب",
+  optionalDesc: "وصف اختياري...",
+  expenseAdded: "تم إضافة المصروف بنجاح",
+  invalidAmount: "المبلغ غير صالح",
+  fillRequiredFields: "يرجى ملء الحقول المطلوبة",
 };

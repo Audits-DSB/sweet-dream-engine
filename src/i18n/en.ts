@@ -707,4 +707,12 @@ export const en = {
   accountsCount: "accounts",
   monthsLabel: "months",
   noDataPeriod: "No data for this period",
+  monthlyComparison: "Monthly Comparison",
+  change: "Change",
+  addExpense: "Add Expense",
+  selectAccount: "Select account",
+  optionalDesc: "Optional description...",
+  expenseAdded: "Expense added successfully",
+  invalidAmount: "Invalid amount",
+  fillRequiredFields: "Please fill required fields",
 };
