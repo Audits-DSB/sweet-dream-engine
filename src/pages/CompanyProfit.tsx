@@ -268,7 +268,7 @@ export default function CompanyProfitPage() {
               </DialogHeader>
               <div className="space-y-4 pt-2">
                 <div className="space-y-2">
-                  <Label>{t.account} *</Label>
+                  <Label>{t.treasurySelectAccount} *</Label>
                   <Select value={expenseForm.accountId} onValueChange={(v) => setExpenseForm(f => ({ ...f, accountId: v }))}>
                     <SelectTrigger><SelectValue placeholder={t.selectAccount} /></SelectTrigger>
                     <SelectContent>
