@@ -101,20 +101,21 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   };
 
   const createOrderFromInventory = (clientId: string, clientName: string, items: Array<{ id: string; name: string; quantity: number; unitPrice: number }>) => {
+    const totalCost = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    const totalSelling = Math.round(totalCost * 1.4); // 40% markup
+    
     const newOrder = {
       id: `ORD-${String(orders.length + 50).padStart(3, '0')}`,
       client: clientName,
       clientId,
-      status: "Draft",
       date: new Date().toISOString().split('T')[0],
-      items: items.map(item => ({
-        ...item,
-        totalCost: item.quantity * item.unitPrice
-      })),
-      totalCost: items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0),
-      totalItems: items.length,
-      source: "من الجرد",
-      notes: `تم إنشاء الأوردر تلقائياً من الجرد للعميل ${clientName}`
+      lines: items.length,
+      totalSelling: `${totalSelling.toLocaleString()} ج.م`,
+      totalCost: `${totalCost.toLocaleString()} ج.م`,
+      splitMode: "متساوي",
+      deliveryFee: totalCost > 30000 ? 0 : 500,
+      status: "Draft",
+      source: "من الجرد"
     };
 
     const updated = [newOrder, ...orders];
