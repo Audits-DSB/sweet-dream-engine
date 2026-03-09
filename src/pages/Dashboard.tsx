@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
+import { WorkflowBanner } from "@/components/WorkflowBanner";
 import { clientsList, ordersList } from "@/data/store";
 
 export default function Dashboard() {
@@ -68,6 +69,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <WorkflowBanner />
       <div>
         <h1 className="page-header">{t.dashboardTitle}</h1>
         <p className="page-description">{t.dashboardDesc}</p>

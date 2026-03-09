@@ -66,6 +66,67 @@ export const deliveryActors = [
   { id: "4", name: "سارة (مؤسس)", type: "مؤسس" },
 ];
 
+export const requestsList = [
+  { id: "REQ-012", client: "المركز الملكي للأسنان", clientId: "C004", date: "2025-03-05", items: 5, totalValue: "48,000 ج.م", priority: "High", status: "Converted to Order", convertedOrderId: "ORD-049", notes: "طلب عاجل - العميل يحتاج المواد خلال 48 ساعة" },
+  { id: "REQ-011", client: "عيادة د. أحمد", clientId: "C001", date: "2025-03-04", items: 3, totalValue: "21,000 ج.م", priority: "Medium", status: "Under Review", convertedOrderId: null, notes: "مراجعة توافر المخزون" },
+  { id: "REQ-010", client: "مركز نور لطب الأسنان", clientId: "C002", date: "2025-03-03", items: 7, totalValue: "85,000 ج.م", priority: "High", status: "Converted to Order", convertedOrderId: "ORD-047", notes: "أوردر كبير - يحتاج موافقة الإدارة" },
+  { id: "REQ-009", client: "عيادة بلو مون", clientId: "C006", date: "2025-03-02", items: 4, totalValue: "32,000 ج.م", priority: "Low", status: "Pending", convertedOrderId: null, notes: "" },
+  { id: "REQ-008", client: "عيادة سمايل هاوس", clientId: "C005", date: "2025-03-01", items: 2, totalValue: "12,000 ج.م", priority: "Medium", status: "Converted to Order", convertedOrderId: "ORD-043", notes: "عميل جديد - التحقق من الائتمان" },
+  { id: "REQ-007", client: "مركز سبايس جاردن", clientId: "C007", date: "2025-02-28", items: 6, totalValue: "54,000 ج.م", priority: "High", status: "Rejected", convertedOrderId: null, notes: "مواد غير متوفرة - تم رفض الطلب" },
+  { id: "REQ-006", client: "عيادة جرين فالي", clientId: "C003", date: "2025-02-27", items: 3, totalValue: "21,000 ج.م", priority: "Medium", status: "Converted to Order", convertedOrderId: "ORD-046", notes: "" },
+];
+
+export const deliveriesList = [
+  { id: "DEL-078", orderId: "ORD-049", client: "المركز الملكي للأسنان", clientId: "C004", date: "2025-03-06", scheduledDate: "2025-03-07", status: "Scheduled", deliveredBy: "أحمد (مؤسس)", deliveryFee: 750, items: 5, notes: "موعد التسليم: 10 صباحاً" },
+  { id: "DEL-077", orderId: "ORD-047", client: "مركز نور لطب الأسنان", clientId: "C002", date: "2025-03-05", scheduledDate: "2025-03-06", status: "In Transit", deliveredBy: "DHL Express", deliveryFee: 750, items: 7, notes: "في الطريق - تتبع رقم DHL123456" },
+  { id: "DEL-076", orderId: "ORD-046", client: "عيادة جرين فالي", clientId: "C003", date: "2025-03-04", scheduledDate: "2025-03-05", status: "Delivered", deliveredBy: "سارة (مؤسس)", deliveryFee: 500, items: 3, notes: "تم التسليم بنجاح - توقيع مستلم" },
+  { id: "DEL-075", orderId: "ORD-045", client: "المركز الملكي للأسنان", clientId: "C004", date: "2025-03-03", scheduledDate: "2025-03-04", status: "Delivered", deliveredBy: "شركة توصيل سريع", deliveryFee: 0, items: 5, notes: "" },
+  { id: "DEL-074", orderId: "ORD-044", client: "عيادة بلو مون", clientId: "C006", date: "2025-03-01", scheduledDate: "2025-03-02", status: "Partially Delivered", deliveredBy: "أحمد (مؤسس)", deliveryFee: 500, items: 6, notes: "تم تسليم 4 من 6 عناصر - الباقي في الطريق" },
+  { id: "DEL-073", orderId: "ORD-043", client: "عيادة سمايل هاوس", clientId: "C005", date: "2025-02-28", scheduledDate: "2025-03-01", status: "Delivered", deliveredBy: "DHL Express", deliveryFee: 500, items: 2, notes: "" },
+  { id: "DEL-072", orderId: "ORD-041", client: "مركز سبايس جاردن", clientId: "C007", date: "2025-02-25", scheduledDate: "2025-02-26", status: "Cancelled", deliveredBy: "-", deliveryFee: 0, items: 3, notes: "ألغاه العميل" },
+  { id: "DEL-071", orderId: "ORD-042", client: "عيادة د. أحمد", clientId: "C001", date: "2025-02-22", scheduledDate: "2025-02-23", status: "Delivery Failed", deliveredBy: "شركة توصيل سريع", deliveryFee: 500, items: 5, notes: "العميل غير موجود - إعادة جدولة" },
+];
+
+export const collectionsList = [
+  { id: "INV-089", orderId: "ORD-049", client: "المركز الملكي للأسنان", clientId: "C004", invoiceDate: "2025-03-06", dueDate: "2025-04-05", totalAmount: 48000, paidAmount: 0, outstanding: 48000, status: "Pending", paymentMethod: "-", notes: "فاتورة جديدة - انتظار التسليم" },
+  { id: "INV-088", orderId: "ORD-047", client: "مركز نور لطب الأسنان", clientId: "C002", invoiceDate: "2025-03-05", dueDate: "2025-04-04", totalAmount: 85000, paidAmount: 42500, outstanding: 42500, status: "Partially Paid", paymentMethod: "تحويل بنكي", notes: "تم دفع 50% - الباقي خلال أسبوعين" },
+  { id: "INV-087", orderId: "ORD-046", client: "عيادة جرين فالي", clientId: "C003", invoiceDate: "2025-03-04", dueDate: "2025-04-03", totalAmount: 21000, paidAmount: 21000, outstanding: 0, status: "Paid", paymentMethod: "نقداً", notes: "تم الدفع كاملاً عند التسليم" },
+  { id: "INV-086", orderId: "ORD-045", client: "المركز الملكي للأسنان", clientId: "C004", invoiceDate: "2025-03-03", dueDate: "2025-04-02", totalAmount: 48000, paidAmount: 48000, outstanding: 0, status: "Paid", paymentMethod: "شيك", notes: "" },
+  { id: "INV-085", orderId: "ORD-044", client: "عيادة بلو مون", clientId: "C006", invoiceDate: "2025-03-01", dueDate: "2025-03-31", totalAmount: 56000, paidAmount: 28000, outstanding: 28000, status: "Partially Paid", paymentMethod: "تحويل بنكي", notes: "دفع جزئي - المتبقي خلال 10 أيام" },
+  { id: "INV-084", orderId: "ORD-043", client: "عيادة سمايل هاوس", clientId: "C005", invoiceDate: "2025-02-28", dueDate: "2025-02-15", totalAmount: 12000, paidAmount: 0, outstanding: 12000, status: "Overdue", paymentMethod: "-", notes: "متأخر 21 يوم - يحتاج متابعة عاجلة" },
+  { id: "INV-083", orderId: "ORD-042", client: "عيادة د. أحمد", clientId: "C001", invoiceDate: "2025-02-25", dueDate: "2025-03-27", totalAmount: 41000, paidAmount: 41000, outstanding: 0, status: "Paid", paymentMethod: "نقداً", notes: "" },
+];
+
+export const inventoryList = [
+  { materialCode: "MAT-001", materialName: "حشو كمبوزيت ضوئي", category: "حشوات", totalStock: 145, reorderPoint: 50, lots: [
+    { lotNumber: "LOT-A123", quantity: 85, expiryDate: "2026-08-15", location: "Shelf A-12", supplier: "3M ESPE" },
+    { lotNumber: "LOT-A124", quantity: 60, expiryDate: "2025-04-20", location: "Shelf A-13", supplier: "3M ESPE" },
+  ]},
+  { materialCode: "MAT-002", materialName: "إبر تخدير", category: "تخدير", totalStock: 320, reorderPoint: 100, lots: [
+    { lotNumber: "LOT-B456", quantity: 200, expiryDate: "2025-12-30", location: "Shelf B-05", supplier: "Septodont" },
+    { lotNumber: "LOT-B457", quantity: 120, expiryDate: "2025-03-25", location: "Shelf B-06", supplier: "Septodont" },
+  ]},
+  { materialCode: "MAT-003", materialName: "مادة طبع سيليكون", category: "طبعات", totalStock: 42, reorderPoint: 30, lots: [
+    { lotNumber: "LOT-C789", quantity: 42, expiryDate: "2026-01-10", location: "Shelf C-08", supplier: "Zhermack" },
+  ]},
+  { materialCode: "MAT-005", materialName: "قفازات لاتكس", category: "مستهلكات", totalStock: 18, reorderPoint: 50, lots: [
+    { lotNumber: "LOT-E234", quantity: 18, expiryDate: "2025-06-15", location: "Shelf E-02", supplier: "Supermax" },
+  ]},
+  { materialCode: "MAT-008", materialName: "مبيض أسنان", category: "تجميل", totalStock: 95, reorderPoint: 40, lots: [
+    { lotNumber: "LOT-H567", quantity: 55, expiryDate: "2026-03-18", location: "Shelf H-01", supplier: "Opalescence" },
+    { lotNumber: "LOT-H568", quantity: 40, expiryDate: "2025-09-22", location: "Shelf H-02", supplier: "Opalescence" },
+  ]},
+];
+
+export const notificationsList = [
+  { id: "NOT-015", type: "warning", title: "مخزون قفازات اللاتكس منخفض", message: "المخزون الحالي: 18 وحدة - أقل من نقطة إعادة الطلب (50)", date: "2025-03-09", time: "09:15", read: false },
+  { id: "NOT-014", type: "urgent", title: "إبر التخدير LOT-B457 تنتهي قريباً", message: "تاريخ الانتهاء: 2025-03-25 (16 يوم متبقية)", date: "2025-03-09", time: "08:30", read: false },
+  { id: "NOT-013", type: "info", title: "تم إنشاء أوردر جديد ORD-049", message: "للعميل: المركز الملكي للأسنان - القيمة: 48,000 ج.م", date: "2025-03-06", time: "14:20", read: false },
+  { id: "NOT-012", type: "success", title: "تم تسليم DEL-076 بنجاح", message: "عيادة جرين فالي - 3 عناصر", date: "2025-03-05", time: "11:45", read: true },
+  { id: "NOT-011", type: "warning", title: "فاتورة INV-084 متأخرة", message: "عيادة سمايل هاوس - المبلغ: 12,000 ج.م - متأخر 21 يوم", date: "2025-03-04", time: "10:00", read: false },
+  { id: "NOT-010", type: "info", title: "طلب REQ-011 قيد المراجعة", message: "عيادة د. أحمد - يحتاج مراجعة توافر المخزون", date: "2025-03-04", time: "09:30", read: true },
+];
+
 // Helper to find client by name
 export function findClientByName(name: string) {
   return clientsList.find(c => c.name === name);
@@ -74,4 +135,42 @@ export function findClientByName(name: string) {
 // Helper to find order by id
 export function findOrderById(id: string) {
   return ordersList.find(o => o.id === id);
+}
+
+// Helper to find request by id
+export function findRequestById(id: string) {
+  return requestsList.find(r => r.id === id);
+}
+
+// Helper to find delivery by order id
+export function findDeliveryByOrderId(orderId: string) {
+  return deliveriesList.find(d => d.orderId === orderId);
+}
+
+// Helper to find collection by order id  
+export function findCollectionByOrderId(orderId: string) {
+  return collectionsList.find(c => c.orderId === orderId);
+}
+
+// Helper to get workflow step for order
+export function getWorkflowStep(orderId: string) {
+  const order = findOrderById(orderId);
+  const delivery = findDeliveryByOrderId(orderId);
+  const collection = findCollectionByOrderId(orderId);
+  
+  if (!order) return { step: 0, status: "Not Found" };
+  
+  if (["Draft", "Confirmed", "Ready for Delivery"].includes(order.status)) {
+    return { step: 1, status: order.status };
+  }
+  
+  if (delivery && ["Scheduled", "In Transit", "Delivered"].includes(delivery.status)) {
+    return { step: 2, status: delivery.status };
+  }
+  
+  if (collection) {
+    return { step: 3, status: collection.status };
+  }
+  
+  return { step: 1, status: order.status };
 }
