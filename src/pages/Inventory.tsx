@@ -75,17 +75,18 @@ export default function InventoryPage() {
   };
 
   // Convert to order functions
-  const getClientItemsToConvert = (clientName: string) => {
-    return mockInventory.filter(item => 
-      item.client === clientName && (item.status === "Depleted" || item.status === "Low Stock")
-    );
+  const getClientItems = (clientName: string) => {
+    return mockInventory.filter(item => item.client === clientName && item.status !== "Expired");
   };
 
   const openConvertDialog = (clientName: string) => {
-    const items = getClientItemsToConvert(clientName);
+    // Pre-select only depleted/low stock items, but show all
+    const items = getClientItems(clientName);
     const preSelected: Record<string, number> = {};
     items.forEach(item => {
-      preSelected[item.id] = item.delivered;
+      if (item.status === "Depleted" || item.status === "Low Stock") {
+        preSelected[item.id] = item.delivered;
+      }
     });
     setSelectedLots(preSelected);
     setConvertClient(clientName);
