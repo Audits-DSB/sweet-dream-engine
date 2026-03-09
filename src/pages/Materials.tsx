@@ -214,46 +214,95 @@ export default function MaterialsPage() {
 
       {/* Detail Dialog */}
       <Dialog open={!!detailItem} onOpenChange={() => setDetailItem(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{detailItem?.code} — {detailItem?.name}</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-lg p-0 overflow-hidden">
           {detailItem && (
-            <div className="space-y-4">
-              {detailItem.image_url && !imgErrors.has(detailItem.code + "-detail") && (
-                <div className="w-full flex justify-center">
-                  <img
-                    src={detailItem.image_url}
-                    alt={detailItem.name}
-                    className="h-40 w-40 rounded-xl object-cover border border-border shadow-sm"
-                    onError={() => setImgErrors(prev => new Set(prev).add(detailItem.code + "-detail"))}
-                  />
+            <>
+              {/* Header with image */}
+              <div className="relative bg-muted/30 p-6 pb-4 border-b border-border">
+                <div className="flex items-start gap-4">
+                  {detailItem.image_url && !imgErrors.has(detailItem.code + "-detail") ? (
+                    <img
+                      src={detailItem.image_url}
+                      alt={detailItem.name}
+                      className="h-20 w-20 rounded-xl object-cover border border-border shadow-sm shrink-0"
+                      onError={() => setImgErrors(prev => new Set(prev).add(detailItem.code + "-detail"))}
+                    />
+                  ) : (
+                    <div className="h-20 w-20 rounded-xl bg-muted flex items-center justify-center shrink-0 border border-border">
+                      <Package className="h-8 w-8 text-muted-foreground/50" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <h2 className="text-lg font-bold leading-tight text-foreground truncate">{detailItem.name}</h2>
+                    <p className="text-xs font-mono text-muted-foreground">{detailItem.code}</p>
+                    <Badge variant="outline" className="text-xs mt-1">{detailItem.category}</Badge>
+                  </div>
                 </div>
-              )}
-              {detailItem.description && (
-                <p className="text-sm text-muted-foreground">{detailItem.description}</p>
-              )}
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.category}</p><p className="font-semibold">{detailItem.category}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">Stock</p><p className="font-semibold">{detailItem.stock_quantity ?? 0}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.sellingPrice}</p><p className="font-semibold">{detailItem.sellingPrice} {t.currency}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.storeCost}</p><p className="font-semibold">{detailItem.storeCost > 0 ? `${detailItem.storeCost} ${t.currency}` : "—"}</p></div>
-                {detailItem.manufacturer && <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.manufacturer}</p><p className="font-semibold">{detailItem.manufacturer}</p></div>}
-                {detailItem.barcode && detailItem.barcode !== "1E+12" && <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">Barcode</p><p className="font-semibold font-mono text-xs">{detailItem.barcode}</p></div>}
               </div>
-              {/* Variants */}
-              {detailItem.variants && detailItem.variants.length > 0 && (
+
+              {/* Body */}
+              <div className="p-6 space-y-5">
+                {detailItem.description && (
+                  <p className="text-sm text-muted-foreground leading-relaxed">{detailItem.description}</p>
+                )}
+
+                {/* Key metrics */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center p-3 rounded-xl bg-muted/40 border border-border/50">
+                    <p className="text-[11px] text-muted-foreground mb-1">{t.sellingPrice}</p>
+                    <p className="text-base font-bold text-foreground">{detailItem.sellingPrice}</p>
+                    <p className="text-[10px] text-muted-foreground">{t.currency}</p>
+                  </div>
+                  <div className="text-center p-3 rounded-xl bg-muted/40 border border-border/50">
+                    <p className="text-[11px] text-muted-foreground mb-1">{t.storeCost}</p>
+                    <p className="text-base font-bold text-foreground">{detailItem.storeCost > 0 ? detailItem.storeCost : "—"}</p>
+                    <p className="text-[10px] text-muted-foreground">{detailItem.storeCost > 0 ? t.currency : ""}</p>
+                  </div>
+                  <div className="text-center p-3 rounded-xl bg-muted/40 border border-border/50">
+                    <p className="text-[11px] text-muted-foreground mb-1">Stock</p>
+                    <p className={`text-base font-bold ${(detailItem.stock_quantity ?? 0) > 0 ? "text-success" : "text-destructive"}`}>
+                      {detailItem.stock_quantity ?? 0}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">{detailItem.unit || "unit"}</p>
+                  </div>
+                </div>
+
+                {/* Extra info */}
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">Variants</p>
-                  {detailItem.variants.map((v: any, i: number) => (
-                    <div key={i} className="p-2 rounded-lg bg-muted/30 text-xs">
-                      <span className="font-medium">{v.name?.replace("()", "")}: </span>
-                      {v.options?.map((o: any, j: number) => (
-                        <Badge key={j} variant="outline" className="ms-1 text-xs">{o.value}</Badge>
+                  {detailItem.manufacturer && (
+                    <div className="flex items-center justify-between py-2 border-b border-border/50 text-sm">
+                      <span className="text-muted-foreground">{t.manufacturer}</span>
+                      <span className="font-medium text-foreground">{detailItem.manufacturer}</span>
+                    </div>
+                  )}
+                  {detailItem.barcode && detailItem.barcode !== "1E+12" && (
+                    <div className="flex items-center justify-between py-2 border-b border-border/50 text-sm">
+                      <span className="text-muted-foreground">Barcode</span>
+                      <span className="font-mono text-xs text-foreground">{detailItem.barcode}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Variants */}
+                {detailItem.variants && detailItem.variants.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Variants</p>
+                    <div className="space-y-2">
+                      {detailItem.variants.map((v: any, i: number) => (
+                        <div key={i} className="flex items-center gap-2 flex-wrap p-2.5 rounded-lg bg-muted/30 border border-border/40">
+                          <span className="text-xs font-medium text-muted-foreground shrink-0">{v.name?.replace("()", "")}:</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {v.options?.map((o: any, j: number) => (
+                              <Badge key={j} variant="secondary" className="text-xs px-2 py-0.5">{o.value}</Badge>
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
