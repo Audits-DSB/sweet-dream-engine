@@ -27,10 +27,20 @@ export default function Dashboard() {
   ];
 
   const collectionData = [
-    { name: t.paid, value: 68, color: "hsl(152, 60%, 40%)" },
-    { name: t.partial, value: 18, color: "hsl(38, 92%, 50%)" },
-    { name: t.overdue, value: 14, color: "hsl(0, 72%, 51%)" },
+    { name: t.paid, value: 68, color: "hsl(152, 60%, 40%)", amount: "523,400 EGP", clients: 12 },
+    { name: t.partial, value: 18, color: "hsl(38, 92%, 50%)", amount: "138,600 EGP", clients: 4 },
+    { name: t.overdue, value: 14, color: "hsl(0, 72%, 51%)", amount: "107,800 EGP", clients: 3 },
   ];
+
+  const renderActiveShape = (props: any) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+    return (
+      <g>
+        <Sector cx={cx} cy={cy} innerRadius={innerRadius - 4} outerRadius={outerRadius + 8} startAngle={startAngle} endAngle={endAngle} fill={fill} opacity={0.9} />
+        <Sector cx={cx} cy={cy} innerRadius={outerRadius + 10} outerRadius={outerRadius + 14} startAngle={startAngle} endAngle={endAngle} fill={fill} />
+      </g>
+    );
+  };
 
   const consumptionTrend = [
     { week: "W1", consumption: 320 },
