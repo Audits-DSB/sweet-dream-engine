@@ -430,7 +430,7 @@ export const ar = {
   priority: "الأولوية",
   critical: "حرج",
   groupBy: "تجميع حسب",
-  items: "عناصر",
+  itemsCount: "عناصر",
   urgent: "عاجل",
   normal: "عادي",
   ok: "جيد",

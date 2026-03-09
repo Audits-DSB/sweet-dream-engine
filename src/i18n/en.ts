@@ -430,7 +430,7 @@ export const en = {
   priority: "Priority",
   critical: "Critical",
   groupBy: "Group by",
-  items: "items",
+  itemsCount: "items",
   urgent: "Urgent",
   normal: "Normal",
   ok: "OK",
