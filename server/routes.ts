@@ -290,28 +290,38 @@ router.post("/orders", async (req, res) => {
   const { items, ...orderBody } = req.body;
   const data = snakifyKeys(orderBody);
   const result = await supabaseAdmin.from("orders").insert(data).select().single();
+  if (result.error) return res.status(400).json({ error: result.error.message });
   if (!result.error && data.client_id) {
     try { await supabaseAdmin.rpc("increment_client_orders", { cid: data.client_id }); } catch { /* ignore */ }
   }
-  if (!result.error && result.data && Array.isArray(items) && items.length > 0) {
-    const orderId = result.data.id;
+  const orderId = result.data.id;
+  if (Array.isArray(items) && items.length > 0) {
     const values = items.map((item: any) => [
-      orderId, item.materialCode || "", item.name || "",
-      item.imageUrl || "", item.unit || "unit",
+      orderId,
+      String(item.materialCode || ""),
+      String(item.name || ""),
+      String(item.imageUrl || ""),
+      String(item.unit || "unit"),
       Number(item.quantity) || 1,
-      Number(item.sellingPrice) || 0, Number(item.costPrice) || 0,
+      Number(item.sellingPrice) || 0,
+      Number(item.costPrice) || 0,
       (Number(item.sellingPrice) || 0) * (Number(item.quantity) || 1),
       (Number(item.costPrice) || 0) * (Number(item.quantity) || 1),
     ]);
     const placeholders = values.map((_, i) =>
-      `($${i * 10 + 1}, $${i * 10 + 2}, $${i * 10 + 3}, $${i * 10 + 4}, $${i * 10 + 5}, $${i * 10 + 6}, $${i * 10 + 7}, $${i * 10 + 8}, $${i * 10 + 9}, $${i * 10 + 10})`
-    ).join(", ");
-    await pgPool.query(
-      `INSERT INTO order_lines (order_id, material_code, material_name, image_url, unit, quantity, selling_price, cost_price, line_total, line_cost) VALUES ${placeholders}`,
-      values.flat()
-    ).catch((e: any) => console.error("order_lines insert error:", e.message));
+      `($${i * 10 + 1},$${i * 10 + 2},$${i * 10 + 3},$${i * 10 + 4},$${i * 10 + 5},$${i * 10 + 6},$${i * 10 + 7},$${i * 10 + 8},$${i * 10 + 9},$${i * 10 + 10})`
+    ).join(",");
+    try {
+      await pgPool.query(
+        `INSERT INTO order_lines (order_id,material_code,material_name,image_url,unit,quantity,selling_price,cost_price,line_total,line_cost) VALUES ${placeholders}`,
+        values.flat()
+      );
+    } catch (e: any) {
+      console.error("order_lines insert error for", orderId, ":", e.message);
+      return res.status(207).json({ ...camelizeKeys(result.data), _linesError: e.message });
+    }
   }
-  sbOk(res, result);
+  res.json(camelizeKeys(result.data));
 });
 router.get("/orders/:id/lines", async (req, res) => {
   try {

@@ -118,24 +118,33 @@ export default function OrdersPage() {
       }).catch(() => {}).finally(() => setMaterialsLoading(false));
   }, []);
 
+  // Load refill data AFTER external materials are ready so prices/images are correct
   useEffect(() => {
+    if (realMaterials.length === 0) return;
     const refillData = localStorage.getItem('refillOrderData');
-    if (refillData) {
-      try {
-        const data = JSON.parse(refillData);
-        if (Date.now() - data.createdAt < 5 * 60 * 1000) {
-          setOrderItems(data.items.map((item: any) => ({
-            materialCode: item.materialCode, name: item.materialName,
-            quantity: item.quantity, sellingPrice: 0, costPrice: 0,
-          })));
-          const uniqueClients = [...new Set(data.items.map((i: any) => i.clientId))];
-          if (uniqueClients.length === 1) setSelectedClient(String(uniqueClients[0]));
-          setDialogOpen(true);
-        }
-        localStorage.removeItem('refillOrderData');
-      } catch { localStorage.removeItem('refillOrderData'); }
-    }
-  }, []);
+    if (!refillData) return;
+    localStorage.removeItem('refillOrderData');
+    try {
+      const data = JSON.parse(refillData);
+      if (Date.now() - data.createdAt > 10 * 60 * 1000) return;
+      const matMap = Object.fromEntries(realMaterials.map(m => [m.code, m]));
+      setOrderItems(data.items.map((item: any) => {
+        const mat = matMap[item.materialCode];
+        return {
+          materialCode: item.materialCode,
+          name: item.materialName || mat?.name || item.materialCode,
+          quantity: item.quantity || 1,
+          sellingPrice: mat?.sellingPrice ?? 0,
+          costPrice: mat?.storeCost ?? 0,
+          imageUrl: mat?.imageUrl || "",
+          unit: mat?.unit || item.unit || "unit",
+        };
+      }));
+      const uniqueClients = [...new Set(data.items.map((i: any) => i.clientId).filter(Boolean))];
+      if (uniqueClients.length === 1) setSelectedClient(String(uniqueClients[0]));
+      setDialogOpen(true);
+    } catch { /* ignore malformed data */ }
+  }, [realMaterials]);
 
   const filtered = orders.filter((o) => {
     const q = search.toLowerCase().trim();
@@ -186,11 +195,14 @@ export default function OrdersPage() {
         status: "Draft", source: t.manual,
         items: orderItems,
       });
+      if (saved._linesError) {
+        toast.warning(`تم حفظ الطلب لكن فشل حفظ تفاصيل المواد: ${saved._linesError}`);
+      }
       await logAudit({ entity: "order", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${client.name}`, action: "create", snapshot: saved, endpoint: "/orders" });
       setOrders(prev => [mapOrder(saved), ...prev]);
       setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee) });
       setSelectedClient(""); setOrderItems([]); setDialogOpen(false);
-      toast.success(t.orderCreated);
+      if (!saved._linesError) toast.success(t.orderCreated);
     } catch (err: any) {
       toast.error(err?.message || t.failedToSaveOrder);
     } finally {

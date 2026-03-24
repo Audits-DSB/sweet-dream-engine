@@ -298,10 +298,19 @@ export default function OrderDetails() {
                 ))}
               </div>
             ) : (
-              <div className="py-16 text-center text-muted-foreground">
-                <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">لا توجد بنود تفصيلية لهذا الطلب</p>
-                <p className="text-xs mt-1">الطلبات الجديدة ستظهر تفاصيلها هنا</p>
+              <div className="py-10 px-6 text-center text-muted-foreground">
+                <Package className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm font-medium">لا توجد تفاصيل مواد محفوظة لهذا الطلب</p>
+                <p className="text-xs mt-1 mb-4">الطلبات المنشأة من الإصدار الجديد ستحفظ تفاصيل المواد تلقائياً</p>
+                {toNum(order.totalSelling) > 0 && (
+                  <div className="inline-block bg-muted/60 rounded-lg px-6 py-3 text-start">
+                    <div className="text-xs text-muted-foreground mb-1">الإجمالي المسجّل</div>
+                    <div className="text-xl font-bold text-primary">{toNum(order.totalSelling).toLocaleString()} {t.currency}</div>
+                    {order.deliveryFee > 0 && (
+                      <div className="text-xs text-muted-foreground mt-1">+ {order.deliveryFee.toLocaleString()} {t.currency} رسوم توصيل</div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
