@@ -124,13 +124,15 @@ export default function MaterialsPage() {
     const num = materials.length + 1;
     const newCode = `MAT-${String(num).padStart(3, "0")}`;
     try {
-      await api.post("/materials", {
+      const matPayload = {
         code: newCode, name: form.name, category: form.category || "General",
         unit: form.unit, sellingPrice: String(form.sellingPrice),
         storeCost: String(form.storeCost), supplier: form.supplier,
         supplierId: form.supplierId, manufacturer: form.manufacturer,
         hasExpiry: form.hasExpiry, active: form.active,
-      });
+      };
+      await api.post("/materials", matPayload);
+      await logAudit({ entity: "material", entityId: newCode, entityName: form.name, action: "create", snapshot: matPayload, endpoint: "/materials", idField: "code" });
       setMaterials(prev => [...prev, { ...form, code: newCode, sellingPrice: Number(form.sellingPrice), storeCost: Number(form.storeCost) }]);
       setForm({ name: "", category: "", unit: "unit", sellingPrice: "", storeCost: "", supplier: "", supplierId: "", manufacturer: "", hasExpiry: false, active: true });
       setDialogOpen(false);

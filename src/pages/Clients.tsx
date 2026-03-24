@@ -83,6 +83,7 @@ export default function ClientsPage() {
         email: form.email, phone: form.phone, city: form.city,
         status: form.status,
       });
+      await logAudit({ entity: "client", entityId: saved.id || newId, entityName: form.name, action: "create", snapshot: saved, endpoint: "/clients" });
       setClients(prev => [...prev, mapClient(saved)]);
       setForm(emptyForm);
       setDialogOpen(false);

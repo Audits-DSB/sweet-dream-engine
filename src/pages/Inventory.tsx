@@ -60,10 +60,12 @@ export default function InventoryPage() {
 
   const { data: rawLots = [], isLoading } = useQuery<InventoryLot[]>({
     queryKey: ["/api/client-inventory"],
+    queryFn: () => api.get<InventoryLot[]>("/client-inventory"),
   });
 
   const { data: clients = [] } = useQuery<{ id: string; name: string }[]>({
     queryKey: ["/api/clients"],
+    queryFn: () => api.get<{ id: string; name: string }[]>("/clients"),
   });
 
   const lots: InventoryLot[] = rawLots.map(l => ({

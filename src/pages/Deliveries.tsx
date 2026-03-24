@@ -135,6 +135,7 @@ export default function DeliveriesPage() {
     };
     try {
       const saved = await api.post<any>("/deliveries", payload);
+      await logAudit({ entity: "delivery", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${order.client || order.id}`, action: "create", snapshot: saved, endpoint: "/deliveries" });
       setDeliveries([mapDelivery(saved), ...deliveries]);
       sendNotification(t.newDelivery || "تسليم جديد", `${newId} - ${order.client}`, "info");
       setSelectedOrder(""); setSelectedActor(""); setCustomActor(""); setDeliveryType("full"); setRequestedDate("");

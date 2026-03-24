@@ -98,10 +98,10 @@ export default function AuditsPage() {
   const [step, setStep] = useState<"form" | "compare">("form");
   const [saving, setSaving] = useState(false);
 
-  const { data: rawAudits = [], isLoading } = useQuery<AuditRecord[]>({ queryKey: ["/api/audits"] });
-  const { data: clients = [] } = useQuery<{ id: string; name: string; city: string }[]>({ queryKey: ["/api/clients"] });
-  const { data: founders = [] } = useQuery<{ id: string; name: string; alias: string }[]>({ queryKey: ["/api/founders"] });
-  const { data: rawLots = [] } = useQuery<InventoryLot[]>({ queryKey: ["/api/client-inventory"] });
+  const { data: rawAudits = [], isLoading } = useQuery<AuditRecord[]>({ queryKey: ["/api/audits"], queryFn: () => api.get<AuditRecord[]>("/audits") });
+  const { data: clients = [] } = useQuery<{ id: string; name: string; city: string }[]>({ queryKey: ["/api/clients"], queryFn: () => api.get("/clients") });
+  const { data: founders = [] } = useQuery<{ id: string; name: string; alias: string }[]>({ queryKey: ["/api/founders"], queryFn: () => api.get("/founders") });
+  const { data: rawLots = [] } = useQuery<InventoryLot[]>({ queryKey: ["/api/client-inventory"], queryFn: () => api.get<InventoryLot[]>("/client-inventory") });
 
   const audits: AuditRecord[] = rawAudits.map(a => ({
     ...a,

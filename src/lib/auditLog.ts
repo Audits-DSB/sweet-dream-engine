@@ -12,26 +12,29 @@ export interface AuditEntry {
   idField?: string;
 }
 
-export async function logAudit(entry: AuditEntry, userId?: string): Promise<void> {
+const entityLabels: Record<string, string> = {
+  client: "عميل",
+  order: "طلب",
+  delivery: "توصيل",
+  supplier: "مورّد",
+  material: "مادة",
+  collection: "تحصيل",
+  request: "طلب عميل",
+  founder: "مؤسس",
+  "founder-transaction": "معاملة مؤسس",
+  "treasury-account": "حساب خزينة",
+  "treasury-transaction": "معاملة خزينة",
+  audits: "جرد",
+  "client-inventory": "مخزون عميل",
+};
+
+export async function logAudit(entry: AuditEntry): Promise<void> {
   try {
     const now = new Date();
     const actionLabels: Record<AuditAction, string> = {
       create: "إنشاء",
       update: "تعديل",
       delete: "حذف",
-    };
-    const entityLabels: Record<string, string> = {
-      client: "عميل",
-      order: "طلب",
-      delivery: "توصيل",
-      supplier: "مورّد",
-      material: "مادة",
-      collection: "تحصيل",
-      request: "طلب عميل",
-      founder: "مؤسس",
-      "founder-transaction": "معاملة مؤسس",
-      "treasury-account": "حساب خزينة",
-      "treasury-transaction": "معاملة خزينة",
     };
 
     const label = entityLabels[entry.entity] || entry.entity;
@@ -53,7 +56,6 @@ export async function logAudit(entry: AuditEntry, userId?: string): Promise<void
       date: now.toISOString().split("T")[0],
       time: now.toTimeString().slice(0, 5),
       read: false,
-      userId: userId || "",
     });
   } catch {
     // Audit log failure should not block the main operation

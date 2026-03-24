@@ -176,6 +176,7 @@ export default function OrdersPage() {
         splitMode: splitLabel, deliveryFee: String(parseInt(form.deliveryFee) || 0),
         status: "Draft", source: t.manual,
       });
+      await logAudit({ entity: "order", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${client.name}`, action: "create", snapshot: saved, endpoint: "/orders" });
       setOrders(prev => [mapOrder(saved), ...prev]);
       setForm({ splitMode: "equal", deliveryFee: "500" });
       setSelectedClient(""); setOrderItems([]); setDialogOpen(false);

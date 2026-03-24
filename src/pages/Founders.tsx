@@ -76,6 +76,7 @@ export default function FoundersPage() {
         phone: form.phone.trim(),
       };
       const saved = await api.post<any>("/founders", payload);
+      await logAudit({ entity: "founder", entityId: saved.id || newId, entityName: payload.name, action: "create", snapshot: saved, endpoint: "/founders" });
       setFounders([...founders, mapFounder(saved)]);
       setForm(emptyForm);
       setAddOpen(false);
@@ -92,6 +93,7 @@ export default function FoundersPage() {
     setSaving(true);
     try {
       await api.patch(`/founders/${editingFounder.id}`, editForm);
+      await logAudit({ entity: "founder", entityId: editingFounder.id, entityName: editForm.name || editingFounder.name, action: "update", snapshot: { ...editingFounder, ...editForm }, endpoint: "/founders" });
       setFounders(founders.map(f => f.id === editingFounder.id ? { ...f, ...editForm } : f));
       setEditOpen(false);
       toast.success(t.founderUpdated || "تم تحديث بيانات المؤسس");

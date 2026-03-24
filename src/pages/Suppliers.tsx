@@ -120,6 +120,7 @@ export default function SuppliersPage() {
     const newId = `SUP-${String(num).padStart(3, "0")}`;
     try {
       const saved = await api.post<any>("/suppliers", { ...form, id: newId, active: true });
+      await logAudit({ entity: "supplier", entityId: saved.id || newId, entityName: form.name, action: "create", snapshot: saved, endpoint: "/suppliers" });
       setSuppliers(prev => [...prev, normalizeSupplier(saved)]);
       setForm({ name: "", country: "", email: "", phone: "", paymentTerms: "Net 30" });
       setDialogOpen(false);
