@@ -12,46 +12,56 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { api } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 
-type Material = {
-  code: string;
-  name: string;
-  category: string;
-  unit: string;
-  sellingPrice: number;
-  storeCost: number;
-  supplier: string;
-  supplierId: string;
-  manufacturer: string;
-  hasExpiry: boolean;
-  active: boolean;
-  image_url?: string | null;
-  stock_quantity?: number;
-  variants?: any[] | null;
-  barcode?: string | null;
-  description?: string | null;
+type ExternalProduct = {
+  id: string; sku: string; name: string; image_url: string | null;
+  price_retail: number; price_wholesale: number; stock_quantity: number;
+  barcode: string | null; category: string; description: string | null;
+  images: string[] | null; features: any[] | null; variants: any[] | null;
 };
 
-function normalizeMaterial(raw: any): Material {
+type Material = {
+  code: string; name: string; category: string; unit: string;
+  sellingPrice: number; storeCost: number; supplier: string;
+  supplierId: string; manufacturer: string; hasExpiry: boolean; active: boolean;
+  image_url?: string | null; stock_quantity?: number;
+  variants?: any[] | null; barcode?: string | null; description?: string | null;
+};
+
+function mapExternal(p: ExternalProduct): Material {
+  const companyVariant = p.variants?.find((v: any) => v.name === "Company" || v.name === "Company()");
   return {
-    code: raw.code,
-    name: raw.name,
+    code: p.sku || p.id.slice(0, 8),
+    name: p.name,
+    category: p.category || "General",
+    unit: "unit",
+    sellingPrice: p.price_retail || 0,
+    storeCost: p.price_wholesale || 0,
+    supplier: "", supplierId: "",
+    manufacturer: companyVariant?.options?.[0]?.value || "",
+    hasExpiry: false, active: true,
+    image_url: p.image_url,
+    stock_quantity: p.stock_quantity,
+    variants: p.variants,
+    barcode: p.barcode,
+    description: p.description,
+  };
+}
+
+function mapDb(raw: any): Material {
+  return {
+    code: raw.code, name: raw.name,
     category: raw.category || "General",
     unit: raw.unit || "unit",
     sellingPrice: Number(raw.sellingPrice ?? raw.selling_price ?? 0),
     storeCost: Number(raw.storeCost ?? raw.store_cost ?? 0),
-    supplier: raw.supplier || "",
-    supplierId: raw.supplierId || raw.supplier_id || "",
+    supplier: raw.supplier || "", supplierId: raw.supplierId || raw.supplier_id || "",
     manufacturer: raw.manufacturer || "",
     hasExpiry: raw.hasExpiry ?? raw.has_expiry ?? false,
     active: raw.active ?? true,
-    image_url: raw.image_url ?? null,
-    stock_quantity: raw.stock_quantity ?? 0,
-    variants: raw.variants ?? null,
-    barcode: raw.barcode ?? null,
-    description: raw.description ?? null,
+    image_url: null, stock_quantity: 0, variants: null, barcode: null, description: null,
   };
 }
 
@@ -61,7 +71,6 @@ export default function MaterialsPage() {
   const [searchParams] = useSearchParams();
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
-  const [enriching, setEnriching] = useState(false);
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -73,58 +82,42 @@ export default function MaterialsPage() {
 
   const fetchMaterials = async () => {
     setLoading(true);
-    try {
-      // 1. Load from our database first — always works
-      const dbMaterials = await api.get<any[]>("/materials");
-      const normalized = (dbMaterials || []).map(normalizeMaterial);
-      setMaterials(normalized);
-      setLoading(false);
+    let loaded = false;
 
-      // 2. Enrich with external data (stock, images) — optional, fails gracefully
-      setEnriching(true);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const res = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-external-materials`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-              ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
-            },
-          }
-        );
-        const json = await res.json();
-        if (json.products && Array.isArray(json.products)) {
-          const byCode = new Map<string, any>();
-          json.products.forEach((p: any) => {
-            const sku = (p.sku || "").toUpperCase();
-            if (sku) byCode.set(sku, p);
-          });
-          setMaterials(prev => prev.map(m => {
-            const ext = byCode.get(m.code.toUpperCase());
-            if (!ext) return m;
-            const companyVariant = ext.variants?.find((v: any) => v.name === "Company" || v.name === "Company()");
-            return {
-              ...m,
-              image_url: m.image_url || ext.image_url || null,
-              stock_quantity: ext.stock_quantity ?? m.stock_quantity,
-              variants: ext.variants ?? m.variants,
-              barcode: m.barcode || ext.barcode || null,
-              description: m.description || ext.description || null,
-              manufacturer: m.manufacturer || companyVariant?.options?.[0]?.value || "",
-            };
-          }));
+    // 1. Try Edge Function first (has 306 products with images & stock)
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-external-materials`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
+          },
         }
-      } catch (_) {}
-      setEnriching(false);
+      );
+      const json = await res.json();
+      if (json.products && Array.isArray(json.products) && json.products.length > 0) {
+        setMaterials(json.products.map(mapExternal));
+        loaded = true;
+      }
     } catch (err) {
-      console.error("Failed to fetch materials:", err);
-      toast.error("تعذّر تحميل المواد");
-      setLoading(false);
-      setEnriching(false);
+      console.error("Edge Function failed, falling back to DB:", err);
     }
+
+    // 2. If Edge Function failed → load from local database
+    if (!loaded) {
+      try {
+        const dbData = await api.get<any[]>("/materials");
+        setMaterials((dbData || []).map(mapDb));
+      } catch {
+        toast.error("تعذّر تحميل المواد");
+      }
+    }
+
+    setLoading(false);
   };
 
   const categories = [...new Set(materials.map(m => m.category))].filter(Boolean).sort();
@@ -140,20 +133,14 @@ export default function MaterialsPage() {
     const num = materials.length + 1;
     const newCode = `MAT-${String(num).padStart(3, "0")}`;
     try {
-      const saved = await api.post<any>("/materials", {
-        code: newCode,
-        name: form.name,
-        category: form.category || "General",
-        unit: form.unit,
-        sellingPrice: String(form.sellingPrice),
-        storeCost: String(form.storeCost),
-        supplier: form.supplier,
-        supplierId: form.supplierId,
-        manufacturer: form.manufacturer,
-        hasExpiry: form.hasExpiry,
-        active: form.active,
+      await api.post("/materials", {
+        code: newCode, name: form.name, category: form.category || "General",
+        unit: form.unit, sellingPrice: String(form.sellingPrice),
+        storeCost: String(form.storeCost), supplier: form.supplier,
+        supplierId: form.supplierId, manufacturer: form.manufacturer,
+        hasExpiry: form.hasExpiry, active: form.active,
       });
-      setMaterials(prev => [...prev, normalizeMaterial(saved)]);
+      setMaterials(prev => [...prev, { ...form, code: newCode, sellingPrice: Number(form.sellingPrice), storeCost: Number(form.storeCost) }]);
       setForm({ name: "", category: "", unit: "unit", sellingPrice: "", storeCost: "", supplier: "", supplierId: "", manufacturer: "", hasExpiry: false, active: true });
       setDialogOpen(false);
       toast.success(t.materialAdded);
@@ -170,10 +157,7 @@ export default function MaterialsPage() {
         </div>
         <div>
           <h1 className="page-header">{t.materialsTitle}</h1>
-          <p className="page-description flex items-center gap-2">
-            {materials.length} {t.materialCount} · {categories.length} {t.category}
-            {enriching && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-          </p>
+          <p className="page-description">{materials.length} {t.materialCount} · {categories.length} {t.category}</p>
         </div>
       </div>
 
@@ -192,7 +176,7 @@ export default function MaterialsPage() {
         {loading ? (
           <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground text-sm">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>{t.loadingUsers || "جاري التحميل..."}</span>
+            <span>جاري تحميل المواد...</span>
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>
@@ -285,13 +269,13 @@ export default function MaterialsPage() {
                   {detailItem.manufacturer && (
                     <div className="flex items-center justify-between py-2 border-b border-border/50 text-sm">
                       <span className="text-muted-foreground">{t.manufacturer}</span>
-                      <span className="font-medium text-foreground">{detailItem.manufacturer}</span>
+                      <span className="font-medium">{detailItem.manufacturer}</span>
                     </div>
                   )}
                   {detailItem.barcode && detailItem.barcode !== "1E+12" && (
                     <div className="flex items-center justify-between py-2 border-b border-border/50 text-sm">
                       <span className="text-muted-foreground">Barcode</span>
-                      <span className="font-mono text-xs text-foreground">{detailItem.barcode}</span>
+                      <span className="font-mono text-xs">{detailItem.barcode}</span>
                     </div>
                   )}
                 </div>
@@ -303,9 +287,7 @@ export default function MaterialsPage() {
                         <div key={i} className="flex items-center gap-2 flex-wrap p-2.5 rounded-lg bg-muted/30 border border-border/40">
                           <span className="text-xs font-medium text-muted-foreground shrink-0">{v.name?.replace("()", "")}:</span>
                           <div className="flex flex-wrap gap-1.5">
-                            {v.options?.map((o: any, j: number) => (
-                              <Badge key={j} variant="secondary" className="text-xs px-2 py-0.5">{o.value}</Badge>
-                            ))}
+                            {v.options?.map((o: any, j: number) => <Badge key={j} variant="secondary" className="text-xs px-2 py-0.5">{o.value}</Badge>)}
                           </div>
                         </div>
                       ))}
@@ -329,9 +311,7 @@ export default function MaterialsPage() {
                 <Label className="text-xs">{t.category}</Label>
                 <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
                   <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
+                  <SelectContent>{categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div><Label className="text-xs">{t.unit}</Label><Input className="h-9 mt-1" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} /></div>
