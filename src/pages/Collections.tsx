@@ -18,17 +18,30 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 type TreasuryAccount = { id: string; name: string; balance: number };
+type Collection = {
+  id: string; order: string; client: string; clientId: string;
+  issueDate: string; dueDate: string; total: number; paid: number;
+  remaining: number; payments: { date: string; amount: number; method: string }[];
+  status: string;
+};
 
-const initialCollections = [
-  { id: "INV-001", order: "ORD-048", client: "عيادة د. أحمد", clientId: "C001", issueDate: "2025-03-06", dueDate: "2025-03-20", total: 32000, paid: 0, remaining: 32000, payments: [] as { date: string; amount: number; method: string }[], status: "Awaiting Confirmation" },
-  { id: "INV-002", order: "ORD-047", client: "مركز نور لطب الأسنان", clientId: "C002", issueDate: "2025-03-05", dueDate: "2025-03-19", total: 85000, paid: 40000, remaining: 45000, payments: [{ date: "2025-03-10", amount: 40000, method: "Bank Transfer" }], status: "Partially Paid" },
-  { id: "INV-003", order: "ORD-046", client: "عيادة جرين فالي", clientId: "C003", issueDate: "2025-03-04", dueDate: "2025-03-18", total: 21000, paid: 21000, remaining: 0, payments: [{ date: "2025-03-12", amount: 21000, method: "Cash" }], status: "Paid" },
-  { id: "INV-004", order: "ORD-045", client: "المركز الملكي للأسنان", clientId: "C004", issueDate: "2025-03-03", dueDate: "2025-03-17", total: 48000, paid: 16000, remaining: 32000, payments: [{ date: "2025-03-05", amount: 16000, method: "Cash" }], status: "Installment Active" },
-  { id: "INV-005", order: "ORD-044", client: "عيادة بلو مون", clientId: "C006", issueDate: "2025-03-01", dueDate: "2025-03-15", total: 56000, paid: 0, remaining: 56000, payments: [], status: "Overdue" },
-  { id: "INV-006", order: "ORD-043", client: "عيادة سمايل هاوس", clientId: "C005", issueDate: "2025-02-28", dueDate: "2025-03-14", total: 12000, paid: 12000, remaining: 0, payments: [{ date: "2025-03-01", amount: 6000, method: "Cash" }, { date: "2025-03-10", amount: 6000, method: "Bank Transfer" }], status: "Paid" },
-  { id: "INV-007", order: "ORD-042", client: "عيادة د. أحمد", clientId: "C001", issueDate: "2025-02-25", dueDate: "2025-03-11", total: 41000, paid: 41000, remaining: 0, payments: [{ date: "2025-03-01", amount: 41000, method: "Bank Transfer" }], status: "Paid" },
-  { id: "INV-008", order: "ORD-041", client: "مركز سبايس جاردن", clientId: "C007", issueDate: "2025-02-22", dueDate: "2025-03-08", total: 24000, paid: 8000, remaining: 16000, payments: [{ date: "2025-02-28", amount: 8000, method: "Cash" }], status: "Overdue" },
-];
+function mapCollection(raw: any): Collection {
+  const total = Number(raw.total ?? raw.totalAmount ?? 0);
+  const paid = Number(raw.paid ?? raw.paidAmount ?? 0);
+  return {
+    id: raw.id,
+    order: raw.order || raw.orderId || raw.order_id || "",
+    client: raw.client || raw.clientName || raw.client_name || "",
+    clientId: raw.clientId || raw.client_id || "",
+    issueDate: raw.issueDate || raw.issue_date || raw.createdAt || "",
+    dueDate: raw.dueDate || raw.due_date || "",
+    total,
+    paid,
+    remaining: Number(raw.remaining ?? (total - paid)),
+    payments: Array.isArray(raw.payments) ? raw.payments : (typeof raw.payments === "string" ? JSON.parse(raw.payments || "[]") : []),
+    status: raw.status || "Awaiting Confirmation",
+  };
+}
 
 export default function CollectionsPage() {
   const { t, lang } = useLanguage();
@@ -36,14 +49,15 @@ export default function CollectionsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const urlStatus = searchParams.get("status") || "";
-  const [collections, setCollections] = useState(initialCollections);
+  const [collections, setCollections] = useState<Collection[]>([]);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>(urlStatus ? { status: urlStatus } : {});
-  const [selectedInvoice, setSelectedInvoice] = useState<typeof initialCollections[0] | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<Collection | null>(null);
+  const [loadingCollections, setLoadingCollections] = useState(true);
 
   // Payment dialog state
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [paymentInvoice, setPaymentInvoice] = useState<typeof initialCollections[0] | null>(null);
+  const [paymentInvoice, setPaymentInvoice] = useState<Collection | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [linkToTreasury, setLinkToTreasury] = useState(true);
@@ -51,9 +65,13 @@ export default function CollectionsPage() {
   const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
 
   useEffect(() => {
-    api.get<any[]>("/treasury/accounts").then((data) => {
-      setTreasuryAccounts(data.filter((a: any) => a.isActive).map((a: any) => ({ id: a.id, name: a.name, balance: Number(a.balance) })));
-    });
+    Promise.all([
+      api.get<any[]>("/collections"),
+      api.get<any[]>("/treasury/accounts"),
+    ]).then(([cols, accounts]) => {
+      setCollections((cols || []).map(mapCollection));
+      setTreasuryAccounts((accounts || []).filter((a: any) => a.isActive).map((a: any) => ({ id: a.id, name: a.name, balance: Number(a.balance) })));
+    }).finally(() => setLoadingCollections(false));
   }, []);
 
   const filtered = collections.filter((c) => {
@@ -67,7 +85,7 @@ export default function CollectionsPage() {
   const paidCount = collections.filter(c => c.status === "Paid").length;
   const totalCollected = collections.reduce((sum, c) => sum + c.paid, 0);
 
-  const openPaymentDialog = (inv: typeof initialCollections[0]) => {
+  const openPaymentDialog = (inv: Collection) => {
     setPaymentInvoice(inv);
     setPaymentAmount("");
     setPaymentMethod("cash");

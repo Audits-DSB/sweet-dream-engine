@@ -5,13 +5,12 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Eye, MoreHorizontal, Truck, Plus } from "lucide-react";
+import { Eye, MoreHorizontal, Truck, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { ordersList, deliveryActors, clientsList } from "@/data/store";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -19,82 +18,134 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 
-const initialDeliveries = [
-  { id: "DEL-035", order: "ORD-048", client: "عيادة د. أحمد", clientId: "C001", requestedDate: "2025-03-08", actualDate: "—", actor: "أحمد (مؤسس)", items: 4, type: "كامل", status: "Pending" },
-  { id: "DEL-034", order: "ORD-047", client: "مركز نور لطب الأسنان", clientId: "C002", requestedDate: "2025-03-07", actualDate: "—", actor: "DHL Express", items: 7, type: "كامل", status: "In Transit" },
-  { id: "DEL-033", order: "ORD-046", client: "عيادة جرين فالي", clientId: "C003", requestedDate: "2025-03-06", actualDate: "2025-03-06", actor: "شركة توصيل سريع", items: 3, type: "كامل", status: "Delivered" },
-  { id: "DEL-032", order: "ORD-044", client: "عيادة بلو مون", clientId: "C006", requestedDate: "2025-03-03", actualDate: "2025-03-03", actor: "سارة (مؤسس)", items: 4, type: "جزئي", status: "Delivered" },
-  { id: "DEL-031", order: "ORD-044", client: "عيادة بلو مون", clientId: "C006", requestedDate: "2025-03-05", actualDate: "—", actor: "أحمد (مؤسس)", items: 2, type: "جزئي", status: "Pending" },
-  { id: "DEL-030", order: "ORD-045", client: "المركز الملكي للأسنان", clientId: "C004", requestedDate: "2025-03-02", actualDate: "2025-03-02", actor: "DHL Express", items: 5, type: "كامل", status: "Delivered" },
-  { id: "DEL-029", order: "ORD-043", client: "عيادة سمايل هاوس", clientId: "C005", requestedDate: "2025-02-28", actualDate: "2025-03-01", actor: "أحمد (مؤسس)", items: 2, type: "كامل", status: "Delivered" },
+type Delivery = {
+  id: string; orderId: string; client: string; clientId: string;
+  requestedDate: string; actualDate: string; actor: string;
+  items: number | string; type: string; status: string;
+};
+type Order = { id: string; client: string; clientId: string; status: string };
+
+const ACTORS = [
+  { id: "1", name: "أحمد (مؤسس)", type: "مؤسس" },
+  { id: "2", name: "سارة (مؤسس)", type: "مؤسس" },
+  { id: "3", name: "DHL Express", type: "شركة توصيل" },
+  { id: "4", name: "شركة توصيل سريع", type: "شركة توصيل" },
 ];
 
-const deliveryStatusMap: Record<string, string> = {
-  "Pending": "warning", "In Transit": "info", "Delivered": "success", "Failed": "destructive",
+const statusVariant: Record<string, string> = {
+  Pending: "warning", "In Transit": "info", Delivered: "success", Failed: "destructive",
 };
+
+function mapDelivery(raw: any): Delivery {
+  return {
+    id: raw.id,
+    orderId: raw.orderId || raw.order_id || raw.order || "",
+    client: raw.client || "",
+    clientId: raw.clientId || raw.client_id || "",
+    requestedDate: raw.requestedDate || raw.requested_date || "",
+    actualDate: raw.actualDate || raw.actual_date || "—",
+    actor: raw.actor || "",
+    items: raw.items ?? 0,
+    type: raw.type || "",
+    status: raw.status || "Pending",
+  };
+}
 
 export default function DeliveriesPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [deliveries, setDeliveries] = useState(initialDeliveries);
+  const { user } = useAuth();
+
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>(() => {
     const status = searchParams.get("status");
     return status ? { status } : {};
   });
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [detailItem, setDetailItem] = useState<typeof initialDeliveries[0] | null>(null);
+  const [detailItem, setDetailItem] = useState<Delivery | null>(null);
   const [selectedOrder, setSelectedOrder] = useState("");
   const [selectedActor, setSelectedActor] = useState("");
   const [deliveryType, setDeliveryType] = useState("full");
   const [requestedDate, setRequestedDate] = useState("");
-  const { user } = useAuth();
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      api.get<any[]>("/deliveries"),
+      api.get<any[]>("/orders"),
+    ]).then(([dels, ords]) => {
+      setDeliveries((dels || []).map(mapDelivery));
+      setOrders((ords || []).map((o: any) => ({ id: o.id, client: o.client || "", clientId: o.clientId || o.client_id || "", status: o.status || "" })));
+    }).catch(() => toast.error("تعذّر تحميل التسليمات")).finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
     const status = searchParams.get("status");
     setFilters(status ? { status } : {});
   }, [searchParams]);
 
-  const sendNotification = async (title: string, body: string, type: string = "info") => {
-    await api.post("/notifications", {
-      id: `NOT-${Date.now()}`,
-      type, title, message: body || "",
-      date: new Date().toISOString().split("T")[0],
-      time: new Date().toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }),
-      read: false, userId: user?.id || "",
-    });
-  };
-
   const filtered = deliveries.filter((d) => {
-    const matchSearch = !search || d.client.toLowerCase().includes(search.toLowerCase()) || d.id.toLowerCase().includes(search.toLowerCase()) || d.order.toLowerCase().includes(search.toLowerCase());
+    const s = search.toLowerCase();
+    const matchSearch = !s || d.client.toLowerCase().includes(s) || d.id.toLowerCase().includes(s) || d.orderId.toLowerCase().includes(s);
     const matchStatus = !filters.status || filters.status === "all" || d.status === filters.status;
     return matchSearch && matchStatus;
   });
 
-  const handleAdd = () => {
-    if (!selectedOrder) { toast.error(t.pleaseSelectOrder); return; }
-    const order = ordersList.find(o => o.id === selectedOrder);
-    if (!order) return;
-    const num = deliveries.length > 0 ? parseInt(deliveries[0].id.split("-")[1]) + 1 : 36;
-    const newId = `DEL-${String(num).padStart(3, "0")}`;
-    const today = requestedDate || new Date().toISOString().split("T")[0];
-    const typeLabel = deliveryType === "full" ? t.full : t.partialType;
-    setDeliveries([{
-      id: newId, order: order.id, client: order.client, clientId: order.clientId, requestedDate: today,
-      actualDate: "—", actor: selectedActor || "—", items: order.lines, type: typeLabel, status: "Pending",
-    }, ...deliveries]);
-    sendNotification(t.newDelivery, `${newId} - ${order.client}`, "info");
-    setSelectedOrder(""); setSelectedActor(""); setDeliveryType("full"); setRequestedDate("");
-    setDialogOpen(false);
-    toast.success(t.deliveryCreated);
+  const sendNotification = async (title: string, body: string, type: string = "info") => {
+    await api.post("/notifications", {
+      id: `NOT-${Date.now()}`, type, title, message: body || "",
+      date: new Date().toISOString().split("T")[0],
+      time: new Date().toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }),
+      read: false, userId: user?.id || "",
+    }).catch(() => {});
   };
 
-  const confirmDelivery = (del: typeof initialDeliveries[0]) => {
-    setDeliveries(deliveries.map(d => d.id === del.id ? { ...d, status: "Delivered", actualDate: new Date().toISOString().split("T")[0] } : d));
-    toast.success(`${t.deliveryConfirmedMsg}: ${del.id}`);
-    sendNotification(t.deliveryConfirmed, `${del.id} - ${del.client}`, "success");
+  const handleAdd = async () => {
+    if (!selectedOrder) { toast.error(t.pleaseSelectOrder); return; }
+    const order = orders.find(o => o.id === selectedOrder);
+    if (!order) return;
+    setSaving(true);
+    const today = requestedDate || new Date().toISOString().split("T")[0];
+    const typeLabel = deliveryType === "full" ? (t.full || "كامل") : (t.partialType || "جزئي");
+    const newId = `DEL-${Date.now().toString().slice(-6)}`;
+    const payload = {
+      id: newId, orderId: order.id, client: order.client, clientId: order.clientId,
+      requestedDate: today, actualDate: "—", actor: selectedActor || "—",
+      items: 0, type: typeLabel, status: "Pending",
+    };
+    try {
+      const saved = await api.post<any>("/deliveries", payload);
+      setDeliveries([mapDelivery(saved), ...deliveries]);
+      sendNotification(t.newDelivery || "تسليم جديد", `${newId} - ${order.client}`, "info");
+      setSelectedOrder(""); setSelectedActor(""); setDeliveryType("full"); setRequestedDate("");
+      setDialogOpen(false);
+      toast.success(t.deliveryCreated || "تم إنشاء التسليم");
+    } catch {
+      toast.error("فشل إنشاء التسليم");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const confirmDelivery = async (del: Delivery) => {
+    const today = new Date().toISOString().split("T")[0];
+    try {
+      await api.patch(`/deliveries/${del.id}`, { status: "Delivered", actualDate: today });
+      setDeliveries(deliveries.map(d => d.id === del.id ? { ...d, status: "Delivered", actualDate: today } : d));
+      toast.success(`${t.deliveryConfirmedMsg || "تم تأكيد التسليم"}: ${del.id}`);
+      sendNotification(t.deliveryConfirmed || "تم التسليم", `${del.id} - ${del.client}`, "success");
+    } catch {
+      toast.error("فشل تحديث التسليم");
+    }
+  };
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -112,7 +163,8 @@ export default function DeliveriesPage() {
         ]}]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("deliveries", [t.code, t.order, t.client, t.requestedDate, t.actualDate, t.executor, t.items, t.type, t.status], filtered.map(d => [d.id, d.order, d.client, d.requestedDate, d.actualDate, d.actor, d.items, d.type, d.status]))}
+        onExport={() => exportToCsv("deliveries", [t.code, t.order, t.client, t.requestedDate, t.actualDate, t.executor, t.items, t.type, t.status],
+          filtered.map(d => [d.id, d.orderId, d.client, d.requestedDate, d.actualDate, d.actor, d.items, d.type, d.status]))}
         actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.newDelivery}</Button>}
       />
 
@@ -126,7 +178,6 @@ export default function DeliveriesPage() {
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.requestedDate}</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.actualDate}</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.executor}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.items}</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.type}</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
               <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.actions}</th>
@@ -136,14 +187,13 @@ export default function DeliveriesPage() {
             {filtered.map((del) => (
               <tr key={del.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetailItem(del)}>
                 <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{del.id}</td>
-                <td className="py-3 px-3 font-mono text-xs hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${del.order}`); }}>{del.order}</td>
+                <td className="py-3 px-3 font-mono text-xs text-primary hover:underline cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${del.orderId}`); }}>{del.orderId}</td>
                 <td className="py-3 px-3 font-medium hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${del.clientId}`); }}>{del.client}</td>
                 <td className="py-3 px-3 text-muted-foreground text-xs">{del.requestedDate}</td>
                 <td className="py-3 px-3 text-xs">{del.actualDate}</td>
                 <td className="py-3 px-3 text-muted-foreground">{del.actor}</td>
-                <td className="py-3 px-3 text-end">{del.items}</td>
                 <td className="py-3 px-3"><span className="text-xs bg-muted px-2 py-0.5 rounded">{del.type}</span></td>
-                <td className="py-3 px-3"><StatusBadge status={del.status} variant={deliveryStatusMap[del.status] as any} /></td>
+                <td className="py-3 px-3"><StatusBadge status={del.status} variant={statusVariant[del.status] as any} /></td>
                 <td className="py-3 px-3 text-end" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -171,16 +221,14 @@ export default function DeliveriesPage() {
           {detailItem && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setDetailItem(null); navigate(`/orders/${detailItem.order}`); }}><p className="text-xs text-muted-foreground">{t.order}</p><p className="font-semibold text-primary">{detailItem.order}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setDetailItem(null); navigate(`/orders/${detailItem.orderId}`); }}>
+                  <p className="text-xs text-muted-foreground">{t.order}</p><p className="font-semibold text-primary">{detailItem.orderId}</p>
+                </div>
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.executor}</p><p className="font-semibold">{detailItem.actor}</p></div>
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.requestedDate}</p><p className="font-semibold">{detailItem.requestedDate}</p></div>
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.actualDate}</p><p className="font-semibold">{detailItem.actualDate}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.items}</p><p className="font-semibold">{detailItem.items}</p></div>
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.type}</p><p className="font-semibold">{detailItem.type}</p></div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">{t.status}:</span>
-                <StatusBadge status={detailItem.status} variant={deliveryStatusMap[detailItem.status] as any} />
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.status}</p><StatusBadge status={detailItem.status} variant={statusVariant[detailItem.status] as any} /></div>
               </div>
               {detailItem.status !== "Delivered" && (
                 <Button className="w-full" onClick={() => { confirmDelivery(detailItem); setDetailItem(null); }}>
@@ -202,7 +250,7 @@ export default function DeliveriesPage() {
               <Select value={selectedOrder} onValueChange={setSelectedOrder}>
                 <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t.selectOrderPlaceholder} /></SelectTrigger>
                 <SelectContent>
-                  {ordersList.filter(o => !["Cancelled", "Closed"].includes(o.status)).map(o => (
+                  {orders.filter(o => !["Cancelled", "Closed"].includes(o.status)).map(o => (
                     <SelectItem key={o.id} value={o.id}>{o.id} — {o.client} ({o.status})</SelectItem>
                   ))}
                 </SelectContent>
@@ -213,7 +261,7 @@ export default function DeliveriesPage() {
               <Select value={selectedActor} onValueChange={setSelectedActor}>
                 <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t.selectExecutor} /></SelectTrigger>
                 <SelectContent>
-                  {deliveryActors.map(a => (
+                  {ACTORS.map(a => (
                     <SelectItem key={a.id} value={a.name}>{a.name} ({a.type})</SelectItem>
                   ))}
                 </SelectContent>
@@ -225,14 +273,16 @@ export default function DeliveriesPage() {
                 <Select value={deliveryType} onValueChange={setDeliveryType}>
                   <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="full">{t.full}</SelectItem>
-                    <SelectItem value="partial">{t.partialType}</SelectItem>
+                    <SelectItem value="full">{t.full || "كامل"}</SelectItem>
+                    <SelectItem value="partial">{t.partialType || "جزئي"}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div><Label className="text-xs">{t.dateLabel}</Label><Input className="h-9 mt-1" type="date" value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} /></div>
             </div>
-            <Button className="w-full" onClick={handleAdd}>{t.createDelivery}</Button>
+            <Button className="w-full" onClick={handleAdd} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (t.createDelivery || "إنشاء التسليم")}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
