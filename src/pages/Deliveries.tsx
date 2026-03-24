@@ -24,13 +24,7 @@ type Delivery = {
   items: number | string; type: string; status: string;
 };
 type Order = { id: string; client: string; clientId: string; status: string };
-
-const ACTORS = [
-  { id: "1", name: "أحمد (مؤسس)", type: "مؤسس" },
-  { id: "2", name: "سارة (مؤسس)", type: "مؤسس" },
-  { id: "3", name: "DHL Express", type: "شركة توصيل" },
-  { id: "4", name: "شركة توصيل سريع", type: "شركة توصيل" },
-];
+type Actor = { id: string; name: string; label: string };
 
 const statusVariant: Record<string, string> = {
   Pending: "warning", "In Transit": "info", Delivered: "success", Failed: "destructive",
@@ -59,6 +53,7 @@ export default function DeliveriesPage() {
 
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [actors, setActors] = useState<Actor[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>(() => {
@@ -69,6 +64,7 @@ export default function DeliveriesPage() {
   const [detailItem, setDetailItem] = useState<Delivery | null>(null);
   const [selectedOrder, setSelectedOrder] = useState("");
   const [selectedActor, setSelectedActor] = useState("");
+  const [customActor, setCustomActor] = useState("");
   const [deliveryType, setDeliveryType] = useState("full");
   const [requestedDate, setRequestedDate] = useState("");
   const [saving, setSaving] = useState(false);
@@ -77,9 +73,14 @@ export default function DeliveriesPage() {
     Promise.all([
       api.get<any[]>("/deliveries"),
       api.get<any[]>("/orders"),
-    ]).then(([dels, ords]) => {
+      api.get<any[]>("/founders"),
+    ]).then(([dels, ords, founders]) => {
       setDeliveries((dels || []).map(mapDelivery));
       setOrders((ords || []).map((o: any) => ({ id: o.id, client: o.client || "", clientId: o.clientId || o.client_id || "", status: o.status || "" })));
+      const founderActors: Actor[] = (founders || []).map((f: any) => ({
+        id: f.id, name: f.name || "", label: f.alias ? `${f.name} (${f.alias})` : f.name,
+      }));
+      setActors([...founderActors, { id: "__other__", name: "__other__", label: t.otherActor || "مندوب خارجي / آخر" }]);
     }).catch(() => toast.error("تعذّر تحميل التسليمات")).finally(() => setLoading(false));
   }, []);
 
@@ -112,16 +113,17 @@ export default function DeliveriesPage() {
     const today = requestedDate || new Date().toISOString().split("T")[0];
     const typeLabel = deliveryType === "full" ? (t.full || "كامل") : (t.partialType || "جزئي");
     const newId = `DEL-${Date.now().toString().slice(-6)}`;
+    const actorName = selectedActor === "__other__" ? (customActor.trim() || "—") : (selectedActor || "—");
     const payload = {
       id: newId, orderId: order.id, client: order.client, clientId: order.clientId,
-      requestedDate: today, actualDate: "—", actor: selectedActor || "—",
+      requestedDate: today, actualDate: "—", actor: actorName,
       items: 0, type: typeLabel, status: "Pending",
     };
     try {
       const saved = await api.post<any>("/deliveries", payload);
       setDeliveries([mapDelivery(saved), ...deliveries]);
       sendNotification(t.newDelivery || "تسليم جديد", `${newId} - ${order.client}`, "info");
-      setSelectedOrder(""); setSelectedActor(""); setDeliveryType("full"); setRequestedDate("");
+      setSelectedOrder(""); setSelectedActor(""); setCustomActor(""); setDeliveryType("full"); setRequestedDate("");
       setDialogOpen(false);
       toast.success(t.deliveryCreated || "تم إنشاء التسليم");
     } catch {
@@ -261,11 +263,14 @@ export default function DeliveriesPage() {
               <Select value={selectedActor} onValueChange={setSelectedActor}>
                 <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t.selectExecutor} /></SelectTrigger>
                 <SelectContent>
-                  {ACTORS.map(a => (
-                    <SelectItem key={a.id} value={a.name}>{a.name} ({a.type})</SelectItem>
+                  {actors.map(a => (
+                    <SelectItem key={a.id} value={a.name}>{a.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {selectedActor === "__other__" && (
+                <Input className="h-9 mt-2" placeholder={t.enterActorName || "اكتب اسم المندوب"} value={customActor} onChange={(e) => setCustomActor(e.target.value)} />
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
