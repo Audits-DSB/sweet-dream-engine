@@ -3,6 +3,45 @@
 -- Run this ONCE in: Supabase Dashboard > SQL Editor
 -- =====================================================
 
+-- ─── AUTH TABLES (required for user roles) ───────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS public.profiles (
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+  full_name text,
+  avatar_url text,
+  created_at timestamptz DEFAULT now()
+);
+
+DO $$ BEGIN
+  CREATE TYPE public.app_role AS ENUM ('admin', 'founder', 'viewer');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE TABLE IF NOT EXISTS public.user_roles (
+  id bigserial PRIMARY KEY,
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  role public.app_role NOT NULL DEFAULT 'viewer',
+  UNIQUE (user_id, role)
+);
+
+-- Auto-create profile when user signs up
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  INSERT INTO public.profiles (user_id, full_name, avatar_url)
+  VALUES (new.id, new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url')
+  ON CONFLICT (user_id) DO NOTHING;
+  RETURN new;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ─── BUSINESS DATA TABLES ─────────────────────────────────────────────────────
+
 CREATE TABLE IF NOT EXISTS clients (
   id text PRIMARY KEY,
   name text NOT NULL DEFAULT '',
@@ -166,3 +205,14 @@ CREATE TABLE IF NOT EXISTS treasury_transactions (
   date text DEFAULT '',
   created_at timestamptz DEFAULT now()
 );
+
+-- ─── MAKE drseifelshamy@gmail.com AN ADMIN ───────────────────────────────────
+-- This inserts the profile and admin role for the user
+
+INSERT INTO public.profiles (user_id, full_name)
+SELECT id, email FROM auth.users WHERE email = 'drseifelshamy@gmail.com'
+ON CONFLICT (user_id) DO NOTHING;
+
+INSERT INTO public.user_roles (user_id, role)
+SELECT id, 'admin' FROM auth.users WHERE email = 'drseifelshamy@gmail.com'
+ON CONFLICT (user_id, role) DO NOTHING;
