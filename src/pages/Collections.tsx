@@ -12,9 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, CheckCircle2, Clock, Receipt, Eye, MoreHorizontal, DollarSign } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Receipt, Eye, MoreHorizontal, DollarSign, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { logAudit } from "@/lib/auditLog";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 type TreasuryAccount = { id: string; name: string; balance: number };
@@ -63,6 +65,8 @@ export default function CollectionsPage() {
   const [linkToTreasury, setLinkToTreasury] = useState(true);
   const [treasuryAccountId, setTreasuryAccountId] = useState("");
   const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<Collection | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -84,6 +88,22 @@ export default function CollectionsPage() {
   const overdueAmount = collections.filter(c => c.status === "Overdue").reduce((sum, c) => sum + c.remaining, 0);
   const paidCount = collections.filter(c => c.status === "Paid").length;
   const totalCollected = collections.reduce((sum, c) => sum + c.paid, 0);
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/collections/${deleteTarget.id}`);
+      await logAudit({ entity: "collection", entityId: deleteTarget.id, entityName: `${deleteTarget.id} - ${deleteTarget.client}`, action: "delete", snapshot: deleteTarget as any, endpoint: "/collections" });
+      setCollections(prev => prev.filter(c => c.id !== deleteTarget.id));
+      setDeleteTarget(null);
+      toast.success(`تم حذف التحصيل: ${deleteTarget.id}`);
+    } catch (err: any) {
+      toast.error(err?.message || "فشل حذف التحصيل");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const openPaymentDialog = (inv: Collection) => {
     setPaymentInvoice(inv);
@@ -211,6 +231,10 @@ export default function CollectionsPage() {
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => setSelectedInvoice(inv)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewDetails}</DropdownMenuItem>
                       {inv.remaining > 0 && <DropdownMenuItem onClick={() => openPaymentDialog(inv)}><DollarSign className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.recordPayment}</DropdownMenuItem>}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(inv)} data-testid={`button-delete-collection-${inv.id}`}>
+                        <Trash2 className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />حذف
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>
@@ -219,6 +243,15 @@ export default function CollectionsPage() {
           </tbody>
         </table>
       </div>
+
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="حذف التحصيل"
+        description={`هل تريد حذف التحصيل "${deleteTarget?.id}"؟ يمكنك استعادته لاحقاً من سجل الأنشطة.`}
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
 
       {/* Invoice Detail Dialog */}
       <Dialog open={!!selectedInvoice && !paymentDialogOpen} onOpenChange={() => setSelectedInvoice(null)}>

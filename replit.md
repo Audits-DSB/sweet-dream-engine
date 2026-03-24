@@ -32,6 +32,13 @@ All business data in main Supabase project:
   - Standard: inflow, expense, withdrawal, transfer
   - Founder transactions: founder_contribution, founder_withdrawal, order_funding (stored with performedBy=founderId, referenceId=founderName, linkedAccountId=orderId, category=method)
 
+## Delete & Audit Log System
+- **ConfirmDeleteDialog** (`src/components/ConfirmDeleteDialog.tsx`) — Reusable confirmation dialog before any delete
+- **auditLog utility** (`src/lib/auditLog.ts`) — Logs all create/update/delete operations to `notifications` table (type: `audit_create`/`audit_update`/`audit_delete`) with full entity snapshot for restore
+- **Activity Page** (`src/pages/Activity.tsx`) — Displays audit history grouped by date; allows restoring deleted items by re-inserting the snapshot via API
+- **Delete enabled on**: Clients, Orders, Deliveries, Suppliers, Collections, Materials, Founders (all with confirmation dialog + audit log)
+- **Restore**: Activity page reads `notifications` where type starts with `audit_`, shows "استعادة" button for deleted items
+
 ## Key API Endpoints (server/routes.ts)
 - `/api/clients`, `/api/suppliers`, `/api/materials`, `/api/founders` — CRUD
 - `/api/orders`, `/api/orders/next-id` — Orders CRUD + auto-increment ID

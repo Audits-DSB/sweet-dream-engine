@@ -223,6 +223,9 @@ router.patch("/notifications/mark-all-read/:userId", async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
 });
+router.delete("/notifications/:id", async (req, res) => {
+  sbOk(res, await supabaseAdmin.from("notifications").delete().eq("id", req.params.id).select().single());
+});
 
 // ─── TREASURY ACCOUNTS ────────────────────────────────────────────────────────
 router.get("/treasury/accounts", async (_req, res) => {

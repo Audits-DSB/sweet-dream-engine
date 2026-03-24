@@ -6,13 +6,15 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Eye, MoreHorizontal, Mail, Phone, Loader2 } from "lucide-react";
+import { Plus, Eye, MoreHorizontal, Mail, Phone, Loader2, Trash2, Pencil } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
+import { logAudit } from "@/lib/auditLog";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -52,6 +54,8 @@ export default function ClientsPage() {
   const [filters, setFilters] = useState<Record<string, string>>(initialStatus ? { status: initialStatus } : {});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -87,6 +91,22 @@ export default function ClientsPage() {
       toast.error(err?.message || t.failedToSaveClient);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/clients/${deleteTarget.id}`);
+      await logAudit({ entity: "client", entityId: deleteTarget.id, entityName: deleteTarget.name, action: "delete", snapshot: deleteTarget as any, endpoint: "/clients" });
+      setClients(prev => prev.filter(c => c.id !== deleteTarget.id));
+      setDeleteTarget(null);
+      toast.success(`تم حذف العميل: ${deleteTarget.name}`);
+    } catch (err: any) {
+      toast.error(err?.message || "فشل حذف العميل");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -162,6 +182,10 @@ export default function ClientsPage() {
                         <DropdownMenuItem onClick={() => navigate(`/clients/${client.id}`)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewProfile}</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => { if (client.email) { window.open(`mailto:${client.email}`); } else { toast.info(t.noEmail); } }}><Mail className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.sendEmail}</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => { if (client.phone) { window.open(`tel:${client.phone}`); } else { toast.info(t.noPhone); } }}><Phone className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.call}</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(client)} data-testid={`button-delete-client-${client.id}`}>
+                          <Trash2 className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />حذف
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </td>
@@ -172,6 +196,15 @@ export default function ClientsPage() {
         )}
         {!loading && filtered.length === 0 && <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>}
       </div>
+
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="حذف العميل"
+        description={`هل تريد حذف "${deleteTarget?.name}"؟ يمكنك استعادته لاحقاً من سجل الأنشطة.`}
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">

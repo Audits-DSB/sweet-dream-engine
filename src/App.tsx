@@ -41,6 +41,7 @@ import SignupPage from "./pages/Signup";
 import ForgotPasswordPage from "./pages/ForgotPassword";
 import ResetPasswordPage from "./pages/ResetPassword";
 import Walkthrough from "./pages/Walkthrough";
+import ActivityPage from "./pages/Activity";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -93,6 +94,7 @@ const App = () => (
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/user-management" element={<UserManagementPage />} />
                 <Route path="/walkthrough" element={<Walkthrough />} />
+                <Route path="/activity" element={<ActivityPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

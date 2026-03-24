@@ -10,6 +10,7 @@ import { Users, TrendingUp, Wallet, Pencil, Plus, Loader2, Trash2 } from "lucide
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
+import { logAudit } from "@/lib/auditLog";
 
 type Founder = {
   id: string;
@@ -106,6 +107,7 @@ export default function FoundersPage() {
     setSaving(true);
     try {
       await api.delete(`/founders/${editingFounder.id}`);
+      await logAudit({ entity: "founder", entityId: editingFounder.id, entityName: editingFounder.name, action: "delete", snapshot: editingFounder as any, endpoint: "/founders" });
       setFounders(founders.filter(f => f.id !== editingFounder.id));
       setDeleteOpen(false);
       setEditOpen(false);

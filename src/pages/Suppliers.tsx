@@ -7,10 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Globe, Mail, Phone, Package, Loader2 } from "lucide-react";
+import { Plus, Globe, Mail, Phone, Package, Loader2, Trash2, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
+import { logAudit } from "@/lib/auditLog";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Supplier = {
   id: string;
@@ -106,6 +111,9 @@ export default function SuppliersPage() {
       supplierName.toLowerCase().includes(m.supplier.toLowerCase())
     );
 
+  const [deleteTarget, setDeleteTarget] = useState<Supplier | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const handleAdd = async () => {
     if (!form.name) { toast.error(t.enterSupplierName); return; }
     const num = suppliers.length + 1;
@@ -118,6 +126,23 @@ export default function SuppliersPage() {
       toast.success(t.supplierAdded);
     } catch {
       toast.error(t.failedToAddSupplier);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/suppliers/${deleteTarget.id}`);
+      await logAudit({ entity: "supplier", entityId: deleteTarget.id, entityName: deleteTarget.name, action: "delete", snapshot: deleteTarget as any, endpoint: "/suppliers" });
+      setSuppliers(prev => prev.filter(s => s.id !== deleteTarget.id));
+      setDetailItem(null);
+      setDeleteTarget(null);
+      toast.success(`تم حذف المورّد: ${deleteTarget.name}`);
+    } catch (err: any) {
+      toast.error(err?.message || "فشل حذف المورّد");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -187,10 +212,26 @@ export default function SuppliersPage() {
         </div>
       )}
 
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="حذف المورّد"
+        description={`هل تريد حذف المورّد "${deleteTarget?.name}"؟ يمكنك استعادته لاحقاً من سجل الأنشطة.`}
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
+
       {/* Detail Dialog */}
       <Dialog open={!!detailItem} onOpenChange={() => setDetailItem(null)}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>{detailItem?.name} — {t.supplierDetails}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <DialogTitle>{detailItem?.name} — {t.supplierDetails}</DialogTitle>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteTarget(detailItem)} data-testid={`button-delete-supplier-${detailItem?.id}`}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </DialogHeader>
           {detailItem && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">

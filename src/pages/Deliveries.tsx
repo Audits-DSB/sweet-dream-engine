@@ -5,14 +5,16 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Eye, MoreHorizontal, Truck, Plus, Loader2 } from "lucide-react";
+import { Eye, MoreHorizontal, Truck, Plus, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
+import { logAudit } from "@/lib/auditLog";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -69,6 +71,8 @@ export default function DeliveriesPage() {
   const [deliveryType, setDeliveryType] = useState("full");
   const [requestedDate, setRequestedDate] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Delivery | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -140,6 +144,22 @@ export default function DeliveriesPage() {
       toast.error("فشل إنشاء التسليم");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/deliveries/${deleteTarget.id}`);
+      await logAudit({ entity: "delivery", entityId: deleteTarget.id, entityName: `${deleteTarget.id} - ${deleteTarget.client}`, action: "delete", snapshot: deleteTarget as any, endpoint: "/deliveries" });
+      setDeliveries(prev => prev.filter(d => d.id !== deleteTarget.id));
+      setDeleteTarget(null);
+      toast.success(`تم حذف التسليم: ${deleteTarget.id}`);
+    } catch (err: any) {
+      toast.error(err?.message || "فشل حذف التسليم");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -216,6 +236,10 @@ export default function DeliveriesPage() {
                       {del.status !== "Delivered" && (
                         <DropdownMenuItem onClick={() => confirmDelivery(del)}><Truck className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.confirmDelivery}</DropdownMenuItem>
                       )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(del)} data-testid={`button-delete-delivery-${del.id}`}>
+                        <Trash2 className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />حذف
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>
@@ -225,6 +249,15 @@ export default function DeliveriesPage() {
         </table>
         {filtered.length === 0 && <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>}
       </div>
+
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="حذف التسليم"
+        description={`هل تريد حذف التسليم "${deleteTarget?.id}"؟ يمكنك استعادته لاحقاً من سجل الأنشطة.`}
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
 
       {/* Detail Dialog */}
       <Dialog open={!!detailItem} onOpenChange={() => setDetailItem(null)}>

@@ -7,12 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Package, ImageOff, Loader2 } from "lucide-react";
+import { Plus, Package, ImageOff, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { api } from "@/lib/api";
+import { logAudit } from "@/lib/auditLog";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 
 type ExternalProduct = {
   id: string; sku: string; name: string; image_url: string | null;
@@ -76,6 +78,8 @@ export default function MaterialsPage() {
   const [detailItem, setDetailItem] = useState<Material | null>(null);
   const [form, setForm] = useState({ name: "", category: "", unit: "unit", sellingPrice: "", storeCost: "", supplier: "", supplierId: "", manufacturer: "", hasExpiry: false, active: true });
   const [imgErrors, setImgErrors] = useState<Set<string>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<Material | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => { fetchMaterials(); }, []);
 
@@ -133,6 +137,23 @@ export default function MaterialsPage() {
       toast.success(t.materialAdded);
     } catch {
       toast.error(t.failedToAddMaterial);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/materials/${deleteTarget.code}`);
+      await logAudit({ entity: "material", entityId: deleteTarget.code, entityName: deleteTarget.name, action: "delete", snapshot: deleteTarget as any, endpoint: "/materials", idField: "code" });
+      setMaterials(prev => prev.filter(m => m.code !== deleteTarget.code));
+      setDetailItem(null);
+      setDeleteTarget(null);
+      toast.success(`تم حذف المادة: ${deleteTarget.name}`);
+    } catch (err: any) {
+      toast.error(err?.message || "فشل حذف المادة");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -282,10 +303,24 @@ export default function MaterialsPage() {
                   </div>
                 )}
               </div>
+              <div className="pt-2 border-t border-border/50">
+                <Button variant="outline" size="sm" className="w-full text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setDeleteTarget(detailItem)} data-testid={`button-delete-material-${detailItem?.code}`}>
+                  <Trash2 className="h-3.5 w-3.5 me-2" />حذف هذه المادة
+                </Button>
+              </div>
             </>
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="حذف المادة"
+        description={`هل تريد حذف "${deleteTarget?.name}"؟ يمكنك استعادته لاحقاً من سجل الأنشطة.`}
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
 
       {/* Add Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
