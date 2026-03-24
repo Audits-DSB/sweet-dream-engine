@@ -52,3 +52,7 @@ externalPort = 3002
 [userenv.shared]
 EXTERNAL_SUPABASE_URL = "https://qelguwdtxlyhulrtfyyb.supabase.co"
 EXTERNAL_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlbGd1d2R0eGx5aHVscnRmeXliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyNjM4NDgsImV4cCI6MjA4NjgzOTg0OH0.MBLHMkBVfG-LNso4Je-T2LXAD6rlyYPeT3msvd6_-BY"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
