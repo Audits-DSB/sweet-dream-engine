@@ -30,18 +30,19 @@ const statusVariant: Record<string, string> = {
   Pending: "warning", "In Transit": "info", Delivered: "success", Failed: "destructive",
 };
 
-function mapDelivery(raw: any): Delivery {
+function mapDelivery(raw: any, clientMap: Record<string, string> = {}): Delivery {
+  const clientId = raw.clientId || raw.client_id || "";
   return {
     id: raw.id,
-    orderId: raw.orderId || raw.order_id || raw.order || "",
-    client: raw.client || "",
-    clientId: raw.clientId || raw.client_id || "",
-    requestedDate: raw.requestedDate || raw.requested_date || "",
-    actualDate: raw.actualDate || raw.actual_date || "—",
-    actor: raw.actor || "",
+    orderId: raw.orderId || raw.order_id || "",
+    client: raw.client || clientMap[clientId] || clientId,
+    clientId,
+    requestedDate: raw.scheduledDate || raw.scheduled_date || raw.requestedDate || raw.requested_date || "",
+    actualDate: raw.date || raw.actualDate || raw.actual_date || "—",
+    actor: raw.deliveredBy || raw.delivered_by || raw.actor || "",
     items: raw.items ?? 0,
-    type: raw.type || "",
-    status: raw.status || "Pending",
+    type: raw.notes || raw.type || "",
+    status: raw.status === "Scheduled" ? "Pending" : (raw.status || "Pending"),
   };
 }
 
@@ -74,9 +75,12 @@ export default function DeliveriesPage() {
       api.get<any[]>("/deliveries"),
       api.get<any[]>("/orders"),
       api.get<any[]>("/founders"),
-    ]).then(([dels, ords, founders]) => {
-      setDeliveries((dels || []).map(mapDelivery));
-      setOrders((ords || []).map((o: any) => ({ id: o.id, client: o.client || "", clientId: o.clientId || o.client_id || "", status: o.status || "" })));
+      api.get<any[]>("/clients"),
+    ]).then(([dels, ords, founders, clients]) => {
+      const clientMap: Record<string, string> = {};
+      (clients || []).forEach((c: any) => { clientMap[c.id] = c.name || ""; });
+      setOrders((ords || []).map((o: any) => ({ id: o.id, client: o.client || clientMap[o.clientId || o.client_id] || "", clientId: o.clientId || o.client_id || "", status: o.status || "" })));
+      setDeliveries((dels || []).map(d => mapDelivery(d, clientMap)));
       const founderActors: Actor[] = (founders || []).map((f: any) => ({
         id: f.id, name: f.name || "", label: f.alias ? `${f.name} (${f.alias})` : f.name,
       }));
@@ -113,11 +117,17 @@ export default function DeliveriesPage() {
     const today = requestedDate || new Date().toISOString().split("T")[0];
     const typeLabel = deliveryType === "full" ? (t.full || "كامل") : (t.partialType || "جزئي");
     const newId = `DEL-${Date.now().toString().slice(-6)}`;
-    const actorName = selectedActor === "__other__" ? (customActor.trim() || "—") : (selectedActor || "—");
+    const actorName = selectedActor === "__other__" ? (customActor.trim() || "") : (selectedActor || "");
     const payload = {
-      id: newId, orderId: order.id, client: order.client, clientId: order.clientId,
-      requestedDate: today, actualDate: "—", actor: actorName,
-      items: 0, type: typeLabel, status: "Pending",
+      id: newId,
+      orderId: order.id,
+      clientId: order.clientId,
+      scheduledDate: today,
+      deliveredBy: actorName,
+      items: 0,
+      notes: typeLabel,
+      deliveryFee: 0,
+      status: "Pending",
     };
     try {
       const saved = await api.post<any>("/deliveries", payload);
@@ -136,7 +146,7 @@ export default function DeliveriesPage() {
   const confirmDelivery = async (del: Delivery) => {
     const today = new Date().toISOString().split("T")[0];
     try {
-      await api.patch(`/deliveries/${del.id}`, { status: "Delivered", actualDate: today });
+      await api.patch(`/deliveries/${del.id}`, { status: "Delivered", date: today });
       setDeliveries(deliveries.map(d => d.id === del.id ? { ...d, status: "Delivered", actualDate: today } : d));
       toast.success(`${t.deliveryConfirmedMsg || "تم تأكيد التسليم"}: ${del.id}`);
       sendNotification(t.deliveryConfirmed || "تم التسليم", `${del.id} - ${del.client}`, "success");
