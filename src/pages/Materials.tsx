@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { supabase } from "@/integrations/supabase/client";
 import { api } from "@/lib/api";
 
 type ExternalProduct = {
@@ -84,30 +83,18 @@ export default function MaterialsPage() {
     setLoading(true);
     let loaded = false;
 
-    // 1. Try Edge Function first (has 306 products with images & stock)
+    // 1. Try via backend proxy (no CORS issues) — has 306 products with images & stock
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-external-materials`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
-          },
-        }
-      );
-      const json = await res.json();
-      if (json.products && Array.isArray(json.products) && json.products.length > 0) {
+      const json = await api.get<{ products: ExternalProduct[] }>("/external-materials");
+      if (json?.products && Array.isArray(json.products) && json.products.length > 0) {
         setMaterials(json.products.map(mapExternal));
         loaded = true;
       }
     } catch (err) {
-      console.error("Edge Function failed, falling back to DB:", err);
+      console.error("External materials failed, falling back to DB:", err);
     }
 
-    // 2. If Edge Function failed → load from local database
+    // 2. Fallback → load from local database
     if (!loaded) {
       try {
         const dbData = await api.get<any[]>("/materials");

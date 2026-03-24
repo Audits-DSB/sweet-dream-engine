@@ -11,7 +11,6 @@ import { Plus, Globe, Mail, Phone, ExternalLink, Package, Loader2 } from "lucide
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
-import { supabase } from "@/integrations/supabase/client";
 
 type Supplier = {
   id: string;

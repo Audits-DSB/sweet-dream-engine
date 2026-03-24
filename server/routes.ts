@@ -3,6 +3,33 @@ import { createClient } from "@supabase/supabase-js";
 
 const router = Router();
 
+// ─── EXTERNAL MATERIALS PROXY (avoids CORS from browser) ─────────────────────
+router.get("/external-materials", async (_req, res) => {
+  try {
+    const response = await fetch(
+      `${process.env.VITE_SUPABASE_URL}/functions/v1/fetch-external-materials`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": process.env.VITE_SUPABASE_PUBLISHABLE_KEY!,
+          "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
+        },
+      }
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("Edge Function error:", response.status, text);
+      return res.status(502).json({ products: [] });
+    }
+    const json = await response.json();
+    res.json(json);
+  } catch (err: any) {
+    console.error("External materials fetch failed:", err.message);
+    res.status(502).json({ products: [] });
+  }
+});
+
 const supabaseAdmin = createClient(
   process.env.VITE_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
