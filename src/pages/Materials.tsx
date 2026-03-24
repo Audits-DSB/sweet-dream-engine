@@ -7,31 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Package, ImageOff } from "lucide-react";
+import { Plus, Package, ImageOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { api } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
 
-type ExternalProduct = {
-  id: string;
-  sku: string;
-  name: string;
-  image_url: string | null;
-  price_retail: number;
-  price_wholesale: number;
-  stock_quantity: number;
-  barcode: string | null;
-  category: string;
-  description: string | null;
-  created_at: string;
-  images: string[] | null;
-  features: any[] | null;
-  variants: any[] | null;
-};
-
-// Map external product to internal material shape
 type Material = {
   code: string;
   name: string;
@@ -51,28 +34,24 @@ type Material = {
   description?: string | null;
 };
 
-function mapProduct(p: ExternalProduct): Material {
-  // Extract manufacturer from variants if available
-  const companyVariant = p.variants?.find((v: any) => v.name === "Company" || v.name === "Company()");
-  const manufacturer = companyVariant?.options?.[0]?.value || "";
-
+function normalizeMaterial(raw: any): Material {
   return {
-    code: p.sku || p.id.slice(0, 8),
-    name: p.name,
-    category: p.category || "General",
-    unit: "unit",
-    sellingPrice: p.price_retail || 0,
-    storeCost: p.price_wholesale || 0,
-    supplier: "",
-    supplierId: "",
-    manufacturer,
-    hasExpiry: false,
-    active: true,
-    image_url: p.image_url,
-    stock_quantity: p.stock_quantity,
-    variants: p.variants,
-    barcode: p.barcode,
-    description: p.description,
+    code: raw.code,
+    name: raw.name,
+    category: raw.category || "General",
+    unit: raw.unit || "unit",
+    sellingPrice: Number(raw.sellingPrice ?? raw.selling_price ?? 0),
+    storeCost: Number(raw.storeCost ?? raw.store_cost ?? 0),
+    supplier: raw.supplier || "",
+    supplierId: raw.supplierId || raw.supplier_id || "",
+    manufacturer: raw.manufacturer || "",
+    hasExpiry: raw.hasExpiry ?? raw.has_expiry ?? false,
+    active: raw.active ?? true,
+    image_url: raw.image_url ?? null,
+    stock_quantity: raw.stock_quantity ?? 0,
+    variants: raw.variants ?? null,
+    barcode: raw.barcode ?? null,
+    description: raw.description ?? null,
   };
 }
 
@@ -82,6 +61,7 @@ export default function MaterialsPage() {
   const [searchParams] = useSearchParams();
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
+  const [enriching, setEnriching] = useState(false);
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -89,37 +69,65 @@ export default function MaterialsPage() {
   const [form, setForm] = useState({ name: "", category: "", unit: "unit", sellingPrice: "", storeCost: "", supplier: "", supplierId: "", manufacturer: "", hasExpiry: false, active: true });
   const [imgErrors, setImgErrors] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    fetchMaterials();
-  }, []);
+  useEffect(() => { fetchMaterials(); }, []);
 
   const fetchMaterials = async () => {
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-external-materials`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
-          },
+      // 1. Load from our database first — always works
+      const dbMaterials = await api.get<any[]>("/materials");
+      const normalized = (dbMaterials || []).map(normalizeMaterial);
+      setMaterials(normalized);
+      setLoading(false);
+
+      // 2. Enrich with external data (stock, images) — optional, fails gracefully
+      setEnriching(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-external-materials`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
+            },
+          }
+        );
+        const json = await res.json();
+        if (json.products && Array.isArray(json.products)) {
+          const byCode = new Map<string, any>();
+          json.products.forEach((p: any) => {
+            const sku = (p.sku || "").toUpperCase();
+            if (sku) byCode.set(sku, p);
+          });
+          setMaterials(prev => prev.map(m => {
+            const ext = byCode.get(m.code.toUpperCase());
+            if (!ext) return m;
+            const companyVariant = ext.variants?.find((v: any) => v.name === "Company" || v.name === "Company()");
+            return {
+              ...m,
+              image_url: m.image_url || ext.image_url || null,
+              stock_quantity: ext.stock_quantity ?? m.stock_quantity,
+              variants: ext.variants ?? m.variants,
+              barcode: m.barcode || ext.barcode || null,
+              description: m.description || ext.description || null,
+              manufacturer: m.manufacturer || companyVariant?.options?.[0]?.value || "",
+            };
+          }));
         }
-      );
-      const json = await res.json();
-      if (json.products) {
-        setMaterials(json.products.map(mapProduct));
-      }
+      } catch (_) {}
+      setEnriching(false);
     } catch (err) {
       console.error("Failed to fetch materials:", err);
-      toast.error("Failed to load materials from external database");
+      toast.error("تعذّر تحميل المواد");
+      setLoading(false);
+      setEnriching(false);
     }
-    setLoading(false);
   };
 
-  const categories = [...new Set(materials.map(m => m.category))].sort();
+  const categories = [...new Set(materials.map(m => m.category))].filter(Boolean).sort();
 
   const filtered = materials.filter((m) => {
     const matchSearch = !search || m.name.toLowerCase().includes(search.toLowerCase()) || m.code.toLowerCase().includes(search.toLowerCase());
@@ -127,14 +135,31 @@ export default function MaterialsPage() {
     return matchSearch && matchCategory;
   });
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.name || !form.sellingPrice) { toast.error(t.enterMaterialAndPrice); return; }
     const num = materials.length + 1;
     const newCode = `MAT-${String(num).padStart(3, "0")}`;
-    setMaterials([...materials, { ...form, code: newCode, sellingPrice: Number(form.sellingPrice), storeCost: Number(form.storeCost) }]);
-    setForm({ name: "", category: "", unit: "unit", sellingPrice: "", storeCost: "", supplier: "", supplierId: "", manufacturer: "", hasExpiry: false, active: true });
-    setDialogOpen(false);
-    toast.success(t.materialAdded);
+    try {
+      const saved = await api.post<any>("/materials", {
+        code: newCode,
+        name: form.name,
+        category: form.category || "General",
+        unit: form.unit,
+        sellingPrice: String(form.sellingPrice),
+        storeCost: String(form.storeCost),
+        supplier: form.supplier,
+        supplierId: form.supplierId,
+        manufacturer: form.manufacturer,
+        hasExpiry: form.hasExpiry,
+        active: form.active,
+      });
+      setMaterials(prev => [...prev, normalizeMaterial(saved)]);
+      setForm({ name: "", category: "", unit: "unit", sellingPrice: "", storeCost: "", supplier: "", supplierId: "", manufacturer: "", hasExpiry: false, active: true });
+      setDialogOpen(false);
+      toast.success(t.materialAdded);
+    } catch {
+      toast.error("تعذّر إضافة المادة");
+    }
   };
 
   return (
@@ -145,7 +170,10 @@ export default function MaterialsPage() {
         </div>
         <div>
           <h1 className="page-header">{t.materialsTitle}</h1>
-          <p className="page-description">{materials.length} {t.materialCount} · {categories.length} {t.category}</p>
+          <p className="page-description flex items-center gap-2">
+            {materials.length} {t.materialCount} · {categories.length} {t.category}
+            {enriching && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+          </p>
         </div>
       </div>
 
@@ -162,7 +190,12 @@ export default function MaterialsPage() {
 
       <div className="stat-card overflow-x-auto">
         {loading ? (
-          <div className="text-center py-12 text-muted-foreground text-sm">{t.loadingUsers || "Loading..."}</div>
+          <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>{t.loadingUsers || "جاري التحميل..."}</span>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
@@ -182,12 +215,7 @@ export default function MaterialsPage() {
                 <tr key={mat.code} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetailItem(mat)}>
                   <td className="py-2 px-3">
                     {mat.image_url && !imgErrors.has(mat.code) ? (
-                      <img
-                        src={mat.image_url}
-                        alt={mat.name}
-                        className="h-9 w-9 rounded-md object-cover border border-border"
-                        onError={() => setImgErrors(prev => new Set(prev).add(mat.code))}
-                      />
+                      <img src={mat.image_url} alt={mat.name} className="h-9 w-9 rounded-md object-cover border border-border" onError={() => setImgErrors(prev => new Set(prev).add(mat.code))} />
                     ) : (
                       <div className="h-9 w-9 rounded-md bg-muted flex items-center justify-center">
                         <ImageOff className="h-4 w-4 text-muted-foreground" />
@@ -197,8 +225,8 @@ export default function MaterialsPage() {
                   <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{mat.code}</td>
                   <td className="py-3 px-3 font-medium">{mat.name}</td>
                   <td className="py-3 px-3"><span className="text-xs bg-muted px-2 py-0.5 rounded">{mat.category}</span></td>
-                  <td className="py-3 px-3 text-end font-medium">{mat.sellingPrice} {t.currency}</td>
-                  <td className="py-3 px-3 text-end text-muted-foreground">{mat.storeCost > 0 ? `${mat.storeCost} ${t.currency}` : "—"}</td>
+                  <td className="py-3 px-3 text-end font-medium">{mat.sellingPrice.toLocaleString()} {t.currency}</td>
+                  <td className="py-3 px-3 text-end text-muted-foreground">{mat.storeCost > 0 ? `${mat.storeCost.toLocaleString()} ${t.currency}` : "—"}</td>
                   <td className="py-3 px-3 text-end">
                     <Badge variant={mat.stock_quantity && mat.stock_quantity > 0 ? "default" : "secondary"} className={mat.stock_quantity && mat.stock_quantity > 0 ? "bg-success/10 text-success border-0" : ""}>
                       {mat.stock_quantity ?? 0}
@@ -215,18 +243,13 @@ export default function MaterialsPage() {
       {/* Detail Dialog */}
       <Dialog open={!!detailItem} onOpenChange={() => setDetailItem(null)}>
         <DialogContent className="max-w-lg p-0 overflow-hidden">
+          <DialogHeader className="sr-only"><DialogTitle>{detailItem?.name}</DialogTitle></DialogHeader>
           {detailItem && (
             <>
-              {/* Header with image */}
               <div className="relative bg-muted/30 p-6 pb-4 border-b border-border">
                 <div className="flex items-start gap-4">
                   {detailItem.image_url && !imgErrors.has(detailItem.code + "-detail") ? (
-                    <img
-                      src={detailItem.image_url}
-                      alt={detailItem.name}
-                      className="h-20 w-20 rounded-xl object-cover border border-border shadow-sm shrink-0"
-                      onError={() => setImgErrors(prev => new Set(prev).add(detailItem.code + "-detail"))}
-                    />
+                    <img src={detailItem.image_url} alt={detailItem.name} className="h-20 w-20 rounded-xl object-cover border border-border shadow-sm shrink-0" onError={() => setImgErrors(prev => new Set(prev).add(detailItem.code + "-detail"))} />
                   ) : (
                     <div className="h-20 w-20 rounded-xl bg-muted flex items-center justify-center shrink-0 border border-border">
                       <Package className="h-8 w-8 text-muted-foreground/50" />
@@ -239,35 +262,25 @@ export default function MaterialsPage() {
                   </div>
                 </div>
               </div>
-
-              {/* Body */}
               <div className="p-6 space-y-5">
-                {detailItem.description && (
-                  <p className="text-sm text-muted-foreground leading-relaxed">{detailItem.description}</p>
-                )}
-
-                {/* Key metrics */}
+                {detailItem.description && <p className="text-sm text-muted-foreground leading-relaxed">{detailItem.description}</p>}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="text-center p-3 rounded-xl bg-muted/40 border border-border/50">
                     <p className="text-[11px] text-muted-foreground mb-1">{t.sellingPrice}</p>
-                    <p className="text-base font-bold text-foreground">{detailItem.sellingPrice}</p>
+                    <p className="text-base font-bold text-foreground">{detailItem.sellingPrice.toLocaleString()}</p>
                     <p className="text-[10px] text-muted-foreground">{t.currency}</p>
                   </div>
                   <div className="text-center p-3 rounded-xl bg-muted/40 border border-border/50">
                     <p className="text-[11px] text-muted-foreground mb-1">{t.storeCost}</p>
-                    <p className="text-base font-bold text-foreground">{detailItem.storeCost > 0 ? detailItem.storeCost : "—"}</p>
+                    <p className="text-base font-bold text-foreground">{detailItem.storeCost > 0 ? detailItem.storeCost.toLocaleString() : "—"}</p>
                     <p className="text-[10px] text-muted-foreground">{detailItem.storeCost > 0 ? t.currency : ""}</p>
                   </div>
                   <div className="text-center p-3 rounded-xl bg-muted/40 border border-border/50">
                     <p className="text-[11px] text-muted-foreground mb-1">Stock</p>
-                    <p className={`text-base font-bold ${(detailItem.stock_quantity ?? 0) > 0 ? "text-success" : "text-destructive"}`}>
-                      {detailItem.stock_quantity ?? 0}
-                    </p>
+                    <p className={`text-base font-bold ${(detailItem.stock_quantity ?? 0) > 0 ? "text-success" : "text-destructive"}`}>{detailItem.stock_quantity ?? 0}</p>
                     <p className="text-[10px] text-muted-foreground">{detailItem.unit || "unit"}</p>
                   </div>
                 </div>
-
-                {/* Extra info */}
                 <div className="space-y-2">
                   {detailItem.manufacturer && (
                     <div className="flex items-center justify-between py-2 border-b border-border/50 text-sm">
@@ -282,8 +295,6 @@ export default function MaterialsPage() {
                     </div>
                   )}
                 </div>
-
-                {/* Variants */}
                 {detailItem.variants && detailItem.variants.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Variants</p>
@@ -330,6 +341,10 @@ export default function MaterialsPage() {
               <div><Label className="text-xs">{t.storeCost}</Label><Input className="h-9 mt-1" type="number" value={form.storeCost} onChange={(e) => setForm({ ...form, storeCost: e.target.value })} /></div>
             </div>
             <div><Label className="text-xs">{t.manufacturer}</Label><Input className="h-9 mt-1" value={form.manufacturer} onChange={(e) => setForm({ ...form, manufacturer: e.target.value })} /></div>
+            <div className="flex items-center gap-2">
+              <Switch checked={form.hasExpiry} onCheckedChange={(v) => setForm({ ...form, hasExpiry: v })} />
+              <Label className="text-xs">{t.hasExpiry || "له تاريخ انتهاء"}</Label>
+            </div>
             <Button className="w-full" onClick={handleAdd}>{t.addMaterial}</Button>
           </div>
         </DialogContent>
