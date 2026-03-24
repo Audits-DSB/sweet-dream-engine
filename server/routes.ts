@@ -710,6 +710,19 @@ router.post("/treasury/transactions", async (req, res) => {
   sbOk(res, result);
 });
 
+router.delete("/treasury/transactions/all", async (req, res) => {
+  const FOUNDER_TYPES = ["founder_contribution", "founder_withdrawal", "order_funding"];
+  const { data: txns } = await supabaseAdmin
+    .from("treasury_transactions")
+    .select("id,account_id,amount,tx_type")
+    .not("tx_type", "in", `(${FOUNDER_TYPES.map(t => `"${t}"`).join(",")})`);
+  const ids = (txns || []).map((t: any) => t.id);
+  if (ids.length === 0) return res.json({ deleted: 0 });
+  const { error } = await supabaseAdmin.from("treasury_transactions").delete().in("id", ids);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ deleted: ids.length });
+});
+
 router.delete("/treasury/transactions/:id", async (req, res) => {
   // Fetch the transaction first to reverse its balance effect
   const { data: tx, error: fetchErr } = await supabaseAdmin
