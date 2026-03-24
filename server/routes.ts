@@ -258,4 +258,68 @@ router.post("/treasury/transactions", async (req, res) => {
   sbOk(res, result);
 });
 
+// ─── FOUNDER TRANSACTIONS (stored in treasury_transactions with special txTypes) ──
+// txType: "founder_contribution" | "founder_withdrawal" | "order_funding"
+// performedBy = founderId, referenceId = founderName, linkedAccountId = orderId, category = method, description = notes
+const FOUNDER_TX_TYPES = ["founder_contribution", "founder_withdrawal", "order_funding"];
+
+router.get("/founder-transactions", async (_req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from("treasury_transactions")
+    .select("*")
+    .in("tx_type", FOUNDER_TX_TYPES)
+    .order("created_at", { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  const mapped = (data || []).map((tx: any) => ({
+    id: tx.id,
+    founderId: tx.performed_by || "",
+    founderName: tx.reference_id || "",
+    type: tx.tx_type === "founder_contribution" ? "contribution" : tx.tx_type === "founder_withdrawal" ? "withdrawal" : "funding",
+    amount: Math.abs(Number(tx.amount)),
+    method: tx.category || "bank",
+    orderId: tx.linked_account_id || "",
+    notes: tx.description || "",
+    date: tx.date || (tx.created_at ? tx.created_at.split("T")[0] : ""),
+    createdAt: tx.created_at,
+  }));
+  res.json(mapped);
+});
+
+router.post("/founder-transactions", async (req, res) => {
+  const { founderId, founderName, type, amount, method, orderId, notes, date } = req.body;
+  const txType = type === "contribution" ? "founder_contribution" : type === "withdrawal" ? "founder_withdrawal" : "order_funding";
+  const signedAmount = type === "withdrawal" ? -Math.abs(Number(amount)) : Math.abs(Number(amount));
+  const txData = {
+    tx_type: txType,
+    amount: signedAmount,
+    balance_after: 0,
+    performed_by: founderId || null,
+    reference_id: founderName || null,
+    linked_account_id: orderId || null,
+    category: method || "bank",
+    description: notes || null,
+    date: date || new Date().toISOString().split("T")[0],
+  };
+  const { data, error } = await supabaseAdmin.from("treasury_transactions").insert(txData).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({
+    id: data.id,
+    founderId: data.performed_by || "",
+    founderName: data.reference_id || "",
+    type,
+    amount: Math.abs(Number(data.amount)),
+    method: data.category || "bank",
+    orderId: data.linked_account_id || "",
+    notes: data.description || "",
+    date: data.date || data.created_at?.split("T")[0] || "",
+    createdAt: data.created_at,
+  });
+});
+
+router.delete("/founder-transactions/:id", async (req, res) => {
+  const { error } = await supabaseAdmin.from("treasury_transactions").delete().eq("id", req.params.id).in("tx_type", FOUNDER_TX_TYPES);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
+});
+
 export default router;

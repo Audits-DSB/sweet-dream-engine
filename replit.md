@@ -1,69 +1,73 @@
 # DSB - Operations & Business Management App
 
 ## Overview
-A full-featured React + TypeScript operations management dashboard ("DSB") for managing clients, orders, deliveries, inventory, collections, suppliers, treasury, founders, reports, and user management. Migrated from Lovable → Replit with PostgreSQL backend.
+A full-featured React + TypeScript operations management dashboard for a dental supply company (DSB). Manages clients, orders, deliveries, inventory, collections, suppliers, treasury, founders, reports, and user management. All business data stored in Supabase PostgreSQL.
 
 ## Architecture
 - **Frontend**: React 18 + TypeScript + Vite (proxied via Express on port 5000)
-- **Backend**: Express.js + Drizzle ORM (port 5000)
-- **Database**: Replit PostgreSQL — all business data (12 tables)
-- **Auth**: Supabase — ONLY for authentication (email/password + OAuth). No Supabase data tables used.
+- **Backend**: Express.js API server (port 5000, Vite on 5001)
+- **Database**: Supabase PostgreSQL (project `nhmrwmseowokjiqccsjd`) — ALL business data
+- **Catalog DB**: Secondary Supabase project (`qelguwdtxlyhulrtfyyb`) — 306-product catalog (read-only via `/api/external-materials`)
+- **Auth**: Supabase Auth (email/password + OAuth via `@supabase/supabase-js`)
 - **UI**: Tailwind CSS + shadcn/ui + Radix UI components
 - **Routing**: React Router v6
-- **State**: TanStack React Query + React Context (AuthContext, WorkflowContext, LanguageContext)
+- **State**: TanStack React Query v5 + React Context (AuthContext, LanguageContext)
 - **Charts**: Recharts
 - **Design**: RTL Arabic, IBM Plex Sans Arabic font, orange primary color theme
 
-## Database Tables (PostgreSQL via Drizzle)
-12 tables: `clients`, `suppliers`, `materials`, `founders`, `orders`, `requests`, `deliveries`, `collections`, `inventory`, `notifications`, `treasury_accounts`, `treasury_transactions`
+## Database Tables (Supabase PostgreSQL)
+All business data in main Supabase project:
+- `clients` — Client records
+- `suppliers` — Supplier records
+- `materials` — Product/material catalog
+- `founders` — Company founders (fields: id, name, alias, email, phone, totalContributed, totalWithdrawn, active)
+- `orders` — Customer orders
+- `requests` — Client requests
+- `deliveries` — Delivery records (columns: id, orderId, clientId, date, scheduledDate, status, deliveredBy, deliveryFee, items, notes)
+- `collections` — Invoice/collection records
+- `inventory` — Inventory lots
+- `notifications` — System notifications
+- `treasury_accounts` — Treasury/cash accounts
+- `treasury_transactions` — All financial transactions including:
+  - Standard: inflow, expense, withdrawal, transfer
+  - Founder transactions: founder_contribution, founder_withdrawal, order_funding (stored with performedBy=founderId, referenceId=founderName, linkedAccountId=orderId, category=method)
+
+## Key API Endpoints (server/routes.ts)
+- `/api/clients`, `/api/suppliers`, `/api/materials`, `/api/founders` — CRUD
+- `/api/orders`, `/api/orders/next-id` — Orders CRUD + auto-increment ID
+- `/api/requests`, `/api/deliveries`, `/api/collections` — CRUD
+- `/api/inventory`, `/api/notifications` — CRUD
+- `/api/treasury/accounts`, `/api/treasury/transactions` — Treasury CRUD
+- `/api/founder-transactions` — Founder financial transactions (GET/POST/DELETE, uses treasury_transactions table)
+- `/api/external-materials` — Proxy to catalog Supabase project
 
 ## Key Files
-- `server/index.ts` — Express entry point, seeds data, proxies Vite on 5001
-- `server/routes.ts` — All CRUD API endpoints for all 12 tables
-- `server/db.ts` — Drizzle DB connection
-- `shared/schema.ts` — Full Drizzle schema for all tables
-- `src/lib/api.ts` — Central frontend API client (fetch wrapper to /api/*)
-- `src/contexts/WorkflowContext.tsx` — Main data context (loads all data from API)
-- `src/data/store.ts` — Static seed data (used for initial DB seeding on first startup)
-- `drizzle.config.ts` — Drizzle Kit config
+- `server/index.ts` — Express entry point, seeds data on first run, proxies Vite on 5001
+- `server/routes.ts` — All CRUD API endpoints, camelCase↔snake_case helpers
+- `src/lib/api.ts` — Frontend API client (fetch wrapper to /api/*)
+- `src/data/store.ts` — Static seed data (used for initial Supabase seeding only)
 
-## Key Structure
-```
-src/
-  pages/          — All page-level components (30+ pages)
-  components/     — Shared UI components (AppLayout, AppSidebar, etc.)
-  contexts/       — Auth, Workflow, Language context providers
-  integrations/
-    supabase/     — Supabase client (ONLY used for auth calls)
-  lib/
-    api.ts        — Frontend API client for all backend calls
-  data/           — Static seed data (store.ts)
-  hooks/          — Custom React hooks
-  i18n/           — Internationalization (Arabic/English RTL support)
-server/
-  index.ts        — Express server + seeding
-  routes.ts       — All /api/* CRUD routes
-  db.ts           — Drizzle DB connection
-shared/
-  schema.ts       — Drizzle schema (all 12 tables)
-```
+## Finance Section (fully dynamic from DB)
+- `CompanyProfit.tsx` — P&L from orders + treasury_transactions, expense tracking
+- `FounderFunding.tsx` — Founder transactions (contributions/withdrawals/order funding) via `/api/founder-transactions`
+- `FinancialReport.tsx` — Aggregate report: P&L from orders, collections summary from collections, founder distributions from founder-transactions + founders
+- `Collections.tsx` — Invoice tracking, payment recording, links to treasury
+- `Treasury.tsx`, `TreasuryAccounts.tsx`, `TreasuryTransactions.tsx` — Treasury management
 
 ## Environment Variables (Replit Secrets)
-- `VITE_SUPABASE_URL` — Supabase project URL (auth only)
-- `VITE_SUPABASE_PUBLISHABLE_KEY` — Supabase anon/public key (auth only)
-- `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key
-- `DATABASE_URL` — Replit PostgreSQL connection string (auto-provided)
+- `VITE_SUPABASE_URL` — Main Supabase project URL
+- `VITE_SUPABASE_PUBLISHABLE_KEY` — Supabase anon/public key
+- `SUPABASE_SERVICE_ROLE_KEY` — Service role key for server-side operations
+- `EXTERNAL_SUPABASE_URL` — Catalog Supabase project URL
+- `EXTERNAL_SUPABASE_ANON_KEY` — Catalog Supabase anon key
 
 ## Running the App
 ```bash
 npx tsx server/index.ts   # starts Express on 5000, spawns Vite on 5001
 ```
 
-## Migration Notes (Lovable → Replit)
-- All business data moved from Supabase to Replit PostgreSQL
-- Supabase kept ONLY for auth (`supabase.auth.*` calls)
-- `UserManagement.tsx` reads `profiles`/`user_roles` from Supabase (auth tables - intentional)
-- `Requests.tsx` uses `supabase.auth.getSession()` for calling external Supabase Edge Function (fetch-external-materials) — intentional
-- All other pages use `src/lib/api.ts` for data operations
-- Treasury data seeded directly via API (accounts and transactions)
-- Field naming: API returns camelCase (Drizzle convention)
+## Notes
+- API returns camelCase; Supabase stores snake_case. Helpers `camelizeKeys`/`snakifyKeys` handle conversion in routes.ts
+- Seed runs only once when `clients` table is empty
+- Founder transactions are stored in `treasury_transactions` with special txTypes (founder_contribution, founder_withdrawal, order_funding) to avoid needing a new table
+- `src/data/store.ts` contains static fallback data; most pages now use live API data
