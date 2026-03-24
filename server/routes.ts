@@ -201,6 +201,106 @@ router.delete("/orders/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── ALERTS (generated from real data) ───────────────────────────────────────
+router.get("/alerts", async (_req, res) => {
+  try {
+    const today = new Date();
+    const alerts: any[] = [];
+
+    const [ordersResult, collectionsResult, clientsResult, inventoryResult] = await Promise.all([
+      supabaseAdmin.from("orders").select("id,status,date,client_id,total_selling,created_at"),
+      supabaseAdmin.from("collections").select("id,status,due_date,client_id,client_name,amount,total,created_at"),
+      supabaseAdmin.from("clients").select("id,name"),
+      supabaseAdmin.from("inventory").select("material_code,material_name,quantity,min_quantity,expiry_date"),
+    ]);
+
+    const clientMap: Record<string, string> = {};
+    for (const c of clientsResult.data || []) clientMap[c.id] = c.name || c.id;
+
+    for (const order of ordersResult.data || []) {
+      if (order.status === "Ready for Delivery" || order.status === "Confirmed") {
+        const orderDate = new Date(order.date || order.created_at);
+        const daysOld = Math.floor((today.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24));
+        const clientName = clientMap[order.client_id] || order.client_id || "";
+        alerts.push({
+          id: `delivery-${order.id}`,
+          type: "delivery",
+          severity: daysOld >= 3 ? "warning" : "info",
+          title: `توصيل معلق — ${order.id}`,
+          description: clientName ? `${clientName} — ${order.status} منذ ${daysOld} يوم` : `${order.status} منذ ${daysOld} يوم`,
+          date: order.date || (order.created_at || "").split("T")[0],
+          link: `/orders/${order.id}`,
+          clientId: order.client_id,
+        });
+      }
+    }
+
+    for (const col of collectionsResult.data || []) {
+      const isOverdue = col.status === "Overdue" || col.status === "overdue" ||
+        (col.due_date && new Date(col.due_date) < today && col.status !== "Paid" && col.status !== "paid");
+      if (isOverdue) {
+        const amount = col.amount || col.total || 0;
+        const clientName = col.client_name || clientMap[col.client_id] || col.client_id || "";
+        alerts.push({
+          id: `overdue-${col.id}`,
+          type: "overdue",
+          severity: "critical",
+          title: `فاتورة متأخرة — ${col.id}`,
+          description: clientName ? `${clientName} — ${Number(amount).toLocaleString()} ج.م متأخرة` : `${Number(amount).toLocaleString()} ج.م متأخرة`,
+          date: col.due_date || (col.created_at || "").split("T")[0],
+          link: "/collections",
+          clientId: col.client_id,
+        });
+      }
+    }
+
+    for (const item of inventoryResult.data || []) {
+      const qty = Number(item.quantity || 0);
+      const minQty = Number(item.min_quantity || 5);
+      if (qty <= minQty) {
+        alerts.push({
+          id: `stock-${item.material_code}`,
+          type: "low_stock",
+          severity: qty === 0 ? "critical" : "warning",
+          title: `مخزون منخفض — ${item.material_name || item.material_code}`,
+          description: `متبقي ${qty} وحدة${minQty ? ` (الحد الأدنى: ${minQty})` : ""}`,
+          date: today.toISOString().split("T")[0],
+          link: "/inventory",
+        });
+      }
+      if (item.expiry_date) {
+        const expiry = new Date(item.expiry_date);
+        const daysLeft = Math.floor((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysLeft <= 60 && daysLeft >= 0) {
+          alerts.push({
+            id: `expiry-${item.material_code}`,
+            type: "expiry",
+            severity: daysLeft <= 14 ? "critical" : "warning",
+            title: `قارب على الانتهاء — ${item.material_name || item.material_code}`,
+            description: `ينتهي في ${item.expiry_date} (${daysLeft} يوم)`,
+            date: today.toISOString().split("T")[0],
+            link: "/inventory",
+          });
+        } else if (daysLeft < 0) {
+          alerts.push({
+            id: `expired-${item.material_code}`,
+            type: "expiry",
+            severity: "critical",
+            title: `منتهي الصلاحية — ${item.material_name || item.material_code}`,
+            description: `انتهى في ${item.expiry_date}`,
+            date: today.toISOString().split("T")[0],
+            link: "/inventory",
+          });
+        }
+      }
+    }
+
+    res.json(alerts);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── REQUESTS ─────────────────────────────────────────────────────────────────
 router.get("/requests", async (_req, res) => {
   sbOk(res, await supabaseAdmin.from("requests").select("*").order("created_at", { ascending: false }));
