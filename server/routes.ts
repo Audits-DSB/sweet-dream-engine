@@ -37,7 +37,20 @@ const supabaseAdmin = createClient(
 // ─── Local PG pool (for tables created in Replit's PostgreSQL) ────────────────
 const pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-// ─── Startup: ensure order_lines table exists ─────────────────────────────────
+// ─── Startup: ensure local tables exist ──────────────────────────────────────
+pgPool.query(`
+  CREATE TABLE IF NOT EXISTS delivery_actors (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    type        TEXT DEFAULT 'external',
+    phone       TEXT,
+    email       TEXT,
+    active      BOOLEAN DEFAULT TRUE,
+    founder_id  TEXT,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+  )
+`).catch((e: any) => console.error("delivery_actors table init error:", e.message));
+
 pgPool.query(`
   CREATE TABLE IF NOT EXISTS order_lines (
     id           SERIAL PRIMARY KEY,
@@ -62,6 +75,7 @@ const toSnake = (s: string) => s.replace(/([A-Z])/g, (c) => `_${c.toLowerCase()}
 function camelizeKeys(obj: any): any {
   if (Array.isArray(obj)) return obj.map(camelizeKeys);
   if (!obj || typeof obj !== "object") return obj;
+  if (obj instanceof Date) return obj.toISOString();
   return Object.fromEntries(Object.entries(obj).map(([k, v]) => [toCamel(k), camelizeKeys(v)]));
 }
 
@@ -129,15 +143,99 @@ router.get("/founders", async (_req, res) => {
   sbOk(res, await supabaseAdmin.from("founders").select("*").order("name"));
 });
 router.post("/founders", async (req, res) => {
-  sbOk(res, await supabaseAdmin.from("founders").insert(snakifyKeys(req.body)).select().single());
+  const result = await supabaseAdmin.from("founders").insert(snakifyKeys(req.body)).select().single();
+  if (!result.error && result.data) {
+    const f = result.data;
+    const actorId = `ACT-F-${f.id}`;
+    // Auto-create delivery actor for this founder (ignore if already exists)
+    await pgPool.query(
+      `INSERT INTO delivery_actors (id, name, type, phone, email, active, founder_id)
+       VALUES ($1, $2, 'founder', $3, $4, TRUE, $5)
+       ON CONFLICT (id) DO NOTHING`,
+      [actorId, f.name || "", f.phone || "", f.email || "", f.id]
+    ).catch(() => {});
+  }
+  sbOk(res, result);
 });
 router.patch("/founders/:id", async (req, res) => {
-  sbOk(res, await supabaseAdmin.from("founders").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
+  const result = await supabaseAdmin.from("founders").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single();
+  if (!result.error && result.data) {
+    const f = result.data;
+    const actorId = `ACT-F-${f.id}`;
+    await pgPool.query(
+      `UPDATE delivery_actors SET name=$1, phone=$2, email=$3 WHERE id=$4`,
+      [f.name || "", f.phone || "", f.email || "", actorId]
+    ).catch(() => {});
+  }
+  sbOk(res, result);
 });
 router.delete("/founders/:id", async (req, res) => {
   const { error } = await supabaseAdmin.from("founders").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
+  // Remove associated delivery actor
+  await pgPool.query("DELETE FROM delivery_actors WHERE founder_id = $1", [req.params.id]).catch(() => {});
   res.json({ ok: true });
+});
+
+// ─── DELIVERY ACTORS ──────────────────────────────────────────────────────────
+router.get("/delivery-actors/sync-founders", async (_req, res) => {
+  try {
+    const { data: founders } = await supabaseAdmin.from("founders").select("id,name,phone,email,active");
+    for (const f of founders || []) {
+      const actorId = `ACT-F-${f.id}`;
+      await pgPool.query(
+        `INSERT INTO delivery_actors (id, name, type, phone, email, active, founder_id)
+         VALUES ($1,$2,'founder',$3,$4,$5,$6)
+         ON CONFLICT (id) DO UPDATE SET name=$2, phone=$3, email=$4, active=$5`,
+        [actorId, f.name || "", f.phone || "", f.email || "", f.active !== false, f.id]
+      ).catch(() => {});
+    }
+    const { rows } = await pgPool.query("SELECT * FROM delivery_actors ORDER BY type DESC, name");
+    res.json(rows.map(camelizeKeys));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.get("/delivery-actors", async (_req, res) => {
+  try {
+    const { rows } = await pgPool.query("SELECT * FROM delivery_actors ORDER BY type DESC, name");
+    res.json(rows.map(camelizeKeys));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.post("/delivery-actors", async (req, res) => {
+  const { id, name, type, phone, email, active, founderId } = req.body;
+  const newId = id || `ACT-${Date.now()}`;
+  try {
+    const { rows } = await pgPool.query(
+      `INSERT INTO delivery_actors (id, name, type, phone, email, active, founder_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [newId, name || "", type || "external", phone || "", email || "", active !== false, founderId || null]
+    );
+    res.json(camelizeKeys(rows[0]));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.patch("/delivery-actors/:id", async (req, res) => {
+  const { name, type, phone, email, active } = req.body;
+  try {
+    const sets: string[] = [];
+    const vals: any[] = [];
+    let i = 1;
+    if (name !== undefined)   { sets.push(`name=$${i++}`);   vals.push(name); }
+    if (type !== undefined)   { sets.push(`type=$${i++}`);   vals.push(type); }
+    if (phone !== undefined)  { sets.push(`phone=$${i++}`);  vals.push(phone); }
+    if (email !== undefined)  { sets.push(`email=$${i++}`);  vals.push(email); }
+    if (active !== undefined) { sets.push(`active=$${i++}`); vals.push(active); }
+    if (!sets.length) return res.json({ ok: true });
+    vals.push(req.params.id);
+    const { rows } = await pgPool.query(
+      `UPDATE delivery_actors SET ${sets.join(",")} WHERE id=$${i} RETURNING *`, vals
+    );
+    res.json(camelizeKeys(rows[0]));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.delete("/delivery-actors/:id", async (req, res) => {
+  try {
+    await pgPool.query("DELETE FROM delivery_actors WHERE id=$1", [req.params.id]);
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── ORDERS ───────────────────────────────────────────────────────────────────

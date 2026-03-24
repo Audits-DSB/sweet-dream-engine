@@ -17,6 +17,11 @@ type Founder = {
   active: boolean; totalContributed: number; totalWithdrawn: number;
 };
 
+type DeliveryActor = {
+  id: string; name: string; type: string; phone: string;
+  email: string; active: boolean; founderId: string | null;
+};
+
 function mapFounder(raw: any): Founder {
   return {
     id: raw.id, name: raw.name || "", alias: raw.alias || "",
@@ -27,12 +32,13 @@ function mapFounder(raw: any): Founder {
   };
 }
 
-const initialActors = [
-  { id: "1", name: "أحمد (مؤسس)", type: "founder", phone: "+20 100 123 4567", active: true },
-  { id: "2", name: "DHL Express", type: "external", phone: "+20 11 234 5678", active: true },
-  { id: "3", name: "شركة توصيل سريع", type: "external", phone: "+20 12 345 6789", active: true },
-  { id: "4", name: "سارة (مؤسس)", type: "founder", phone: "+20 111 987 6543", active: false },
-];
+function mapActor(raw: any): DeliveryActor {
+  return {
+    id: raw.id, name: raw.name || "", type: raw.type || "external",
+    phone: raw.phone || "", email: raw.email || "",
+    active: raw.active !== false, founderId: raw.founderId || raw.founder_id || null,
+  };
+}
 
 type DialogMode = "founder" | "actor" | "editFounder" | "editActor" | null;
 
@@ -41,7 +47,9 @@ export default function SettingsPage() {
   const [founders, setFounders] = useState<Founder[]>([]);
   const [foundersLoading, setFoundersLoading] = useState(true);
   const [founderSaving, setFounderSaving] = useState(false);
-  const [actors, setActors] = useState(initialActors);
+  const [actors, setActors] = useState<DeliveryActor[]>([]);
+  const [actorsLoading, setActorsLoading] = useState(true);
+  const [actorSaving, setActorSaving] = useState(false);
   const { rules: dbRules, loading: rulesLoading } = useBusinessRules();
   const [rules, setRules] = useState<BusinessRules>(DEFAULT_RULES);
   const [rulesSaving, setRulesSaving] = useState(false);
@@ -52,7 +60,7 @@ export default function SettingsPage() {
   }, [dbRules, rulesLoading]);
 
   const [founderForm, setFounderForm] = useState({ name: "", alias: "", email: "", phone: "" });
-  const [actorForm, setActorForm] = useState({ name: "", type: "external", phone: "" });
+  const [actorForm, setActorForm] = useState({ name: "", type: "external", phone: "", email: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -60,6 +68,11 @@ export default function SettingsPage() {
       .then((data) => setFounders((data || []).map(mapFounder)))
       .catch(() => toast.error(t.failedToLoadData))
       .finally(() => setFoundersLoading(false));
+
+    api.get<any[]>("/delivery-actors/sync-founders")
+      .then((data) => setActors((data || []).map(mapActor)))
+      .catch(() => api.get<any[]>("/delivery-actors").then(d => setActors((d || []).map(mapActor))).catch(() => {}))
+      .finally(() => setActorsLoading(false));
   }, []);
 
   const editFounder = (founder: Founder) => {
@@ -89,7 +102,9 @@ export default function SettingsPage() {
         id: newId, name: founderForm.name.trim(), alias: founderForm.alias.trim(),
         email: founderForm.email.trim(), phone: founderForm.phone.trim(),
       });
-      setFounders([...founders, mapFounder(saved)]);
+      setFounders(prev => [...prev, mapFounder(saved)]);
+      // Refresh actors — backend auto-created an actor for this founder
+      api.get<any[]>("/delivery-actors").then(d => setActors((d || []).map(mapActor))).catch(() => {});
       setFounderForm({ name: "", alias: "", email: "", phone: "" }); setDialogMode(null);
       toast.success(t.founderAddedSettings);
     } catch { toast.error(t.failedToLoadData); }
@@ -101,32 +116,62 @@ export default function SettingsPage() {
     try {
       await api.delete(`/founders/${id}`);
       setFounders(founders.filter(f => f.id !== id));
+      // Refresh actors — backend removed associated actor
+      setActors(prev => prev.filter(a => a.founderId !== id));
       toast.success(t.founderDeleted);
     } catch { toast.error(t.failedToLoadData); }
   };
 
-  const editActor = (actor: typeof initialActors[0]) => {
+  const editActor = (actor: DeliveryActor) => {
     setEditingId(actor.id);
-    setActorForm({ name: actor.name, type: actor.type, phone: actor.phone });
+    setActorForm({ name: actor.name, type: actor.type, phone: actor.phone, email: actor.email });
     setDialogMode("editActor");
   };
 
-  const saveEditActor = () => {
-    if (!actorForm.name) { toast.error(t.enterFounderName); return; }
-    setActors(actors.map(a => a.id === editingId ? { ...a, name: actorForm.name, type: actorForm.type, phone: actorForm.phone } : a));
-    setDialogMode(null); setEditingId(null);
-    toast.success(t.actorAdded);
+  const saveEditActor = async () => {
+    if (!actorForm.name || !editingId) { toast.error(t.enterFounderName); return; }
+    setActorSaving(true);
+    try {
+      const updated = await api.patch<any>(`/delivery-actors/${editingId}`, actorForm);
+      setActors(prev => prev.map(a => a.id === editingId ? mapActor(updated) : a));
+      setDialogMode(null); setEditingId(null);
+      toast.success(t.actorAdded);
+    } catch { toast.error(t.failedToLoadData); }
+    finally { setActorSaving(false); }
   };
 
-  const addActor = () => {
+  const addActor = async () => {
     if (!actorForm.name) { toast.error(t.enterFounderName); return; }
-    setActors([...actors, { id: String(Date.now()), name: actorForm.name, type: actorForm.type, phone: actorForm.phone, active: true }]);
-    setActorForm({ name: "", type: "external", phone: "" }); setDialogMode(null);
-    toast.success(t.actorAdded);
+    setActorSaving(true);
+    try {
+      const saved = await api.post<any>("/delivery-actors", actorForm);
+      setActors(prev => [...prev, mapActor(saved)]);
+      setActorForm({ name: "", type: "external", phone: "", email: "" }); setDialogMode(null);
+      toast.success(t.actorAdded);
+    } catch { toast.error(t.failedToLoadData); }
+    finally { setActorSaving(false); }
   };
 
-  const deleteActor = (id: string) => { setActors(actors.filter(a => a.id !== id)); toast.success(t.actorDeleted); };
-  const toggleActorStatus = (id: string) => { setActors(actors.map(a => a.id === id ? { ...a, active: !a.active } : a)); };
+  const deleteActor = async (id: string) => {
+    const actor = actors.find(a => a.id === id);
+    if (actor?.founderId) { toast.error("لا يمكن حذف مؤسس من هنا — احذفه من تبويب المؤسسين"); return; }
+    if (!confirm("هل تريد حذف عنصر التوصيل؟")) return;
+    try {
+      await api.delete(`/delivery-actors/${id}`);
+      setActors(prev => prev.filter(a => a.id !== id));
+      toast.success(t.actorDeleted);
+    } catch { toast.error(t.failedToLoadData); }
+  };
+
+  const toggleActorStatus = async (id: string) => {
+    const actor = actors.find(a => a.id === id);
+    if (!actor) return;
+    const newActive = !actor.active;
+    try {
+      await api.patch(`/delivery-actors/${id}`, { active: newActive });
+      setActors(prev => prev.map(a => a.id === id ? { ...a, active: newActive } : a));
+    } catch { toast.error(t.failedToLoadData); }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -279,40 +324,88 @@ export default function SettingsPage() {
 
         <TabsContent value="delivery" className="space-y-4">
           <div className="flex justify-between items-center">
-            <p className="text-sm text-muted-foreground">{actors.length} {t.deliveryActors}</p>
-            <Button size="sm" onClick={() => { setActorForm({ name: "", type: "external", phone: "" }); setDialogMode("actor"); }}>
+            <p className="text-sm text-muted-foreground">
+              {actorsLoading ? "..." : `${actors.length} ${t.deliveryActors}`}
+              {actors.filter(a => a.founderId).length > 0 && (
+                <span className="text-muted-foreground"> · {actors.filter(a => a.founderId).length} مؤسس</span>
+              )}
+            </p>
+            <Button size="sm" onClick={() => { setActorForm({ name: "", type: "external", phone: "", email: "" }); setDialogMode("actor"); }}>
               <Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addActorBtn}
             </Button>
           </div>
-          <div className="stat-card overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.name}</th>
-                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.type}</th>
-                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.phone}</th>
-                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
-                  <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.actions}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {actors.map((actor) => (
-                  <tr key={actor.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                    <td className="py-2.5 px-3 font-medium">{actor.name}</td>
-                    <td className="py-2.5 px-3"><Badge variant="secondary" className="text-xs">{actor.type === "founder" ? t.founderType : t.externalType}</Badge></td>
-                    <td className="py-2.5 px-3 text-muted-foreground">{actor.phone}</td>
-                    <td className="py-2.5 px-3"><Badge variant={actor.active ? "default" : "secondary"} className={actor.active ? "bg-success/10 text-success border-0" : ""}>{actor.active ? t.active : t.inactive}</Badge></td>
-                    <td className="py-2.5 px-3 text-end">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => editActor(actor)}><Pencil className="h-3 w-3" /></Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => toggleActorStatus(actor.id)}><Switch checked={actor.active} className="scale-75" /></Button>
-                      </div>
-                    </td>
+
+          {actorsLoading ? (
+            <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+          ) : actors.length === 0 ? (
+            <div className="stat-card py-16 text-center">
+              <Truck className="h-8 w-8 mx-auto mb-3 text-muted-foreground opacity-40" />
+              <p className="text-sm text-muted-foreground mb-4">لا يوجد عناصر توصيل بعد</p>
+              <p className="text-xs text-muted-foreground mb-4">المؤسسون يضافون تلقائياً عند إنشائهم</p>
+              <Button size="sm" onClick={() => { setActorForm({ name: "", type: "external", phone: "", email: "" }); setDialogMode("actor"); }}>
+                <Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addActorBtn}
+              </Button>
+            </div>
+          ) : (
+            <div className="stat-card overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.name}</th>
+                    <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.type}</th>
+                    <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.phone}</th>
+                    <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
+                    <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.actions}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {actors.map((actor) => (
+                    <tr key={actor.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                      <td className="py-2.5 px-3">
+                        <div className="flex items-center gap-2">
+                          <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${actor.founderId ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                            {actor.name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-medium">{actor.name}</p>
+                            {actor.email && <p className="text-[11px] text-muted-foreground">{actor.email}</p>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <Badge variant="secondary" className={`text-xs ${actor.founderId ? "bg-primary/10 text-primary border-0" : ""}`}>
+                          {actor.founderId ? "مؤسس" : actor.type === "founder" ? t.founderType : t.externalType}
+                        </Badge>
+                      </td>
+                      <td className="py-2.5 px-3 text-muted-foreground text-xs">{actor.phone || "—"}</td>
+                      <td className="py-2.5 px-3">
+                        <Badge variant={actor.active ? "default" : "secondary"} className={actor.active ? "bg-success/10 text-success border-0" : ""}>
+                          {actor.active ? t.active : t.inactive}
+                        </Badge>
+                      </td>
+                      <td className="py-2.5 px-3 text-end">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => editActor(actor)} title={t.edit}><Pencil className="h-3 w-3" /></Button>
+                          <Button
+                            variant="ghost" size="sm" className={`h-7 w-7 p-0 ${actor.active ? "text-success" : "text-muted-foreground"}`}
+                            onClick={() => toggleActorStatus(actor.id)}
+                            title={actor.active ? "تعطيل" : "تفعيل"}
+                          >
+                            <Switch checked={actor.active} className="scale-75 pointer-events-none" />
+                          </Button>
+                          {!actor.founderId && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => deleteActor(actor.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -346,8 +439,13 @@ export default function SettingsPage() {
                 <Button size="sm" variant={actorForm.type === "external" ? "default" : "outline"} onClick={() => setActorForm({ ...actorForm, type: "external" })} className="flex-1 h-9">{t.externalType}</Button>
               </div>
             </div>
-            <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={actorForm.phone} onChange={(e) => setActorForm({ ...actorForm, phone: e.target.value })} /></div>
-            <Button className="w-full" onClick={addActor}>{t.addActorBtn}</Button>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={actorForm.phone} onChange={(e) => setActorForm({ ...actorForm, phone: e.target.value })} /></div>
+              <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={actorForm.email} onChange={(e) => setActorForm({ ...actorForm, email: e.target.value })} /></div>
+            </div>
+            <Button className="w-full" onClick={addActor} disabled={actorSaving}>
+              {actorSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : t.addActorBtn}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -382,8 +480,13 @@ export default function SettingsPage() {
                 <Button size="sm" variant={actorForm.type === "external" ? "default" : "outline"} onClick={() => setActorForm({ ...actorForm, type: "external" })} className="flex-1 h-9">{t.externalType}</Button>
               </div>
             </div>
-            <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={actorForm.phone} onChange={(e) => setActorForm({ ...actorForm, phone: e.target.value })} /></div>
-            <Button className="w-full" onClick={saveEditActor}><Save className="h-4 w-4 ltr:mr-2 rtl:ml-2" />{t.saveChanges}</Button>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={actorForm.phone} onChange={(e) => setActorForm({ ...actorForm, phone: e.target.value })} /></div>
+              <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={actorForm.email} onChange={(e) => setActorForm({ ...actorForm, email: e.target.value })} /></div>
+            </div>
+            <Button className="w-full" onClick={saveEditActor} disabled={actorSaving}>
+              {actorSaving ? <Loader2 className="h-4 w-4 animate-spin ltr:mr-2 rtl:ml-2" /> : <Save className="h-4 w-4 ltr:mr-2 rtl:ml-2" />}{t.saveChanges}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
