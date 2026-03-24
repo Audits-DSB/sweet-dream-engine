@@ -639,6 +639,31 @@ router.post("/treasury/transactions", async (req, res) => {
   sbOk(res, result);
 });
 
+router.delete("/treasury/transactions/:id", async (req, res) => {
+  // Fetch the transaction first to reverse its balance effect
+  const { data: tx, error: fetchErr } = await supabaseAdmin
+    .from("treasury_transactions")
+    .select("*")
+    .eq("id", req.params.id)
+    .single();
+  if (fetchErr || !tx) return res.status(404).json({ error: "Transaction not found" });
+
+  const { error } = await supabaseAdmin.from("treasury_transactions").delete().eq("id", req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+
+  // Reverse the balance: add back the amount (which was negative for expenses)
+  if (tx.account_id && tx.amount !== null) {
+    const { data: acc } = await supabaseAdmin.from("treasury_accounts").select("balance").eq("id", tx.account_id).single();
+    if (acc) {
+      const restored = Number(acc.balance) - Number(tx.amount); // subtract negative = add back
+      await supabaseAdmin.from("treasury_accounts")
+        .update({ balance: restored, updated_at: new Date().toISOString() })
+        .eq("id", tx.account_id);
+    }
+  }
+  res.json({ ok: true });
+});
+
 // ─── FOUNDER TRANSACTIONS (stored in treasury_transactions with special txTypes) ──
 // txType: "founder_contribution" | "founder_withdrawal" | "order_funding"
 // performedBy = founderId, referenceId = founderName, linkedAccountId = orderId, category = method, description = notes

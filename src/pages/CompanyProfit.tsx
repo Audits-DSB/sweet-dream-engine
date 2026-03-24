@@ -4,7 +4,7 @@ import { useBusinessRules, getCompanyShareRatio, getFounderShareRatio } from "@/
 import { StatCard } from "@/components/StatCard";
 import {
   TrendingUp, TrendingDown, DollarSign, Percent, Download, Wallet,
-  Plus, ArrowUpRight, ArrowDownRight, Minus, ShoppingCart, Receipt, X
+  Plus, ArrowUpRight, ArrowDownRight, Minus, ShoppingCart, Receipt, Trash2, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { exportToCsv } from "@/lib/exportCsv";
@@ -26,6 +26,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { logAudit } from "@/lib/auditLog";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 
 const EXPENSE_CATEGORIES = ["marketing", "operations", "salaries", "supplies", "rent", "utilities", "logistics", "maintenance", "other"] as const;
 
@@ -50,6 +52,8 @@ export default function CompanyProfitPage() {
   const [selectedMonth, setSelectedMonth] = useState<MonthDetail | null>(null);
   const [expenseForm, setExpenseForm] = useState({ amount: "", category: "operations" as typeof EXPENSE_CATEGORIES[number], description: "", accountId: "" });
   const [submitting, setSubmitting] = useState(false);
+  const [deleteTxTarget, setDeleteTxTarget] = useState<MonthDetail["expenses"][number] | null>(null);
+  const [deletingTx, setDeletingTx] = useState(false);
   const { rules } = useBusinessRules();
 
   const parseAmount = (val: unknown): number => {
@@ -257,6 +261,39 @@ export default function CompanyProfitPage() {
       toast({ title: t.error, description: String(err), variant: "destructive" });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDeleteExpense = async () => {
+    if (!deleteTxTarget) return;
+    setDeletingTx(true);
+    try {
+      await api.delete(`/treasury/transactions/${deleteTxTarget.id}`);
+      await logAudit({
+        entity: "treasury_transaction",
+        entityId: deleteTxTarget.id,
+        entityName: `${categoryLabel(deleteTxTarget.category)} — ${Math.abs(deleteTxTarget.amount).toLocaleString()} ${t.currency}`,
+        action: "delete",
+        snapshot: deleteTxTarget as any,
+        endpoint: "/treasury/transactions",
+      });
+      queryClient.invalidateQueries({ queryKey: ["treasury_transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["treasury_accounts"] });
+      // Remove from selectedMonth view
+      if (selectedMonth) {
+        setSelectedMonth(prev => prev ? {
+          ...prev,
+          expenses: prev.expenses.filter(e => e.id !== deleteTxTarget.id),
+          cost: prev.cost - Math.abs(deleteTxTarget.amount),
+          profit: prev.profit + Math.abs(deleteTxTarget.amount),
+        } : prev);
+      }
+      toast({ title: t.success, description: "تم حذف العملية بنجاح وتم تعديل رصيد الحساب" });
+      setDeleteTxTarget(null);
+    } catch (err) {
+      toast({ title: t.error, description: String(err), variant: "destructive" });
+    } finally {
+      setDeletingTx(false);
     }
   };
 
@@ -559,12 +596,25 @@ export default function CompanyProfitPage() {
                 ) : (
                   <div className="space-y-2">
                     {selectedMonth.expenses.map((e) => (
-                      <div key={e.id} className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-muted/20">
-                        <div>
+                      <div key={e.id} className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-muted/20 group">
+                        <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium">{categoryLabel(e.category)}</p>
-                          {e.description && <p className="text-xs text-muted-foreground">{e.description}</p>}
+                          {e.description && <p className="text-xs text-muted-foreground truncate">{e.description}</p>}
+                          <p className="text-xs text-muted-foreground">{e.created_at ? format(parseISO(e.created_at), "d MMM") : ""}</p>
                         </div>
-                        <p className="text-xs font-semibold text-destructive">-{fmtNum(Math.abs(e.amount))} {t.currency}</p>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <p className="text-xs font-semibold text-destructive">-{fmtNum(Math.abs(e.amount))} {t.currency}</p>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => setDeleteTxTarget(e)}
+                            data-testid={`button-delete-tx-${e.id}`}
+                            title="حذف العملية"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -574,6 +624,19 @@ export default function CompanyProfitPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      <ConfirmDeleteDialog
+        open={!!deleteTxTarget}
+        onOpenChange={(open) => !open && setDeleteTxTarget(null)}
+        title="حذف العملية المالية"
+        description={
+          deleteTxTarget
+            ? `هل تريد حذف عملية "${categoryLabel(deleteTxTarget.category)}" بقيمة ${Math.abs(deleteTxTarget.amount).toLocaleString()} ${t.currency}؟ سيتم استعادة المبلغ لرصيد الحساب تلقائياً.`
+            : ""
+        }
+        onConfirm={handleDeleteExpense}
+        loading={deletingTx}
+      />
     </div>
   );
 }
