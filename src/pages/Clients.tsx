@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
@@ -6,29 +6,60 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Eye, MoreHorizontal, Mail, Phone } from "lucide-react";
+import { Plus, Eye, MoreHorizontal, Mail, Phone, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { clientsList as initialData } from "@/data/store";
+import { api } from "@/lib/api";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const emptyClient = { name: "", contact: "", email: "", phone: "", city: "", status: "Active" };
+type Client = {
+  id: string; name: string; contact: string; email: string; phone: string;
+  city: string; status: string; joinDate: string; totalOrders: number;
+  outstanding: number; lastAudit: string;
+};
+
+function mapClient(raw: any): Client {
+  return {
+    id: raw.id,
+    name: raw.name || "",
+    contact: raw.contact || "",
+    email: raw.email || "",
+    phone: raw.phone || "",
+    city: raw.city || "",
+    status: raw.status || "Active",
+    joinDate: raw.joinDate || raw.join_date || "",
+    totalOrders: Number(raw.totalOrders ?? raw.total_orders ?? 0),
+    outstanding: Number(raw.outstanding ?? 0),
+    lastAudit: raw.lastAudit || raw.last_audit || "—",
+  };
+}
+
+const emptyForm = { name: "", contact: "", email: "", phone: "", city: "", status: "Active" };
 
 export default function ClientsPage() {
   const { t } = useLanguage();
   const [searchParams] = useSearchParams();
   const initialStatus = searchParams.get("status") || "";
-  const [clients, setClients] = useState(initialData);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>(initialStatus ? { status: initialStatus } : {});
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState(emptyClient);
+  const [form, setForm] = useState(emptyForm);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    api.get<any[]>("/clients")
+      .then(data => setClients((data || []).map(mapClient)))
+      .catch(() => toast.error("تعذّر تحميل العملاء"))
+      .finally(() => setLoading(false));
+  }, []);
 
   const filtered = clients.filter((c) => {
     const matchSearch = !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.contact.toLowerCase().includes(search.toLowerCase()) || c.id.toLowerCase().includes(search.toLowerCase());
@@ -37,14 +68,26 @@ export default function ClientsPage() {
     return matchSearch && matchStatus && matchCity;
   });
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.name || !form.contact) { toast.error(t.enterNameAndContact); return; }
-    const newId = `C${String(clients.length + 1).padStart(3, "0")}`;
-    const today = new Date().toISOString().split("T")[0];
-    setClients([...clients, { ...form, id: newId, joinDate: today, totalOrders: 0, outstanding: 0, lastAudit: "—" }]);
-    setForm(emptyClient);
-    setDialogOpen(false);
-    toast.success(t.clientAdded);
+    setSaving(true);
+    try {
+      const newId = `C${String(clients.length + 1).padStart(3, "0")}`;
+      const today = new Date().toISOString().split("T")[0];
+      const saved = await api.post<any>("/clients", {
+        id: newId, name: form.name, contact: form.contact,
+        email: form.email, phone: form.phone, city: form.city,
+        status: form.status,
+      });
+      setClients(prev => [...prev, mapClient(saved)]);
+      setForm(emptyForm);
+      setDialogOpen(false);
+      toast.success(t.clientAdded);
+    } catch (err: any) {
+      toast.error(err?.message || "فشل حفظ العميل");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -60,7 +103,7 @@ export default function ClientsPage() {
         onSearchChange={setSearch}
         filters={[
           { label: t.status, value: "status", options: [{ label: t.active, value: "Active" }, { label: t.inactive, value: "Inactive" }] },
-          { label: t.city, value: "city", options: [...new Set(clients.map(c => c.city))].map(c => ({ label: c, value: c })) },
+          { label: t.city, value: "city", options: [...new Set(clients.map(c => c.city))].filter(Boolean).map(c => ({ label: c, value: c })) },
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
@@ -69,61 +112,65 @@ export default function ClientsPage() {
       />
 
       <div className="stat-card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.code}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.clientName}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.contactPerson}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.city}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.totalOrders}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.outstanding}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.lastAudit}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.actions}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((client) => (
-              <tr key={client.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/clients/${client.id}`)}>
-                <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{client.id}</td>
-                <td className="py-3 px-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <span className="text-xs font-bold text-primary">{client.name.charAt(0)}</span>
-                    </div>
-                    <span className="font-medium">{client.name}</span>
-                  </div>
-                </td>
-                <td className="py-3 px-3 text-muted-foreground">{client.contact}</td>
-                <td className="py-3 px-3 text-muted-foreground">{client.city}</td>
-                <td className="py-3 px-3"><StatusBadge status={client.status} /></td>
-                <td className="py-3 px-3 text-end font-medium">{client.totalOrders}</td>
-                <td className="py-3 px-3 text-end font-medium">
-                  {client.outstanding > 0 ? (
-                    <span className="text-warning">{client.outstanding.toLocaleString()} {t.currency}</span>
-                  ) : (
-                    <span className="text-success">{t.settled}</span>
-                  )}
-                </td>
-                <td className="py-3 px-3 text-muted-foreground text-xs">{client.lastAudit}</td>
-                <td className="py-3 px-3 text-end" onClick={(e) => e.stopPropagation()}>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => navigate(`/clients/${client.id}`)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewProfile}</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => { if (client.email) { window.open(`mailto:${client.email}`); } else { toast.info(t.noEmail || "لا يوجد بريد إلكتروني"); } }}><Mail className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.sendEmail}</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => { if (client.phone) { window.open(`tel:${client.phone}`); } else { toast.info(t.noPhone || "لا يوجد رقم هاتف"); } }}><Phone className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.call}</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </td>
+        {loading ? (
+          <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.code}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.clientName}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.contactPerson}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.city}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
+                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.totalOrders}</th>
+                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.outstanding}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.lastAudit}</th>
+                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.actions}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length === 0 && <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>}
+            </thead>
+            <tbody>
+              {filtered.map((client) => (
+                <tr key={client.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/clients/${client.id}`)}>
+                  <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{client.id}</td>
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <span className="text-xs font-bold text-primary">{client.name.charAt(0)}</span>
+                      </div>
+                      <span className="font-medium">{client.name}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-3 text-muted-foreground">{client.contact}</td>
+                  <td className="py-3 px-3 text-muted-foreground">{client.city}</td>
+                  <td className="py-3 px-3"><StatusBadge status={client.status} /></td>
+                  <td className="py-3 px-3 text-end font-medium">{client.totalOrders}</td>
+                  <td className="py-3 px-3 text-end font-medium">
+                    {client.outstanding > 0 ? (
+                      <span className="text-warning">{client.outstanding.toLocaleString()} {t.currency}</span>
+                    ) : (
+                      <span className="text-success">{t.settled}</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-3 text-muted-foreground text-xs">{client.lastAudit}</td>
+                  <td className="py-3 px-3 text-end" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => navigate(`/clients/${client.id}`)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewProfile}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { if (client.email) { window.open(`mailto:${client.email}`); } else { toast.info("لا يوجد بريد إلكتروني"); } }}><Mail className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.sendEmail}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { if (client.phone) { window.open(`tel:${client.phone}`); } else { toast.info("لا يوجد رقم هاتف"); } }}><Phone className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.call}</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {!loading && filtered.length === 0 && <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>}
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -149,7 +196,9 @@ export default function ClientsPage() {
                 </Select>
               </div>
             </div>
-            <Button className="w-full" onClick={handleAdd}>{t.addClient}</Button>
+            <Button className="w-full" onClick={handleAdd} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t.addClient}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

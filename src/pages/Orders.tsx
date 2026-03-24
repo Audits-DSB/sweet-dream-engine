@@ -9,8 +9,7 @@ import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loade
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { clientsList, ordersList as initialData } from "@/data/store";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -18,29 +17,48 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+type Order = {
+  id: string; client: string; clientId: string; date: string; lines: number;
+  totalSelling: string; totalCost: string; splitMode: string;
+  deliveryFee: number; status: string; source: string;
+};
+
+type Client = { id: string; name: string; city: string; status: string; };
+
 type MaterialItem = {
-  code: string;
-  name: string;
-  category: string;
-  unit: string;
-  sellingPrice: number;
-  storeCost: number;
-  active: boolean;
+  code: string; name: string; category: string; unit: string;
+  sellingPrice: number; storeCost: number; active: boolean;
 };
 
 interface OrderItem {
-  materialCode: string;
-  name: string;
-  quantity: number;
-  sellingPrice: number;
-  costPrice: number;
+  materialCode: string; name: string; quantity: number;
+  sellingPrice: number; costPrice: number;
+}
+
+function mapOrder(raw: any): Order {
+  return {
+    id: raw.id,
+    client: raw.client || "",
+    clientId: raw.clientId || raw.client_id || "",
+    date: raw.date || "",
+    lines: Number(raw.lines ?? 0),
+    totalSelling: raw.totalSelling ?? raw.total_selling ?? "0",
+    totalCost: raw.totalCost ?? raw.total_cost ?? "0",
+    splitMode: raw.splitMode ?? raw.split_mode ?? "",
+    deliveryFee: Number(raw.deliveryFee ?? raw.delivery_fee ?? 0),
+    status: raw.status || "Draft",
+    source: raw.source || "",
+  };
 }
 
 export default function OrdersPage() {
   const { t } = useLanguage();
   const [searchParams] = useSearchParams();
   const urlStatus = searchParams.get("status") || "";
-  const [orders, setOrders] = useState(initialData);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>(urlStatus ? { status: urlStatus } : {});
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -52,99 +70,74 @@ export default function OrdersPage() {
   const [materialsLoading, setMaterialsLoading] = useState(false);
   const navigate = useNavigate();
 
-  // Fetch materials from the same external API as Materials page
   useEffect(() => {
-    const fetchMaterials = async () => {
-      setMaterialsLoading(true);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const res = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-external-materials`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-              ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
-            },
-          }
-        );
-        const json = await res.json();
-        if (json.products) {
-          setRealMaterials(json.products.map((p: any) => ({
-            code: p.sku || p.id?.slice(0, 8) || "",
-            name: p.name,
-            category: p.category || "General",
-            unit: "unit",
-            sellingPrice: p.price_retail || 0,
-            storeCost: p.price_wholesale || 0,
-            active: true,
-          })));
-        }
-      } catch (err) {
-        console.error("Failed to fetch materials for orders:", err);
-      }
-      setMaterialsLoading(false);
-    };
-    fetchMaterials();
+    Promise.all([
+      api.get<any[]>("/orders"),
+      api.get<any[]>("/clients"),
+    ]).then(([ordersData, clientsData]) => {
+      const clientMap: Record<string, string> = {};
+      const clientArr = (clientsData || []).map((c: any) => {
+        clientMap[c.id] = c.name || "";
+        return { id: c.id, name: c.name, city: c.city || "", status: c.status || "Active" };
+      });
+      setClients(clientArr);
+      setOrders((ordersData || []).map(raw => {
+        const o = mapOrder(raw);
+        if (!o.client && o.clientId) o.client = clientMap[o.clientId] || o.clientId;
+        return o;
+      }));
+    }).catch(() => toast.error("تعذّر تحميل البيانات"))
+      .finally(() => setLoading(false));
   }, []);
 
-  // Check for refill order data
+  useEffect(() => {
+    setMaterialsLoading(true);
+    api.get<{ products: any[] }>("/external-materials")
+      .then(json => {
+        if (json?.products?.length) {
+          setRealMaterials(json.products.map((p: any) => ({
+            code: p.sku || p.id?.slice(0, 8) || "",
+            name: p.name, category: p.category || "General",
+            unit: "unit", sellingPrice: p.price_retail || 0,
+            storeCost: p.price_wholesale || 0, active: true,
+          })));
+        }
+      }).catch(() => {}).finally(() => setMaterialsLoading(false));
+  }, []);
+
   useEffect(() => {
     const refillData = localStorage.getItem('refillOrderData');
     if (refillData) {
       try {
         const data = JSON.parse(refillData);
-        // Check if data is recent (within 5 minutes)
         if (Date.now() - data.createdAt < 5 * 60 * 1000) {
-          const refillOrderItems = data.items.map((item: any) => ({
-            materialCode: item.materialCode,
-            name: item.materialName,
-            quantity: item.quantity,
-            sellingPrice: 0, // Will need to be set manually
-            costPrice: 0 // Will need to be set manually
-          }));
-          
-          // If all items belong to the same client, auto-select that client
-          const uniqueClients = [...new Set(data.items.map((item: any) => item.clientId))];
-          if (uniqueClients.length === 1) {
-            setSelectedClient(String(uniqueClients[0]));
-          }
-          
-          setOrderItems(refillOrderItems);
+          setOrderItems(data.items.map((item: any) => ({
+            materialCode: item.materialCode, name: item.materialName,
+            quantity: item.quantity, sellingPrice: 0, costPrice: 0,
+          })));
+          const uniqueClients = [...new Set(data.items.map((i: any) => i.clientId))];
+          if (uniqueClients.length === 1) setSelectedClient(String(uniqueClients[0]));
           setDialogOpen(true);
-          
-          // Remove the data to prevent reuse
-          localStorage.removeItem('refillOrderData');
-        } else {
-          // Remove expired data
-          localStorage.removeItem('refillOrderData');
         }
-      } catch (err) {
-        console.error("Failed to parse refill order data:", err);
         localStorage.removeItem('refillOrderData');
-      }
+      } catch { localStorage.removeItem('refillOrderData'); }
     }
   }, []);
 
   const filtered = orders.filter((o) => {
     const q = search.toLowerCase().trim();
-    const matchSearch = !q || o.client.toLowerCase().includes(q) || o.id.toLowerCase().includes(q) || o.date.includes(q) || o.source.toLowerCase().includes(q) || o.status.toLowerCase().includes(q) || o.splitMode.toLowerCase().includes(q);
+    const matchSearch = !q || o.client.toLowerCase().includes(q) || o.id.toLowerCase().includes(q) || o.date.includes(q) || o.source.toLowerCase().includes(q) || o.status.toLowerCase().includes(q);
     const activeStatuses = ["Draft", "Confirmed", "Ready for Delivery"];
     const matchStatus = !filters.status || filters.status === "all" || (filters.status === "active" ? activeStatuses.includes(o.status) : o.status === filters.status);
     return matchSearch && matchStatus;
   });
 
   const usedMaterialCodes = orderItems.map(i => i.materialCode);
-
-  const filteredMaterials = useMemo(() => {
-    return realMaterials.filter(m => {
-      if (!m.active) return false;
-      if (usedMaterialCodes.includes(m.code)) return false;
-      if (!materialSearch) return true;
-      return m.name.toLowerCase().includes(materialSearch.toLowerCase()) || m.code.toLowerCase().includes(materialSearch.toLowerCase()) || m.category.toLowerCase().includes(materialSearch.toLowerCase());
-    });
-  }, [materialSearch, usedMaterialCodes, realMaterials]);
+  const filteredMaterials = useMemo(() => realMaterials.filter(m => {
+    if (!m.active || usedMaterialCodes.includes(m.code)) return false;
+    if (!materialSearch) return true;
+    return m.name.toLowerCase().includes(materialSearch.toLowerCase()) || m.code.toLowerCase().includes(materialSearch.toLowerCase()) || m.category.toLowerCase().includes(materialSearch.toLowerCase());
+  }), [materialSearch, usedMaterialCodes, realMaterials]);
 
   const addMaterialDirectly = (mat: MaterialItem) => {
     setOrderItems([...orderItems, { materialCode: mat.code, name: mat.name, quantity: 1, sellingPrice: mat.sellingPrice, costPrice: mat.storeCost }]);
@@ -157,38 +150,40 @@ export default function OrdersPage() {
     setOrderItems(updated);
   };
 
-  const removeItem = (index: number) => {
-    setOrderItems(orderItems.filter((_, i) => i !== index));
-  };
+  const removeItem = (index: number) => setOrderItems(orderItems.filter((_, i) => i !== index));
 
-  const totalSelling = orderItems.reduce((sum, item) => sum + item.sellingPrice * item.quantity, 0);
-  const totalCost = orderItems.reduce((sum, item) => sum + item.costPrice * item.quantity, 0);
+  const totalSelling = orderItems.reduce((sum, i) => sum + i.sellingPrice * i.quantity, 0);
+  const totalCost = orderItems.reduce((sum, i) => sum + i.costPrice * i.quantity, 0);
 
-  const handleAdd = () => {
-    if (!selectedClient || orderItems.length === 0) {
-      toast.error(t.selectClientAndTotal);
-      return;
-    }
-    const client = clientsList.find(c => c.id === selectedClient);
+  const handleAdd = async () => {
+    if (!selectedClient || orderItems.length === 0) { toast.error(t.selectClientAndTotal); return; }
+    const client = clients.find(c => c.id === selectedClient);
     if (!client) return;
-    const num = orders.length > 0 ? parseInt(orders[0].id.split("-")[1]) + 1 : 49;
-    const newId = `ORD-${String(num).padStart(3, "0")}`;
-    const today = new Date().toISOString().split("T")[0];
-    const splitLabel = form.splitMode === "equal" ? t.equal : t.byContribution;
-    // Check if this order was created from refill
-    const wasFromRefill = localStorage.getItem('refillOrderData') !== null;
-    const source = wasFromRefill ? "تعبئة" : t.manual;
-    
-    setOrders([{
-      id: newId, client: client.name, clientId: client.id, date: today, lines: orderItems.length,
-      totalSelling: `${totalSelling.toLocaleString()} ${t.currency}`, totalCost: `${totalCost.toLocaleString()} ${t.currency}`,
-      splitMode: splitLabel, deliveryFee: parseInt(form.deliveryFee) || 0, status: "Draft", source: source,
-    }, ...orders]);
-    setForm({ splitMode: "equal", deliveryFee: "500" });
-    setSelectedClient("");
-    setOrderItems([]);
-    setDialogOpen(false);
-    toast.success(t.orderCreated);
+    setSaving(true);
+    try {
+      const num = orders.length > 0
+        ? Math.max(...orders.map(o => parseInt(o.id.split("-")[1] || "0") || 0)) + 1
+        : 1;
+      const newId = `ORD-${String(num).padStart(3, "0")}`;
+      const today = new Date().toISOString().split("T")[0];
+      const splitLabel = form.splitMode === "equal" ? t.equal : t.byContribution;
+      const saved = await api.post<any>("/orders", {
+        id: newId, clientId: client.id, date: today,
+        lines: orderItems.length,
+        totalSelling: String(totalSelling),
+        totalCost: String(totalCost),
+        splitMode: splitLabel, deliveryFee: String(parseInt(form.deliveryFee) || 0),
+        status: "Draft", source: t.manual,
+      });
+      setOrders(prev => [mapOrder(saved), ...prev]);
+      setForm({ splitMode: "equal", deliveryFee: "500" });
+      setSelectedClient(""); setOrderItems([]); setDialogOpen(false);
+      toast.success(t.orderCreated);
+    } catch (err: any) {
+      toast.error(err?.message || "فشل حفظ الطلب");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const statusOptions = [
@@ -217,51 +212,55 @@ export default function OrdersPage() {
       />
 
       <div className="stat-card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.orderNumber}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.date}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.lines}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.selling}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.costCol}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.splitMode}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.source}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
-              <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.actions}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((order) => (
-              <tr key={order.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/orders/${order.id}`)}>
-                <td className="py-3 px-3 font-mono text-xs font-medium">{order.id}</td>
-                <td className="py-3 px-3 font-medium hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${order.clientId}`); }}>{order.client}</td>
-                <td className="py-3 px-3 text-muted-foreground">{order.date}</td>
-                <td className="py-3 px-3 text-end">{order.lines}</td>
-                <td className="py-3 px-3 text-end font-medium">{order.totalSelling}</td>
-                <td className="py-3 px-3 text-end text-muted-foreground">{order.totalCost}</td>
-                <td className="py-3 px-3"><span className="text-xs bg-muted px-2 py-0.5 rounded">{order.splitMode}</span></td>
-                <td className="py-3 px-3 text-xs text-muted-foreground">{order.source}</td>
-                <td className="py-3 px-3"><StatusBadge status={order.status} /></td>
-                <td className="py-3 px-3 text-end" onClick={(e) => e.stopPropagation()}>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => navigate(`/orders/${order.id}`)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewDetails}</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate("/deliveries")}><Truck className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.registerDelivery}</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => toast.success(`${t.createInvoice}: ${order.id}`)}><FileText className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.createInvoice}</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => toast.success(`${t.copy}: ${order.id}`)}><Copy className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.copy}</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </td>
+        {loading ? (
+          <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.orderNumber}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.date}</th>
+                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.lines}</th>
+                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.selling}</th>
+                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.costCol}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.splitMode}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.source}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
+                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.actions}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length === 0 && <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>}
+            </thead>
+            <tbody>
+              {filtered.map((order) => (
+                <tr key={order.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/orders/${order.id}`)}>
+                  <td className="py-3 px-3 font-mono text-xs font-medium">{order.id}</td>
+                  <td className="py-3 px-3 font-medium hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${order.clientId}`); }}>{order.client}</td>
+                  <td className="py-3 px-3 text-muted-foreground">{order.date}</td>
+                  <td className="py-3 px-3 text-end">{order.lines}</td>
+                  <td className="py-3 px-3 text-end font-medium">{order.totalSelling}</td>
+                  <td className="py-3 px-3 text-end text-muted-foreground">{order.totalCost}</td>
+                  <td className="py-3 px-3"><span className="text-xs bg-muted px-2 py-0.5 rounded">{order.splitMode}</span></td>
+                  <td className="py-3 px-3 text-xs text-muted-foreground">{order.source}</td>
+                  <td className="py-3 px-3"><StatusBadge status={order.status} /></td>
+                  <td className="py-3 px-3 text-end" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => navigate(`/orders/${order.id}`)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewDetails}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => navigate("/deliveries")}><Truck className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.registerDelivery}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toast.success(`${t.createInvoice}: ${order.id}`)}><FileText className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.createInvoice}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toast.success(`${t.copy}: ${order.id}`)}><Copy className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.copy}</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {!loading && filtered.length === 0 && <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>}
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setOrderItems([]); setSelectedClient(""); setMaterialSearch(""); } }}>
@@ -269,39 +268,28 @@ export default function OrdersPage() {
           <DialogHeader><DialogTitle>{t.newOrder}</DialogTitle></DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-2">
             <div className="space-y-4">
-              {/* Client Selection */}
               <div>
                 <Label className="text-xs">{t.client} *</Label>
                 <Select value={selectedClient} onValueChange={setSelectedClient}>
                   <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t.selectClientPlaceholder} /></SelectTrigger>
                   <SelectContent>
-                    {clientsList.filter(c => c.status === "Active").map(c => (
+                    {clients.filter(c => c.status === "Active").map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.name} — {c.city}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Material Search & Add */}
               <div>
                 <Label className="text-xs font-medium mb-2 block">{t.orderItemsLabel} *</Label>
                 <div className="relative">
                   <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    className="h-9 ps-9 text-xs"
-                    placeholder={t.searchMaterials}
-                    value={materialSearch}
-                    onChange={(e) => setMaterialSearch(e.target.value)}
-                  />
+                  <Input className="h-9 ps-9 text-xs" placeholder={t.searchMaterials} value={materialSearch} onChange={(e) => setMaterialSearch(e.target.value)} />
                 </div>
                 {materialSearch && filteredMaterials.length > 0 && (
                   <div className="border border-border rounded-md mt-1 max-h-40 overflow-y-auto bg-background shadow-md">
                     {filteredMaterials.slice(0, 8).map(mat => (
-                      <div
-                        key={mat.code}
-                        className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors"
-                        onClick={() => addMaterialDirectly(mat)}
-                      >
+                      <div key={mat.code} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors" onClick={() => addMaterialDirectly(mat)}>
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-muted-foreground">{mat.code}</span>
                           <span className="font-medium">{mat.name}</span>
@@ -312,19 +300,12 @@ export default function OrdersPage() {
                     ))}
                   </div>
                 )}
-                {materialsLoading && (
-                  <div className="text-center py-2 text-muted-foreground text-xs mt-1 flex items-center justify-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> جاري تحميل المواد...</div>
-                )}
-                {!materialsLoading && materialSearch && filteredMaterials.length === 0 && (
-                  <div className="text-center py-2 text-muted-foreground text-xs mt-1">{t.noResults}</div>
-                )}
+                {materialsLoading && <div className="text-center py-2 text-muted-foreground text-xs mt-1 flex items-center justify-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> جاري تحميل المواد...</div>}
+                {!materialsLoading && materialSearch && filteredMaterials.length === 0 && <div className="text-center py-2 text-muted-foreground text-xs mt-1">{t.noResults}</div>}
               </div>
 
-              {/* Selected Items */}
               {orderItems.length === 0 ? (
-                <div className="text-center py-6 border border-dashed border-border rounded-md text-muted-foreground text-xs">
-                  {t.noItemsAdded}
-                </div>
+                <div className="text-center py-6 border border-dashed border-border rounded-md text-muted-foreground text-xs">{t.noItemsAdded}</div>
               ) : (
                 <div className="space-y-2">
                   {orderItems.map((item, idx) => (
@@ -334,30 +315,18 @@ export default function OrdersPage() {
                           <span className="font-mono text-muted-foreground">{item.materialCode}</span>
                           <span className="font-medium">{item.name}</span>
                         </div>
-                        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => removeItem(idx)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => removeItem(idx)}><Trash2 className="h-3.5 w-3.5" /></Button>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <Label className="text-[10px] text-muted-foreground">{t.quantity}</Label>
-                          <Input className="h-7 text-xs mt-0.5" type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", parseInt(e.target.value) || 1)} />
-                        </div>
-                        <div>
-                          <Label className="text-[10px] text-muted-foreground">{t.sellingPrice}</Label>
-                          <Input className="h-7 text-xs mt-0.5" type="number" value={item.sellingPrice} onChange={(e) => updateItem(idx, "sellingPrice", parseFloat(e.target.value) || 0)} />
-                        </div>
-                        <div>
-                          <Label className="text-[10px] text-muted-foreground">{t.costPrice}</Label>
-                          <Input className="h-7 text-xs mt-0.5" type="number" value={item.costPrice} onChange={(e) => updateItem(idx, "costPrice", parseFloat(e.target.value) || 0)} />
-                        </div>
+                        <div><Label className="text-[10px] text-muted-foreground">{t.quantity}</Label><Input className="h-7 text-xs mt-0.5" type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", parseInt(e.target.value) || 1)} /></div>
+                        <div><Label className="text-[10px] text-muted-foreground">{t.sellingPrice}</Label><Input className="h-7 text-xs mt-0.5" type="number" value={item.sellingPrice} onChange={(e) => updateItem(idx, "sellingPrice", parseFloat(e.target.value) || 0)} /></div>
+                        <div><Label className="text-[10px] text-muted-foreground">{t.costPrice}</Label><Input className="h-7 text-xs mt-0.5" type="number" value={item.costPrice} onChange={(e) => updateItem(idx, "costPrice", parseFloat(e.target.value) || 0)} /></div>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* Totals Summary */}
               {orderItems.length > 0 && (
                 <div className="bg-muted/40 rounded-md p-3 text-xs space-y-1">
                   <div className="flex justify-between"><span className="text-muted-foreground">{t.totalSelling}:</span><span className="font-medium">{totalSelling.toLocaleString()} {t.currency}</span></div>
@@ -366,12 +335,8 @@ export default function OrdersPage() {
                 </div>
               )}
 
-              {/* Settings */}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">{t.deliveryFee}</Label>
-                  <Input className="h-9 mt-1" type="number" value={form.deliveryFee} onChange={(e) => setForm({ ...form, deliveryFee: e.target.value })} />
-                </div>
+                <div><Label className="text-xs">{t.deliveryFee}</Label><Input className="h-9 mt-1" type="number" value={form.deliveryFee} onChange={(e) => setForm({ ...form, deliveryFee: e.target.value })} /></div>
                 <div>
                   <Label className="text-xs">{t.splitModeLabel}</Label>
                   <Select value={form.splitMode} onValueChange={(v) => setForm({ ...form, splitMode: v })}>
@@ -384,7 +349,9 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              <Button className="w-full" onClick={handleAdd}>{t.createOrder}</Button>
+              <Button className="w-full" onClick={handleAdd} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t.createOrder}
+              </Button>
             </div>
           </ScrollArea>
         </DialogContent>
