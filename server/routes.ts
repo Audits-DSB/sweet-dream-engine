@@ -458,7 +458,54 @@ router.post("/deliveries", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("deliveries").insert(snakifyKeys(req.body)).select().single());
 });
 router.patch("/deliveries/:id", async (req, res) => {
-  sbOk(res, await supabaseAdmin.from("deliveries").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
+  const result = await supabaseAdmin.from("deliveries").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single();
+  if (!result.error && req.body.status === "Delivered") {
+    const del = result.data;
+    const orderId = del.order_id;
+    const clientId = del.client_id;
+    const deliveryDate = del.date || new Date().toISOString().split("T")[0];
+    try {
+      // Avoid duplicates: skip if already inserted for this order
+      const { rows: existing } = await pgPool.query(
+        "SELECT 1 FROM client_inventory WHERE source_order=$1 AND client_id=$2 LIMIT 1",
+        [orderId, clientId]
+      );
+      if (existing.length === 0) {
+        // Fetch order lines from local PG
+        const { rows: lines } = await pgPool.query(
+          "SELECT * FROM order_lines WHERE order_id=$1",
+          [orderId]
+        );
+        // Fetch client name from Supabase
+        const { data: clientData } = await supabaseAdmin.from("clients").select("name").eq("id", clientId).single();
+        const clientName = clientData?.name || clientId;
+        if (lines.length > 0) {
+          const vals: any[] = [];
+          const placeholders = lines.map((line: any, i: number) => {
+            const base = i * 12;
+            const id = `CI-${orderId}-${line.material_code || i}-${Date.now()}`;
+            vals.push(
+              id, clientId, clientName,
+              line.material_name || "", line.material_code || "", line.unit || "unit",
+              Number(line.quantity) || 0, Number(line.quantity) || 0,
+              Number(line.selling_price) || 0, Number(line.cost_price) || 0,
+              deliveryDate, orderId
+            );
+            return `($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12})`;
+          });
+          await pgPool.query(
+            `INSERT INTO client_inventory
+              (id,client_id,client_name,material,code,unit,delivered,remaining,selling_price,store_cost,delivery_date,source_order)
+             VALUES ${placeholders.join(",")}`,
+            vals
+          );
+        }
+      }
+    } catch (e: any) {
+      console.error("client_inventory auto-insert error:", e.message);
+    }
+  }
+  sbOk(res, result);
 });
 router.delete("/deliveries/:id", async (req, res) => {
   const { error } = await supabaseAdmin.from("deliveries").delete().eq("id", req.params.id);

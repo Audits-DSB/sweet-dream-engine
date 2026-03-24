@@ -250,52 +250,79 @@ export default function InventoryPage() {
                     {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                   </div>
                 </div>
-                {isExpanded && (
-                  <div className="border-t border-border overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border bg-muted/30">
-                          <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.batchNumber}</th>
-                          <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>
-                          <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.deliveredQty}</th>
-                          <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.remainingQty}</th>
-                          <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.unit}</th>
-                          <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.sellingPrice}</th>
-                          <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.expiryDate}</th>
-                          <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.sourceOrder}</th>
-                          <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
-                          <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {group.items.map(lot => {
-                          const daysToExpiry = lot.expiry ? Math.ceil((new Date(lot.expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
-                          const isNearExpiry = daysToExpiry !== null && daysToExpiry > 0 && daysToExpiry <= 30;
-                          return (
-                            <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetailItem(lot)}>
-                              <td className="py-2.5 px-3 font-mono text-xs text-muted-foreground">{lot.id}</td>
-                              <td className="py-2.5 px-3 font-medium">{lot.material}</td>
-                              <td className="py-2.5 px-3 text-end">{lot.delivered}</td>
-                              <td className="py-2.5 px-3 text-end font-medium">{lot.remaining}</td>
-                              <td className="py-2.5 px-3 text-muted-foreground">{lot.unit}</td>
-                              <td className="py-2.5 px-3 text-end">{lot.sellingPrice} {t.currency}</td>
-                              <td className="py-2.5 px-3 text-xs">
-                                <span className={isNearExpiry ? "text-warning font-medium" : "text-muted-foreground"}>
-                                  {lot.expiry}{isNearExpiry && ` (${daysToExpiry} ${t.daysRemaining})`}
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-3 font-mono text-xs text-muted-foreground hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${lot.sourceOrder}`); }}>{lot.sourceOrder}</td>
-                              <td className="py-2.5 px-3"><StatusBadge status={lot.status} /></td>
-                              <td className="py-2.5 px-3 text-end" onClick={e => e.stopPropagation()}>
-                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditItem(lot)}><Pencil className="h-3.5 w-3.5" /></Button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                {isExpanded && (() => {
+                  // Group items by sourceOrder
+                  const orderGroups: Record<string, InventoryLot[]> = {};
+                  group.items.forEach(lot => {
+                    const key = lot.sourceOrder || "—";
+                    if (!orderGroups[key]) orderGroups[key] = [];
+                    orderGroups[key].push(lot);
+                  });
+                  return (
+                    <div className="border-t border-border divide-y divide-border/50">
+                      {Object.entries(orderGroups).map(([orderId, orderItems]) => {
+                        const orderDate = orderItems[0]?.deliveryDate || "";
+                        const orderTotal = orderItems.reduce((s, l) => s + l.remaining * l.sellingPrice, 0);
+                        return (
+                          <div key={orderId}>
+                            <div className="flex items-center gap-3 px-4 py-2.5 bg-muted/20">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-muted-foreground">{t.sourceOrder || "الطلب"}:</span>
+                                <button
+                                  className="font-mono text-sm font-bold text-primary hover:underline"
+                                  onClick={() => navigate(`/orders/${orderId}`)}
+                                >{orderId}</button>
+                              </div>
+                              {orderDate && <span className="text-xs text-muted-foreground">{t.deliveryDate || "تاريخ التسليم"}: {orderDate}</span>}
+                              <span className="text-xs text-muted-foreground">{orderItems.length} {t.materialsCount || "مادة"}</span>
+                              <span className="text-xs font-medium text-primary mr-auto">{t.remainingValue || "قيمة المتبقي"}: {orderTotal.toLocaleString()} {t.currency}</span>
+                            </div>
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-border/40 bg-muted/10">
+                                  <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>
+                                  <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.code || "الكود"}</th>
+                                  <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.deliveredQty}</th>
+                                  <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.remainingQty}</th>
+                                  <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.unit}</th>
+                                  <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.sellingPrice}</th>
+                                  <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.expiryDate}</th>
+                                  <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
+                                  <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground"></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {orderItems.map(lot => {
+                                  const daysToExpiry = lot.expiry ? Math.ceil((new Date(lot.expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+                                  const isNearExpiry = daysToExpiry !== null && daysToExpiry > 0 && daysToExpiry <= 30;
+                                  return (
+                                    <tr key={lot.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors cursor-pointer" onClick={() => setDetailItem(lot)}>
+                                      <td className="py-2 px-3 font-medium">{lot.material}</td>
+                                      <td className="py-2 px-3 font-mono text-xs text-muted-foreground">{lot.code}</td>
+                                      <td className="py-2 px-3 text-end">{lot.delivered}</td>
+                                      <td className="py-2 px-3 text-end font-medium">{lot.remaining}</td>
+                                      <td className="py-2 px-3 text-muted-foreground">{lot.unit}</td>
+                                      <td className="py-2 px-3 text-end">{lot.sellingPrice.toLocaleString()} {t.currency}</td>
+                                      <td className="py-2 px-3 text-xs">
+                                        <span className={isNearExpiry ? "text-warning font-medium" : "text-muted-foreground"}>
+                                          {lot.expiry || "—"}{isNearExpiry && ` (${daysToExpiry} ${t.daysRemaining})`}
+                                        </span>
+                                      </td>
+                                      <td className="py-2 px-3"><StatusBadge status={lot.status} /></td>
+                                      <td className="py-2 px-3 text-end" onClick={e => e.stopPropagation()}>
+                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditItem(lot)}><Pencil className="h-3.5 w-3.5" /></Button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}
