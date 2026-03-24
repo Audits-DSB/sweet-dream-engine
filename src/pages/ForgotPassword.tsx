@@ -6,11 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Mail, ArrowLeft } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const { t } = useLanguage();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,8 +35,8 @@ export default function ForgotPasswordPage() {
           <div className="h-14 w-14 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4">
             <span className="text-primary-foreground font-bold text-xl">OP</span>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Reset Password</h1>
-          <p className="text-muted-foreground mt-1">We'll send you a reset link</p>
+          <h1 className="text-2xl font-bold text-foreground">{t.resetPassword}</h1>
+          <p className="text-muted-foreground mt-1">{t.weSendResetLink}</p>
         </div>
 
         <div className="stat-card p-6 space-y-6">
@@ -43,24 +45,24 @@ export default function ForgotPasswordPage() {
               <div className="h-12 w-12 rounded-full bg-success/10 flex items-center justify-center mx-auto">
                 <Mail className="h-6 w-6 text-success" />
               </div>
-              <p className="text-sm text-muted-foreground">Check your email for a password reset link. It may take a few minutes.</p>
+              <p className="text-sm text-muted-foreground">{t.checkEmailReset}</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email address</Label>
+                <Label htmlFor="email">{t.emailAddress}</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} className="pl-10 h-11" required />
+                  <Mail className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input id="email" type="email" placeholder={t.emailPlaceholder} value={email} onChange={e => setEmail(e.target.value)} className="ps-10 h-11" required />
                 </div>
               </div>
               <Button type="submit" className="w-full h-11" disabled={loading}>
-                {loading ? "Sending..." : "Send Reset Link"}
+                {loading ? t.sendingLink : t.sendResetLink}
               </Button>
             </form>
           )}
           <Link to="/login" className="flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-4 w-4" /> Back to login
+            <ArrowLeft className="h-4 w-4" /> {t.backToLogin}
           </Link>
         </div>
       </div>

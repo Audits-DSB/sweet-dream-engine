@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface FilterOption {
   label: string;
@@ -27,7 +28,7 @@ interface DataToolbarProps {
 }
 
 export function DataToolbar({
-  searchPlaceholder = "Search...",
+  searchPlaceholder,
   searchValue,
   onSearchChange,
   filters = [],
@@ -36,13 +37,16 @@ export function DataToolbar({
   onExport,
   actions,
 }: DataToolbarProps) {
+  const { t } = useLanguage();
+  const placeholder = searchPlaceholder ?? `${t.search}...`;
+
   return (
     <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
       <div className="flex flex-1 flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-72">
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder={searchPlaceholder}
+            placeholder={placeholder}
             value={searchValue}
             onChange={(e) => onSearchChange(e.target.value)}
             className="ps-9 h-9"
@@ -55,11 +59,11 @@ export function DataToolbar({
             onValueChange={(val) => onFilterChange?.(filter.value, val === "" ? "all" : val)}
           >
             <SelectTrigger className="h-9 w-[140px]">
-              <Filter className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+              <Filter className="h-3.5 w-3.5 me-1.5 text-muted-foreground" />
               <SelectValue placeholder={filter.label} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All {filter.label}</SelectItem>
+              <SelectItem value="all">{t.all} {filter.label}</SelectItem>
               {filter.options.filter(opt => opt.value && opt.value.trim() !== "").map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
@@ -72,8 +76,8 @@ export function DataToolbar({
       <div className="flex items-center gap-2">
         {onExport && (
           <Button variant="outline" size="sm" onClick={onExport} className="h-9">
-            <Download className="h-3.5 w-3.5 mr-1.5" />
-            Export
+            <Download className="h-3.5 w-3.5 me-1.5" />
+            {t.export}
           </Button>
         )}
         {actions}

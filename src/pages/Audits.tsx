@@ -217,7 +217,7 @@ export default function AuditsPage() {
       clientName: audit.client,
       invoiceNumber: `INV-${audit.id}`,
       date: audit.date,
-      columns: [t.material, t.codeCol || "الكود", t.unit, "الكمية المطلوبة", `السعر (${t.currency})`, `الإجمالي (${t.currency})`],
+      columns: [t.material, t.codeCol, t.unit, t.qtyRequired, `${t.priceColon} (${t.currency})`, `${t.total} (${t.currency})`],
       rows: shortages.map(r => [
         r.material, r.code, r.unit,
         Math.abs(r.diff),
@@ -225,8 +225,8 @@ export default function AuditsPage() {
         (Math.abs(r.diff) * r.sellingPrice).toLocaleString(),
       ]),
       totals: [
-        { label: "إجمالي الأصناف الناقصة", value: String(shortages.length) },
-        { label: "إجمالي التكلفة للعميل", value: `${shortages.reduce((s, r) => s + Math.abs(r.diff) * r.sellingPrice, 0).toLocaleString()} ${t.currency}` },
+        { label: t.totalShortageItems, value: String(shortages.length) },
+        { label: t.totalCostForClient, value: `${shortages.reduce((s, r) => s + Math.abs(r.diff) * r.sellingPrice, 0).toLocaleString()} ${t.currency}` },
       ],
       footer: `${t.auditor}: ${audit.auditor} — ${audit.date}`,
     });
@@ -238,7 +238,7 @@ export default function AuditsPage() {
     if (shortages.length === 0) { toast.info(t.noResults); return; }
     exportToCsv(
       `purchase_list_${audit.id}`,
-      ["المادة", "الكود", "الوحدة", "الكمية المطلوبة", `سعر التكلفة (${t.currency})`, `الإجمالي (${t.currency})`, "العميل"],
+      [t.material, t.codeCol, t.unit, t.qtyRequired, `${t.storeCostColon} (${t.currency})`, `${t.total} (${t.currency})`, t.client],
       shortages.map(r => [
         r.material, r.code, r.unit,
         Math.abs(r.diff),
@@ -247,7 +247,7 @@ export default function AuditsPage() {
         audit.client,
       ])
     );
-    toast.success("تم تصدير قائمة المشتريات");
+    toast.success(t.purchaseListExported);
   };
 
   const getAuditDetails = (audit: typeof initialAudits[0]): ComparisonRow[] => {
@@ -268,7 +268,7 @@ export default function AuditsPage() {
   };
 
   const initManualEntry = () => {
-    if (clientInventory.length === 0) { toast.error("لا يوجد مخزون لهذا العميل"); return; }
+    if (clientInventory.length === 0) { toast.error(t.noInventoryForClient); return; }
     const rows: ComparisonRow[] = clientInventory.map(inv => ({
       material: inv.material,
       code: inv.code,
@@ -355,8 +355,8 @@ export default function AuditsPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => setSelectedAudit(audit)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewDetails}</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => printClientInvoice(audit)}><Printer className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />فاتورة العميل</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => exportPurchaseSheet(audit)}><FileSpreadsheet className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />قائمة المشتريات</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => printClientInvoice(audit)}><Printer className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.clientInvoice}</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => exportPurchaseSheet(audit)}><FileSpreadsheet className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.purchaseListLabel}</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>
@@ -411,7 +411,7 @@ export default function AuditsPage() {
                           <p className="text-lg font-bold text-warning">{details.filter(r => r.result === "surplus").length}</p>
                         </div>
                         <div className="p-3 rounded-lg bg-muted/50 text-center">
-                          <p className="text-xs text-muted-foreground">تكلفة النقص</p>
+                          <p className="text-xs text-muted-foreground">{t.totalShortageCost}</p>
                           <p className="text-lg font-bold">{shortageTotal.toLocaleString()} <span className="text-xs font-normal">{t.currency}</span></p>
                         </div>
                       </div>
@@ -422,10 +422,10 @@ export default function AuditsPage() {
                           <thead>
                             <tr className="border-b border-border">
                               <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>
-                              <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">الكود</th>
+                              <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.codeCol}</th>
                               <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.expected}</th>
                               <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.actual}</th>
-                              <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">الفرق</th>
+                              <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.differenceCol}</th>
                               <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.result}</th>
                             </tr>
                           </thead>
@@ -454,10 +454,10 @@ export default function AuditsPage() {
                       {/* Action buttons */}
                       <div className="flex flex-wrap gap-2 pt-2">
                         <Button variant="default" size="sm" onClick={() => printClientInvoice(selectedAudit)}>
-                          <Printer className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />طباعة فاتورة العميل
+                          <Printer className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.printClientInvoice}
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => exportPurchaseSheet(selectedAudit)}>
-                          <FileSpreadsheet className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />تصدير قائمة المشتريات
+                          <FileSpreadsheet className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.exportPurchaseListBtn}
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => {
                           printInvoice({
@@ -467,18 +467,18 @@ export default function AuditsPage() {
                             clientName: selectedAudit.client,
                             invoiceNumber: selectedAudit.id,
                             date: selectedAudit.date,
-                            columns: [t.material, "الكود", t.expected, t.actual, "الفرق", t.result],
+                            columns: [t.material, t.codeCol, t.expected, t.actual, t.differenceCol, t.result],
                             rows: details.map(d => [d.material, d.code, d.expected, d.actual, d.diff, resultLabel(d.result)]),
                             totals: [
                               { label: t.matched, value: String(details.filter(d => d.result === "matched").length) },
                               { label: t.shortage, value: String(shortages.length) },
-                              { label: "تكلفة النقص للعميل", value: `${shortageTotal.toLocaleString()} ${t.currency}` },
-                              { label: "تكلفة الشراء", value: `${purchaseTotal.toLocaleString()} ${t.currency}` },
+                              { label: t.shortagesCostForClient, value: `${shortageTotal.toLocaleString()} ${t.currency}` },
+                              { label: t.purchaseCost, value: `${purchaseTotal.toLocaleString()} ${t.currency}` },
                             ],
                             footer: `${t.auditor}: ${selectedAudit.auditor} — ${selectedAudit.date}`,
                           });
                         }}>
-                          <FileText className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />طباعة تقرير الجرد
+                          <FileText className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.printAuditReport}
                         </Button>
                       </div>
                     </>
@@ -494,7 +494,7 @@ export default function AuditsPage() {
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) resetDialog(); }}>
         <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle>{step === "form" ? t.scheduleAudit : "مراجعة المقارنة"}</DialogTitle>
+            <DialogTitle>{step === "form" ? t.scheduleAudit : t.reviewComparison}</DialogTitle>
           </DialogHeader>
           <ScrollArea className="max-h-[75vh]">
             <div className="space-y-4 pe-2">
@@ -530,19 +530,19 @@ export default function AuditsPage() {
                     <div className="space-y-2">
                       <h4 className="text-sm font-semibold flex items-center gap-2">
                         <Package className="h-4 w-4 text-primary" />
-                        مخزون العميل الحالي ({clientInventory.length} صنف)
+                        {t.currentClientInventory} ({clientInventory.length} {t.itemCount})
                       </h4>
                       {clientInventory.length === 0 ? (
-                        <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-lg">لا يوجد مخزون مسجل لهذا العميل</p>
+                        <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-lg">{t.noInventoryForClient}</p>
                       ) : (
                         <div className="overflow-x-auto border border-border rounded-lg">
                           <table className="w-full text-xs">
                             <thead>
                               <tr className="border-b border-border bg-muted/30">
-                                <th className="text-start py-2 px-2.5 font-medium">المادة</th>
-                                <th className="text-start py-2 px-2.5 font-medium">الكود</th>
-                                <th className="text-end py-2 px-2.5 font-medium">المتبقي</th>
-                                <th className="text-start py-2 px-2.5 font-medium">الوحدة</th>
+                                <th className="text-start py-2 px-2.5 font-medium">{t.material}</th>
+                                <th className="text-start py-2 px-2.5 font-medium">{t.codeCol}</th>
+                                <th className="text-end py-2 px-2.5 font-medium">{t.remaining}</th>
+                                <th className="text-start py-2 px-2.5 font-medium">{t.unit}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -564,25 +564,25 @@ export default function AuditsPage() {
                   {/* Upload or manual entry */}
                   {selectedClient && clientInventory.length > 0 && (
                     <div className="space-y-2">
-                      <h4 className="text-sm font-semibold">رفع ملف الجرد أو إدخال يدوي</h4>
-                      <p className="text-xs text-muted-foreground">ارفع ملف CSV يحتوي على الكميات الفعلية (كود، اسم المادة، الكمية) أو أدخل يدوياً</p>
+                      <h4 className="text-sm font-semibold">{t.uploadAuditFileTitle}</h4>
+                      <p className="text-xs text-muted-foreground">{t.uploadAuditFileDesc}</p>
                       <div className="flex gap-2">
                         <input type="file" ref={fileInputRef} className="hidden" accept=".csv,.txt,.xlsx" onChange={handleFileUpload} />
                         <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                          <Upload className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />رفع ملف CSV
+                          <Upload className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.uploadCsv}
                         </Button>
                         <Button variant="outline" size="sm" onClick={initManualEntry}>
-                          <ClipboardCheck className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />إدخال يدوي
+                          <ClipboardCheck className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.manualEntryBtn}
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => {
                           exportToCsv(
                             `audit_template_${selectedClient}`,
-                            ["الكود", "المادة", "الكمية الفعلية"],
+                            [t.codeCol, t.material, t.actual],
                             clientInventory.map(inv => [inv.code, inv.material, ""])
                           );
-                          toast.success("تم تصدير القالب");
+                          toast.success(t.templateExported);
                         }}>
-                          <Download className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />تحميل قالب
+                          <Download className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.downloadTemplate}
                         </Button>
                       </div>
                     </div>
@@ -610,12 +610,12 @@ export default function AuditsPage() {
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-border bg-muted/30">
-                          <th className="text-start py-2 px-2.5 font-medium">المادة</th>
-                          <th className="text-start py-2 px-2.5 font-medium">الكود</th>
-                          <th className="text-end py-2 px-2.5 font-medium">المتوقع</th>
-                          <th className="text-end py-2 px-2.5 font-medium">الفعلي</th>
-                          <th className="text-end py-2 px-2.5 font-medium">الفرق</th>
-                          <th className="text-start py-2 px-2.5 font-medium">النتيجة</th>
+                          <th className="text-start py-2 px-2.5 font-medium">{t.material}</th>
+                          <th className="text-start py-2 px-2.5 font-medium">{t.codeCol}</th>
+                          <th className="text-end py-2 px-2.5 font-medium">{t.expected}</th>
+                          <th className="text-end py-2 px-2.5 font-medium">{t.actual}</th>
+                          <th className="text-end py-2 px-2.5 font-medium">{t.differenceCol}</th>
+                          <th className="text-start py-2 px-2.5 font-medium">{t.result}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -649,9 +649,9 @@ export default function AuditsPage() {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setStep("form")}>رجوع</Button>
+                    <Button variant="outline" size="sm" onClick={() => setStep("form")}>{t.back}</Button>
                     <Button size="sm" className="flex-1" onClick={handleSaveAudit}>
-                      <CheckCircle2 className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />حفظ الجرد
+                      <CheckCircle2 className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.saveAudit}
                     </Button>
                   </div>
                 </>

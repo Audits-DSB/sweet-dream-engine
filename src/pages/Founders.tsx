@@ -246,7 +246,7 @@ export default function FoundersPage() {
       {/* Edit Founder Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{t.edit || "تعديل"} — {editingFounder?.name}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t.edit} — {editingFounder?.name}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><Label className="text-xs">{t.name} *</Label><Input className="h-9 mt-1" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /></div>
             <div><Label className="text-xs">{t.jobTitle}</Label><Input className="h-9 mt-1" value={editForm.alias} onChange={(e) => setEditForm({ ...editForm, alias: e.target.value })} /></div>
@@ -260,7 +260,7 @@ export default function FoundersPage() {
               <Trash2 className="h-4 w-4" />
             </Button>
             <Button className="flex-1" onClick={handleEdit} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (t.save || "حفظ")}
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t.save}
             </Button>
           </DialogFooter>
         </DialogContent>

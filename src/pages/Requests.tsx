@@ -263,7 +263,7 @@ export default function RequestsPage() {
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.code}</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.date}</th>
-              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.materials || "المواد"}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.materials}</th>
               <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.expectedTotal}</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.notes}</th>
@@ -286,9 +286,9 @@ export default function RequestsPage() {
                         onClick={(e) => { 
                           e.stopPropagation(); 
                           toast(item.materialName, {
-                            description: `الكود: ${item.materialCode} · الكمية: ${item.qty} · السعر: ${item.unitPrice.toLocaleString()} ${t.currency}`,
+                            description: `${t.codeColon} ${item.materialCode} · ${t.quantityColon} ${item.qty} · ${t.priceColon} ${item.unitPrice.toLocaleString()} ${t.currency}`,
                             action: {
-                              label: "فتح المواد",
+                              label: t.openMaterials,
                               onClick: () => navigate(`/materials?search=${encodeURIComponent(item.materialName)}`)
                             }
                           });
@@ -342,19 +342,19 @@ export default function RequestsPage() {
 
               {/* Material Selector */}
               <div>
-                <Label className="text-xs">{t.materials || "المواد"} *</Label>
+                <Label className="text-xs">{t.materials} *</Label>
                 <div className="mt-1 relative">
                   <Search className="absolute start-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     className="ps-9"
-                    placeholder={t.searchMaterials || "ابحث عن مادة..."}
+                    placeholder={t.searchMaterials}
                     value={matSearch}
                     onChange={e => setMatSearch(e.target.value)}
                   />
                 </div>
                 <ScrollArea className="h-52 mt-2 border border-border rounded-md">
                   {loadingMats ? (
-                    <div className="flex items-center justify-center h-full text-sm text-muted-foreground py-8">جاري التحميل...</div>
+                    <div className="flex items-center justify-center h-full text-sm text-muted-foreground py-8">{t.loadingMaterials}</div>
                   ) : filteredMats.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-sm text-muted-foreground py-8">{t.noResults}</div>
                   ) : (
@@ -422,7 +422,7 @@ export default function RequestsPage() {
             </div>
           </ScrollArea>
           <DialogFooter>
-            <Button onClick={handleAdd}>{t.add || "إضافة"}</Button>
+            <Button onClick={handleAdd}>{t.add}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -465,7 +465,7 @@ export default function RequestsPage() {
               )}
 
               <div>
-                <p className="text-xs font-medium text-muted-foreground mb-2">{t.materials || "المواد"} ({detailReq.items.length})</p>
+                <p className="text-xs font-medium text-muted-foreground mb-2">{t.materials} ({detailReq.items.length})</p>
                 <div className="space-y-2">
                   {detailReq.items.map((item, idx) => (
                     <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20">

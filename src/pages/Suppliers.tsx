@@ -69,7 +69,7 @@ export default function SuppliersPage() {
       const data = await api.get<any[]>("/suppliers");
       setSuppliers((data || []).map(normalizeSupplier));
     } catch {
-      toast.error("تعذّر تحميل الموردين");
+      toast.error(t.failedToLoadSuppliers);
     }
     setLoading(false);
   };
@@ -131,7 +131,7 @@ export default function SuppliersPage() {
       setDialogOpen(false);
       toast.success(t.supplierAdded);
     } catch {
-      toast.error("تعذّر إضافة المورد");
+      toast.error(t.failedToAddSupplier);
     }
   };
 
@@ -158,7 +158,7 @@ export default function SuppliersPage() {
       {loading ? (
         <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground text-sm">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span>جاري التحميل...</span>
+          <span>{t.loadingMaterials}</span>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -222,7 +222,7 @@ export default function SuppliersPage() {
                 <h4 className="text-sm font-semibold mb-2">{t.suppliedMaterials}</h4>
                 {materialsLoading ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> جاري التحميل...
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t.loadingMaterials}
                   </div>
                 ) : getMaterialsForSupplier(detailItem.name).length === 0 ? (
                   <p className="text-sm text-muted-foreground">{t.noMaterials}</p>

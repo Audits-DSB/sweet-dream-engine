@@ -20,45 +20,44 @@ export default function Walkthrough() {
   const workflowSteps = [
     {
       id: 0,
-      title: "مرحباً بك في مسار العمل",
-      subtitle: "تعرف على كيفية عمل النظام من البداية للنهاية",
+      title: t.wtWelcomeTitle,
+      subtitle: t.wtWelcomeSubtitle,
       icon: PlayCircle,
       color: "text-primary",
       bgColor: "bg-primary/10",
       content: (
         <div className="space-y-4">
           <p className="text-muted-foreground">
-            مرحباً بك في نظام إدارة المواد الطبية. سنأخذك في جولة تفاعلية لتتعرف على 
-            كيفية سير العمل من استلام طلبات العملاء وحتى تحصيل المدفوعات.
+            {t.wtWelcomeDesc}
           </p>
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-primary/10 p-3 rounded-lg">
               <div className="flex items-center gap-2 mb-1">
                 <FileText className="h-4 w-4 text-primary" />
-                <span className="font-medium text-sm">الطلبات</span>
+                <span className="font-medium text-sm">{t.wtRequests}</span>
               </div>
-              <p className="text-xs text-muted-foreground">استقبال ومراجعة طلبات العملاء</p>
+              <p className="text-xs text-muted-foreground">{t.wtRequestsDesc}</p>
             </div>
             <div className="bg-warning/10 p-3 rounded-lg">
               <div className="flex items-center gap-2 mb-1">
                 <ShoppingCart className="h-4 w-4 text-warning" />
-                <span className="font-medium text-sm">الأوردرات</span>
+                <span className="font-medium text-sm">{t.wtOrders}</span>
               </div>
-              <p className="text-xs text-muted-foreground">تحويل الطلبات لأوردرات فعلية</p>
+              <p className="text-xs text-muted-foreground">{t.wtOrdersDesc}</p>
             </div>
             <div className="bg-success/10 p-3 rounded-lg">
               <div className="flex items-center gap-2 mb-1">
                 <Truck className="h-4 w-4 text-success" />
-                <span className="font-medium text-sm">التوصيل</span>
+                <span className="font-medium text-sm">{t.wtDelivery}</span>
               </div>
-              <p className="text-xs text-muted-foreground">إدارة عملية التوصيل للعملاء</p>
+              <p className="text-xs text-muted-foreground">{t.wtDeliveryDesc}</p>
             </div>
             <div className="bg-secondary/10 p-3 rounded-lg">
               <div className="flex items-center gap-2 mb-1">
                 <Receipt className="h-4 w-4 text-secondary" />
-                <span className="font-medium text-sm">التحصيل</span>
+                <span className="font-medium text-sm">{t.wtCollections}</span>
               </div>
-              <p className="text-xs text-muted-foreground">متابعة وتحصيل المدفوعات</p>
+              <p className="text-xs text-muted-foreground">{t.wtCollectionsDesc}</p>
             </div>
           </div>
         </div>
@@ -68,19 +67,18 @@ export default function Walkthrough() {
     },
     {
       id: 1,
-      title: "الطلبات (Requests)",
-      subtitle: "نقطة البداية - استقبال طلبات العملاء",
+      title: t.wtRequestsTitle,
+      subtitle: t.wtRequestsSubtitle,
       icon: FileText,
       color: "text-info",
       bgColor: "bg-info/10",
       content: (
         <div className="space-y-4">
           <p className="text-muted-foreground">
-            هنا تبدأ رحلة كل عملية تجارية. العملاء يرسلون طلباتهم لشراء المواد الطبية،
-            ونقوم بمراجعتها وتقييم إمكانية تنفيذها.
+            {t.wtRequestsContent}
           </p>
           <div className="space-y-2">
-            <h4 className="font-medium text-sm">الطلبات الحالية:</h4>
+            <h4 className="font-medium text-sm">{t.wtCurrentRequests}</h4>
             {requests.slice(0, 3).map(req => (
               <div key={req.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
                 <div className="flex items-center gap-2">
@@ -96,28 +94,27 @@ export default function Walkthrough() {
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Clock className="h-4 w-4" />
-            <span>متوسط وقت المراجعة: 24 ساعة</span>
+            <span>{t.wtAvgReviewTime}</span>
           </div>
         </div>
       ),
-      action: "مشاهدة الطلبات",
+      action: t.wtViewRequests,
       route: "/requests",
     },
     {
       id: 2,
-      title: "الأوردرات (Orders)",
-      subtitle: "تحويل الطلبات المعتمدة لأوردرات فعلية",
+      title: t.wtOrdersTitle,
+      subtitle: t.wtOrdersSubtitle,
       icon: ShoppingCart,
       color: "text-warning",
       bgColor: "bg-warning/10",
       content: (
         <div className="space-y-4">
           <p className="text-muted-foreground">
-            بعد مراجعة وقبول الطلب، يتم تحويله لأوردر فعلي. هنا نحدد الكميات النهائية،
-            الأسعار، وننسق مع الموردين لتوفير المواد المطلوبة.
+            {t.wtOrdersContent}
           </p>
           <div className="space-y-2">
-            <h4 className="font-medium text-sm">الأوردرات الحالية:</h4>
+            <h4 className="font-medium text-sm">{t.wtCurrentOrders}</h4>
             {orders.slice(0, 3).map(order => (
               <div key={order.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
                 <div className="flex items-center gap-2">
@@ -136,24 +133,23 @@ export default function Walkthrough() {
           </div>
         </div>
       ),
-      action: "مشاهدة الأوردرات",
+      action: t.wtViewOrders,
       route: "/orders",
     },
     {
       id: 3,
-      title: "التوصيل (Deliveries)",
-      subtitle: "إيصال المواد للعملاء",
+      title: t.wtDeliveryTitle,
+      subtitle: t.wtDeliverySubtitle,
       icon: Truck,
       color: "text-success",
       bgColor: "bg-success/10",
       content: (
         <div className="space-y-4">
           <p className="text-muted-foreground">
-            بعد تجهيز الأوردر، ننتقل لمرحلة التوصيل. نقوم بتنسيق مواعيد التسليم مع العملاء
-            وإدارة عملية النقل سواء بفريقنا الداخلي أو شركات التوصيل الخارجية.
+            {t.wtDeliveryContent}
           </p>
           <div className="space-y-2">
-            <h4 className="font-medium text-sm">عمليات التوصيل الحالية:</h4>
+            <h4 className="font-medium text-sm">{t.wtCurrentDeliveries}</h4>
             {deliveries.slice(0, 3).map(delivery => (
               <div key={delivery.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
                 <div className="flex items-center gap-2">
@@ -172,24 +168,23 @@ export default function Walkthrough() {
           </div>
         </div>
       ),
-      action: "مشاهدة التوصيل",
+      action: t.wtViewDeliveries,
       route: "/deliveries",
     },
     {
       id: 4,
-      title: "التحصيل (Collections)",
-      subtitle: "المرحلة الأخيرة - تحصيل المدفوعات",
+      title: t.wtCollectionsTitle,
+      subtitle: t.wtCollectionsSubtitle,
       icon: Receipt,
       color: "text-secondary",
       bgColor: "bg-secondary/10",
       content: (
         <div className="space-y-4">
           <p className="text-muted-foreground">
-            بعد إتمام التسليم، نقوم بإصدار الفواتير ومتابعة تحصيل المدفوعات من العملاء.
-            نتابع المدفوعات المتأخرة ونرسل التذكيرات عند الحاجة.
+            {t.wtCollectionsContent}
           </p>
           <div className="space-y-2">
-            <h4 className="font-medium text-sm">الفواتير الحالية:</h4>
+            <h4 className="font-medium text-sm">{t.wtCurrentInvoices}</h4>
             {collections.slice(0, 3).map(collection => (
               <div key={collection.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
                 <div className="flex items-center gap-2">
@@ -198,7 +193,7 @@ export default function Walkthrough() {
                   <span className="text-sm text-muted-foreground">{collection.client}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium">{collection.totalAmount.toLocaleString()} ج.م</span>
+                  <span className="text-xs font-medium">{collection.totalAmount.toLocaleString()} {t.currency}</span>
                   <Badge variant="secondary" className="text-xs">
                     {collection.status}
                   </Badge>
@@ -208,41 +203,40 @@ export default function Walkthrough() {
           </div>
         </div>
       ),
-      action: "مشاهدة التحصيل",
+      action: t.wtViewCollections,
       route: "/collections",
     },
     {
       id: 5,
-      title: "مبروك! تمت الجولة",
-      subtitle: "أنت الآن تعرف كيف يعمل النظام",
+      title: t.wtCompleteTitle,
+      subtitle: t.wtCompleteSubtitle,
       icon: CheckCircle,
       color: "text-success",
       bgColor: "bg-success/10",
       content: (
         <div className="space-y-4">
           <p className="text-muted-foreground">
-            ممتاز! الآن تعرف كيف يسير العمل في النظام من استقبال الطلب وحتى تحصيل المدفوعات.
-            يمكنك البدء في استكشاف النظام بنفسك.
+            {t.wtCompleteDesc}
           </p>
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-muted/30 p-3 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <Eye className="h-4 w-4 text-primary" />
-                <span className="font-medium text-sm">استكشف النظام</span>
+                <span className="font-medium text-sm">{t.wtExplore}</span>
               </div>
-              <p className="text-xs text-muted-foreground">تصفح الصفحات المختلفة وتفاعل مع البيانات</p>
+              <p className="text-xs text-muted-foreground">{t.wtExploreDesc}</p>
             </div>
             <div className="bg-muted/30 p-3 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <RefreshCw className="h-4 w-4 text-secondary" />
-                <span className="font-medium text-sm">إعادة تعيين</span>
+                <span className="font-medium text-sm">{t.wtReset}</span>
               </div>
-              <p className="text-xs text-muted-foreground">إعادة البيانات للحالة الأصلية في أي وقت</p>
+              <p className="text-xs text-muted-foreground">{t.wtResetDesc}</p>
             </div>
           </div>
         </div>
       ),
-      action: "العودة للداشبورد",
+      action: t.wtBackToDashboard,
       route: "/",
     },
   ];
@@ -253,14 +247,14 @@ export default function Walkthrough() {
   return (
     <div className="container mx-auto p-6 max-w-4xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">مسار العمل التفاعلي</h1>
-        <p className="text-muted-foreground">تعرف على كيفية سير العمل في النظام خطوة بخطوة</p>
+        <h1 className="text-2xl font-bold mb-2">{t.wtPageTitle}</h1>
+        <p className="text-muted-foreground">{t.wtPageDesc}</p>
       </div>
 
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-sm text-muted-foreground">التقدم:</span>
-          <span className="text-sm font-medium">{currentStep + 1} من {workflowSteps.length}</span>
+          <span className="text-sm text-muted-foreground">{t.wtProgress}</span>
+          <span className="text-sm font-medium">{currentStep + 1} {t.wtOf} {workflowSteps.length}</span>
         </div>
         <Progress value={progress} className="h-2" />
       </div>
@@ -290,7 +284,7 @@ export default function Walkthrough() {
           className="gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
-          السابق
+          {t.wtPrevious}
         </Button>
 
         <div className="flex items-center gap-3">
@@ -312,7 +306,7 @@ export default function Walkthrough() {
               className="gap-2"
             >
               <RefreshCw className="h-4 w-4" />
-              إعادة تعيين البيانات
+              {t.wtResetData}
             </Button>
           )}
         </div>
@@ -327,7 +321,7 @@ export default function Walkthrough() {
           }}
           className="gap-2"
         >
-          {currentStep === workflowSteps.length - 1 ? "انتهاء" : "التالي"}
+          {currentStep === workflowSteps.length - 1 ? t.wtFinish : t.wtNext}
           <ArrowRight className="h-4 w-4" />
         </Button>
       </div>

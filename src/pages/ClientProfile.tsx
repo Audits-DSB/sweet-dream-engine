@@ -74,7 +74,7 @@ export default function ClientProfile() {
         .filter((o: any) => (o.clientId || o.client_id) === id)
         .map(mapOrder);
       setOrders(clientOrders);
-    }).catch(() => toast.error("تعذّر تحميل بيانات العميل"))
+    }).catch(() => toast.error(t.failedToLoadClientData))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -85,9 +85,9 @@ export default function ClientProfile() {
       await api.patch(`/clients/${client.id}`, editForm);
       setClient({ ...client, ...editForm });
       setEditOpen(false);
-      toast.success(t.clientUpdated || "تم تحديث بيانات العميل");
+      toast.success(t.clientUpdated);
     } catch {
-      toast.error("فشل تحديث بيانات العميل");
+      toast.error(t.failedToUpdateClient);
     } finally {
       setSaving(false);
     }
@@ -104,8 +104,8 @@ export default function ClientProfile() {
   if (!client) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/clients")}><ArrowLeft className="h-4 w-4 ltr:mr-1 rtl:ml-1" />{t.back || "رجوع"}</Button>
-        <div className="text-center py-16 text-muted-foreground">لم يتم العثور على العميل</div>
+        <Button variant="ghost" size="sm" onClick={() => navigate("/clients")}><ArrowLeft className="h-4 w-4 ltr:mr-1 rtl:ml-1" />{t.back}</Button>
+        <div className="text-center py-16 text-muted-foreground">{t.clientNotFound}</div>
       </div>
     );
   }
@@ -182,7 +182,7 @@ export default function ClientProfile() {
 
         <TabsContent value="inventory">
           <div className="stat-card">
-            <p className="text-center py-10 text-muted-foreground text-sm">المخزون متاح من صفحة المخزون</p>
+            <p className="text-center py-10 text-muted-foreground text-sm">{t.inventoryFromPage}</p>
           </div>
         </TabsContent>
       </Tabs>
@@ -213,7 +213,7 @@ export default function ClientProfile() {
           </div>
           <DialogFooter>
             <Button onClick={handleEditSave} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (t.save || "حفظ")}
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t.save}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -57,7 +57,7 @@ export default function ClientsPage() {
   useEffect(() => {
     api.get<any[]>("/clients")
       .then(data => setClients((data || []).map(mapClient)))
-      .catch(() => toast.error("تعذّر تحميل العملاء"))
+      .catch(() => toast.error(t.failedToLoadClients))
       .finally(() => setLoading(false));
   }, []);
 
@@ -84,7 +84,7 @@ export default function ClientsPage() {
       setDialogOpen(false);
       toast.success(t.clientAdded);
     } catch (err: any) {
-      toast.error(err?.message || "فشل حفظ العميل");
+      toast.error(err?.message || t.failedToSaveClient);
     } finally {
       setSaving(false);
     }
@@ -160,8 +160,8 @@ export default function ClientsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => navigate(`/clients/${client.id}`)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewProfile}</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => { if (client.email) { window.open(`mailto:${client.email}`); } else { toast.info("لا يوجد بريد إلكتروني"); } }}><Mail className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.sendEmail}</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => { if (client.phone) { window.open(`tel:${client.phone}`); } else { toast.info("لا يوجد رقم هاتف"); } }}><Phone className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.call}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { if (client.email) { window.open(`mailto:${client.email}`); } else { toast.info(t.noEmail); } }}><Mail className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.sendEmail}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { if (client.phone) { window.open(`tel:${client.phone}`); } else { toast.info(t.noPhone); } }}><Phone className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.call}</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </td>
@@ -177,7 +177,7 @@ export default function ClientsPage() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{t.addNewClient}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div><Label className="text-xs">{t.clientName} *</Label><Input className="h-9 mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={`${t.example}: عيادة د. سمير`} /></div>
+            <div><Label className="text-xs">{t.clientName} *</Label><Input className="h-9 mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t.example} /></div>
             <div><Label className="text-xs">{t.contactPerson} *</Label><Input className="h-9 mt-1" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} placeholder={t.fullName} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>

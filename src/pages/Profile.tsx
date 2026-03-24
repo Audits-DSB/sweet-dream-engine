@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function ProfilePage() {
   const { user, profile } = useAuth();
+  const { t, dir } = useLanguage();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,9 +50,9 @@ export default function ProfilePage() {
         .update({ avatar_url: url })
         .eq("user_id", user.id);
 
-      toast({ title: "تم تحديث الصورة بنجاح" });
+      toast({ title: t.photoUpdated });
     } catch (err: any) {
-      toast({ title: "خطأ في رفع الصورة", description: err.message, variant: "destructive" });
+      toast({ title: t.photoUploadError, description: err.message, variant: "destructive" });
     } finally {
       setUploading(false);
     }
@@ -66,21 +68,21 @@ export default function ProfilePage() {
         .eq("user_id", user.id);
 
       if (error) throw error;
-      toast({ title: "تم حفظ البيانات بنجاح" });
+      toast({ title: t.dataSaved });
     } catch (err: any) {
-      toast({ title: "خطأ في الحفظ", description: err.message, variant: "destructive" });
+      toast({ title: t.saveError, description: err.message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="p-6 max-w-xl mx-auto space-y-6" dir="rtl">
-      <h1 className="text-2xl font-bold text-foreground">الملف الشخصي</h1>
+    <div className="p-6 max-w-xl mx-auto space-y-6" dir={dir}>
+      <h1 className="text-2xl font-bold text-foreground" data-testid="text-profile-title">{t.profile}</h1>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">الصورة الشخصية</CardTitle>
+          <CardTitle className="text-lg">{t.profilePhoto}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-4">
           <div className="relative">
@@ -91,7 +93,8 @@ export default function ProfilePage() {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:bg-primary/90 transition-colors"
+              className="absolute bottom-0 end-0 h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:bg-primary/90 transition-colors"
+              data-testid="button-change-avatar"
             >
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
             </button>
@@ -103,30 +106,30 @@ export default function ProfilePage() {
             className="hidden"
             onChange={handleAvatarUpload}
           />
-          <p className="text-sm text-muted-foreground">اضغط على الكاميرا لتغيير الصورة</p>
+          <p className="text-sm text-muted-foreground">{t.tapCameraToChange}</p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">البيانات الأساسية</CardTitle>
+          <CardTitle className="text-lg">{t.basicInfo}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>البريد الإلكتروني</Label>
-            <Input value={user?.email ?? ""} disabled className="bg-muted" />
+            <Label>{t.email}</Label>
+            <Input value={user?.email ?? ""} disabled className="bg-muted" data-testid="input-email" />
           </div>
           <div className="space-y-2">
-            <Label>الاسم الكامل</Label>
-            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="أدخل اسمك" />
+            <Label>{t.fullName}</Label>
+            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder={t.enterYourName} data-testid="input-fullname" />
           </div>
           <div className="space-y-2">
-            <Label>رقم الجوال</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="01xxxxxxxxx" dir="ltr" />
+            <Label>{t.phoneNumber}</Label>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="01xxxxxxxxx" dir="ltr" data-testid="input-phone" />
           </div>
-          <Button onClick={handleSave} disabled={saving} className="w-full">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Save className="h-4 w-4 ml-2" />}
-            حفظ التعديلات
+          <Button onClick={handleSave} disabled={saving} className="w-full" data-testid="button-save-profile">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : <Save className="h-4 w-4 me-2" />}
+            {t.saveChanges}
           </Button>
         </CardContent>
       </Card>

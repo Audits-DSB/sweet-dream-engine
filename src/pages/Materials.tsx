@@ -100,7 +100,7 @@ export default function MaterialsPage() {
         const dbData = await api.get<any[]>("/materials");
         setMaterials((dbData || []).map(mapDb));
       } catch {
-        toast.error("تعذّر تحميل المواد");
+        toast.error(t.failedToLoadMaterials);
       }
     }
 
@@ -132,7 +132,7 @@ export default function MaterialsPage() {
       setDialogOpen(false);
       toast.success(t.materialAdded);
     } catch {
-      toast.error("تعذّر إضافة المادة");
+      toast.error(t.failedToAddMaterial);
     }
   };
 
@@ -163,7 +163,7 @@ export default function MaterialsPage() {
         {loading ? (
           <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground text-sm">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>جاري تحميل المواد...</span>
+            <span>{t.loadingMaterials}</span>
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>
@@ -310,7 +310,7 @@ export default function MaterialsPage() {
             <div><Label className="text-xs">{t.manufacturer}</Label><Input className="h-9 mt-1" value={form.manufacturer} onChange={(e) => setForm({ ...form, manufacturer: e.target.value })} /></div>
             <div className="flex items-center gap-2">
               <Switch checked={form.hasExpiry} onCheckedChange={(v) => setForm({ ...form, hasExpiry: v })} />
-              <Label className="text-xs">{t.hasExpiry || "له تاريخ انتهاء"}</Label>
+              <Label className="text-xs">{t.hasExpiryDate}</Label>
             </div>
             <Button className="w-full" onClick={handleAdd}>{t.addMaterial}</Button>
           </div>

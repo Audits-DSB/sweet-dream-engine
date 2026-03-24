@@ -86,7 +86,7 @@ export default function OrdersPage() {
         if (!o.client && o.clientId) o.client = clientMap[o.clientId] || o.clientId;
         return o;
       }));
-    }).catch(() => toast.error("تعذّر تحميل البيانات"))
+    }).catch(() => toast.error(t.failedToLoadData))
       .finally(() => setLoading(false));
   }, []);
 
@@ -180,7 +180,7 @@ export default function OrdersPage() {
       setSelectedClient(""); setOrderItems([]); setDialogOpen(false);
       toast.success(t.orderCreated);
     } catch (err: any) {
-      toast.error(err?.message || "فشل حفظ الطلب");
+      toast.error(err?.message || t.failedToSaveOrder);
     } finally {
       setSaving(false);
     }
@@ -300,7 +300,7 @@ export default function OrdersPage() {
                     ))}
                   </div>
                 )}
-                {materialsLoading && <div className="text-center py-2 text-muted-foreground text-xs mt-1 flex items-center justify-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> جاري تحميل المواد...</div>}
+                {materialsLoading && <div className="text-center py-2 text-muted-foreground text-xs mt-1 flex items-center justify-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> {t.loadingMaterials}</div>}
                 {!materialsLoading && materialSearch && filteredMaterials.length === 0 && <div className="text-center py-2 text-muted-foreground text-xs mt-1">{t.noResults}</div>}
               </div>
 
