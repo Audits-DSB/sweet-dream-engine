@@ -138,6 +138,30 @@ router.delete("/materials/:code", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── SUPPLIER MATERIALS ───────────────────────────────────────────────────────
+router.get("/suppliers/:id/materials", async (req, res) => {
+  try {
+    const { rows } = await pgPool.query("SELECT * FROM supplier_materials WHERE supplier_id=$1 ORDER BY material_name", [req.params.id]);
+    res.json(rows.map(camelizeKeys));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.post("/suppliers/:id/materials", async (req, res) => {
+  const { materialCode, materialName } = req.body;
+  try {
+    await pgPool.query(
+      "INSERT INTO supplier_materials (supplier_id, material_code, material_name) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
+      [req.params.id, materialCode, materialName || ""]
+    );
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.delete("/suppliers/:id/materials/:code", async (req, res) => {
+  try {
+    await pgPool.query("DELETE FROM supplier_materials WHERE supplier_id=$1 AND material_code=$2", [req.params.id, req.params.code]);
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── FOUNDERS ─────────────────────────────────────────────────────────────────
 router.get("/founders", async (_req, res) => {
   sbOk(res, await supabaseAdmin.from("founders").select("*").order("name"));
