@@ -185,6 +185,17 @@ export async function printInvoice(data: {
       border-bottom: 1px solid #f0f4f7;
       font-size: 11px;
       color: #2c3e50;
+      vertical-align: middle;
+    }
+
+    .item-img {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
+      border-radius: 6px;
+      border: 1px solid #e2ecf1;
+      background: #f8fbfd;
+      display: block;
     }
 
     .items-table tbody tr:last-child td { border-bottom: none; }

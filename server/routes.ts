@@ -273,7 +273,18 @@ router.get("/orders/next-id", async (_req, res) => {
   res.json({ nextId: `ORD-${String(max + 1).padStart(3, "0")}` });
 });
 router.get("/orders", async (_req, res) => {
-  sbOk(res, await supabaseAdmin.from("orders").select("*").order("created_at", { ascending: false }));
+  const [ordersRes, clientsRes] = await Promise.all([
+    supabaseAdmin.from("orders").select("*").order("created_at", { ascending: false }),
+    supabaseAdmin.from("clients").select("id,name"),
+  ]);
+  if (ordersRes.error) return res.status(400).json({ error: ordersRes.error.message });
+  const clientMap: Record<string, string> = {};
+  for (const c of clientsRes.data || []) clientMap[c.id] = c.name || c.id;
+  const orders = (ordersRes.data || []).map(o => ({
+    ...o,
+    client: clientMap[o.client_id] || o.client_id || "",
+  }));
+  res.json(camelizeKeys(orders));
 });
 router.post("/orders", async (req, res) => {
   const { items, ...orderBody } = req.body;

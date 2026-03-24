@@ -146,13 +146,21 @@ export default function OrderDetails() {
           </Button>
           <Button variant="outline" size="sm" onClick={() => {
             const invoiceLines = hasDetailedLines
-              ? lines.map(l => [l.materialName, l.materialCode, l.unit, l.quantity, toNum(l.sellingPrice).toLocaleString(), toNum(l.lineTotal).toLocaleString()])
+              ? lines.map(l => [
+                  l.imageUrl ? `<img class="item-img" src="${l.imageUrl}" alt="" />` : '',
+                  l.materialName,
+                  l.materialCode,
+                  l.unit,
+                  l.quantity,
+                  toNum(l.sellingPrice).toLocaleString(),
+                  toNum(l.lineTotal).toLocaleString(),
+                ])
               : [];
             printInvoice({
               title: t.printInvoice, companyName: "DSB", subtitle: t.ordersTitle,
-              clientName: order.client, invoiceNumber: order.id, date: order.date,
+              clientName: order.client || order.clientId, invoiceNumber: order.id, date: order.date,
               columns: invoiceLines.length > 0
-                ? [t.materialCol, t.codeCol, t.unitCol, t.qtyCol, `${t.sellingPerUnit} (${t.currency})`, `${t.lineTotalSelling} (${t.currency})`]
+                ? ['', t.materialCol, t.codeCol, t.unitCol, t.qtyCol, `${t.sellingPerUnit} (${t.currency})`, `${t.lineTotalSelling} (${t.currency})`]
                 : [t.totalAmount],
               rows: invoiceLines.length > 0 ? invoiceLines : [[`${linesTotal.toLocaleString()} ${t.currency}`]],
               totals: [
