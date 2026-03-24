@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -6,15 +6,25 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, Save, Users, Building2, Truck, Percent, Settings as SettingsIcon } from "lucide-react";
+import { Plus, Pencil, Trash2, Save, Users, Building2, Truck, Percent, Settings as SettingsIcon, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 
-const initialFounders = [
-  { id: "1", name: "أحمد الراشد", alias: "المدير التنفيذي", email: "ahmed@opshub.com", active: true, totalContributed: 125000, totalProfit: 42500 },
-  { id: "2", name: "سارة المنصور", alias: "مدير العمليات", email: "sara@opshub.com", active: true, totalContributed: 95000, totalProfit: 38200 },
-  { id: "3", name: "عمر خليل", alias: "المدير المالي", email: "omar@opshub.com", active: true, totalContributed: 80000, totalProfit: 31800 },
-];
+type Founder = {
+  id: string; name: string; alias: string; email: string; phone: string;
+  active: boolean; totalContributed: number; totalWithdrawn: number;
+};
+
+function mapFounder(raw: any): Founder {
+  return {
+    id: raw.id, name: raw.name || "", alias: raw.alias || "",
+    email: raw.email || "", phone: raw.phone || "",
+    active: raw.active !== false,
+    totalContributed: Number(raw.totalContributed ?? raw.total_contributed ?? 0),
+    totalWithdrawn: Number(raw.totalWithdrawn ?? raw.total_withdrawn ?? 0),
+  };
+}
 
 const initialActors = [
   { id: "1", name: "أحمد (مؤسس)", type: "founder", phone: "+20 100 123 4567", active: true },
@@ -35,25 +45,64 @@ type DialogMode = "founder" | "actor" | "editFounder" | "editActor" | null;
 
 export default function SettingsPage() {
   const { t } = useLanguage();
-  const [founders, setFounders] = useState(initialFounders);
+  const [founders, setFounders] = useState<Founder[]>([]);
+  const [foundersLoading, setFoundersLoading] = useState(true);
+  const [founderSaving, setFounderSaving] = useState(false);
   const [actors, setActors] = useState(initialActors);
   const [rules, setRules] = useState(businessRules);
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
-  const [founderForm, setFounderForm] = useState({ name: "", alias: "", email: "" });
+  const [founderForm, setFounderForm] = useState({ name: "", alias: "", email: "", phone: "" });
   const [actorForm, setActorForm] = useState({ name: "", type: "external", phone: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const editFounder = (founder: typeof initialFounders[0]) => {
+  useEffect(() => {
+    api.get<any[]>("/founders")
+      .then((data) => setFounders((data || []).map(mapFounder)))
+      .catch(() => toast.error(t.failedToLoadData))
+      .finally(() => setFoundersLoading(false));
+  }, []);
+
+  const editFounder = (founder: Founder) => {
     setEditingId(founder.id);
-    setFounderForm({ name: founder.name, alias: founder.alias, email: founder.email });
+    setFounderForm({ name: founder.name, alias: founder.alias, email: founder.email, phone: founder.phone });
     setDialogMode("editFounder");
   };
 
-  const saveEditFounder = () => {
+  const saveEditFounder = async () => {
     if (!founderForm.name) { toast.error(t.enterFounderName); return; }
-    setFounders(founders.map(f => f.id === editingId ? { ...f, name: founderForm.name, alias: founderForm.alias, email: founderForm.email } : f));
-    setDialogMode(null); setEditingId(null);
-    toast.success(t.founderUpdated);
+    setFounderSaving(true);
+    try {
+      await api.patch(`/founders/${editingId}`, founderForm);
+      setFounders(founders.map(f => f.id === editingId ? { ...f, ...founderForm } : f));
+      setDialogMode(null); setEditingId(null);
+      toast.success(t.founderUpdated);
+    } catch { toast.error(t.failedToLoadData); }
+    finally { setFounderSaving(false); }
+  };
+
+  const addFounder = async () => {
+    if (!founderForm.name) { toast.error(t.enterFounderName); return; }
+    setFounderSaving(true);
+    try {
+      const newId = `F${Date.now().toString().slice(-6)}`;
+      const saved = await api.post<any>("/founders", {
+        id: newId, name: founderForm.name.trim(), alias: founderForm.alias.trim(),
+        email: founderForm.email.trim(), phone: founderForm.phone.trim(),
+      });
+      setFounders([...founders, mapFounder(saved)]);
+      setFounderForm({ name: "", alias: "", email: "", phone: "" }); setDialogMode(null);
+      toast.success(t.founderAddedSettings);
+    } catch { toast.error(t.failedToLoadData); }
+    finally { setFounderSaving(false); }
+  };
+
+  const deleteFounder = async (id: string) => {
+    if (!confirm(t.confirmDelete || "هل أنت متأكد؟")) return;
+    try {
+      await api.delete(`/founders/${id}`);
+      setFounders(founders.filter(f => f.id !== id));
+      toast.success(t.founderDeleted);
+    } catch { toast.error(t.failedToLoadData); }
   };
 
   const editActor = (actor: typeof initialActors[0]) => {
@@ -69,13 +118,6 @@ export default function SettingsPage() {
     toast.success(t.actorAdded);
   };
 
-  const addFounder = () => {
-    if (!founderForm.name) { toast.error(t.enterFounderName); return; }
-    setFounders([...founders, { id: String(Date.now()), name: founderForm.name, alias: founderForm.alias, email: founderForm.email, active: true, totalContributed: 0, totalProfit: 0 }]);
-    setFounderForm({ name: "", alias: "", email: "" }); setDialogMode(null);
-    toast.success(t.founderAddedSettings);
-  };
-
   const addActor = () => {
     if (!actorForm.name) { toast.error(t.enterFounderName); return; }
     setActors([...actors, { id: String(Date.now()), name: actorForm.name, type: actorForm.type, phone: actorForm.phone, active: true }]);
@@ -83,7 +125,6 @@ export default function SettingsPage() {
     toast.success(t.actorAdded);
   };
 
-  const deleteFounder = (id: string) => { setFounders(founders.filter(f => f.id !== id)); toast.success(t.founderDeleted); };
   const deleteActor = (id: string) => { setActors(actors.filter(a => a.id !== id)); toast.success(t.actorDeleted); };
   const toggleActorStatus = (id: string) => { setActors(actors.map(a => a.id === id ? { ...a, active: !a.active } : a)); };
 
@@ -162,35 +203,70 @@ export default function SettingsPage() {
         <TabsContent value="founders" className="space-y-4">
           <div className="flex justify-between items-center">
             <p className="text-sm text-muted-foreground">{founders.filter(f => f.active).length} {t.activeFounders}</p>
-            <Button size="sm" onClick={() => { setFounderForm({ name: "", alias: "", email: "" }); setDialogMode("founder"); }}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addFounderBtn}</Button>
+            <Button size="sm" onClick={() => { setFounderForm({ name: "", alias: "", email: "", phone: "" }); setDialogMode("founder"); }}>
+              <Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addFounderBtn}
+            </Button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {founders.map((founder) => (
-              <div key={founder.id} className="stat-card space-y-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center"><span className="text-sm font-bold text-primary">{founder.name.charAt(0)}</span></div>
-                    <div><p className="font-semibold text-sm">{founder.name}</p><p className="text-xs text-muted-foreground">{founder.alias}</p></div>
+
+          {foundersLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : founders.length === 0 ? (
+            <div className="stat-card py-16 text-center">
+              <p className="text-sm text-muted-foreground mb-4">لا يوجد مؤسسون مسجّلون بعد</p>
+              <Button size="sm" onClick={() => { setFounderForm({ name: "", alias: "", email: "", phone: "" }); setDialogMode("founder"); }}>
+                <Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addFounderBtn}
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {founders.map((founder) => (
+                <div key={founder.id} className="stat-card space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="text-sm font-bold text-primary">{founder.name.charAt(0)}</span>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm">{founder.name}</p>
+                        <p className="text-xs text-muted-foreground">{founder.alias}</p>
+                      </div>
+                    </div>
+                    <Badge variant={founder.active ? "default" : "secondary"} className={founder.active ? "bg-success/10 text-success border-0" : ""}>
+                      {founder.active ? t.active : t.inactive}
+                    </Badge>
                   </div>
-                  <Badge variant={founder.active ? "default" : "secondary"} className={founder.active ? "bg-success/10 text-success border-0" : ""}>{founder.active ? t.active : t.inactive}</Badge>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-2 rounded bg-muted/50">
+                      <p className="text-muted-foreground">{t.contribution}</p>
+                      <p className="font-semibold mt-0.5">{founder.totalContributed > 0 ? `${founder.totalContributed.toLocaleString()} ${t.currency}` : "—"}</p>
+                    </div>
+                    <div className="p-2 rounded bg-muted/50">
+                      <p className="text-muted-foreground">{t.phone}</p>
+                      <p className="font-semibold mt-0.5 truncate">{founder.phone || founder.email || "—"}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => editFounder(founder)}>
+                      <Pencil className="h-3 w-3 ltr:mr-1 rtl:ml-1" />{t.edit}
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => deleteFounder(founder.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-2 rounded bg-muted/50"><p className="text-muted-foreground">{t.contribution}</p><p className="font-semibold mt-0.5">{founder.totalContributed.toLocaleString()} {t.currency}</p></div>
-                  <div className="p-2 rounded bg-muted/50"><p className="text-muted-foreground">{t.profits}</p><p className="font-semibold mt-0.5">{founder.totalProfit.toLocaleString()} {t.currency}</p></div>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => editFounder(founder)}><Pencil className="h-3 w-3 ltr:mr-1 rtl:ml-1" />{t.edit}</Button>
-                  <Button variant="outline" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => deleteFounder(founder.id)}><Trash2 className="h-3 w-3" /></Button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="delivery" className="space-y-4">
           <div className="flex justify-between items-center">
             <p className="text-sm text-muted-foreground">{actors.length} {t.deliveryActors}</p>
-            <Button size="sm" onClick={() => { setActorForm({ name: "", type: "external", phone: "" }); setDialogMode("actor"); }}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addActorBtn}</Button>
+            <Button size="sm" onClick={() => { setActorForm({ name: "", type: "external", phone: "" }); setDialogMode("actor"); }}>
+              <Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addActorBtn}
+            </Button>
           </div>
           <div className="stat-card overflow-x-auto">
             <table className="w-full text-sm">
@@ -224,18 +300,25 @@ export default function SettingsPage() {
         </TabsContent>
       </Tabs>
 
+      {/* Add Founder Dialog */}
       <Dialog open={dialogMode === "founder"} onOpenChange={() => setDialogMode(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{t.addFounderBtn}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><Label className="text-xs">{t.name} *</Label><Input className="h-9 mt-1" value={founderForm.name} onChange={(e) => setFounderForm({ ...founderForm, name: e.target.value })} /></div>
             <div><Label className="text-xs">{t.jobTitle}</Label><Input className="h-9 mt-1" value={founderForm.alias} onChange={(e) => setFounderForm({ ...founderForm, alias: e.target.value })} /></div>
-            <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={founderForm.email} onChange={(e) => setFounderForm({ ...founderForm, email: e.target.value })} /></div>
-            <Button className="w-full" onClick={addFounder}>{t.addFounderBtn}</Button>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={founderForm.email} onChange={(e) => setFounderForm({ ...founderForm, email: e.target.value })} /></div>
+              <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={founderForm.phone} onChange={(e) => setFounderForm({ ...founderForm, phone: e.target.value })} /></div>
+            </div>
+            <Button className="w-full" onClick={addFounder} disabled={founderSaving}>
+              {founderSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : t.addFounderBtn}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
+      {/* Add Actor Dialog */}
       <Dialog open={dialogMode === "actor"} onOpenChange={() => setDialogMode(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{t.addActorLabel}</DialogTitle></DialogHeader>
@@ -253,18 +336,25 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Edit Founder Dialog */}
       <Dialog open={dialogMode === "editFounder"} onOpenChange={() => setDialogMode(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{t.edit} {t.founders}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><Label className="text-xs">{t.name} *</Label><Input className="h-9 mt-1" value={founderForm.name} onChange={(e) => setFounderForm({ ...founderForm, name: e.target.value })} /></div>
             <div><Label className="text-xs">{t.jobTitle}</Label><Input className="h-9 mt-1" value={founderForm.alias} onChange={(e) => setFounderForm({ ...founderForm, alias: e.target.value })} /></div>
-            <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={founderForm.email} onChange={(e) => setFounderForm({ ...founderForm, email: e.target.value })} /></div>
-            <Button className="w-full" onClick={saveEditFounder}><Save className="h-4 w-4 ltr:mr-2 rtl:ml-2" />{t.saveChanges}</Button>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={founderForm.email} onChange={(e) => setFounderForm({ ...founderForm, email: e.target.value })} /></div>
+              <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={founderForm.phone} onChange={(e) => setFounderForm({ ...founderForm, phone: e.target.value })} /></div>
+            </div>
+            <Button className="w-full" onClick={saveEditFounder} disabled={founderSaving}>
+              {founderSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4 ltr:mr-2 rtl:ml-2" />{t.saveChanges}</>}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
+      {/* Edit Actor Dialog */}
       <Dialog open={dialogMode === "editActor"} onOpenChange={() => setDialogMode(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{t.edit} {t.deliveryActors}</DialogTitle></DialogHeader>
