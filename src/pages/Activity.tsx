@@ -116,6 +116,26 @@ export default function ActivityPage() {
     return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
   }, [filtered]);
 
+  // Fields allowed per entity when restoring — strips computed/auto-generated columns
+  const restoreAllowedFields: Record<string, string[]> = {
+    client: ["id", "name", "contact", "email", "phone", "city", "status", "outstanding"],
+    supplier: ["id", "name", "country", "email", "phone", "paymentTerms", "active"],
+    order: ["id", "clientId", "date", "totalSelling", "totalCost", "splitMode", "deliveryFee", "status", "source"],
+    delivery: ["id", "orderId", "clientId", "date", "scheduledDate", "deliveredBy", "deliveryFee", "items", "notes", "status"],
+    collection: ["id", "orderId", "clientId", "client", "invoiceDate", "dueDate", "totalAmount", "paidAmount", "outstanding", "status", "paymentMethod", "notes"],
+    material: ["code", "name", "category", "unit", "sellingPrice", "storeCost", "supplier", "supplierId", "manufacturer", "hasExpiry", "active"],
+    founder: ["id", "name", "alias", "email", "phone", "active"],
+    "founder-transaction": ["id", "founderId", "type", "amount", "date", "note"],
+    "treasury-account": ["id", "name", "type", "balance", "currency"],
+    "treasury-transaction": ["id", "accountId", "type", "amount", "date", "description"],
+  };
+
+  const cleanSnapshot = (entity: string, snapshot: Record<string, any>): Record<string, any> => {
+    const allowed = restoreAllowedFields[entity];
+    if (!allowed) return snapshot;
+    return Object.fromEntries(Object.entries(snapshot).filter(([k]) => allowed.includes(k)));
+  };
+
   const handleRestore = async (entry: AuditNotification) => {
     const data = parseAuditData(entry.message);
     if (!data || data.action !== "delete") return;
@@ -126,7 +146,8 @@ export default function ActivityPage() {
 
     setRestoring(entry.id);
     try {
-      await api.post(data.endpoint, data.snapshot);
+      const payload = cleanSnapshot(data.entity, data.snapshot);
+      await api.post(data.endpoint, payload);
       toast.success(`✅ تمت استعادة ${entityLabels[data.entity] || data.entity}: ${data.entityName}`);
       // Mark this log entry as restored (update title)
       await api.patch(`/notifications/${entry.id}`, {

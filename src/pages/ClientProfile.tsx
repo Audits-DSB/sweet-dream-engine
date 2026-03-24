@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api } from "@/lib/api";
+import { logAudit } from "@/lib/auditLog";
 import { toast } from "sonner";
 
 type Client = {
@@ -83,6 +84,7 @@ export default function ClientProfile() {
     setSaving(true);
     try {
       await api.patch(`/clients/${client.id}`, editForm);
+      await logAudit({ entity: "client", entityId: client.id, entityName: editForm.name || client.name, action: "update", snapshot: { ...client, ...editForm }, endpoint: "/clients" });
       setClient({ ...client, ...editForm });
       setEditOpen(false);
       toast.success(t.clientUpdated);

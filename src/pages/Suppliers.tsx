@@ -184,6 +184,7 @@ export default function SuppliersPage() {
         email: editForm.email, phone: editForm.phone, paymentTerms: editForm.paymentTerms,
       });
       const updated = normalizeSupplier(saved);
+      await logAudit({ entity: "supplier", entityId: detailItem.id, entityName: editForm.name || detailItem.name, action: "update", snapshot: { ...detailItem, ...editForm }, endpoint: "/suppliers" });
       setSuppliers(prev => prev.map(s => s.id === detailItem.id ? updated : s));
       setDetailItem(updated);
       setEditMode(false);
