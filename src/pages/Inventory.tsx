@@ -10,11 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, Users, List, ChevronDown, ChevronUp, Download, ShoppingCart, Plus, Minus, Loader2, Pencil } from "lucide-react";
+import { AlertTriangle, Users, List, ChevronDown, ChevronUp, Download, ShoppingCart, Plus, Minus, Loader2, Pencil, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { logAudit } from "@/lib/auditLog";
 
 type InventoryLot = {
   id: string;
@@ -46,6 +47,7 @@ export default function InventoryPage() {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [detailItem, setDetailItem] = useState<InventoryLot | null>(null);
   const [editItem, setEditItem] = useState<InventoryLot | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<InventoryLot | null>(null);
   const [viewMode, setViewMode] = useState<"client" | "item">("client");
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
 
@@ -80,15 +82,33 @@ export default function InventoryPage() {
   }));
 
   const addMutation = useMutation({
-    mutationFn: (data: Partial<InventoryLot>) => api.post("/client-inventory", data),
+    mutationFn: async (data: Partial<InventoryLot>) => {
+      const id = `LOT-${Date.now().toString(36).toUpperCase()}`;
+      const saved = await api.post<InventoryLot>("/client-inventory", { ...data, id });
+      await logAudit({ entity: "client-inventory", entityId: id, entityName: `${data.material} — ${data.clientName}`, action: "create", snapshot: { ...data, id }, endpoint: "/client-inventory" });
+      return saved;
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/client-inventory"] }); setAddDialogOpen(false); setNewLot({}); toast.success("تم إضافة الدفعة"); },
     onError: () => toast.error("فشل إضافة الدفعة"),
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<InventoryLot> }) => api.patch(`/client-inventory/${id}`, data),
+    mutationFn: async ({ id, data }: { id: string; data: Partial<InventoryLot> }) => {
+      const saved = await api.patch<InventoryLot>(`/client-inventory/${id}`, data);
+      await logAudit({ entity: "client-inventory", entityId: id, entityName: `${data.material} — ${data.clientName}`, action: "update", snapshot: data as any, endpoint: "/client-inventory" });
+      return saved;
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/client-inventory"] }); setEditItem(null); toast.success("تم تحديث الدفعة"); },
     onError: () => toast.error("فشل التحديث"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (lot: InventoryLot) => {
+      await api.delete(`/client-inventory/${lot.id}`);
+      await logAudit({ entity: "client-inventory", entityId: lot.id, entityName: `${lot.material} — ${lot.clientName}`, action: "delete", snapshot: lot as any, endpoint: "/client-inventory", idField: "id" });
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/client-inventory"] }); setDeleteTarget(null); toast.success("تم حذف الدفعة"); },
+    onError: () => toast.error("فشل الحذف"),
   });
 
   const clientNames = [...new Set(lots.map(l => l.clientName))];
@@ -288,7 +308,7 @@ export default function InventoryPage() {
                                   <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.sellingPrice}</th>
                                   <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.expiryDate}</th>
                                   <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
-                                  <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground"></th>
+                                  <th className="py-2 px-3 w-16"></th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -296,7 +316,7 @@ export default function InventoryPage() {
                                   const daysToExpiry = lot.expiry ? Math.ceil((new Date(lot.expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
                                   const isNearExpiry = daysToExpiry !== null && daysToExpiry > 0 && daysToExpiry <= 30;
                                   return (
-                                    <tr key={lot.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors cursor-pointer" onClick={() => setDetailItem(lot)}>
+                                    <tr key={lot.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors cursor-pointer group" onClick={() => setDetailItem(lot)}>
                                       <td className="py-2 px-3 font-medium">{lot.material}</td>
                                       <td className="py-2 px-3 font-mono text-xs text-muted-foreground">{lot.code}</td>
                                       <td className="py-2 px-3 text-end">{lot.delivered}</td>
@@ -310,7 +330,10 @@ export default function InventoryPage() {
                                       </td>
                                       <td className="py-2 px-3"><StatusBadge status={lot.status} /></td>
                                       <td className="py-2 px-3 text-end" onClick={e => e.stopPropagation()}>
-                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditItem(lot)}><Pencil className="h-3.5 w-3.5" /></Button>
+                                        <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditItem(lot)}><Pencil className="h-3.5 w-3.5" /></Button>
+                                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteTarget(lot)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                                        </div>
                                       </td>
                                     </tr>
                                   );
@@ -343,7 +366,7 @@ export default function InventoryPage() {
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.expiryDate}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.sourceOrder}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
-                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground"></th>
+                <th className="py-3 px-3 w-20"></th>
               </tr>
             </thead>
             <tbody>
@@ -351,10 +374,10 @@ export default function InventoryPage() {
                 const daysToExpiry = lot.expiry ? Math.ceil((new Date(lot.expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
                 const isNearExpiry = daysToExpiry !== null && daysToExpiry > 0 && daysToExpiry <= 30;
                 return (
-                  <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetailItem(lot)}>
+                  <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer group" onClick={() => setDetailItem(lot)}>
                     <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{lot.id}</td>
                     <td className="py-3 px-3 font-medium hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${lot.clientId}`); }}>{lot.clientName}</td>
-                    <td className="py-3 px-3 hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate("/materials"); }}>{lot.material}</td>
+                    <td className="py-3 px-3 hover:text-primary">{lot.material}</td>
                     <td className="py-3 px-3 text-end">{lot.delivered}</td>
                     <td className="py-3 px-3 text-end font-medium">{lot.remaining}</td>
                     <td className="py-3 px-3 text-muted-foreground">{lot.unit}</td>
@@ -367,7 +390,10 @@ export default function InventoryPage() {
                     <td className="py-3 px-3 font-mono text-xs text-muted-foreground hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${lot.sourceOrder}`); }}>{lot.sourceOrder}</td>
                     <td className="py-3 px-3"><StatusBadge status={lot.status} /></td>
                     <td className="py-3 px-3 text-end" onClick={e => e.stopPropagation()}>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditItem(lot)}><Pencil className="h-3.5 w-3.5" /></Button>
+                      <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditItem(lot)}><Pencil className="h-3.5 w-3.5" /></Button>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteTarget(lot)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -401,7 +427,10 @@ export default function InventoryPage() {
                 <div><span className="text-muted-foreground">متوسط أسبوعي:</span> {detailItem.avgWeeklyUsage} {detailItem.unit}/أسبوع</div>
               </div>
               <div className="pt-2"><StatusBadge status={detailItem.status} /></div>
-              <DialogFooter>
+              <DialogFooter className="gap-2">
+                <Button size="sm" variant="destructive" onClick={() => { setDetailItem(null); setDeleteTarget(detailItem); }}>
+                  <Trash2 className="h-3.5 w-3.5 ml-1.5" /> حذف
+                </Button>
                 <Button size="sm" variant="outline" onClick={() => { setDetailItem(null); setEditItem(detailItem); }}>
                   <Pencil className="h-3.5 w-3.5 ml-1.5" /> تعديل
                 </Button>
@@ -455,10 +484,6 @@ export default function InventoryPage() {
           <DialogHeader><DialogTitle>إضافة دفعة جديدة</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">رقم الدفعة (LOT-XXX)</Label>
-              <Input className="h-9 mt-1" placeholder="LOT-012" value={newLot.id || ""} onChange={e => setNewLot({ ...newLot, id: e.target.value })} />
-            </div>
-            <div>
               <Label className="text-xs">العميل</Label>
               <Select value={newLot.clientId || ""} onValueChange={v => {
                 const cl = clients.find(c => c.id === v);
@@ -483,6 +508,22 @@ export default function InventoryPage() {
             <Button variant="outline" size="sm" onClick={() => setAddDialogOpen(false)}>إلغاء</Button>
             <Button size="sm" disabled={addMutation.isPending} onClick={() => addMutation.mutate({ ...newLot, status: "In Stock" })}>
               {addMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "إضافة"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>تأكيد الحذف</DialogTitle>
+            <DialogDescription>هل تريد حذف الدفعة <strong>{deleteTarget?.material}</strong> للعميل <strong>{deleteTarget?.clientName}</strong>؟ لا يمكن التراجع عن هذه العملية.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>إلغاء</Button>
+            <Button variant="destructive" size="sm" disabled={deleteMutation.isPending} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>
+              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Trash2 className="h-3.5 w-3.5 ml-1.5" /> حذف</>}
             </Button>
           </DialogFooter>
         </DialogContent>
