@@ -1,71 +1,120 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, Package, Receipt, ClipboardCheck, TrendingUp } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, Package, Receipt, TrendingUp, ClipboardCheck, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { clientsList } from "@/data/store";
+import { api } from "@/lib/api";
 import { toast } from "sonner";
 
-const clientData: Record<string, any> = {
-  "C001": {
-    id: "C001", name: "عيادة د. أحمد", contact: "أحمد خالد", email: "ahmed@clinic.eg",
-    phone: "+20 100 111 2233", city: "القاهرة", address: "شارع التحرير، الدقي، الجيزة",
-    status: "Active", joinDate: "2024-03-15", totalOrders: 18, totalDelivered: 16,
-    outstanding: 32000, totalPaid: 285000, currentInventoryValue: 124000,
-    consumptionData: [{ week: "W1", value: 12000 }, { week: "W2", value: 15000 }, { week: "W3", value: 11000 }, { week: "W4", value: 18000 }, { week: "W5", value: 14000 }, { week: "W6", value: 21000 }],
-    recentOrders: [
-      { id: "ORD-042", date: "2025-03-01", total: "32,000", status: "Delivered" },
-      { id: "ORD-038", date: "2025-02-20", total: "28,000", status: "Delivered" },
-      { id: "ORD-035", date: "2025-02-12", total: "16,000", status: "Closed" },
-    ],
-    inventoryItems: [
-      { material: "حشو كمبوزيت ضوئي", qty: 45, unit: "عبوة", expiry: "2025-06-15", status: "In Stock" },
-      { material: "إبر تخدير", qty: 8, unit: "علبة", expiry: "2025-04-20", status: "Low Stock" },
-      { material: "مادة طبع سيليكون", qty: 30, unit: "عبوة", expiry: "2025-12-01", status: "In Stock" },
-      { material: "قفازات لاتكس", qty: 2, unit: "كرتونة", expiry: "2025-03-25", status: "Low Stock" },
-    ],
-  },
+type Client = {
+  id: string; name: string; contact: string; email: string; phone: string;
+  city: string; status: string; joinDate: string; totalOrders: number;
+  outstanding: number;
 };
+
+type Order = {
+  id: string; date: string; totalSelling: string; totalCost: string; status: string;
+};
+
+function mapClient(raw: any): Client {
+  return {
+    id: raw.id,
+    name: raw.name || "",
+    contact: raw.contact || "",
+    email: raw.email || "",
+    phone: raw.phone || "",
+    city: raw.city || "",
+    status: raw.status || "Active",
+    joinDate: raw.joinDate || raw.join_date || "",
+    totalOrders: Number(raw.totalOrders ?? raw.total_orders ?? 0),
+    outstanding: Number(raw.outstanding ?? 0),
+  };
+}
+
+function mapOrder(raw: any): Order {
+  return {
+    id: raw.id,
+    date: raw.date || "",
+    totalSelling: raw.totalSelling ?? raw.total_selling ?? "0",
+    totalCost: raw.totalCost ?? raw.total_cost ?? "0",
+    status: raw.status || "",
+  };
+}
 
 export default function ClientProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const [client, setClient] = useState<Client | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editForm, setEditForm] = useState({ name: "", contact: "", email: "", phone: "", city: "", status: "Active" });
 
-  // Build default from clientsList if not in detailed data
-  const detailed = clientData[id || ""];
-  const basic = clientsList.find(c => c.id === id);
-  const clientBase = detailed || {
-    id: basic?.id || id, name: basic?.name || "—", contact: basic?.contact || "—", email: basic?.email || "",
-    phone: basic?.phone || "", city: basic?.city || "", address: "", status: basic?.status || "Active",
-    joinDate: basic?.joinDate || "", totalOrders: basic?.totalOrders || 0, totalDelivered: 0,
-    outstanding: basic?.outstanding || 0, totalPaid: 0, currentInventoryValue: 0,
-    consumptionData: [{ week: "W1", value: 0 }],
-    recentOrders: [], inventoryItems: [],
+  useEffect(() => {
+    if (!id) return;
+    Promise.all([
+      api.get<any[]>("/clients"),
+      api.get<any[]>("/orders"),
+    ]).then(([clientsData, ordersData]) => {
+      const found = (clientsData || []).find((c: any) => c.id === id);
+      if (found) {
+        const c = mapClient(found);
+        setClient(c);
+        setEditForm({ name: c.name, contact: c.contact, email: c.email, phone: c.phone, city: c.city, status: c.status });
+      }
+      const clientOrders = (ordersData || [])
+        .filter((o: any) => (o.clientId || o.client_id) === id)
+        .map(mapOrder);
+      setOrders(clientOrders);
+    }).catch(() => toast.error("تعذّر تحميل بيانات العميل"))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const handleEditSave = async () => {
+    if (!client) return;
+    setSaving(true);
+    try {
+      await api.patch(`/clients/${client.id}`, editForm);
+      setClient({ ...client, ...editForm });
+      setEditOpen(false);
+      toast.success(t.clientUpdated || "تم تحديث بيانات العميل");
+    } catch {
+      toast.error("فشل تحديث بيانات العميل");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const [client, setClient] = useState(clientBase);
-  const [editForm, setEditForm] = useState({ name: client.name, contact: client.contact, email: client.email, phone: client.phone, city: client.city, address: client.address || "", status: client.status });
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
-  const handleEditSave = () => {
-    setClient({ ...client, ...editForm });
-    setEditOpen(false);
-    toast.success(t.clientUpdated || "تم تحديث بيانات العميل");
-  };
+  if (!client) {
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/clients")}><ArrowLeft className="h-4 w-4 ltr:mr-1 rtl:ml-1" />{t.back || "رجوع"}</Button>
+        <div className="text-center py-16 text-muted-foreground">لم يتم العثور على العميل</div>
+      </div>
+    );
+  }
 
   const stats = [
-    { label: t.totalOrders, value: client.totalOrders, icon: Package },
-    { label: t.totalPaid, value: `${(client.totalPaid || 0).toLocaleString()} ${t.currency}`, icon: Receipt },
-    { label: t.outstanding, value: `${(client.outstanding || 0).toLocaleString()} ${t.currency}`, icon: TrendingUp },
-    { label: t.inventoryValue, value: `${(client.currentInventoryValue || 0).toLocaleString()} ${t.currency}`, icon: ClipboardCheck },
+    { label: t.totalOrders, value: orders.length, icon: Package },
+    { label: t.outstanding, value: `${client.outstanding.toLocaleString()} ${t.currency}`, icon: TrendingUp },
+    { label: t.totalPaid, value: "—", icon: Receipt },
+    { label: t.inventoryValue, value: "—", icon: ClipboardCheck },
   ];
 
   return (
@@ -74,17 +123,17 @@ export default function ClientProfile() {
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate("/clients")}><ArrowLeft className="h-4 w-4" /></Button>
         <div className="flex-1">
           <div className="flex items-center gap-3"><h1 className="page-header">{client.name}</h1><StatusBadge status={client.status} /></div>
-          <p className="page-description">{client.id} · {t.clientProfileJoined} {client.joinDate}</p>
+          <p className="page-description">{client.id} · {t.contactPerson}: {client.contact}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => { setEditForm({ name: client.name, contact: client.contact, email: client.email, phone: client.phone, city: client.city, address: client.address || "", status: client.status }); setEditOpen(true); }}>{t.editClient}</Button>
+        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>{t.editClient}</Button>
       </div>
 
       <div className="stat-card">
         <div className="flex flex-wrap gap-6 text-sm">
           {client.email && <div className="flex items-center gap-2 text-muted-foreground"><Mail className="h-4 w-4" />{client.email}</div>}
           {client.phone && <div className="flex items-center gap-2 text-muted-foreground"><Phone className="h-4 w-4" />{client.phone}</div>}
-          {client.address && <div className="flex items-center gap-2 text-muted-foreground"><MapPin className="h-4 w-4" />{client.address}</div>}
-          <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4" />{t.clientProfileJoined} {client.joinDate}</div>
+          {client.city && <div className="flex items-center gap-2 text-muted-foreground"><MapPin className="h-4 w-4" />{client.city}</div>}
+          {client.joinDate && <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4" />{t.clientProfileJoined} {client.joinDate}</div>}
         </div>
       </div>
 
@@ -97,27 +146,11 @@ export default function ClientProfile() {
         ))}
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs defaultValue="orders" className="space-y-4">
         <TabsList className="bg-muted">
-          <TabsTrigger value="overview">{t.overview}</TabsTrigger>
           <TabsTrigger value="orders">{t.ordersTab}</TabsTrigger>
           <TabsTrigger value="inventory">{t.inventoryTab}</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="overview">
-          <div className="stat-card">
-            <h3 className="font-semibold text-sm mb-4">{t.consumptionTrend}</h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={client.consumptionData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="week" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
-                <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: "hsl(var(--primary))", r: 3 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </TabsContent>
 
         <TabsContent value="orders">
           <div className="stat-card overflow-x-auto">
@@ -131,48 +164,29 @@ export default function ClientProfile() {
                 </tr>
               </thead>
               <tbody>
-                {client.recentOrders.map((order: any) => (
+                {orders.map((order) => (
                   <tr key={order.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/orders/${order.id}`)}>
                     <td className="py-2.5 px-3 font-medium text-primary">{order.id}</td>
                     <td className="py-2.5 px-3 text-muted-foreground">{order.date}</td>
                     <td className="py-2.5 px-3"><StatusBadge status={order.status} /></td>
-                    <td className="py-2.5 px-3 text-end font-medium">{order.total} {t.currency}</td>
+                    <td className="py-2.5 px-3 text-end font-medium">{order.totalSelling} {t.currency}</td>
                   </tr>
                 ))}
+                {orders.length === 0 && (
+                  <tr><td colSpan={4} className="py-10 text-center text-muted-foreground text-sm">{t.noResults}</td></tr>
+                )}
               </tbody>
             </table>
           </div>
         </TabsContent>
 
         <TabsContent value="inventory">
-          <div className="stat-card overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>
-                  <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.quantity}</th>
-                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.unit}</th>
-                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.expiryDate}</th>
-                  <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {client.inventoryItems.map((item: any, idx: number) => (
-                  <tr key={idx} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate("/inventory")}>
-                    <td className="py-2.5 px-3 font-medium">{item.material}</td>
-                    <td className="py-2.5 px-3 text-end">{item.qty}</td>
-                    <td className="py-2.5 px-3 text-muted-foreground">{item.unit}</td>
-                    <td className="py-2.5 px-3 text-muted-foreground">{item.expiry}</td>
-                    <td className="py-2.5 px-3"><StatusBadge status={item.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="stat-card">
+            <p className="text-center py-10 text-muted-foreground text-sm">المخزون متاح من صفحة المخزون</p>
           </div>
         </TabsContent>
       </Tabs>
 
-      {/* Edit Client Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{t.editClient}</DialogTitle></DialogHeader>
@@ -196,10 +210,11 @@ export default function ClientProfile() {
                 </Select>
               </div>
             </div>
-            <div><Label className="text-xs">{t.address || "العنوان"}</Label><Input className="h-9 mt-1" value={editForm.address} onChange={e => setEditForm({ ...editForm, address: e.target.value })} /></div>
           </div>
           <DialogFooter>
-            <Button onClick={handleEditSave}>{t.save || "حفظ"}</Button>
+            <Button onClick={handleEditSave} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (t.save || "حفظ")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
