@@ -50,6 +50,13 @@ export default function CompanyProfitPage() {
   const [expenseForm, setExpenseForm] = useState({ amount: "", category: "operations" as typeof EXPENSE_CATEGORIES[number], description: "", accountId: "" });
   const [submitting, setSubmitting] = useState(false);
 
+  const parseAmount = (val: unknown): number => {
+    if (!val) return 0;
+    if (typeof val === "number") return val;
+    const cleaned = String(val).replace(/[^\d.-]/g, "");
+    return parseFloat(cleaned) || 0;
+  };
+
   const { data: accounts, isLoading: loadingAccounts } = useQuery({
     queryKey: ["treasury_accounts"],
     queryFn: () => api.get<any[]>("/treasury/accounts").then(d => d.filter((a: any) => a.isActive)),
@@ -67,7 +74,7 @@ export default function CompanyProfitPage() {
 
   const totalBalance = useMemo(() => {
     if (!accounts) return 0;
-    return accounts.reduce((sum, a) => sum + (a.balance || 0), 0);
+    return accounts.reduce((sum, a) => sum + parseAmount(a.balance), 0);
   }, [accounts]);
 
   const { monthlyPnL, totals, expenseBreakdown, comparison, monthDetails } = useMemo(() => {
@@ -89,7 +96,7 @@ export default function CompanyProfitPage() {
       if (d < cutoff) return;
       const key = format(d, "yyyy-MM");
       ensureMonth(key);
-      monthlyData[key].revenue += o.totalCost || o.total_cost || 0;
+      monthlyData[key].revenue += parseAmount(o.totalCost ?? o.total_cost);
       monthlyData[key].orders = [...(monthlyData[key].orders || []), o];
     });
 
@@ -100,9 +107,9 @@ export default function CompanyProfitPage() {
       ensureMonth(key);
       const txType = tx.txType || tx.tx_type;
       if (txType === "expense" || txType === "withdrawal") {
-        monthlyData[key].cost += Math.abs(tx.amount);
+        monthlyData[key].cost += Math.abs(parseAmount(tx.amount));
         const cat = tx.category || "other";
-        monthlyData[key].expCats[cat] = (monthlyData[key].expCats[cat] || 0) + Math.abs(tx.amount);
+        monthlyData[key].expCats[cat] = (monthlyData[key].expCats[cat] || 0) + Math.abs(parseAmount(tx.amount));
         monthlyData[key].expenses = [...(monthlyData[key].expenses || []), tx];
       }
     });
@@ -530,7 +537,7 @@ export default function CompanyProfitPage() {
                           <p className="text-xs text-muted-foreground">{o.clientName || o.client_name || o.client}</p>
                         </div>
                         <div className="text-end">
-                          <p className="text-xs font-semibold">{fmtNum(o.totalCost || o.total_cost || 0)} {t.currency}</p>
+                          <p className="text-xs font-semibold">{fmtNum(parseAmount(o.totalCost ?? o.total_cost))} {t.currency}</p>
                           <Badge variant="outline" className="text-xs mt-0.5">{o.status}</Badge>
                         </div>
                       </div>
