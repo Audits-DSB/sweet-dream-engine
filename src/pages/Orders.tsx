@@ -30,12 +30,12 @@ type Client = { id: string; name: string; city: string; status: string; };
 
 type MaterialItem = {
   code: string; name: string; category: string; unit: string;
-  sellingPrice: number; storeCost: number; active: boolean;
+  sellingPrice: number; storeCost: number; active: boolean; imageUrl: string;
 };
 
 interface OrderItem {
   materialCode: string; name: string; quantity: number;
-  sellingPrice: number; costPrice: number;
+  sellingPrice: number; costPrice: number; imageUrl: string; unit: string;
 }
 
 function mapOrder(raw: any): Order {
@@ -110,8 +110,9 @@ export default function OrdersPage() {
           setRealMaterials(json.products.map((p: any) => ({
             code: p.sku || p.id?.slice(0, 8) || "",
             name: p.name, category: p.category || "General",
-            unit: "unit", sellingPrice: p.price_retail || 0,
+            unit: p.unit || "unit", sellingPrice: p.price_retail || 0,
             storeCost: p.price_wholesale || 0, active: true,
+            imageUrl: p.image_url || p.image || "",
           })));
         }
       }).catch(() => {}).finally(() => setMaterialsLoading(false));
@@ -152,7 +153,7 @@ export default function OrdersPage() {
   }), [materialSearch, usedMaterialCodes, realMaterials]);
 
   const addMaterialDirectly = (mat: MaterialItem) => {
-    setOrderItems([...orderItems, { materialCode: mat.code, name: mat.name, quantity: 1, sellingPrice: mat.sellingPrice, costPrice: mat.storeCost }]);
+    setOrderItems([...orderItems, { materialCode: mat.code, name: mat.name, quantity: 1, sellingPrice: mat.sellingPrice, costPrice: mat.storeCost, imageUrl: mat.imageUrl, unit: mat.unit }]);
     setMaterialSearch("");
   };
 
@@ -183,6 +184,7 @@ export default function OrdersPage() {
         totalCost: String(totalCost),
         splitMode: splitLabel, deliveryFee: String(parseInt(form.deliveryFee) || 0),
         status: "Draft", source: t.manual,
+        items: orderItems,
       });
       await logAudit({ entity: "order", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${client.name}`, action: "create", snapshot: saved, endpoint: "/orders" });
       setOrders(prev => [mapOrder(saved), ...prev]);

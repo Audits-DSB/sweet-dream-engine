@@ -3,15 +3,16 @@ import { useRef, useState, useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2 } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { printInvoice } from "@/lib/printInvoice";
 
 type OrderLine = {
-  material: string; code: string; unit: string; qty: number;
-  sellingPrice: number; storeCost: number; lineTotal: number; lineCost: number;
+  id: number; orderId: string; materialCode: string; materialName: string;
+  imageUrl: string; unit: string; quantity: number;
+  sellingPrice: number; costPrice: number; lineTotal: number; lineCost: number;
 };
 type OrderDelivery = { id: string; date: string; actor: string; status: string; items: string };
 type FounderContrib = { founder: string; amount: number; percentage: number };
@@ -21,7 +22,7 @@ type Order = {
   source: string; splitMode: string; deliveryFee: number;
   subscription: { type: string; value: number };
   cashback: { type: string; value: number };
-  lines: OrderLine[];
+  legacyLines: any[];
   deliveries: OrderDelivery[];
   founderContributions: FounderContrib[];
   totalSelling: string | number;
@@ -54,7 +55,7 @@ function mapOrder(raw: any): Order {
     deliveryFee: toNum(raw.deliveryFee ?? raw.delivery_fee),
     subscription: raw.subscription || { type: "none", value: 0 },
     cashback: raw.cashback || { type: "none", value: 0 },
-    lines: parseJsonField(raw.lines),
+    legacyLines: parseJsonField(raw.lines),
     deliveries: parseJsonField(raw.deliveries),
     founderContributions: parseJsonField(raw.founderContributions ?? raw.founder_contributions),
     totalSelling: raw.totalSelling ?? raw.total_selling ?? 0,
@@ -69,12 +70,17 @@ export default function OrderDetails() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
+  const [lines, setLines] = useState<OrderLine[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<any[]>("/orders").then((all) => {
+    Promise.all([
+      api.get<any[]>("/orders"),
+      api.get<OrderLine[]>(`/orders/${id}/lines`).catch(() => []),
+    ]).then(([all, fetchedLines]) => {
       const found = (all || []).find((o: any) => o.id === id);
       if (found) setOrder(mapOrder(found));
+      setLines(fetchedLines || []);
     }).catch(() => toast.error("تعذّر تحميل بيانات الطلب"))
       .finally(() => setLoading(false));
   }, [id]);
@@ -101,12 +107,19 @@ export default function OrderDetails() {
     );
   }
 
-  const linesTotal = order.lines.length > 0
-    ? order.lines.reduce((s, l) => s + toNum(l.lineTotal), 0)
-    : toNum(order.totalSelling);
-  const costTotal = order.lines.length > 0
-    ? order.lines.reduce((s, l) => s + toNum(l.lineCost), 0)
-    : toNum(order.totalCost);
+  const hasDetailedLines = lines.length > 0;
+  const hasLegacyLines = !hasDetailedLines && order.legacyLines.length > 0 && typeof order.legacyLines[0] === "object";
+
+  const linesTotal = hasDetailedLines
+    ? lines.reduce((s, l) => s + toNum(l.lineTotal), 0)
+    : hasLegacyLines
+      ? order.legacyLines.reduce((s: number, l: any) => s + toNum(l.lineTotal), 0)
+      : toNum(order.totalSelling);
+  const costTotal = hasDetailedLines
+    ? lines.reduce((s, l) => s + toNum(l.lineCost), 0)
+    : hasLegacyLines
+      ? order.legacyLines.reduce((s: number, l: any) => s + toNum(l.lineCost), 0)
+      : toNum(order.totalCost);
 
   const subVal = order.subscription?.value || 0;
   const subscriptionAmt = order.subscription?.type === "percentage" ? linesTotal * subVal / 100 : subVal;
@@ -122,7 +135,7 @@ export default function OrderDetails() {
           <p className="page-description">
             <span className="cursor-pointer hover:text-primary" onClick={() => navigate(`/clients/${order.clientId}`)}>{order.client}</span>
             {" · "}{order.date}
-            {order.source && order.source !== "—" ? ` · ${t.orderDetailsSource}: ${order.source}` : ""}
+            {order.source && order.source !== "—" ? ` · ${t.orderDetailsSource || "المصدر"}: ${order.source}` : ""}
           </p>
         </div>
         <div className="flex gap-2">
@@ -132,15 +145,16 @@ export default function OrderDetails() {
             {uploadedFile || t.uploadInvoice}
           </Button>
           <Button variant="outline" size="sm" onClick={() => {
+            const invoiceLines = hasDetailedLines
+              ? lines.map(l => [l.materialName, l.materialCode, l.unit, l.quantity, toNum(l.sellingPrice).toLocaleString(), toNum(l.lineTotal).toLocaleString()])
+              : [];
             printInvoice({
               title: t.printInvoice, companyName: "DSB", subtitle: t.ordersTitle,
               clientName: order.client, invoiceNumber: order.id, date: order.date,
-              columns: order.lines.length > 0
+              columns: invoiceLines.length > 0
                 ? [t.materialCol, t.codeCol, t.unitCol, t.qtyCol, `${t.sellingPerUnit} (${t.currency})`, `${t.lineTotalSelling} (${t.currency})`]
                 : [t.totalAmount],
-              rows: order.lines.length > 0
-                ? order.lines.map(l => [l.material, l.code, l.unit, l.qty, l.sellingPrice, toNum(l.lineTotal).toLocaleString()])
-                : [[`${linesTotal.toLocaleString()} ${t.currency}`]],
+              rows: invoiceLines.length > 0 ? invoiceLines : [[`${linesTotal.toLocaleString()} ${t.currency}`]],
               totals: [
                 { label: t.totalSelling, value: `${linesTotal.toLocaleString()} ${t.currency}` },
                 { label: `${t.subscriptionLabel} (${subVal}%)`, value: `${subscriptionAmt.toLocaleString()} ${t.currency}` },
@@ -153,61 +167,144 @@ export default function OrderDetails() {
         </div>
       </div>
 
-      <Tabs defaultValue="lines" className="space-y-4">
+      <Tabs defaultValue="invoice" className="space-y-4">
         <TabsList className="bg-muted">
-          <TabsTrigger value="lines">{t.orderLines}</TabsTrigger>
+          <TabsTrigger value="invoice">الفاتورة</TabsTrigger>
           <TabsTrigger value="financials">{t.financials}</TabsTrigger>
           <TabsTrigger value="deliveries">{t.deliveriesTab}</TabsTrigger>
           <TabsTrigger value="funding">{t.fundingTab}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="lines">
-          <div className="stat-card overflow-x-auto">
-            {order.lines.length > 0 ? (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.materialCol}</th>
-                    <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.codeCol}</th>
-                    <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.unitCol}</th>
-                    <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.qtyCol}</th>
-                    <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.sellingPerUnit}</th>
-                    <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.costPerUnit}</th>
-                    <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.lineTotalSelling}</th>
-                    <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.lineTotalCost}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {order.lines.map((line, idx) => (
-                    <tr key={idx} className="border-b border-border/50 hover:bg-muted/30 cursor-pointer" onClick={() => navigate(`/materials?search=${encodeURIComponent(line.code || line.material)}`)}>
-                      <td className="py-2.5 px-3 font-medium">{line.material}</td>
-                      <td className="py-2.5 px-3 font-mono text-xs text-muted-foreground">{line.code}</td>
-                      <td className="py-2.5 px-3 text-muted-foreground">{line.unit}</td>
-                      <td className="py-2.5 px-3 text-end">{line.qty}</td>
-                      <td className="py-2.5 px-3 text-end">{toNum(line.sellingPrice).toLocaleString()} {t.currency}</td>
-                      <td className="py-2.5 px-3 text-end text-muted-foreground">{toNum(line.storeCost).toLocaleString()} {t.currency}</td>
-                      <td className="py-2.5 px-3 text-end font-medium">{toNum(line.lineTotal).toLocaleString()} {t.currency}</td>
-                      <td className="py-2.5 px-3 text-end text-muted-foreground">{toNum(line.lineCost).toLocaleString()} {t.currency}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* ── MINI INVOICE TAB ─────────────────────────────────────────── */}
+        <TabsContent value="invoice">
+          <div className="stat-card space-y-0 overflow-hidden">
+            {/* Invoice header */}
+            <div className="flex items-start justify-between p-6 border-b border-border bg-muted/30">
+              <div>
+                <div className="text-2xl font-bold text-primary">DSB</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Dental Supply Business</div>
+              </div>
+              <div className="text-end space-y-1">
+                <div className="font-mono text-lg font-bold">{order.id}</div>
+                <div className="text-sm text-muted-foreground">{order.date}</div>
+                <StatusBadge status={order.status} />
+              </div>
+            </div>
+
+            {/* Client info */}
+            <div className="px-6 py-4 border-b border-border/50 bg-muted/10">
+              <div className="text-xs text-muted-foreground mb-0.5">العميل</div>
+              <div
+                className="font-semibold cursor-pointer hover:text-primary transition-colors"
+                onClick={() => navigate(`/clients/${order.clientId}`)}
+              >
+                {order.client}
+              </div>
+              {order.splitMode && order.splitMode !== "—" && (
+                <div className="text-xs text-muted-foreground mt-0.5">نمط التقسيم: {order.splitMode}</div>
+              )}
+            </div>
+
+            {/* Items */}
+            {hasDetailedLines ? (
+              <div className="divide-y divide-border/50">
+                {lines.map((line) => (
+                  <div key={line.id} className="flex items-center gap-4 px-6 py-4 hover:bg-muted/20 transition-colors">
+                    {/* Product image */}
+                    <div className="w-14 h-14 rounded-lg border border-border overflow-hidden bg-muted/50 flex-shrink-0 flex items-center justify-center">
+                      {line.imageUrl ? (
+                        <img
+                          src={line.imageUrl}
+                          alt={line.materialName}
+                          className="w-full h-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }}
+                        />
+                      ) : null}
+                      <Package className={`h-6 w-6 text-muted-foreground ${line.imageUrl ? "hidden" : ""}`} />
+                    </div>
+
+                    {/* Name + code */}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{line.materialName}</div>
+                      <div className="text-xs text-muted-foreground font-mono mt-0.5">{line.materialCode}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{line.unit}</div>
+                    </div>
+
+                    {/* Quantity badge */}
+                    <div className="text-center flex-shrink-0">
+                      <div className="text-xs text-muted-foreground">الكمية</div>
+                      <div className="text-lg font-bold text-primary">×{line.quantity}</div>
+                    </div>
+
+                    {/* Unit price */}
+                    <div className="text-center flex-shrink-0 hidden sm:block">
+                      <div className="text-xs text-muted-foreground">السعر</div>
+                      <div className="font-medium text-sm">{toNum(line.sellingPrice).toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground">{t.currency}</div>
+                    </div>
+
+                    {/* Line total */}
+                    <div className="text-end flex-shrink-0">
+                      <div className="text-xs text-muted-foreground">الإجمالي</div>
+                      <div className="font-bold">{toNum(line.lineTotal).toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground">{t.currency}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : hasLegacyLines ? (
+              <div className="divide-y divide-border/50">
+                {order.legacyLines.map((line: any, idx: number) => (
+                  <div key={idx} className="flex items-center gap-4 px-6 py-4">
+                    <div className="w-14 h-14 rounded-lg border border-border bg-muted/50 flex-shrink-0 flex items-center justify-center">
+                      <Package className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">{line.material || line.materialName || "—"}</div>
+                      <div className="text-xs text-muted-foreground font-mono">{line.code}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs text-muted-foreground">الكمية</div>
+                      <div className="text-lg font-bold text-primary">×{line.qty || line.quantity || 1}</div>
+                    </div>
+                    <div className="text-end">
+                      <div className="font-bold">{toNum(line.lineTotal).toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground">{t.currency}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
-              <div className="py-6 space-y-2 text-sm">
-                <div className="flex justify-between py-2 border-b border-border/50">
-                  <span className="text-muted-foreground">{t.totalSelling}</span>
-                  <span className="font-semibold">{linesTotal.toLocaleString()} {t.currency}</span>
+              <div className="py-16 text-center text-muted-foreground">
+                <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">لا توجد بنود تفصيلية لهذا الطلب</p>
+                <p className="text-xs mt-1">الطلبات الجديدة ستظهر تفاصيلها هنا</p>
+              </div>
+            )}
+
+            {/* Invoice totals */}
+            {(hasDetailedLines || hasLegacyLines) && (
+              <div className="px-6 py-4 border-t border-border bg-muted/20 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">المجموع</span>
+                  <span className="font-medium">{linesTotal.toLocaleString()} {t.currency}</span>
                 </div>
-                <div className="flex justify-between py-2 border-b border-border/50">
-                  <span className="text-muted-foreground">{t.totalCost}</span>
-                  <span className="font-semibold">{costTotal.toLocaleString()} {t.currency}</span>
+                {order.deliveryFee > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{t.deliveryFeeDisplay}</span>
+                    <span className="font-medium">{order.deliveryFee.toLocaleString()} {t.currency}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-base border-t border-border pt-2 mt-1">
+                  <span>الإجمالي النهائي</span>
+                  <span className="text-primary">{(linesTotal + (order.deliveryFee || 0)).toLocaleString()} {t.currency}</span>
                 </div>
-                <p className="text-xs text-muted-foreground pt-2 text-center">لا توجد بنود تفصيلية مسجّلة لهذا الطلب</p>
               </div>
             )}
           </div>
         </TabsContent>
 
+        {/* ── FINANCIALS TAB ───────────────────────────────────────────── */}
         <TabsContent value="financials">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="stat-card space-y-3">
@@ -231,6 +328,7 @@ export default function OrderDetails() {
           </div>
         </TabsContent>
 
+        {/* ── DELIVERIES TAB ───────────────────────────────────────────── */}
         <TabsContent value="deliveries">
           <div className="stat-card overflow-x-auto">
             {order.deliveries.length > 0 ? (
@@ -262,6 +360,7 @@ export default function OrderDetails() {
           </div>
         </TabsContent>
 
+        {/* ── FUNDING TAB ──────────────────────────────────────────────── */}
         <TabsContent value="funding">
           <div className="stat-card">
             <div className="flex items-center justify-between mb-4">
