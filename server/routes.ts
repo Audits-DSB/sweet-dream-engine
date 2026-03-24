@@ -3,30 +3,27 @@ import { createClient } from "@supabase/supabase-js";
 
 const router = Router();
 
-// ─── EXTERNAL MATERIALS PROXY (avoids CORS from browser) ─────────────────────
+// ─── EXTERNAL MATERIALS PROXY (queries the Lovable/catalog Supabase project) ──
 router.get("/external-materials", async (_req, res) => {
   try {
-    const response = await fetch(
-      `${process.env.VITE_SUPABASE_URL}/functions/v1/fetch-external-materials`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": process.env.VITE_SUPABASE_PUBLISHABLE_KEY!,
-          "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
-        },
-      }
-    );
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("Edge Function error:", response.status, text);
-      return res.status(502).json({ products: [] });
+    const extUrl = process.env.EXTERNAL_SUPABASE_URL;
+    const extKey = process.env.EXTERNAL_SUPABASE_ANON_KEY;
+    if (!extUrl || !extKey) {
+      console.error("External Supabase credentials not configured");
+      return res.json({ products: [] });
     }
-    const json = await response.json();
-    res.json(json);
+    const extClient = createClient(extUrl, extKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data, error } = await extClient.from("products").select("*").order("created_at");
+    if (error) {
+      console.error("External materials query error:", error.message);
+      return res.json({ products: [] });
+    }
+    res.json({ products: data ?? [], count: data?.length ?? 0 });
   } catch (err: any) {
     console.error("External materials fetch failed:", err.message);
-    res.status(502).json({ products: [] });
+    res.json({ products: [] });
   }
 });
 
