@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -51,8 +51,8 @@ export default function CollectionsPage() {
   const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
 
   useEffect(() => {
-    supabase.from("treasury_accounts").select("id, name, balance").eq("is_active", true).then(({ data }) => {
-      if (data) setTreasuryAccounts(data as TreasuryAccount[]);
+    api.get<any[]>("/treasury/accounts").then((data) => {
+      setTreasuryAccounts(data.filter((a: any) => a.isActive).map((a: any) => ({ id: a.id, name: a.name, balance: Number(a.balance) })));
     });
   }, []);
 
@@ -97,20 +97,18 @@ export default function CollectionsPage() {
       const account = treasuryAccounts.find(a => a.id === treasuryAccountId);
       if (account) {
         const newBalance = Number(account.balance) + amt;
-        const { error: txErr } = await supabase.from("treasury_transactions").insert({
-          account_id: treasuryAccountId,
-          tx_type: "inflow" as any,
+        await api.post("/treasury/transactions", {
+          accountId: treasuryAccountId,
+          txType: "inflow",
           amount: amt,
-          balance_after: newBalance,
+          balanceAfter: newBalance,
           description: `${t.recordPayment}: ${paymentInvoice.id} - ${paymentInvoice.client}`,
-          reference_id: paymentInvoice.id,
-          performed_by: user?.id || null,
+          referenceId: paymentInvoice.id,
+          performedBy: user?.id || null,
+          newBalance,
         });
-        if (!txErr) {
-          await supabase.from("treasury_accounts").update({ balance: newBalance }).eq("id", treasuryAccountId);
-          setTreasuryAccounts(prev => prev.map(a => a.id === treasuryAccountId ? { ...a, balance: newBalance } : a));
-          toast.success(t.paymentLinkedToTreasury);
-        }
+        setTreasuryAccounts(prev => prev.map(a => a.id === treasuryAccountId ? { ...a, balance: newBalance } : a));
+        toast.success(t.paymentLinkedToTreasury);
       }
     }
 

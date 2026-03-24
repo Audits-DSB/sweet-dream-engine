@@ -148,8 +148,18 @@ export default function RequestsPage() {
   };
 
   const sendNotification = async (title: string, body: string, type: string = "info") => {
-    if (!user) return;
-    await supabase.from("notifications").insert({ user_id: user.id, title, body, type });
+    try {
+      await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: `NOT-${Date.now()}`, type, title, message: body || "",
+          date: new Date().toISOString().split("T")[0],
+          time: new Date().toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }),
+          read: false, userId: user?.id || "",
+        }),
+      });
+    } catch (_) {}
   };
 
   const filtered = requests.filter((r) => {

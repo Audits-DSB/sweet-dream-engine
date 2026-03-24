@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
@@ -36,8 +36,8 @@ export default function TreasuryAccountsPage() {
 
   const fetchAccounts = async () => {
     setLoading(true);
-    const { data } = await supabase.from("treasury_accounts").select("*").order("created_at");
-    if (data) setAccounts(data as Account[]);
+    const data = await api.get<Account[]>("/treasury/accounts");
+    setAccounts(data.map(a => ({ ...a, account_type: a.accountType ?? a.account_type, custodian_name: a.custodianName ?? a.custodian_name, bank_name: a.bankName ?? a.bank_name, account_number: a.accountNumber ?? a.account_number, is_active: a.isActive ?? a.is_active, created_at: a.createdAt ?? a.created_at })) as Account[]);
     setLoading(false);
   };
 
@@ -55,19 +55,15 @@ export default function TreasuryAccountsPage() {
 
   const save = async () => {
     if (!form.name || !form.custodian_name) { toast.error(t.treasuryFillRequired); return; }
+    const payload = {
+      name: form.name, accountType: form.account_type, custodianName: form.custodian_name,
+      bankName: form.bank_name || null, accountNumber: form.account_number || null, description: form.description || null,
+    };
     if (editing) {
-      const { error } = await supabase.from("treasury_accounts").update({
-        name: form.name, account_type: form.account_type as any, custodian_name: form.custodian_name,
-        bank_name: form.bank_name || null, account_number: form.account_number || null, description: form.description || null,
-      }).eq("id", editing.id);
-      if (error) { toast.error(error.message); return; }
+      await api.patch(`/treasury/accounts/${editing.id}`, payload);
       toast.success(t.treasuryAccountUpdated);
     } else {
-      const { error } = await supabase.from("treasury_accounts").insert({
-        name: form.name, account_type: form.account_type as any, custodian_name: form.custodian_name,
-        bank_name: form.bank_name || null, account_number: form.account_number || null, description: form.description || null,
-      });
-      if (error) { toast.error(error.message); return; }
+      await api.post("/treasury/accounts", payload);
       toast.success(t.treasuryAccountAdded);
     }
     setDialogOpen(false);
@@ -75,7 +71,7 @@ export default function TreasuryAccountsPage() {
   };
 
   const toggleActive = async (a: Account) => {
-    await supabase.from("treasury_accounts").update({ is_active: !a.is_active }).eq("id", a.id);
+    await api.patch(`/treasury/accounts/${a.id}`, { isActive: !a.is_active });
     fetchAccounts();
   };
 
@@ -92,7 +88,7 @@ export default function TreasuryAccountsPage() {
             <p className="page-description">{accounts.length} {t.treasuryAccountCount}</p>
           </div>
         </div>
-        {canManage && <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 me-1" />{t.treasuryAddAccount}</Button>}
+        {canManage && <Button size="sm" onClick={openNew} data-testid="button-add-account"><Plus className="h-4 w-4 me-1" />{t.treasuryAddAccount}</Button>}
       </div>
 
       <div className="stat-card overflow-x-auto">
@@ -115,7 +111,7 @@ export default function TreasuryAccountsPage() {
             </thead>
             <tbody>
               {accounts.map(a => (
-                <tr key={a.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                <tr key={a.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors" data-testid={`row-account-${a.id}`}>
                   <td className="py-3 px-3 font-medium">{a.name}</td>
                   <td className="py-3 px-3"><Badge variant="outline">{t[("treasury_" + a.account_type) as keyof typeof t] as string || a.account_type}</Badge></td>
                   <td className="py-3 px-3">{a.custodian_name}</td>
@@ -125,8 +121,8 @@ export default function TreasuryAccountsPage() {
                   {canManage && (
                     <td className="py-3 px-3">
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(a)}><Pencil className="h-3.5 w-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleActive(a)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(a)} data-testid={`button-edit-account-${a.id}`}><Pencil className="h-3.5 w-3.5" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleActive(a)} data-testid={`button-toggle-account-${a.id}`}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                       </div>
                     </td>
                   )}
@@ -141,17 +137,17 @@ export default function TreasuryAccountsPage() {
         <DialogContent>
           <DialogHeader><DialogTitle>{editing ? t.treasuryEditAccount : t.treasuryAddAccount}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div><Label>{t.treasuryAccountName}</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
+            <div><Label>{t.treasuryAccountName}</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} data-testid="input-account-name" /></div>
             <div>
               <Label>{t.treasuryType}</Label>
               <Select value={form.account_type} onValueChange={v => setForm(f => ({ ...f, account_type: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger data-testid="select-account-type"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {ACCOUNT_TYPES.map(at => <SelectItem key={at} value={at}>{t[("treasury_" + at) as keyof typeof t] as string || at}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>{t.treasuryCustodian}</Label><Input value={form.custodian_name} onChange={e => setForm(f => ({ ...f, custodian_name: e.target.value }))} /></div>
+            <div><Label>{t.treasuryCustodian}</Label><Input value={form.custodian_name} onChange={e => setForm(f => ({ ...f, custodian_name: e.target.value }))} data-testid="input-custodian" /></div>
             {(form.account_type === "bank") && (
               <>
                 <div><Label>{t.treasuryBankName}</Label><Input value={form.bank_name} onChange={e => setForm(f => ({ ...f, bank_name: e.target.value }))} /></div>
@@ -160,7 +156,7 @@ export default function TreasuryAccountsPage() {
             )}
             <div><Label>{t.description}</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
           </div>
-          <DialogFooter><Button onClick={save}>{editing ? t.save : t.add}</Button></DialogFooter>
+          <DialogFooter><Button onClick={save} data-testid="button-save-account">{editing ? t.save : t.add}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

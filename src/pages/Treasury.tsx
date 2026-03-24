@@ -1,23 +1,21 @@
 import { useState, useEffect, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { api } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
-import { Landmark, Wallet, Building, Users, TrendingUp, TrendingDown, ArrowRightLeft, Plus, DollarSign } from "lucide-react";
+import { Landmark, Building, TrendingUp, TrendingDown, ArrowRightLeft, Plus, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const COLORS = ["hsl(200, 70%, 45%)", "hsl(150, 55%, 45%)", "hsl(38, 90%, 50%)", "hsl(280, 55%, 55%)", "hsl(0, 0%, 55%)"];
 
 type Account = {
-  id: string; name: string; account_type: string; custodian_name: string;
-  balance: number; is_active: boolean; bank_name: string | null; description: string | null;
+  id: string; name: string; accountType: string; custodianName: string;
+  balance: number; isActive: boolean; bankName: string | null; description: string | null;
 };
 type Tx = {
-  id: string; account_id: string; tx_type: string; amount: number; balance_after: number;
-  category: string | null; description: string | null; created_at: string;
-  treasury_accounts?: { name: string } | null;
+  id: string; accountId: string; txType: string; amount: number; balanceAfter: number;
+  category: string | null; description: string | null; createdAt: string;
 };
 
 export default function TreasuryDashboard() {
@@ -29,43 +27,45 @@ export default function TreasuryDashboard() {
 
   useEffect(() => {
     fetchData();
-    const ch = supabase.channel("treasury-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "treasury_accounts" }, () => fetchData())
-      .on("postgres_changes", { event: "*", schema: "public", table: "treasury_transactions" }, () => fetchData())
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchData = async () => {
     setLoading(true);
-    const [accRes, txRes] = await Promise.all([
-      supabase.from("treasury_accounts").select("*").eq("is_active", true).order("created_at"),
-      supabase.from("treasury_transactions").select("*, treasury_accounts!account_id(name)").order("created_at", { ascending: false }).limit(20),
+    const [accData, txData] = await Promise.all([
+      api.get<Account[]>("/treasury/accounts"),
+      api.get<Tx[]>("/treasury/transactions"),
     ]);
-    if (accRes.data) setAccounts(accRes.data as Account[]);
-    if (txRes.data) setTransactions(txRes.data as Tx[]);
+    setAccounts(accData.filter((a: Account) => a.isActive));
+    setTransactions(txData.slice(0, 20));
     setLoading(false);
   };
 
+  const accountName = (id: string) => accounts.find(a => a.id === id)?.name ?? "—";
+
   const totalBalance = useMemo(() => accounts.reduce((s, a) => s + Number(a.balance), 0), [accounts]);
-  const totalInflows = useMemo(() => transactions.filter(t => t.tx_type === "inflow" || t.tx_type === "transfer_in").reduce((s, t) => s + Number(t.amount), 0), [transactions]);
-  const totalOutflows = useMemo(() => transactions.filter(t => t.tx_type === "withdrawal" || t.tx_type === "expense" || t.tx_type === "transfer_out").reduce((s, t) => s + Number(t.amount), 0), [transactions]);
+  const totalInflows = useMemo(() => transactions.filter(t => t.txType === "inflow" || t.txType === "transfer_in").reduce((s, t) => s + Number(t.amount), 0), [transactions]);
+  const totalOutflows = useMemo(() => transactions.filter(t => t.txType === "withdrawal" || t.txType === "expense" || t.txType === "transfer_out").reduce((s, t) => s + Number(t.amount), 0), [transactions]);
 
   const byTypeData = useMemo(() => {
     const map: Record<string, number> = {};
-    accounts.forEach(a => { map[t[("treasury_" + a.account_type) as keyof typeof t] as string || a.account_type] = (map[t[("treasury_" + a.account_type) as keyof typeof t] as string || a.account_type] || 0) + Number(a.balance); });
+    accounts.forEach(a => {
+      const label = t[("treasury_" + a.accountType) as keyof typeof t] as string || a.accountType;
+      map[label] = (map[label] || 0) + Number(a.balance);
+    });
     return Object.entries(map).map(([name, value]) => ({ name, value }));
   }, [accounts, t]);
 
   const byCustodianData = useMemo(() => {
     const map: Record<string, number> = {};
-    accounts.forEach(a => { map[a.custodian_name] = (map[a.custodian_name] || 0) + Number(a.balance); });
+    accounts.forEach(a => { map[a.custodianName] = (map[a.custodianName] || 0) + Number(a.balance); });
     return Object.entries(map).map(([name, value]) => ({ name, value }));
   }, [accounts]);
 
   const byCategoryData = useMemo(() => {
     const map: Record<string, number> = {};
-    transactions.filter(tx => tx.tx_type === "expense" || tx.tx_type === "withdrawal").forEach(tx => {
+    transactions.filter(tx => tx.txType === "expense" || tx.txType === "withdrawal").forEach(tx => {
       const cat = tx.category ? (t[("treasury_cat_" + tx.category) as keyof typeof t] as string || tx.category) : t.treasury_cat_other;
       map[cat] = (map[cat] || 0) + Number(tx.amount);
     });
@@ -79,7 +79,6 @@ export default function TreasuryDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -97,7 +96,6 @@ export default function TreasuryDashboard() {
         </div>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="stat-card flex items-center gap-4">
           <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center"><DollarSign className="h-6 w-6 text-primary" /></div>
@@ -122,9 +120,7 @@ export default function TreasuryDashboard() {
         </div>
       </div>
 
-      {/* Charts Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Balance by Account Type */}
         <div className="stat-card">
           <h3 className="text-sm font-semibold mb-3">{t.treasuryByType}</h3>
           {byTypeData.length > 0 ? (
@@ -138,8 +134,6 @@ export default function TreasuryDashboard() {
             </ResponsiveContainer>
           ) : <p className="text-center py-8 text-muted-foreground text-sm">{t.treasuryNoAccounts}</p>}
         </div>
-
-        {/* Balance by Custodian */}
         <div className="stat-card">
           <h3 className="text-sm font-semibold mb-3">{t.treasuryByCustodian}</h3>
           {byCustodianData.length > 0 ? (
@@ -153,8 +147,6 @@ export default function TreasuryDashboard() {
             </ResponsiveContainer>
           ) : <p className="text-center py-8 text-muted-foreground text-sm">{t.treasuryNoAccounts}</p>}
         </div>
-
-        {/* Withdrawals by Category */}
         <div className="stat-card">
           <h3 className="text-sm font-semibold mb-3">{t.treasuryByCategory}</h3>
           {byCategoryData.length > 0 ? (
@@ -170,7 +162,6 @@ export default function TreasuryDashboard() {
         </div>
       </div>
 
-      {/* Accounts Table */}
       <div className="stat-card">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold">{t.treasuryAccounts}</h3>
@@ -193,8 +184,8 @@ export default function TreasuryDashboard() {
                 {accounts.map(a => (
                   <tr key={a.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/treasury/accounts`)}>
                     <td className="py-2 px-3 font-medium">{a.name}</td>
-                    <td className="py-2 px-3"><Badge variant="outline">{t[("treasury_" + a.account_type) as keyof typeof t] as string || a.account_type}</Badge></td>
-                    <td className="py-2 px-3 text-muted-foreground">{a.custodian_name}</td>
+                    <td className="py-2 px-3"><Badge variant="outline">{t[("treasury_" + a.accountType) as keyof typeof t] as string || a.accountType}</Badge></td>
+                    <td className="py-2 px-3 text-muted-foreground">{a.custodianName}</td>
                     <td className="py-2 px-3 font-semibold">{fmtMoney(Number(a.balance))} {t.egp}</td>
                   </tr>
                 ))}
@@ -204,7 +195,6 @@ export default function TreasuryDashboard() {
         )}
       </div>
 
-      {/* Recent Transactions */}
       <div className="stat-card">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold">{t.treasuryRecentActivity}</h3>
@@ -226,12 +216,12 @@ export default function TreasuryDashboard() {
               </thead>
               <tbody>
                 {transactions.slice(0, 10).map(tx => {
-                  const isOut = ["withdrawal", "expense", "transfer_out"].includes(tx.tx_type);
+                  const isOut = ["withdrawal", "expense", "transfer_out"].includes(tx.txType);
                   return (
                     <tr key={tx.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                      <td className="py-2 px-3 text-muted-foreground">{new Date(tx.created_at).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US")}</td>
-                      <td className="py-2 px-3"><Badge variant={isOut ? "destructive" : "default"}>{txTypeLabel(tx.tx_type)}</Badge></td>
-                      <td className="py-2 px-3">{(tx.treasury_accounts as any)?.name || "—"}</td>
+                      <td className="py-2 px-3 text-muted-foreground">{new Date(tx.createdAt).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US")}</td>
+                      <td className="py-2 px-3"><Badge variant={isOut ? "destructive" : "default"}>{txTypeLabel(tx.txType)}</Badge></td>
+                      <td className="py-2 px-3">{accountName(tx.accountId)}</td>
                       <td className={`py-2 px-3 font-semibold ${isOut ? "text-destructive" : "text-success"}`}>{isOut ? "-" : "+"}{fmtMoney(Number(tx.amount))}</td>
                       <td className="py-2 px-3 text-muted-foreground max-w-[200px] truncate">{tx.description || "—"}</td>
                     </tr>

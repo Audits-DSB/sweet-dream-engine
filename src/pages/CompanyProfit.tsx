@@ -13,7 +13,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, PieChart, Pie, Cell
 } from "recharts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useMemo, useState } from "react";
 import { subMonths, format, parseISO } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,7 +34,7 @@ type MonthDetail = {
   revenue: number;
   cost: number;
   profit: number;
-  orders: Array<{ id: string; order_number: string; client_name: string; total_cost: number; status: string; created_at: string }>;
+  orders: Array<{ id: string; orderNumber?: string; order_number?: string; clientName?: string; client_name?: string; totalCost?: number; total_cost?: number; status: string; createdAt?: string; created_at?: string }>;
   expenses: Array<{ id: string; amount: number; category: string | null; description: string | null; created_at: string }>;
 };
 
@@ -52,29 +52,17 @@ export default function CompanyProfitPage() {
 
   const { data: accounts, isLoading: loadingAccounts } = useQuery({
     queryKey: ["treasury_accounts"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("treasury_accounts").select("*").eq("is_active", true);
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.get<any[]>("/treasury/accounts").then(d => d.filter((a: any) => a.isActive)),
   });
 
   const { data: transactions, isLoading: loadingTx } = useQuery({
     queryKey: ["treasury_transactions"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("treasury_transactions").select("*").order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.get<any[]>("/treasury/transactions"),
   });
 
   const { data: orders, isLoading: loadingOrders } = useQuery({
     queryKey: ["orders"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.get<any[]>("/orders"),
   });
 
   const totalBalance = useMemo(() => {
@@ -97,20 +85,21 @@ export default function CompanyProfitPage() {
     };
 
     (orders || []).forEach((o) => {
-      const d = parseISO(o.created_at);
+      const d = parseISO(o.createdAt || o.created_at);
       if (d < cutoff) return;
       const key = format(d, "yyyy-MM");
       ensureMonth(key);
-      monthlyData[key].revenue += o.total_cost || 0;
+      monthlyData[key].revenue += o.totalCost || o.total_cost || 0;
       monthlyData[key].orders = [...(monthlyData[key].orders || []), o];
     });
 
     (transactions || []).forEach((tx) => {
-      const d = parseISO(tx.created_at);
+      const d = parseISO(tx.createdAt || tx.created_at);
       if (d < cutoff) return;
       const key = format(d, "yyyy-MM");
       ensureMonth(key);
-      if (tx.tx_type === "expense" || tx.tx_type === "withdrawal") {
+      const txType = tx.txType || tx.tx_type;
+      if (txType === "expense" || txType === "withdrawal") {
         monthlyData[key].cost += Math.abs(tx.amount);
         const cat = tx.category || "other";
         monthlyData[key].expCats[cat] = (monthlyData[key].expCats[cat] || 0) + Math.abs(tx.amount);
@@ -237,20 +226,19 @@ export default function CompanyProfitPage() {
 
     setSubmitting(true);
     try {
-      const { error: txError } = await supabase.from("treasury_transactions").insert({
-        account_id: expenseForm.accountId,
+      const newBalance = account.balance - amount;
+      await api.post("/treasury/transactions", {
+        id: `TX-${Date.now()}`,
+        accountId: expenseForm.accountId,
         amount: -amount,
-        tx_type: "expense",
+        txType: "expense",
         category: expenseForm.category,
         description: expenseForm.description || null,
-        balance_after: account.balance - amount,
-        performed_by: user?.id,
+        balanceAfter: newBalance,
+        performedBy: user?.id || null,
+        date: new Date().toISOString().split("T")[0],
+        newBalance,
       });
-      if (txError) throw txError;
-
-      const { error: accError } = await supabase.from("treasury_accounts").update({ balance: account.balance - amount }).eq("id", expenseForm.accountId);
-      if (accError) throw accError;
-
       toast({ title: t.success, description: t.expenseAdded });
       setExpenseDialogOpen(false);
       setExpenseForm({ amount: "", category: "operations", description: "", accountId: "" });
@@ -538,11 +526,11 @@ export default function CompanyProfitPage() {
                     {selectedMonth.orders.map((o) => (
                       <div key={o.id} className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-muted/20 cursor-pointer hover:bg-muted/40" onClick={() => navigate(`/orders/${o.id}`)}>
                         <div>
-                          <p className="text-xs font-medium">{o.order_number}</p>
-                          <p className="text-xs text-muted-foreground">{o.client_name}</p>
+                          <p className="text-xs font-medium">{o.orderNumber || o.order_number || o.id}</p>
+                          <p className="text-xs text-muted-foreground">{o.clientName || o.client_name || o.client}</p>
                         </div>
                         <div className="text-end">
-                          <p className="text-xs font-semibold">{fmtNum(o.total_cost)} {t.currency}</p>
+                          <p className="text-xs font-semibold">{fmtNum(o.totalCost || o.total_cost || 0)} {t.currency}</p>
                           <Badge variant="outline" className="text-xs mt-0.5">{o.status}</Badge>
                         </div>
                       </div>

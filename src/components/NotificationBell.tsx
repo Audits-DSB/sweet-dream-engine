@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useWorkflow } from "@/contexts/WorkflowContext";
+import { api } from "@/lib/api";
 import { Bell, CheckCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,62 +10,26 @@ import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { formatDistanceToNow } from "date-fns";
-import { ar as arLocale } from "date-fns/locale";
-import { enUS } from "date-fns/locale";
-
-interface Notification {
-  id: string;
-  title: string;
-  body: string | null;
-  type: string;
-  read: boolean;
-  created_at: string;
-}
 
 export function NotificationBell() {
   const { user } = useAuth();
   const { t, lang } = useLanguage();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { notifications, refreshData } = useWorkflow();
   const [open, setOpen] = useState(false);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  useEffect(() => {
-    if (!user) return;
-
-    const fetchNotifications = async () => {
-      const { data } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(30);
-      if (data) setNotifications(data);
-    };
-
-    fetchNotifications();
-
-    const channel = supabase
-      .channel("user-notifications")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
-        (payload) => { setNotifications((prev) => [payload.new as Notification, ...prev]); })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
-        (payload) => { setNotifications((prev) => prev.map((n) => (n.id === (payload.new as Notification).id ? (payload.new as Notification) : n))); })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [user]);
-
   const markAsRead = async (id: string) => {
-    await supabase.from("notifications").update({ read: true }).eq("id", id);
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    await api.patch(`/notifications/${id}`, { read: true });
+    refreshData();
   };
 
   const markAllAsRead = async () => {
     if (!user) return;
-    await supabase.from("notifications").update({ read: true }).eq("user_id", user.id).eq("read", false);
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    for (const n of notifications.filter(n => !n.read)) {
+      await api.patch(`/notifications/${n.id}`, { read: true });
+    }
+    refreshData();
   };
 
   const typeColor: Record<string, string> = {
@@ -81,7 +46,7 @@ export function NotificationBell() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative h-9 w-9">
+        <Button variant="ghost" size="icon" className="relative h-9 w-9" data-testid="button-notifications">
           <Bell className="h-4 w-4" />
           {unreadCount > 0 && (
             <Badge className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[10px] bg-destructive text-destructive-foreground border-0">
@@ -105,7 +70,7 @@ export function NotificationBell() {
             <div className="p-6 text-center text-sm text-muted-foreground">{t.noNotifications}</div>
           ) : (
             <div className="divide-y divide-border">
-              {notifications.map((n) => (
+              {notifications.slice(0, 30).map((n) => (
                 <div
                   key={n.id}
                   className={`p-3 flex gap-3 cursor-pointer hover:bg-accent/50 transition-colors ${!n.read ? "bg-accent/20" : ""}`}
@@ -119,10 +84,8 @@ export function NotificationBell() {
                       </span>
                     </div>
                     <p className="text-sm font-medium mt-1 truncate">{n.title}</p>
-                    {n.body && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>}
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: lang === "ar" ? arLocale : enUS })}
-                    </p>
+                    {n.message && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>}
+                    <p className="text-[10px] text-muted-foreground mt-1">{n.date} {n.time}</p>
                   </div>
                 </div>
               ))}

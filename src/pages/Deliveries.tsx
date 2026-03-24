@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Eye, MoreHorizontal, Truck, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ordersList, deliveryActors, clientsList } from "@/data/store";
@@ -57,8 +57,13 @@ export default function DeliveriesPage() {
   }, [searchParams]);
 
   const sendNotification = async (title: string, body: string, type: string = "info") => {
-    if (!user) return;
-    await supabase.from("notifications").insert({ user_id: user.id, title, body, type });
+    await api.post("/notifications", {
+      id: `NOT-${Date.now()}`,
+      type, title, message: body || "",
+      date: new Date().toISOString().split("T")[0],
+      time: new Date().toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }),
+      read: false, userId: user?.id || "",
+    });
   };
 
   const filtered = deliveries.filter((d) => {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -13,12 +13,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
-type Account = { id: string; name: string; balance: number; account_type: string };
+type Account = { id: string; name: string; balance: number; accountType: string };
 type Tx = {
-  id: string; account_id: string; tx_type: string; amount: number; balance_after: number;
-  category: string | null; description: string | null; reference_id: string | null;
-  linked_account_id: string | null; created_at: string;
-  treasury_accounts?: { name: string } | null;
+  id: string; accountId: string; txType: string; amount: number; balanceAfter: number;
+  category: string | null; description: string | null; referenceId: string | null;
+  linkedAccountId: string | null; createdAt: string;
 };
 
 const TX_TYPES = ["inflow", "withdrawal", "expense", "transfer_in", "transfer_out", "adjustment"] as const;
@@ -45,16 +44,18 @@ export default function TreasuryTransactionsPage() {
 
   const fetchAll = async () => {
     setLoading(true);
-    const [txRes, accRes] = await Promise.all([
-      supabase.from("treasury_transactions").select("*, treasury_accounts!account_id(name)").order("created_at", { ascending: false }).limit(200),
-      supabase.from("treasury_accounts").select("id, name, balance, account_type").eq("is_active", true),
+    const [txData, accData] = await Promise.all([
+      api.get<Tx[]>("/treasury/transactions"),
+      api.get<Account[]>("/treasury/accounts"),
     ]);
-    if (txRes.data) setTransactions(txRes.data as Tx[]);
-    if (accRes.data) setAccounts(accRes.data as Account[]);
+    setTransactions(txData);
+    setAccounts(accData.filter((a: any) => a.isActive));
     setLoading(false);
   };
 
-  const filtered = filterType === "all" ? transactions : transactions.filter(tx => tx.tx_type === filterType);
+  const accountName = (id: string) => accounts.find(a => a.id === id)?.name ?? "—";
+
+  const filtered = filterType === "all" ? transactions : transactions.filter(tx => tx.txType === filterType);
 
   const submitTx = async () => {
     if (!form.account_id || !form.amount || Number(form.amount) <= 0) { toast.error(t.treasuryFillRequired); return; }
@@ -68,37 +69,39 @@ export default function TreasuryTransactionsPage() {
 
     if (isOut && newBalance < 0) { toast.error(t.treasuryInsufficientFunds); return; }
 
-    // Insert transaction
-    const { error: txErr } = await supabase.from("treasury_transactions").insert({
-      account_id: form.account_id,
-      tx_type: form.tx_type as any,
+    const txPayload: any = {
+      accountId: form.account_id,
+      txType: form.tx_type,
       amount: amt,
-      balance_after: newBalance,
-      category: (form.tx_type === "expense" || form.tx_type === "withdrawal") ? form.category as any : null,
+      balanceAfter: newBalance,
+      category: (form.tx_type === "expense" || form.tx_type === "withdrawal") ? form.category : null,
       description: form.description || null,
-      linked_account_id: form.linked_account_id || null,
-      performed_by: user?.id || null,
-    });
-    if (txErr) { toast.error(txErr.message); return; }
+      linkedAccountId: form.linked_account_id || null,
+      performedBy: user?.id || null,
+      newBalance,
+    };
 
-    // Update account balance
-    await supabase.from("treasury_accounts").update({ balance: newBalance }).eq("id", form.account_id);
+    if (form.tx_type === "transfer_out" && form.linked_account_id) {
+      const linked = accounts.find(a => a.id === form.linked_account_id);
+      if (linked) txPayload.linkedNewBalance = Number(linked.balance) + amt;
+    }
 
-    // If transfer, create mirror transaction on linked account
-    if ((form.tx_type === "transfer_out") && form.linked_account_id) {
+    await api.post("/treasury/transactions", txPayload);
+
+    // Mirror transaction for transfer_in
+    if (form.tx_type === "transfer_out" && form.linked_account_id) {
       const linked = accounts.find(a => a.id === form.linked_account_id);
       if (linked) {
         const linkedNewBal = Number(linked.balance) + amt;
-        await supabase.from("treasury_transactions").insert({
-          account_id: form.linked_account_id,
-          tx_type: "transfer_in" as any,
+        await api.post("/treasury/transactions", {
+          accountId: form.linked_account_id,
+          txType: "transfer_in",
           amount: amt,
-          balance_after: linkedNewBal,
+          balanceAfter: linkedNewBal,
           description: `${t.treasuryTransferFrom} ${account.name}`,
-          linked_account_id: form.account_id,
-          performed_by: user?.id || null,
+          linkedAccountId: form.account_id,
+          performedBy: user?.id || null,
         });
-        await supabase.from("treasury_accounts").update({ balance: linkedNewBal }).eq("id", form.linked_account_id);
       }
     }
 
@@ -131,7 +134,7 @@ export default function TreasuryTransactionsPage() {
               {TX_TYPES.map(tt => <SelectItem key={tt} value={tt}>{txTypeLabel(tt)}</SelectItem>)}
             </SelectContent>
           </Select>
-          {canManage && <Button size="sm" onClick={() => setDialogOpen(true)}><Plus className="h-4 w-4 me-1" />{t.treasuryNewTx}</Button>}
+          {canManage && <Button size="sm" onClick={() => setDialogOpen(true)} data-testid="button-new-tx"><Plus className="h-4 w-4 me-1" />{t.treasuryNewTx}</Button>}
         </div>
       </div>
 
@@ -155,14 +158,14 @@ export default function TreasuryTransactionsPage() {
             </thead>
             <tbody>
               {filtered.map(tx => {
-                const isOut = ["withdrawal", "expense", "transfer_out"].includes(tx.tx_type);
+                const isOut = ["withdrawal", "expense", "transfer_out"].includes(tx.txType);
                 return (
-                  <tr key={tx.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-3 text-muted-foreground">{new Date(tx.created_at).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US")}</td>
-                    <td className="py-3 px-3"><Badge variant={isOut ? "destructive" : "default"}>{txTypeLabel(tx.tx_type)}</Badge></td>
-                    <td className="py-3 px-3">{(tx.treasury_accounts as any)?.name || "—"}</td>
+                  <tr key={tx.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors" data-testid={`row-tx-${tx.id}`}>
+                    <td className="py-3 px-3 text-muted-foreground">{new Date(tx.createdAt).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US")}</td>
+                    <td className="py-3 px-3"><Badge variant={isOut ? "destructive" : "default"}>{txTypeLabel(tx.txType)}</Badge></td>
+                    <td className="py-3 px-3">{accountName(tx.accountId)}</td>
                     <td className={`py-3 px-3 font-semibold ${isOut ? "text-destructive" : "text-success"}`}>{isOut ? "-" : "+"}{fmtMoney(Number(tx.amount))}</td>
-                    <td className="py-3 px-3 text-muted-foreground">{fmtMoney(Number(tx.balance_after))}</td>
+                    <td className="py-3 px-3 text-muted-foreground">{fmtMoney(Number(tx.balanceAfter))}</td>
                     <td className="py-3 px-3">{tx.category ? <Badge variant="outline">{catLabel(tx.category)}</Badge> : "—"}</td>
                     <td className="py-3 px-3 text-muted-foreground max-w-[200px] truncate">{tx.description || "—"}</td>
                   </tr>
@@ -173,7 +176,6 @@ export default function TreasuryTransactionsPage() {
         )}
       </div>
 
-      {/* New Transaction Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{t.treasuryNewTx}</DialogTitle></DialogHeader>
@@ -181,7 +183,7 @@ export default function TreasuryTransactionsPage() {
             <div>
               <Label>{t.treasuryAccountName}</Label>
               <Select value={form.account_id} onValueChange={v => setForm(f => ({ ...f, account_id: v }))}>
-                <SelectTrigger><SelectValue placeholder={t.treasurySelectAccount} /></SelectTrigger>
+                <SelectTrigger data-testid="select-tx-account"><SelectValue placeholder={t.treasurySelectAccount} /></SelectTrigger>
                 <SelectContent>
                   {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({fmtMoney(Number(a.balance))})</SelectItem>)}
                 </SelectContent>
@@ -190,7 +192,7 @@ export default function TreasuryTransactionsPage() {
             <div>
               <Label>{t.treasuryType}</Label>
               <Select value={form.tx_type} onValueChange={v => setForm(f => ({ ...f, tx_type: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger data-testid="select-tx-type"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {TX_TYPES.map(tt => <SelectItem key={tt} value={tt}>{txTypeLabel(tt)}</SelectItem>)}
                 </SelectContent>
@@ -198,7 +200,7 @@ export default function TreasuryTransactionsPage() {
             </div>
             <div>
               <Label>{t.amount} ({t.egp})</Label>
-              <Input type="number" min="0.01" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+              <Input type="number" min="0.01" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} data-testid="input-tx-amount" />
             </div>
             {(form.tx_type === "expense" || form.tx_type === "withdrawal") && (
               <div>
@@ -224,10 +226,10 @@ export default function TreasuryTransactionsPage() {
             )}
             <div>
               <Label>{t.description}</Label>
-              <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+              <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} data-testid="textarea-tx-description" />
             </div>
           </div>
-          <DialogFooter><Button onClick={submitTx}>{t.treasuryRecordTx}</Button></DialogFooter>
+          <DialogFooter><Button onClick={submitTx} data-testid="button-submit-tx">{t.treasuryRecordTx}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

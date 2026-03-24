@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
 import { FileBarChart, DollarSign, TrendingUp, TrendingDown, Wallet, Users, ArrowRightLeft, Download } from "lucide-react";
@@ -47,12 +47,23 @@ export default function FinancialReportPage() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from("treasury_accounts").select("id, name, account_type, custodian_name, balance").eq("is_active", true),
-      supabase.from("treasury_transactions").select("id, tx_type, amount, category, created_at").order("created_at", { ascending: false }).limit(100),
-    ]).then(([accRes, txRes]) => {
-      if (accRes.data) setAccounts(accRes.data as TreasuryAccount[]);
-      if (txRes.data) setTxs(txRes.data as TreasuryTx[]);
-    });
+      api.get<any[]>("/treasury/accounts"),
+      api.get<any[]>("/treasury/transactions"),
+    ]).then(([accs, txData]) => {
+      setAccounts(accs.filter((a: any) => a.isActive).map((a: any) => ({
+        id: a.id, name: a.name,
+        account_type: a.accountType || a.account_type,
+        custodian_name: a.custodianName || a.custodian_name,
+        balance: a.balance,
+      })));
+      setTxs(txData.slice(0, 100).map((tx: any) => ({
+        id: tx.id,
+        tx_type: tx.txType || tx.tx_type,
+        amount: tx.amount,
+        category: tx.category,
+        created_at: tx.createdAt || tx.created_at,
+      })));
+    }).catch(console.error);
   }, []);
 
   const fmtMoney = (n: number) => n.toLocaleString(lang === "ar" ? "ar-EG" : "en-US");
