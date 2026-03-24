@@ -119,6 +119,15 @@ router.delete("/founders/:id", async (req, res) => {
 });
 
 // ─── ORDERS ───────────────────────────────────────────────────────────────────
+router.get("/orders/next-id", async (_req, res) => {
+  const { data } = await supabaseAdmin.from("orders").select("id").order("created_at", { ascending: false }).limit(100);
+  let max = 0;
+  for (const row of data || []) {
+    const n = parseInt((row.id as string).replace(/[^0-9]/g, "")) || 0;
+    if (n > max) max = n;
+  }
+  res.json({ nextId: `ORD-${String(max + 1).padStart(3, "0")}` });
+});
 router.get("/orders", async (_req, res) => {
   sbOk(res, await supabaseAdmin.from("orders").select("*").order("created_at", { ascending: false }));
 });
@@ -126,7 +135,7 @@ router.post("/orders", async (req, res) => {
   const data = snakifyKeys(req.body);
   const result = await supabaseAdmin.from("orders").insert(data).select().single();
   if (!result.error && data.client_id) {
-    await supabaseAdmin.rpc("increment_client_orders", { cid: data.client_id }).catch(() => {});
+    try { await supabaseAdmin.rpc("increment_client_orders", { cid: data.client_id }); } catch { /* ignore */ }
   }
   sbOk(res, result);
 });

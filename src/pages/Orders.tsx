@@ -161,10 +161,7 @@ export default function OrdersPage() {
     if (!client) return;
     setSaving(true);
     try {
-      const num = orders.length > 0
-        ? Math.max(...orders.map(o => parseInt(o.id.split("-")[1] || "0") || 0)) + 1
-        : 1;
-      const newId = `ORD-${String(num).padStart(3, "0")}`;
+      const { nextId: newId } = await api.get<{ nextId: string }>("/orders/next-id");
       const today = new Date().toISOString().split("T")[0];
       const splitLabel = form.splitMode === "equal" ? t.equal : t.byContribution;
       const saved = await api.post<any>("/orders", {
