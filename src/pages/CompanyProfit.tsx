@@ -98,7 +98,7 @@ export default function CompanyProfitPage() {
       if (d < cutoff) return;
       const key = format(d, "yyyy-MM");
       ensureMonth(key);
-      monthlyData[key].revenue += parseAmount(o.totalSelling ?? o.total_selling);
+      monthlyData[key].revenue += parseAmount(o.totalCost ?? o.total_cost);
       monthlyData[key].orders = [...(monthlyData[key].orders || []), o];
     });
 
