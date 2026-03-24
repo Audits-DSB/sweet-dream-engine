@@ -2,12 +2,7 @@ import express from "express";
 import cors from "cors";
 import { spawn } from "child_process";
 import { createProxyMiddleware } from "http-proxy-middleware";
-import { db } from "./db";
-import {
-  clients, suppliers, materials, founders,
-  orders, requests, deliveries, collections,
-  inventory, notifications, treasuryAccounts, treasuryTransactions,
-} from "../shared/schema";
+import { createClient } from "@supabase/supabase-js";
 import apiRouter from "./routes";
 import {
   clientsList, suppliersList, materialsList, foundersList,
@@ -21,93 +16,101 @@ const VITE_PORT = 5001;
 
 app.use(cors());
 app.use(express.json());
-
 app.use("/api", apiRouter);
 
+const supabaseAdmin = createClient(
+  process.env.VITE_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
+
 async function seedIfEmpty() {
-  const existingClients = await db.select().from(clients).limit(1);
-  if (existingClients.length > 0) return;
+  const { data: existing } = await supabaseAdmin.from("clients").select("id").limit(1);
+  if (existing && existing.length > 0) {
+    console.log("✅ Supabase already has data — skipping seed.");
+    return;
+  }
 
-  console.log("🌱 Seeding initial data...");
+  console.log("🌱 Seeding initial data into Supabase...");
 
-  await db.insert(clients).values(clientsList.map(c => ({
+  await supabaseAdmin.from("clients").upsert(clientsList.map(c => ({
     id: c.id, name: c.name, contact: c.contact, email: c.email,
-    phone: c.phone, city: c.city, status: c.status, joinDate: c.joinDate,
-    totalOrders: c.totalOrders, outstanding: String(c.outstanding), lastAudit: c.lastAudit,
-  }))).onConflictDoNothing();
+    phone: c.phone, city: c.city, status: c.status, join_date: c.joinDate,
+    total_orders: c.totalOrders, outstanding: String(c.outstanding), last_audit: c.lastAudit,
+  })));
 
-  await db.insert(suppliers).values(suppliersList.map(s => ({
+  await supabaseAdmin.from("suppliers").upsert(suppliersList.map(s => ({
     id: s.id, name: s.name, country: s.country, email: s.email,
-    phone: s.phone, website: s.website, paymentTerms: s.paymentTerms, active: s.active,
-  }))).onConflictDoNothing();
+    phone: s.phone, website: s.website, payment_terms: s.paymentTerms, active: s.active,
+  })));
 
-  await db.insert(materials).values(materialsList.map(m => ({
+  await supabaseAdmin.from("materials").upsert(materialsList.map(m => ({
     code: m.code, name: m.name, category: m.category, unit: m.unit,
-    sellingPrice: String(m.sellingPrice), storeCost: String(m.storeCost),
-    supplier: m.supplier, supplierId: m.supplierId, manufacturer: m.manufacturer,
-    hasExpiry: m.hasExpiry, active: m.active,
-  }))).onConflictDoNothing();
+    selling_price: String(m.sellingPrice), store_cost: String(m.storeCost),
+    supplier: m.supplier, supplier_id: m.supplierId, manufacturer: m.manufacturer,
+    has_expiry: m.hasExpiry, active: m.active,
+  })));
 
-  await db.insert(founders).values(foundersList.map(f => ({
+  await supabaseAdmin.from("founders").upsert(foundersList.map(f => ({
     id: f.id, name: f.name, alias: f.alias, email: f.email, phone: f.phone,
-  }))).onConflictDoNothing();
+  })));
 
-  await db.insert(orders).values(ordersList.map(o => ({
-    id: o.id, client: o.client, clientId: o.clientId, date: o.date,
-    lines: o.lines, totalSelling: o.totalSelling, totalCost: o.totalCost,
-    splitMode: o.splitMode, deliveryFee: String(o.deliveryFee), status: o.status, source: o.source,
-  }))).onConflictDoNothing();
+  await supabaseAdmin.from("orders").upsert(ordersList.map(o => ({
+    id: o.id, client: o.client, client_id: o.clientId, date: o.date,
+    lines: o.lines, total_selling: o.totalSelling, total_cost: o.totalCost,
+    split_mode: o.splitMode, delivery_fee: String(o.deliveryFee), status: o.status, source: o.source,
+  })));
 
-  await db.insert(requests).values(requestsList.map(r => ({
-    id: r.id, client: r.client, clientId: r.clientId, date: r.date,
-    items: r.items, totalValue: r.totalValue, priority: r.priority,
-    status: r.status, convertedOrderId: r.convertedOrderId ?? null, notes: r.notes,
-  }))).onConflictDoNothing();
+  await supabaseAdmin.from("requests").upsert(requestsList.map(r => ({
+    id: r.id, client: r.client, client_id: r.clientId, date: r.date,
+    items: r.items, total_value: r.totalValue, priority: r.priority,
+    status: r.status, converted_order_id: r.convertedOrderId ?? null, notes: r.notes,
+  })));
 
-  await db.insert(deliveries).values(deliveriesList.map(d => ({
-    id: d.id, orderId: d.orderId, client: d.client, clientId: d.clientId,
-    date: d.date, scheduledDate: d.scheduledDate, status: d.status,
-    deliveredBy: d.deliveredBy, deliveryFee: String(d.deliveryFee),
+  await supabaseAdmin.from("deliveries").upsert(deliveriesList.map(d => ({
+    id: d.id, order_id: d.orderId, client: d.client, client_id: d.clientId,
+    date: d.date, scheduled_date: d.scheduledDate, status: d.status,
+    delivered_by: d.deliveredBy, delivery_fee: String(d.deliveryFee),
     items: d.items, notes: d.notes,
-  }))).onConflictDoNothing();
+  })));
 
-  await db.insert(collections).values(collectionsList.map(c => ({
-    id: c.id, orderId: c.orderId, client: c.client, clientId: c.clientId,
-    invoiceDate: c.invoiceDate, dueDate: c.dueDate, totalAmount: String(c.totalAmount),
-    paidAmount: String(c.paidAmount), outstanding: String(c.outstanding),
-    status: c.status, paymentMethod: c.paymentMethod, notes: c.notes,
-  }))).onConflictDoNothing();
+  await supabaseAdmin.from("collections").upsert(collectionsList.map(c => ({
+    id: c.id, order_id: c.orderId, client: c.client, client_id: c.clientId,
+    invoice_date: c.invoiceDate, due_date: c.dueDate, total_amount: String(c.totalAmount),
+    paid_amount: String(c.paidAmount), outstanding: String(c.outstanding),
+    status: c.status, payment_method: c.paymentMethod, notes: c.notes,
+  })));
 
-  await db.insert(inventory).values(inventoryList.map(i => ({
-    materialCode: i.materialCode, materialName: i.materialName,
-    category: i.category, totalStock: i.totalStock, reorderPoint: i.reorderPoint,
+  await supabaseAdmin.from("inventory").upsert(inventoryList.map(i => ({
+    material_code: i.materialCode, material_name: i.materialName,
+    category: i.category, total_stock: i.totalStock, reorder_point: i.reorderPoint,
     lots: i.lots,
-  }))).onConflictDoNothing();
+  })));
 
-  await db.insert(notifications).values(notificationsList.map(n => ({
+  await supabaseAdmin.from("notifications").upsert(notificationsList.map(n => ({
     id: n.id, type: n.type, title: n.title, message: n.message,
-    date: n.date, time: n.time, read: n.read, userId: "",
-  }))).onConflictDoNothing();
+    date: n.date, time: n.time, read: n.read, user_id: "",
+  })));
 
-  // Seed treasury accounts
+  // Seed treasury accounts with fixed UUIDs so we can reference them for transactions
   const acc1Id = "11111111-1111-1111-1111-111111111111";
   const acc2Id = "22222222-2222-2222-2222-222222222222";
   const acc3Id = "33333333-3333-3333-3333-333333333333";
-  await db.insert(treasuryAccounts).values([
-    { id: acc1Id, name: "الصندوق الرئيسي", accountType: "cashbox", custodianName: "أحمد الراشد", balance: "850000", isActive: true },
-    { id: acc2Id, name: "حساب الراتب - سارة", accountType: "cashbox", custodianName: "سارة المنصور", balance: "420000", isActive: true },
-    { id: acc3Id, name: "بنك الأهلي", accountType: "bank", custodianName: "عمر خليل", bankName: "البنك الأهلي المصري", balance: "1250000", isActive: true },
-  ]).onConflictDoNothing();
 
-  // Seed some treasury transactions
-  await db.insert(treasuryTransactions).values([
-    { accountId: acc1Id, txType: "inflow", amount: "850000", balanceAfter: "850000", category: "revenue", description: "إيرادات مارس", performedBy: null },
-    { accountId: acc2Id, txType: "inflow", amount: "420000", balanceAfter: "420000", category: "revenue", description: "إيرادات فبراير", performedBy: null },
-    { accountId: acc3Id, txType: "inflow", amount: "1250000", balanceAfter: "1250000", category: "revenue", description: "إيرادات يناير", performedBy: null },
-    { accountId: acc1Id, txType: "expense", amount: "-45000", balanceAfter: "805000", category: "logistics", description: "مصاريف توصيل", performedBy: null },
-    { accountId: acc1Id, txType: "expense", amount: "-30000", balanceAfter: "775000", category: "marketing", description: "إعلانات ومسوقون", performedBy: null },
-    { accountId: acc2Id, txType: "withdrawal", amount: "-85000", balanceAfter: "335000", category: "salaries", description: "رواتب شهر مارس", performedBy: null },
-  ]).onConflictDoNothing();
+  await supabaseAdmin.from("treasury_accounts").upsert([
+    { id: acc1Id, name: "الصندوق الرئيسي", account_type: "cashbox", custodian_name: "أحمد الراشد", balance: 850000, is_active: true },
+    { id: acc2Id, name: "حساب الراتب - سارة", account_type: "cashbox", custodian_name: "سارة المنصور", balance: 420000, is_active: true },
+    { id: acc3Id, name: "بنك الأهلي", account_type: "bank", custodian_name: "عمر خليل", bank_name: "البنك الأهلي المصري", balance: 1250000, is_active: true },
+  ]);
+
+  await supabaseAdmin.from("treasury_transactions").insert([
+    { account_id: acc1Id, tx_type: "inflow", amount: 850000, balance_after: 850000, category: "revenue", description: "إيرادات مارس" },
+    { account_id: acc2Id, tx_type: "inflow", amount: 420000, balance_after: 420000, category: "revenue", description: "إيرادات فبراير" },
+    { account_id: acc3Id, tx_type: "inflow", amount: 1250000, balance_after: 1250000, category: "revenue", description: "إيرادات يناير" },
+    { account_id: acc1Id, tx_type: "expense", amount: -45000, balance_after: 805000, category: "logistics", description: "مصاريف توصيل" },
+    { account_id: acc1Id, tx_type: "expense", amount: -30000, balance_after: 775000, category: "marketing", description: "إعلانات ومسوقون" },
+    { account_id: acc2Id, tx_type: "withdrawal", amount: -85000, balance_after: 335000, category: "salaries", description: "رواتب شهر مارس" },
+  ]);
 
   console.log("✅ Seeding complete!");
 }

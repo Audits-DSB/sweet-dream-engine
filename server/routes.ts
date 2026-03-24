@@ -1,255 +1,228 @@
 import { Router } from "express";
-import { db } from "./db";
-import {
-  clients, suppliers, materials, founders,
-  orders, requests, deliveries, collections,
-  inventory, notifications,
-  treasuryAccounts, treasuryTransactions,
-} from "../shared/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { createClient } from "@supabase/supabase-js";
 
 const router = Router();
 
+const supabaseAdmin = createClient(
+  process.env.VITE_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
+
+// ─── camelCase ↔ snake_case helpers ──────────────────────────────────────────
+const toCamel = (s: string) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+const toSnake = (s: string) => s.replace(/([A-Z])/g, (c) => `_${c.toLowerCase()}`);
+
+function camelizeKeys(obj: any): any {
+  if (Array.isArray(obj)) return obj.map(camelizeKeys);
+  if (!obj || typeof obj !== "object") return obj;
+  return Object.fromEntries(Object.entries(obj).map(([k, v]) => [toCamel(k), camelizeKeys(v)]));
+}
+
+function snakifyKeys(obj: any): any {
+  if (Array.isArray(obj)) return obj.map(snakifyKeys);
+  if (!obj || typeof obj !== "object") return obj;
+  return Object.fromEntries(Object.entries(obj).map(([k, v]) => [toSnake(k), snakifyKeys(v)]));
+}
+
+function sbOk(res: any, { data, error }: { data: any; error: any }) {
+  if (error) { console.error("[Supabase Error]", error.message); return res.status(500).json({ error: error.message }); }
+  return res.json(camelizeKeys(data));
+}
+
 // ─── CLIENTS ─────────────────────────────────────────────────────────────────
 router.get("/clients", async (_req, res) => {
-  const rows = await db.select().from(clients);
-  res.json(rows);
+  sbOk(res, await supabaseAdmin.from("clients").select("*").order("name"));
 });
-
 router.post("/clients", async (req, res) => {
-  const [row] = await db.insert(clients).values(req.body).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("clients").insert(snakifyKeys(req.body)).select().single());
 });
-
 router.patch("/clients/:id", async (req, res) => {
-  const [row] = await db.update(clients).set(req.body).where(eq(clients.id, req.params.id)).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("clients").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
-
 router.delete("/clients/:id", async (req, res) => {
-  await db.delete(clients).where(eq(clients.id, req.params.id));
+  const { error } = await supabaseAdmin.from("clients").delete().eq("id", req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
 });
 
 // ─── SUPPLIERS ────────────────────────────────────────────────────────────────
 router.get("/suppliers", async (_req, res) => {
-  const rows = await db.select().from(suppliers);
-  res.json(rows);
+  sbOk(res, await supabaseAdmin.from("suppliers").select("*").order("name"));
 });
-
 router.post("/suppliers", async (req, res) => {
-  const [row] = await db.insert(suppliers).values(req.body).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("suppliers").insert(snakifyKeys(req.body)).select().single());
 });
-
 router.patch("/suppliers/:id", async (req, res) => {
-  const [row] = await db.update(suppliers).set(req.body).where(eq(suppliers.id, req.params.id)).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("suppliers").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
-
 router.delete("/suppliers/:id", async (req, res) => {
-  await db.delete(suppliers).where(eq(suppliers.id, req.params.id));
+  const { error } = await supabaseAdmin.from("suppliers").delete().eq("id", req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
 });
 
 // ─── MATERIALS ────────────────────────────────────────────────────────────────
 router.get("/materials", async (_req, res) => {
-  const rows = await db.select().from(materials);
-  res.json(rows);
+  sbOk(res, await supabaseAdmin.from("materials").select("*").order("name"));
 });
-
 router.post("/materials", async (req, res) => {
-  const [row] = await db.insert(materials).values(req.body).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("materials").insert(snakifyKeys(req.body)).select().single());
 });
-
 router.patch("/materials/:code", async (req, res) => {
-  const [row] = await db.update(materials).set(req.body).where(eq(materials.code, req.params.code)).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("materials").update(snakifyKeys(req.body)).eq("code", req.params.code).select().single());
 });
-
 router.delete("/materials/:code", async (req, res) => {
-  await db.delete(materials).where(eq(materials.code, req.params.code));
+  const { error } = await supabaseAdmin.from("materials").delete().eq("code", req.params.code);
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
 });
 
 // ─── FOUNDERS ─────────────────────────────────────────────────────────────────
 router.get("/founders", async (_req, res) => {
-  const rows = await db.select().from(founders);
-  res.json(rows);
+  sbOk(res, await supabaseAdmin.from("founders").select("*").order("name"));
 });
-
 router.post("/founders", async (req, res) => {
-  const [row] = await db.insert(founders).values(req.body).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("founders").insert(snakifyKeys(req.body)).select().single());
 });
-
 router.patch("/founders/:id", async (req, res) => {
-  const [row] = await db.update(founders).set(req.body).where(eq(founders.id, req.params.id)).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("founders").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
-
 router.delete("/founders/:id", async (req, res) => {
-  await db.delete(founders).where(eq(founders.id, req.params.id));
+  const { error } = await supabaseAdmin.from("founders").delete().eq("id", req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
 });
 
 // ─── ORDERS ───────────────────────────────────────────────────────────────────
 router.get("/orders", async (_req, res) => {
-  const rows = await db.select().from(orders).orderBy(desc(orders.createdAt));
-  res.json(rows);
+  sbOk(res, await supabaseAdmin.from("orders").select("*").order("created_at", { ascending: false }));
 });
-
 router.post("/orders", async (req, res) => {
-  const [row] = await db.insert(orders).values(req.body).returning();
-  // bump client totalOrders
-  await db.update(clients).set({ totalOrders: sql`total_orders + 1` }).where(eq(clients.id, req.body.clientId));
-  res.json(row);
+  const data = snakifyKeys(req.body);
+  const result = await supabaseAdmin.from("orders").insert(data).select().single();
+  if (!result.error && data.client_id) {
+    await supabaseAdmin.rpc("increment_client_orders", { cid: data.client_id }).catch(() => {});
+  }
+  sbOk(res, result);
 });
-
 router.patch("/orders/:id", async (req, res) => {
-  const [row] = await db.update(orders).set(req.body).where(eq(orders.id, req.params.id)).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("orders").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
-
 router.delete("/orders/:id", async (req, res) => {
-  await db.delete(orders).where(eq(orders.id, req.params.id));
+  const { error } = await supabaseAdmin.from("orders").delete().eq("id", req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
 });
 
 // ─── REQUESTS ─────────────────────────────────────────────────────────────────
 router.get("/requests", async (_req, res) => {
-  const rows = await db.select().from(requests).orderBy(desc(requests.createdAt));
-  res.json(rows);
+  sbOk(res, await supabaseAdmin.from("requests").select("*").order("created_at", { ascending: false }));
 });
-
 router.post("/requests", async (req, res) => {
-  const [row] = await db.insert(requests).values(req.body).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("requests").insert(snakifyKeys(req.body)).select().single());
 });
-
 router.patch("/requests/:id", async (req, res) => {
-  const [row] = await db.update(requests).set(req.body).where(eq(requests.id, req.params.id)).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("requests").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
-
 router.delete("/requests/:id", async (req, res) => {
-  await db.delete(requests).where(eq(requests.id, req.params.id));
+  const { error } = await supabaseAdmin.from("requests").delete().eq("id", req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
 });
 
 // ─── DELIVERIES ───────────────────────────────────────────────────────────────
 router.get("/deliveries", async (_req, res) => {
-  const rows = await db.select().from(deliveries).orderBy(desc(deliveries.createdAt));
-  res.json(rows);
+  sbOk(res, await supabaseAdmin.from("deliveries").select("*").order("created_at", { ascending: false }));
 });
-
 router.post("/deliveries", async (req, res) => {
-  const [row] = await db.insert(deliveries).values(req.body).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("deliveries").insert(snakifyKeys(req.body)).select().single());
 });
-
 router.patch("/deliveries/:id", async (req, res) => {
-  const [row] = await db.update(deliveries).set(req.body).where(eq(deliveries.id, req.params.id)).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("deliveries").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
-
 router.delete("/deliveries/:id", async (req, res) => {
-  await db.delete(deliveries).where(eq(deliveries.id, req.params.id));
+  const { error } = await supabaseAdmin.from("deliveries").delete().eq("id", req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
 });
 
 // ─── COLLECTIONS ──────────────────────────────────────────────────────────────
 router.get("/collections", async (_req, res) => {
-  const rows = await db.select().from(collections).orderBy(desc(collections.createdAt));
-  res.json(rows);
+  sbOk(res, await supabaseAdmin.from("collections").select("*").order("created_at", { ascending: false }));
 });
-
 router.post("/collections", async (req, res) => {
-  const [row] = await db.insert(collections).values(req.body).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("collections").insert(snakifyKeys(req.body)).select().single());
 });
-
 router.patch("/collections/:id", async (req, res) => {
-  const [row] = await db.update(collections).set(req.body).where(eq(collections.id, req.params.id)).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("collections").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
-
 router.delete("/collections/:id", async (req, res) => {
-  await db.delete(collections).where(eq(collections.id, req.params.id));
+  const { error } = await supabaseAdmin.from("collections").delete().eq("id", req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
 });
 
 // ─── INVENTORY ────────────────────────────────────────────────────────────────
 router.get("/inventory", async (_req, res) => {
-  const rows = await db.select().from(inventory);
-  res.json(rows);
+  sbOk(res, await supabaseAdmin.from("inventory").select("*").order("material_name"));
 });
-
 router.post("/inventory", async (req, res) => {
-  const [row] = await db.insert(inventory).values(req.body).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("inventory").insert(snakifyKeys(req.body)).select().single());
 });
-
 router.patch("/inventory/:code", async (req, res) => {
-  const [row] = await db.update(inventory).set({ ...req.body, updatedAt: new Date() }).where(eq(inventory.materialCode, req.params.code)).returning();
-  res.json(row);
+  const body = { ...snakifyKeys(req.body), updated_at: new Date().toISOString() };
+  sbOk(res, await supabaseAdmin.from("inventory").update(body).eq("material_code", req.params.code).select().single());
 });
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
 router.get("/notifications", async (_req, res) => {
-  const rows = await db.select().from(notifications).orderBy(desc(notifications.createdAt));
-  res.json(rows);
+  sbOk(res, await supabaseAdmin.from("notifications").select("*").order("created_at", { ascending: false }));
 });
-
 router.post("/notifications", async (req, res) => {
-  const [row] = await db.insert(notifications).values(req.body).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("notifications").insert(snakifyKeys(req.body)).select().single());
 });
-
 router.patch("/notifications/:id", async (req, res) => {
-  const [row] = await db.update(notifications).set(req.body).where(eq(notifications.id, req.params.id)).returning();
-  res.json(row);
+  sbOk(res, await supabaseAdmin.from("notifications").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
-
 router.patch("/notifications/mark-all-read/:userId", async (req, res) => {
-  await db.update(notifications).set({ read: true }).where(eq(notifications.userId, req.params.userId));
+  const { error } = await supabaseAdmin.from("notifications").update({ read: true }).eq("user_id", req.params.userId);
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
 });
 
 // ─── TREASURY ACCOUNTS ────────────────────────────────────────────────────────
 router.get("/treasury/accounts", async (_req, res) => {
-  const rows = await db.select().from(treasuryAccounts).orderBy(desc(treasuryAccounts.createdAt));
-  res.json(rows);
+  sbOk(res, await supabaseAdmin.from("treasury_accounts").select("*").order("created_at", { ascending: false }));
 });
-
 router.post("/treasury/accounts", async (req, res) => {
-  const [row] = await db.insert(treasuryAccounts).values(req.body).returning();
-  res.json(row);
+  const body = snakifyKeys(req.body);
+  delete body.id;
+  sbOk(res, await supabaseAdmin.from("treasury_accounts").insert(body).select().single());
 });
-
 router.patch("/treasury/accounts/:id", async (req, res) => {
-  const [row] = await db.update(treasuryAccounts).set({ ...req.body, updatedAt: new Date() }).where(eq(treasuryAccounts.id, req.params.id)).returning();
-  res.json(row);
+  const body = { ...snakifyKeys(req.body), updated_at: new Date().toISOString() };
+  sbOk(res, await supabaseAdmin.from("treasury_accounts").update(body).eq("id", req.params.id).select().single());
 });
 
 // ─── TREASURY TRANSACTIONS ────────────────────────────────────────────────────
 router.get("/treasury/transactions", async (_req, res) => {
-  const rows = await db.select().from(treasuryTransactions).orderBy(desc(treasuryTransactions.createdAt));
-  res.json(rows);
+  sbOk(res, await supabaseAdmin.from("treasury_transactions").select("*").order("created_at", { ascending: false }));
 });
-
 router.post("/treasury/transactions", async (req, res) => {
-  const { newBalance, linkedNewBalance, ...txData } = req.body;
-  const [row] = await db.insert(treasuryTransactions).values(txData).returning();
-  // Update account balance
-  if (newBalance !== undefined) {
-    await db.update(treasuryAccounts).set({ balance: String(newBalance), updatedAt: new Date() }).where(eq(treasuryAccounts.id, txData.accountId));
+  const { newBalance, linkedNewBalance, ...rest } = req.body;
+  const txData = snakifyKeys(rest);
+  delete txData.id;
+  const result = await supabaseAdmin.from("treasury_transactions").insert(txData).select().single();
+  if (!result.error) {
+    if (newBalance !== undefined) {
+      await supabaseAdmin.from("treasury_accounts").update({ balance: newBalance, updated_at: new Date().toISOString() }).eq("id", rest.accountId);
+    }
+    if (linkedNewBalance !== undefined && rest.linkedAccountId) {
+      await supabaseAdmin.from("treasury_accounts").update({ balance: linkedNewBalance, updated_at: new Date().toISOString() }).eq("id", rest.linkedAccountId);
+    }
   }
-  if (linkedNewBalance !== undefined && txData.linkedAccountId) {
-    await db.update(treasuryAccounts).set({ balance: String(linkedNewBalance), updatedAt: new Date() }).where(eq(treasuryAccounts.id, txData.linkedAccountId));
-  }
-  res.json(row);
+  sbOk(res, result);
 });
 
 export default router;
