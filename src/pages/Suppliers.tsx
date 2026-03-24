@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Globe, Mail, Phone, ExternalLink, Package, Loader2 } from "lucide-react";
+import { Plus, Globe, Mail, Phone, Package, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
@@ -18,7 +18,6 @@ type Supplier = {
   country: string;
   email: string;
   phone: string;
-  website: string;
   paymentTerms: string;
   active: boolean;
 };
@@ -40,7 +39,6 @@ function normalizeSupplier(raw: any): Supplier {
     country: raw.country || "",
     email: raw.email || "",
     phone: raw.phone || "",
-    website: raw.website || "",
     paymentTerms: raw.paymentTerms ?? raw.payment_terms ?? "Net 30",
     active: raw.active ?? true,
   };
@@ -54,7 +52,7 @@ export default function SuppliersPage() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailItem, setDetailItem] = useState<Supplier | null>(null);
-  const [form, setForm] = useState({ name: "", country: "", email: "", phone: "", website: "", paymentTerms: "Net 30" });
+  const [form, setForm] = useState({ name: "", country: "", email: "", phone: "", paymentTerms: "Net 30" });
   const [extMaterials, setExtMaterials] = useState<ExtMaterial[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
 
@@ -77,20 +75,8 @@ export default function SuppliersPage() {
   const loadExtMaterials = async () => {
     setMaterialsLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-external-materials`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
-          },
-        }
-      );
-      const json = await res.json();
-      if (json.products && Array.isArray(json.products)) {
+      const json = await api.get<{ products: any[] }>("/external-materials");
+      if (json?.products && Array.isArray(json.products)) {
         setExtMaterials(json.products.map((p: any) => {
           const companyVariant = p.variants?.find((v: any) => v.name === "Company" || v.name === "Company()");
           const manufacturer = companyVariant?.options?.[0]?.value || "";
@@ -127,7 +113,7 @@ export default function SuppliersPage() {
     try {
       const saved = await api.post<any>("/suppliers", { ...form, id: newId, active: true });
       setSuppliers(prev => [...prev, normalizeSupplier(saved)]);
-      setForm({ name: "", country: "", email: "", phone: "", website: "", paymentTerms: "Net 30" });
+      setForm({ name: "", country: "", email: "", phone: "", paymentTerms: "Net 30" });
       setDialogOpen(false);
       toast.success(t.supplierAdded);
     } catch {
@@ -151,7 +137,7 @@ export default function SuppliersPage() {
         filters={[]}
         filterValues={{}}
         onFilterChange={() => {}}
-        onExport={() => exportToCsv("suppliers", [t.code, t.name, t.country, t.email, t.phone, t.website, t.paymentTerms], filtered.map(s => [s.id, s.name, s.country, s.email, s.phone, s.website, s.paymentTerms]))}
+        onExport={() => exportToCsv("suppliers", [t.code, t.name, t.country, t.email, t.phone, t.paymentTerms], filtered.map(s => [s.id, s.name, s.country, s.email, s.phone, s.paymentTerms]))}
         actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addSupplier}</Button>}
       />
 
@@ -213,11 +199,6 @@ export default function SuppliersPage() {
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.email}</p><p className="font-semibold text-xs">{detailItem.email || "—"}</p></div>
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.phone}</p><p className="font-semibold">{detailItem.phone || "—"}</p></div>
               </div>
-              {detailItem.website && (
-                <a href={`https://${detailItem.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm text-primary hover:underline">
-                  <ExternalLink className="h-3.5 w-3.5" />{detailItem.website}
-                </a>
-              )}
               <div>
                 <h4 className="text-sm font-semibold mb-2">{t.suppliedMaterials}</h4>
                 {materialsLoading ? (
@@ -256,10 +237,7 @@ export default function SuppliersPage() {
               <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
               <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">{t.website}</Label><Input className="h-9 mt-1" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} /></div>
-              <div><Label className="text-xs">{t.paymentTerms}</Label><Input className="h-9 mt-1" value={form.paymentTerms} onChange={(e) => setForm({ ...form, paymentTerms: e.target.value })} /></div>
-            </div>
+            <div><Label className="text-xs">{t.paymentTerms}</Label><Input className="h-9 mt-1" value={form.paymentTerms} onChange={(e) => setForm({ ...form, paymentTerms: e.target.value })} /></div>
             <Button className="w-full" onClick={handleAdd}>{t.addSupplier}</Button>
           </div>
         </DialogContent>
