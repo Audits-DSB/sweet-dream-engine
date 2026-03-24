@@ -51,10 +51,6 @@ async function seedIfEmpty() {
     has_expiry: m.hasExpiry, active: m.active,
   })));
 
-  await supabaseAdmin.from("founders").upsert(foundersList.map(f => ({
-    id: f.id, name: f.name, alias: f.alias, email: f.email, phone: f.phone,
-  })));
-
   await supabaseAdmin.from("orders").upsert(ordersList.map(o => ({
     id: o.id, client: o.client, client_id: o.clientId, date: o.date,
     lines: o.lines, total_selling: o.totalSelling, total_cost: o.totalCost,
