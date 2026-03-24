@@ -548,9 +548,12 @@ function pgOne(res: any, rows: any[]) {
   return res.json(camelizeKeys(rows[0]));
 }
 
-router.get("/client-inventory", async (_req, res) => {
+router.get("/client-inventory", async (req, res) => {
   try {
-    const { rows } = await pgPool.query("SELECT * FROM client_inventory ORDER BY created_at DESC");
+    const { clientId } = req.query as { clientId?: string };
+    const { rows } = clientId
+      ? await pgPool.query("SELECT * FROM client_inventory WHERE client_id=$1 ORDER BY created_at DESC", [clientId])
+      : await pgPool.query("SELECT * FROM client_inventory ORDER BY created_at DESC");
     pgOk(res, rows);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });

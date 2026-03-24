@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, Package, Receipt, TrendingUp, ClipboardCheck, Loader2 } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, Package, Receipt, TrendingUp, ClipboardCheck, Loader2, ExternalLink, AlertTriangle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -21,6 +22,12 @@ type Client = {
 
 type Order = {
   id: string; date: string; totalSelling: string; totalCost: string; status: string;
+};
+
+type InventoryLot = {
+  id: string; material: string; code: string; unit: string;
+  delivered: number; remaining: number; sellingPrice: number;
+  deliveryDate: string; expiry: string; sourceOrder: string; status: string;
 };
 
 function mapClient(raw: any): Client {
@@ -48,12 +55,20 @@ function mapOrder(raw: any): Order {
   };
 }
 
+function statusColor(status: string) {
+  if (status === "Low Stock") return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400";
+  if (status === "Depleted") return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400";
+  if (status === "Expired") return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400";
+  return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
+}
+
 export default function ClientProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [client, setClient] = useState<Client | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [inventory, setInventory] = useState<InventoryLot[]>([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -64,7 +79,8 @@ export default function ClientProfile() {
     Promise.all([
       api.get<any[]>("/clients"),
       api.get<any[]>("/orders"),
-    ]).then(([clientsData, ordersData]) => {
+      api.get<any[]>(`/client-inventory?clientId=${id}`).catch(() => []),
+    ]).then(([clientsData, ordersData, invData]) => {
       const found = (clientsData || []).find((c: any) => c.id === id);
       if (found) {
         const c = mapClient(found);
@@ -75,6 +91,19 @@ export default function ClientProfile() {
         .filter((o: any) => (o.clientId || o.client_id) === id)
         .map(mapOrder);
       setOrders(clientOrders);
+      setInventory((invData || []).map((r: any) => ({
+        id: r.id,
+        material: r.material || "",
+        code: r.code || "",
+        unit: r.unit || "",
+        delivered: Number(r.delivered ?? 0),
+        remaining: Number(r.remaining ?? 0),
+        sellingPrice: Number(r.sellingPrice ?? r.selling_price ?? 0),
+        deliveryDate: r.deliveryDate || r.delivery_date || "",
+        expiry: r.expiry || "",
+        sourceOrder: r.sourceOrder || r.source_order || "",
+        status: r.status || "In Stock",
+      })));
     }).catch(() => toast.error(t.failedToLoadClientData))
       .finally(() => setLoading(false));
   }, [id]);
@@ -112,11 +141,14 @@ export default function ClientProfile() {
     );
   }
 
+  const inventoryValue = inventory.reduce((sum, lot) => sum + lot.remaining * lot.sellingPrice, 0);
+  const lowStockCount = inventory.filter(l => l.status === "Low Stock" || l.status === "Depleted").length;
+
   const stats = [
     { label: t.totalOrders, value: orders.length, icon: Package },
     { label: t.outstanding, value: `${client.outstanding.toLocaleString()} ${t.currency}`, icon: TrendingUp },
-    { label: t.totalPaid, value: "—", icon: Receipt },
-    { label: t.inventoryValue, value: "—", icon: ClipboardCheck },
+    { label: t.totalPaid, value: `${inventory.length} ${t.materialCol || "صنف"}`, icon: Receipt },
+    { label: t.inventoryValue, value: `${inventoryValue.toLocaleString()} ${t.currency}`, icon: ClipboardCheck },
   ];
 
   return (
@@ -183,8 +215,85 @@ export default function ClientProfile() {
         </TabsContent>
 
         <TabsContent value="inventory">
-          <div className="stat-card">
-            <p className="text-center py-10 text-muted-foreground text-sm">{t.inventoryFromPage}</p>
+          <div className="stat-card overflow-hidden">
+            {/* Header with link to full inventory page */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-sm">مخزون العميل</span>
+                <span className="text-xs text-muted-foreground">({inventory.length} صنف)</span>
+                {lowStockCount > 0 && (
+                  <Badge variant="destructive" className="text-xs py-0 px-1.5 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    {lowStockCount} يحتاج تجديد
+                  </Badge>
+                )}
+              </div>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => navigate("/inventory")}>
+                <ExternalLink className="h-3 w-3" />
+                صفحة المخزون الكاملة
+              </Button>
+            </div>
+
+            {inventory.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground">
+                <Package className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">لا يوجد مخزون لهذا العميل</p>
+                <p className="text-xs mt-1">يُضاف المخزون تلقائياً عند تأكيد التسليم</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/20">
+                      <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">المادة</th>
+                      <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">الكود</th>
+                      <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">الطلب</th>
+                      <th className="text-center py-2.5 px-3 text-xs font-medium text-muted-foreground">المُسلَّم</th>
+                      <th className="text-center py-2.5 px-3 text-xs font-medium text-muted-foreground">المتبقي</th>
+                      <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">القيمة</th>
+                      <th className="text-center py-2.5 px-3 text-xs font-medium text-muted-foreground">الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inventory.map((lot) => (
+                      <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                        <td className="py-2.5 px-3 font-medium">{lot.material}</td>
+                        <td className="py-2.5 px-3 font-mono text-xs text-muted-foreground">{lot.code}</td>
+                        <td className="py-2.5 px-3">
+                          <span
+                            className="text-xs text-primary cursor-pointer hover:underline"
+                            onClick={() => navigate(`/orders/${lot.sourceOrder}`)}
+                          >
+                            {lot.sourceOrder}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center">{lot.delivered} {lot.unit}</td>
+                        <td className="py-2.5 px-3 text-center font-semibold">{lot.remaining} {lot.unit}</td>
+                        <td className="py-2.5 px-3 text-end font-medium">
+                          {(lot.remaining * lot.sellingPrice).toLocaleString()} {t.currency}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(lot.status)}`}>
+                            {lot.status === "In Stock" ? "في المخزون" :
+                             lot.status === "Low Stock" ? "مخزون منخفض" :
+                             lot.status === "Depleted" ? "نفد" :
+                             lot.status === "Expired" ? "منتهي" : lot.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border bg-muted/30">
+                      <td colSpan={5} className="py-2.5 px-3 text-xs font-semibold text-muted-foreground">إجمالي قيمة المخزون</td>
+                      <td className="py-2.5 px-3 text-end font-bold text-primary">{inventoryValue.toLocaleString()} {t.currency}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
           </div>
         </TabsContent>
       </Tabs>
