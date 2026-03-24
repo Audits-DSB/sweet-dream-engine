@@ -1,5 +1,6 @@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
+import { useBusinessRules, getCompanyShareRatio, getFounderShareRatio } from "@/lib/useBusinessRules";
 import { StatCard } from "@/components/StatCard";
 import {
   TrendingUp, TrendingDown, DollarSign, Percent, Download, Wallet,
@@ -49,6 +50,7 @@ export default function CompanyProfitPage() {
   const [selectedMonth, setSelectedMonth] = useState<MonthDetail | null>(null);
   const [expenseForm, setExpenseForm] = useState({ amount: "", category: "operations" as typeof EXPENSE_CATEGORIES[number], description: "", accountId: "" });
   const [submitting, setSubmitting] = useState(false);
+  const { rules } = useBusinessRules();
 
   const parseAmount = (val: unknown): number => {
     if (!val) return 0;
@@ -124,8 +126,8 @@ export default function CompanyProfitPage() {
         revenue: d.revenue,
         cost: d.cost,
         profit,
-        companyShare: profit > 0 ? Math.round(profit * 0.15) : 0,
-        founderShare: profit > 0 ? Math.round(profit * 0.85) : 0,
+        companyShare: profit > 0 ? Math.round(profit * getCompanyShareRatio(rules)) : 0,
+        founderShare: profit > 0 ? Math.round(profit * getFounderShareRatio(rules)) : 0,
       };
     });
 
@@ -186,7 +188,7 @@ export default function CompanyProfitPage() {
       comparison: comparisonData,
       monthDetails: details,
     };
-  }, [orders, transactions, monthsFilter]);
+  }, [orders, transactions, monthsFilter, rules.companyProfitPercentage]);
 
   const isLoading = loadingAccounts || loadingTx || loadingOrders;
 

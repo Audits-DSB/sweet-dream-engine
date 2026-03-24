@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { logAudit } from "@/lib/auditLog";
+import { useBusinessRules } from "@/lib/useBusinessRules";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -57,6 +58,7 @@ export default function OrdersPage() {
   const { t } = useLanguage();
   const [searchParams] = useSearchParams();
   const urlStatus = searchParams.get("status") || "";
+  const { rules } = useBusinessRules();
   const [orders, setOrders] = useState<Order[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,7 +67,7 @@ export default function OrdersPage() {
   const [filters, setFilters] = useState<Record<string, string>>(urlStatus ? { status: urlStatus } : {});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState("");
-  const [form, setForm] = useState({ splitMode: "equal", deliveryFee: "500" });
+  const [form, setForm] = useState({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee) });
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [materialSearch, setMaterialSearch] = useState("");
   const [realMaterials, setRealMaterials] = useState<MaterialItem[]>([]);
@@ -73,6 +75,12 @@ export default function OrdersPage() {
   const [deleteTarget, setDeleteTarget] = useState<Order | null>(null);
   const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (dialogOpen) {
+      setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee) });
+    }
+  }, [dialogOpen, rules.defaultSplitMode, rules.defaultDeliveryFee]);
 
   useEffect(() => {
     Promise.all([
@@ -178,7 +186,7 @@ export default function OrdersPage() {
       });
       await logAudit({ entity: "order", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${client.name}`, action: "create", snapshot: saved, endpoint: "/orders" });
       setOrders(prev => [mapOrder(saved), ...prev]);
-      setForm({ splitMode: "equal", deliveryFee: "500" });
+      setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee) });
       setSelectedClient(""); setOrderItems([]); setDialogOpen(false);
       toast.success(t.orderCreated);
     } catch (err: any) {

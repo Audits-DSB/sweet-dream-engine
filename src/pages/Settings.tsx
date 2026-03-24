@@ -10,6 +10,7 @@ import { Plus, Pencil, Trash2, Save, Users, Building2, Truck, Percent, Settings 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { useBusinessRules, saveBusinessRules, BusinessRules, DEFAULT_RULES } from "@/lib/useBusinessRules";
 
 type Founder = {
   id: string; name: string; alias: string; email: string; phone: string;
@@ -33,14 +34,6 @@ const initialActors = [
   { id: "4", name: "سارة (مؤسس)", type: "founder", phone: "+20 111 987 6543", active: false },
 ];
 
-const businessRules = {
-  companyProfitPercentage: 15, defaultSplitMode: "equal" as "equal" | "contribution",
-  defaultLeadTimeWeeks: 2, defaultCoverageWeeks: 4, defaultSafetyStock: 5,
-  subscriptionType: "percentage" as "fixed" | "percentage" | "none", subscriptionValue: 5,
-  defaultDeliveryFee: 50, lowStockAlertEnabled: true, expiryAlertDays: 14,
-  auditReminderEnabled: true, auditReminderDays: 7,
-};
-
 type DialogMode = "founder" | "actor" | "editFounder" | "editActor" | null;
 
 export default function SettingsPage() {
@@ -49,8 +42,15 @@ export default function SettingsPage() {
   const [foundersLoading, setFoundersLoading] = useState(true);
   const [founderSaving, setFounderSaving] = useState(false);
   const [actors, setActors] = useState(initialActors);
-  const [rules, setRules] = useState(businessRules);
+  const { rules: dbRules, loading: rulesLoading } = useBusinessRules();
+  const [rules, setRules] = useState<BusinessRules>(DEFAULT_RULES);
+  const [rulesSaving, setRulesSaving] = useState(false);
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
+
+  useEffect(() => {
+    if (!rulesLoading) setRules(dbRules);
+  }, [dbRules, rulesLoading]);
+
   const [founderForm, setFounderForm] = useState({ name: "", alias: "", email: "", phone: "" });
   const [actorForm, setActorForm] = useState({ name: "", type: "external", phone: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -196,7 +196,23 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="flex justify-end">
-            <Button onClick={() => toast.success(t.settingsSaved)}><Save className="h-4 w-4 ltr:mr-2 rtl:ml-2" />{t.saveChanges}</Button>
+            <Button
+              disabled={rulesSaving}
+              onClick={async () => {
+                setRulesSaving(true);
+                try {
+                  await saveBusinessRules(rules);
+                  toast.success(t.settingsSaved);
+                } catch {
+                  toast.error(t.failedToLoadData);
+                } finally {
+                  setRulesSaving(false);
+                }
+              }}
+            >
+              {rulesSaving ? <Loader2 className="h-4 w-4 animate-spin ltr:mr-2 rtl:ml-2" /> : <Save className="h-4 w-4 ltr:mr-2 rtl:ml-2" />}
+              {t.saveChanges}
+            </Button>
           </div>
         </TabsContent>
 

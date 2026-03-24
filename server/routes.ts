@@ -432,4 +432,29 @@ router.delete("/founder-transactions/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── BUSINESS RULES (local PG) ────────────────────────────────────────────────
+router.get("/business-rules", async (_req, res) => {
+  try {
+    const { rows } = await pgPool.query("SELECT * FROM business_rules WHERE id = 'default'");
+    if (!rows.length) return res.json({});
+    res.json(camelizeKeys(rows[0]));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.put("/business-rules", async (req, res) => {
+  try {
+    const body = snakifyKeys(req.body);
+    delete body.id;
+    body.updated_at = new Date().toISOString();
+    const keys = Object.keys(body);
+    const sets = keys.map((k, i) => `${k}=$${i + 1}`);
+    const { rows } = await pgPool.query(
+      `UPDATE business_rules SET ${sets.join(",")} WHERE id='default' RETURNING *`,
+      Object.values(body)
+    );
+    if (!rows.length) return res.status(404).json({ error: "Not found" });
+    res.json(camelizeKeys(rows[0]));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 export default router;

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useBusinessRules, getCompanyShareRatio, getFounderShareRatio } from "@/lib/useBusinessRules";
 import { FileBarChart, DollarSign, TrendingUp, TrendingDown, Wallet, Users, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -29,6 +30,7 @@ export default function FinancialReportPage() {
   const { t, lang } = useLanguage();
   const navigate = useNavigate();
   const [period, setPeriod] = useState("6");
+  const { rules } = useBusinessRules();
 
   const { data: orders = [], isLoading: loadingOrders } = useQuery<Order[]>({
     queryKey: ["orders"],
@@ -129,8 +131,8 @@ export default function FinancialReportPage() {
         revenue: d.revenue,
         cost: d.cost,
         profit,
-        companyShare: profit > 0 ? Math.round(profit * 0.15) : 0,
-        founderShare: profit > 0 ? Math.round(profit * 0.85) : 0,
+        companyShare: profit > 0 ? Math.round(profit * getCompanyShareRatio(rules)) : 0,
+        founderShare: profit > 0 ? Math.round(profit * getFounderShareRatio(rules)) : 0,
       };
     });
 
@@ -144,7 +146,7 @@ export default function FinancialReportPage() {
       monthlyPnL: pnl,
       totals: { revenue: tRev, cost: tCost, profit: tProfit, company: tCompany, founder: tFounder },
     };
-  }, [orders, txs, period]);
+  }, [orders, txs, period, rules.companyProfitPercentage]);
 
   // ── Collections summary from real data ─────────────────────────────────────
   const collectionsSummary = useMemo(() => {
