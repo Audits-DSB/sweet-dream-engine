@@ -42,10 +42,12 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <div className="h-14 w-14 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4">
-            <span className="text-primary-foreground font-bold text-xl">OP</span>
-          </div>
-          <h1 className="text-2xl font-bold text-foreground">Welcome to DSB</h1>
+          <img
+            src="/images/dsb-logo.png"
+            alt="Dental Smart Box Logo"
+            className="h-20 w-20 rounded-2xl object-cover mx-auto mb-3"
+          />
+          <h1 className="text-xl font-bold text-foreground">Dental Smart Box</h1>
           <p className="text-muted-foreground mt-1">Sign in to your account</p>
         </div>
 
