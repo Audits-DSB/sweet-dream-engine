@@ -118,6 +118,43 @@ export const inventory = pgTable("inventory", {
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
+export const clientInventory = pgTable("client_inventory", {
+  id: text("id").primaryKey(),
+  clientId: text("client_id").notNull().default(""),
+  clientName: text("client_name").notNull().default(""),
+  material: text("material").notNull().default(""),
+  code: text("code").notNull().default(""),
+  unit: text("unit").notNull().default(""),
+  delivered: numeric("delivered", { precision: 14, scale: 2 }).notNull().default("0"),
+  remaining: numeric("remaining", { precision: 14, scale: 2 }).notNull().default("0"),
+  sellingPrice: numeric("selling_price", { precision: 14, scale: 2 }).notNull().default("0"),
+  storeCost: numeric("store_cost", { precision: 14, scale: 2 }).notNull().default("0"),
+  deliveryDate: text("delivery_date").notNull().default(""),
+  expiry: text("expiry").notNull().default(""),
+  sourceOrder: text("source_order").notNull().default(""),
+  status: text("status").notNull().default("In Stock"),
+  avgWeeklyUsage: numeric("avg_weekly_usage", { precision: 14, scale: 2 }).notNull().default("0"),
+  leadTimeWeeks: numeric("lead_time_weeks", { precision: 14, scale: 2 }).notNull().default("2"),
+  safetyStock: numeric("safety_stock", { precision: 14, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const audits = pgTable("audits", {
+  id: text("id").primaryKey(),
+  clientId: text("client_id").notNull().default(""),
+  clientName: text("client_name").notNull().default(""),
+  date: text("date").notNull().default(""),
+  auditor: text("auditor").notNull().default(""),
+  totalItems: integer("total_items").notNull().default(0),
+  matched: integer("matched").notNull().default(0),
+  shortage: integer("shortage").notNull().default(0),
+  surplus: integer("surplus").notNull().default(0),
+  notes: text("notes").notNull().default(""),
+  status: text("status").notNull().default("Completed"),
+  comparison: jsonb("comparison").notNull().default([]),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 export const notifications = pgTable("notifications", {
   id: text("id").primaryKey(),
   type: text("type").notNull().default("info"),

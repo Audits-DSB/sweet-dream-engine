@@ -1,164 +1,190 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useWorkflow } from "@/contexts/WorkflowContext";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Users, List, ChevronDown, ChevronUp, Download, ShoppingCart, Plus, Minus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertTriangle, Users, List, ChevronDown, ChevronUp, Download, ShoppingCart, Plus, Minus, Loader2, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 
-const mockInventory = [
-  { id: "LOT-001", client: "عيادة د. أحمد", clientId: "C001", material: "حشو كمبوزيت ضوئي", code: "MAT-001", unit: "عبوة", delivered: 50, remaining: 45, sellingPrice: 1200, storeCost: 800, deliveryDate: "2025-02-20", expiry: "2025-06-15", sourceOrder: "ORD-042", status: "In Stock" },
-  { id: "LOT-002", client: "عيادة د. أحمد", clientId: "C001", material: "إبر تخدير", code: "MAT-002", unit: "علبة", delivered: 20, remaining: 8, sellingPrice: 950, storeCost: 600, deliveryDate: "2025-02-20", expiry: "2025-04-20", sourceOrder: "ORD-042", status: "Low Stock" },
-  { id: "LOT-003", client: "عيادة د. أحمد", clientId: "C001", material: "مادة طبع سيليكون", code: "MAT-003", unit: "عبوة", delivered: 40, remaining: 30, sellingPrice: 450, storeCost: 280, deliveryDate: "2025-01-15", expiry: "2025-12-01", sourceOrder: "ORD-038", status: "In Stock" },
-  { id: "LOT-004", client: "عيادة د. أحمد", clientId: "C001", material: "قفازات لاتكس", code: "MAT-005", unit: "كرتونة", delivered: 10, remaining: 2, sellingPrice: 400, storeCost: 280, deliveryDate: "2025-01-15", expiry: "2025-03-25", sourceOrder: "ORD-038", status: "Low Stock" },
-  { id: "LOT-005", client: "مركز نور لطب الأسنان", clientId: "C002", material: "حشو كمبوزيت ضوئي", code: "MAT-001", unit: "عبوة", delivered: 80, remaining: 65, sellingPrice: 1200, storeCost: 800, deliveryDate: "2025-03-01", expiry: "2025-07-20", sourceOrder: "ORD-045", status: "In Stock" },
-  { id: "LOT-006", client: "مركز نور لطب الأسنان", clientId: "C002", material: "مبيض أسنان", code: "MAT-008", unit: "عبوة", delivered: 5, remaining: 0.5, sellingPrice: 2800, storeCost: 1800, deliveryDate: "2025-02-10", expiry: "2025-04-01", sourceOrder: "ORD-040", status: "Low Stock" },
-  { id: "LOT-007", client: "عيادة جرين فالي", clientId: "C003", material: "إبر تخدير", code: "MAT-002", unit: "علبة", delivered: 30, remaining: 22, sellingPrice: 950, storeCost: 600, deliveryDate: "2025-02-25", expiry: "2025-05-30", sourceOrder: "ORD-043", status: "In Stock" },
-  { id: "LOT-008", client: "المركز الملكي للأسنان", clientId: "C004", material: "حشو كمبوزيت ضوئي", code: "MAT-001", unit: "عبوة", delivered: 100, remaining: 0, sellingPrice: 1200, storeCost: 800, deliveryDate: "2024-12-15", expiry: "2025-03-10", sourceOrder: "ORD-035", status: "Depleted" },
-  { id: "LOT-009", client: "المركز الملكي للأسنان", clientId: "C004", material: "فرز دوارة", code: "MAT-010", unit: "عبوة", delivered: 5, remaining: 4, sellingPrice: 2000, storeCost: 1300, deliveryDate: "2025-03-01", expiry: "2026-01-01", sourceOrder: "ORD-045", status: "In Stock" },
-  { id: "LOT-010", client: "عيادة بلو مون", clientId: "C006", material: "قفازات لاتكس", code: "MAT-005", unit: "كرتونة", delivered: 15, remaining: 12, sellingPrice: 400, storeCost: 280, deliveryDate: "2025-03-03", expiry: "2025-09-15", sourceOrder: "ORD-044", status: "In Stock" },
-  { id: "LOT-011", client: "مركز سبايس جاردن", clientId: "C007", material: "مادة تلميع", code: "MAT-012", unit: "عبوة", delivered: 8, remaining: 0, sellingPrice: 1500, storeCost: 950, deliveryDate: "2025-01-10", expiry: "2025-03-01", sourceOrder: "ORD-036", status: "Expired" },
-];
+type InventoryLot = {
+  id: string;
+  clientId: string;
+  clientName: string;
+  material: string;
+  code: string;
+  unit: string;
+  delivered: number;
+  remaining: number;
+  sellingPrice: number;
+  storeCost: number;
+  deliveryDate: string;
+  expiry: string;
+  sourceOrder: string;
+  status: string;
+  avgWeeklyUsage: number;
+  leadTimeWeeks: number;
+  safetyStock: number;
+};
 
 export default function InventoryPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { createOrderFromInventory } = useWorkflow();
+  const qc = useQueryClient();
+
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [detailItem, setDetailItem] = useState<typeof mockInventory[0] | null>(null);
+  const [detailItem, setDetailItem] = useState<InventoryLot | null>(null);
+  const [editItem, setEditItem] = useState<InventoryLot | null>(null);
   const [viewMode, setViewMode] = useState<"client" | "item">("client");
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
-  
+
   // Convert to order dialog state
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
-  const [convertClient, setConvertClient] = useState("");
+  const [convertClientName, setConvertClientName] = useState("");
   const [selectedLots, setSelectedLots] = useState<Record<string, number>>({});
 
-  const clients = [...new Set(mockInventory.map(i => i.client))];
+  // Add lot dialog
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [newLot, setNewLot] = useState<Partial<InventoryLot>>({});
 
-  const filtered = mockInventory.filter((i) => {
-    const matchSearch = !search || i.material.toLowerCase().includes(search.toLowerCase()) || i.client.toLowerCase().includes(search.toLowerCase()) || i.id.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = !filters.status || filters.status === "all" || i.status === filters.status;
-    const matchClient = !filters.client || filters.client === "all" || i.client === filters.client;
+  const { data: rawLots = [], isLoading } = useQuery<InventoryLot[]>({
+    queryKey: ["/api/client-inventory"],
+  });
+
+  const { data: clients = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/clients"],
+  });
+
+  const lots: InventoryLot[] = rawLots.map(l => ({
+    ...l,
+    delivered: Number(l.delivered),
+    remaining: Number(l.remaining),
+    sellingPrice: Number(l.sellingPrice),
+    storeCost: Number(l.storeCost),
+    avgWeeklyUsage: Number(l.avgWeeklyUsage),
+    leadTimeWeeks: Number(l.leadTimeWeeks),
+    safetyStock: Number(l.safetyStock),
+  }));
+
+  const addMutation = useMutation({
+    mutationFn: (data: Partial<InventoryLot>) => api.post("/client-inventory", data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/client-inventory"] }); setAddDialogOpen(false); setNewLot({}); toast.success("تم إضافة الدفعة"); },
+    onError: () => toast.error("فشل إضافة الدفعة"),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<InventoryLot> }) => api.patch(`/client-inventory/${id}`, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/client-inventory"] }); setEditItem(null); toast.success("تم تحديث الدفعة"); },
+    onError: () => toast.error("فشل التحديث"),
+  });
+
+  const clientNames = [...new Set(lots.map(l => l.clientName))];
+
+  const filtered = lots.filter((l) => {
+    const matchSearch = !search || l.material.toLowerCase().includes(search.toLowerCase()) || l.clientName.toLowerCase().includes(search.toLowerCase()) || l.id.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = !filters.status || filters.status === "all" || l.status === filters.status;
+    const matchClient = !filters.client || filters.client === "all" || l.clientName === filters.client;
     return matchSearch && matchStatus && matchClient;
   });
 
-  // Group by client
   const clientGroups = useMemo(() => {
-    const groups: Record<string, { clientId: string; items: typeof mockInventory }> = {};
+    const groups: Record<string, { clientId: string; items: InventoryLot[] }> = {};
     filtered.forEach(item => {
-      if (!groups[item.client]) {
-        groups[item.client] = { clientId: item.clientId, items: [] };
-      }
-      groups[item.client].items.push(item);
+      if (!groups[item.clientName]) groups[item.clientName] = { clientId: item.clientId, items: [] };
+      groups[item.clientName].items.push(item);
     });
     return groups;
   }, [filtered]);
 
-  const lowStockCount = mockInventory.filter(i => i.status === "Low Stock").length;
-  const expiredCount = mockInventory.filter(i => i.status === "Expired").length;
-  const depletedCount = mockInventory.filter(i => i.status === "Depleted").length;
-  const nearExpiryCount = mockInventory.filter(i => {
-    if (!i.expiry) return false;
-    const days = (new Date(i.expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
-    return days > 0 && days <= 30 && i.status !== "Depleted" && i.status !== "Expired";
+  const lowStockCount = lots.filter(l => l.status === "Low Stock").length;
+  const expiredCount = lots.filter(l => l.status === "Expired").length;
+  const depletedCount = lots.filter(l => l.status === "Depleted").length;
+  const nearExpiryCount = lots.filter(l => {
+    if (!l.expiry) return false;
+    const days = (new Date(l.expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    return days > 0 && days <= 30 && l.status !== "Depleted" && l.status !== "Expired";
   }).length;
 
-  const toggleClient = (client: string) => {
-    setExpandedClient(expandedClient === client ? null : client);
-  };
+  const toggleClient = (cn: string) => setExpandedClient(expandedClient === cn ? null : cn);
 
-  // Convert to order functions
-  const getClientItems = (clientName: string) => {
-    return mockInventory.filter(item => item.client === clientName && item.status !== "Expired");
-  };
+  const getClientItems = (clientName: string) => lots.filter(l => l.clientName === clientName && l.status !== "Expired");
 
   const openConvertDialog = (clientName: string) => {
-    // Pre-select only depleted/low stock items, but show all
     const items = getClientItems(clientName);
     const preSelected: Record<string, number> = {};
     items.forEach(item => {
-      if (item.status === "Depleted" || item.status === "Low Stock") {
-        preSelected[item.id] = item.delivered;
-      }
+      if (item.status === "Depleted" || item.status === "Low Stock") preSelected[item.id] = item.delivered;
     });
     setSelectedLots(preSelected);
-    setConvertClient(clientName);
+    setConvertClientName(clientName);
     setConvertDialogOpen(true);
   };
 
   const toggleLotSelection = (lotId: string, defaultQuantity: number) => {
-    setSelectedLots(prev => {
-      const newSelected = { ...prev };
-      if (newSelected[lotId]) {
-        delete newSelected[lotId];
-      } else {
-        newSelected[lotId] = defaultQuantity;
-      }
-      return newSelected;
-    });
+    setSelectedLots(prev => { const n = { ...prev }; if (n[lotId]) delete n[lotId]; else n[lotId] = defaultQuantity; return n; });
   };
 
   const adjustQuantity = (lotId: string, delta: number) => {
-    setSelectedLots(prev => ({
-      ...prev,
-      [lotId]: Math.max(1, (prev[lotId] || 1) + delta)
-    }));
+    setSelectedLots(prev => ({ ...prev, [lotId]: Math.max(1, (prev[lotId] || 1) + delta) }));
   };
 
   const handleCreateOrder = () => {
-    const selectedItems = mockInventory.filter(item => selectedLots[item.id]);
-    
-    if (selectedItems.length === 0) {
-      toast.error(t.selectAtLeastOneMaterial);
-      return;
-    }
-
-    const orderItems = selectedItems.map(item => ({
-      id: item.id,
-      name: item.material,
-      quantity: selectedLots[item.id],
-      unitPrice: item.storeCost
-    }));
-
+    const selectedItems = lots.filter(l => selectedLots[l.id]);
+    if (selectedItems.length === 0) { toast.error(t.selectAtLeastOneMaterial); return; }
+    const orderItems = selectedItems.map(item => ({ id: item.id, name: item.material, quantity: selectedLots[item.id], unitPrice: item.storeCost }));
     const clientItem = selectedItems[0];
-    const newOrder = createOrderFromInventory(
-      clientItem.clientId,
-      convertClient,
-      orderItems
-    );
-
+    const newOrder = createOrderFromInventory(clientItem.clientId, convertClientName, orderItems);
     setConvertDialogOpen(false);
     setSelectedLots({});
-    
-    toast.success(`${t.orderCreatedSuccess} ${newOrder.id}`, {
-      action: {
-        label: t.viewOrdersLabel,
-        onClick: () => navigate("/orders")
-      }
-    });
+    toast.success(`${t.orderCreatedSuccess} ${newOrder.id}`, { action: { label: t.viewOrdersLabel, onClick: () => navigate("/orders") } });
   };
+
+  const computedStatus = (lot: InventoryLot) => {
+    if (lot.expiry) {
+      const days = (new Date(lot.expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+      if (days < 0) return "Expired";
+    }
+    if (lot.remaining <= 0) return "Depleted";
+    if (lot.avgWeeklyUsage > 0 && lot.remaining < lot.safetyStock * 2) return "Low Stock";
+    return lot.status;
+  };
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center py-24">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-header">{t.inventoryTitle}</h1>
-          <p className="page-description">{mockInventory.length} {t.batchCount} {t.acrossClients} {clients.length} {t.clientsLabel}</p>
+          <p className="page-description">{lots.length} {t.batchCount} {t.acrossClients} {clientNames.length} {t.clientsLabel}</p>
         </div>
-        <div className="flex gap-1 bg-muted rounded-lg p-0.5">
-          <Button variant={viewMode === "client" ? "default" : "ghost"} size="sm" className="h-7 text-xs gap-1.5" onClick={() => setViewMode("client")}>
-            <Users className="h-3.5 w-3.5" />{t.viewByClient}
+        <div className="flex items-center gap-2">
+          <Button size="sm" className="h-8 gap-1.5" onClick={() => setAddDialogOpen(true)}>
+            <Plus className="h-3.5 w-3.5" /> إضافة دفعة
           </Button>
-          <Button variant={viewMode === "item" ? "default" : "ghost"} size="sm" className="h-7 text-xs gap-1.5" onClick={() => setViewMode("item")}>
-            <List className="h-3.5 w-3.5" />{t.viewByItem}
-          </Button>
+          <div className="flex gap-1 bg-muted rounded-lg p-0.5">
+            <Button variant={viewMode === "client" ? "default" : "ghost"} size="sm" className="h-7 text-xs gap-1.5" onClick={() => setViewMode("client")}>
+              <Users className="h-3.5 w-3.5" />{t.viewByClient}
+            </Button>
+            <Button variant={viewMode === "item" ? "default" : "ghost"} size="sm" className="h-7 text-xs gap-1.5" onClick={() => setViewMode("item")}>
+              <List className="h-3.5 w-3.5" />{t.viewByItem}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -180,84 +206,48 @@ export default function InventoryPage() {
             { label: t.inStock, value: "In Stock" }, { label: t.lowStock, value: "Low Stock" },
             { label: t.depleted, value: "Depleted" }, { label: t.expired, value: "Expired" },
           ]},
-          { label: t.client, value: "client", options: clients.map(c => ({ label: c, value: c })) },
+          { label: t.client, value: "client", options: clientNames.map(c => ({ label: c, value: c })) },
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("inventory", [t.batchNumber, t.client, t.material, t.code, t.unit, t.deliveredQty, t.remainingQty, t.sellingPrice, t.storeCost, t.deliveryDate, t.expiryDate, t.sourceOrder, t.status], filtered.map(i => [i.id, i.client, i.material, i.code, i.unit, i.delivered, i.remaining, i.sellingPrice, i.storeCost, i.deliveryDate, i.expiry, i.sourceOrder, i.status]))}
+        onExport={() => exportToCsv("inventory", [t.batchNumber, t.client, t.material, t.code, t.unit, t.deliveredQty, t.remainingQty, t.sellingPrice, t.storeCost, t.deliveryDate, t.expiryDate, t.sourceOrder, t.status], filtered.map(l => [l.id, l.clientName, l.material, l.code, l.unit, l.delivered, l.remaining, l.sellingPrice, l.storeCost, l.deliveryDate, l.expiry, l.sourceOrder, l.status]))}
       />
 
       {viewMode === "client" ? (
-        /* ===== CLIENT VIEW ===== */
         <div className="space-y-3">
           {Object.entries(clientGroups).map(([clientName, group]) => {
             const isExpanded = expandedClient === clientName;
-            const totalRemaining = group.items.reduce((s, i) => s + i.remaining * i.sellingPrice, 0);
-            const materialsCount = group.items.length;
-            const hasWarning = group.items.some(i => i.status === "Low Stock" || i.status === "Expired" || i.status === "Depleted");
+            const totalRemaining = group.items.reduce((s, l) => s + l.remaining * l.sellingPrice, 0);
+            const hasWarning = group.items.some(l => l.status === "Low Stock" || l.status === "Expired" || l.status === "Depleted");
             const canConvert = getClientItems(clientName).length > 0;
-
             return (
               <div key={clientName} className="stat-card overflow-hidden">
-                {/* Client Header */}
-                <div
-                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors"
-                  onClick={() => toggleClient(clientName)}
-                >
+                <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => toggleClient(clientName)}>
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
-                      {clientName.charAt(0)}
-                    </div>
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">{clientName.charAt(0)}</div>
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-sm cursor-pointer hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${group.clientId}`); }}>{clientName}</h3>
                         {hasWarning && <AlertTriangle className="h-3.5 w-3.5 text-warning" />}
                       </div>
-                      <p className="text-xs text-muted-foreground">{materialsCount} {t.materialsCount} · {t.remainingValue}: {totalRemaining.toLocaleString()} {t.currency}</p>
+                      <p className="text-xs text-muted-foreground">{group.items.length} {t.materialsCount} · {t.remainingValue}: {totalRemaining.toLocaleString()} {t.currency}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {canConvert && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs gap-1.5"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openConvertDialog(clientName);
-                        }}
-                      >
-                        <ShoppingCart className="h-3.5 w-3.5" />
-                        {t.convertToOrderBtn}
+                      <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={(e) => { e.stopPropagation(); openConvertDialog(clientName); }}>
+                        <ShoppingCart className="h-3.5 w-3.5" />{t.convertToOrderBtn}
                       </Button>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs gap-1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        exportToCsv(
-                          `inventory_${clientName}`,
-                          ["code", "material", "unit", "remaining"],
-                          group.items.map(i => [i.code, i.material, i.unit, i.remaining])
-                        );
-                      }}
-                    >
+                    <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={(e) => { e.stopPropagation(); exportToCsv(`inventory_${clientName}`, ["code", "material", "unit", "remaining"], group.items.map(l => [l.code, l.material, l.unit, l.remaining])); }}>
                       <Download className="h-3.5 w-3.5" />{t.export || "Export"}
                     </Button>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="flex gap-1">
-                      {[...new Set(group.items.map(item => item.status))].map(status => (
-                        <StatusBadge key={status} status={status} />
-                      ))}
-                    </div>
+                    <div className="flex gap-1">{[...new Set(group.items.map(l => l.status))].map(s => <StatusBadge key={s} status={s} />)}</div>
                     {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                   </div>
                 </div>
-
-                {/* Expanded Items Table */}
                 {isExpanded && (
                   <div className="border-t border-border overflow-x-auto">
                     <table className="w-full text-sm">
@@ -272,6 +262,7 @@ export default function InventoryPage() {
                           <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.expiryDate}</th>
                           <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.sourceOrder}</th>
                           <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
+                          <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -293,6 +284,9 @@ export default function InventoryPage() {
                               </td>
                               <td className="py-2.5 px-3 font-mono text-xs text-muted-foreground hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${lot.sourceOrder}`); }}>{lot.sourceOrder}</td>
                               <td className="py-2.5 px-3"><StatusBadge status={lot.status} /></td>
+                              <td className="py-2.5 px-3 text-end" onClick={e => e.stopPropagation()}>
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditItem(lot)}><Pencil className="h-3.5 w-3.5" /></Button>
+                              </td>
                             </tr>
                           );
                         })}
@@ -306,7 +300,6 @@ export default function InventoryPage() {
           {Object.keys(clientGroups).length === 0 && <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>}
         </div>
       ) : (
-        /* ===== ITEM VIEW (original flat table) ===== */
         <div className="stat-card overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -321,6 +314,7 @@ export default function InventoryPage() {
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.expiryDate}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.sourceOrder}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
+                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground"></th>
               </tr>
             </thead>
             <tbody>
@@ -330,7 +324,7 @@ export default function InventoryPage() {
                 return (
                   <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetailItem(lot)}>
                     <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{lot.id}</td>
-                    <td className="py-3 px-3 font-medium hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${lot.clientId}`); }}>{lot.client}</td>
+                    <td className="py-3 px-3 font-medium hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${lot.clientId}`); }}>{lot.clientName}</td>
                     <td className="py-3 px-3 hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate("/materials"); }}>{lot.material}</td>
                     <td className="py-3 px-3 text-end">{lot.delivered}</td>
                     <td className="py-3 px-3 text-end font-medium">{lot.remaining}</td>
@@ -343,6 +337,9 @@ export default function InventoryPage() {
                     </td>
                     <td className="py-3 px-3 font-mono text-xs text-muted-foreground hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${lot.sourceOrder}`); }}>{lot.sourceOrder}</td>
                     <td className="py-3 px-3"><StatusBadge status={lot.status} /></td>
+                    <td className="py-3 px-3 text-end" onClick={e => e.stopPropagation()}>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditItem(lot)}><Pencil className="h-3.5 w-3.5" /></Button>
+                    </td>
                   </tr>
                 );
               })}
@@ -362,7 +359,7 @@ export default function InventoryPage() {
           {detailItem && (
             <div className="space-y-3 text-sm">
               <div className="grid grid-cols-2 gap-2">
-                <div><span className="text-muted-foreground">{t.clientColon}</span> {detailItem.client}</div>
+                <div><span className="text-muted-foreground">{t.clientColon}</span> {detailItem.clientName}</div>
                 <div><span className="text-muted-foreground">{t.codeColon}</span> {detailItem.code}</div>
                 <div><span className="text-muted-foreground">{t.unitColon}</span> {detailItem.unit}</div>
                 <div><span className="text-muted-foreground">{t.deliveredColon}</span> {detailItem.delivered}</div>
@@ -372,12 +369,93 @@ export default function InventoryPage() {
                 <div><span className="text-muted-foreground">{t.deliveryDateColon}</span> {detailItem.deliveryDate}</div>
                 <div><span className="text-muted-foreground">{t.expiryDateColon}</span> {detailItem.expiry}</div>
                 <div><span className="text-muted-foreground">{t.sourceOrderColon}</span> {detailItem.sourceOrder}</div>
+                <div><span className="text-muted-foreground">متوسط أسبوعي:</span> {detailItem.avgWeeklyUsage} {detailItem.unit}/أسبوع</div>
               </div>
-              <div className="pt-2">
-                <StatusBadge status={detailItem.status} />
-              </div>
+              <div className="pt-2"><StatusBadge status={detailItem.status} /></div>
+              <DialogFooter>
+                <Button size="sm" variant="outline" onClick={() => { setDetailItem(null); setEditItem(detailItem); }}>
+                  <Pencil className="h-3.5 w-3.5 ml-1.5" /> تعديل
+                </Button>
+              </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>تعديل الدفعة — {editItem?.id}</DialogTitle>
+          </DialogHeader>
+          {editItem && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label className="text-xs">الكمية المتبقية</Label><Input className="h-9 mt-1" type="number" value={editItem.remaining} onChange={e => setEditItem({ ...editItem, remaining: Number(e.target.value) })} /></div>
+                <div><Label className="text-xs">الحالة</Label>
+                  <Select value={editItem.status} onValueChange={v => setEditItem({ ...editItem, status: v })}>
+                    <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="In Stock">In Stock</SelectItem>
+                      <SelectItem value="Low Stock">Low Stock</SelectItem>
+                      <SelectItem value="Depleted">Depleted</SelectItem>
+                      <SelectItem value="Expired">Expired</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div><Label className="text-xs">سعر البيع</Label><Input className="h-9 mt-1" type="number" value={editItem.sellingPrice} onChange={e => setEditItem({ ...editItem, sellingPrice: Number(e.target.value) })} /></div>
+                <div><Label className="text-xs">التكلفة</Label><Input className="h-9 mt-1" type="number" value={editItem.storeCost} onChange={e => setEditItem({ ...editItem, storeCost: Number(e.target.value) })} /></div>
+                <div><Label className="text-xs">تاريخ الانتهاء</Label><Input className="h-9 mt-1" type="date" value={editItem.expiry} onChange={e => setEditItem({ ...editItem, expiry: e.target.value })} /></div>
+                <div><Label className="text-xs">متوسط الاستخدام الأسبوعي</Label><Input className="h-9 mt-1" type="number" value={editItem.avgWeeklyUsage} onChange={e => setEditItem({ ...editItem, avgWeeklyUsage: Number(e.target.value) })} /></div>
+                <div><Label className="text-xs">مخزون الأمان</Label><Input className="h-9 mt-1" type="number" value={editItem.safetyStock} onChange={e => setEditItem({ ...editItem, safetyStock: Number(e.target.value) })} /></div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" size="sm" onClick={() => setEditItem(null)}>إلغاء</Button>
+                <Button size="sm" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ id: editItem.id, data: editItem })}>
+                  {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "حفظ"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add New Lot Dialog */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>إضافة دفعة جديدة</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">رقم الدفعة (LOT-XXX)</Label>
+              <Input className="h-9 mt-1" placeholder="LOT-012" value={newLot.id || ""} onChange={e => setNewLot({ ...newLot, id: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-xs">العميل</Label>
+              <Select value={newLot.clientId || ""} onValueChange={v => {
+                const cl = clients.find(c => c.id === v);
+                setNewLot({ ...newLot, clientId: v, clientName: cl?.name || "" });
+              }}>
+                <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="اختر عميل" /></SelectTrigger>
+                <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div><Label className="text-xs">المادة</Label><Input className="h-9 mt-1" value={newLot.material || ""} onChange={e => setNewLot({ ...newLot, material: e.target.value })} /></div>
+            <div><Label className="text-xs">الكود</Label><Input className="h-9 mt-1" placeholder="MAT-001" value={newLot.code || ""} onChange={e => setNewLot({ ...newLot, code: e.target.value })} /></div>
+            <div><Label className="text-xs">الوحدة</Label><Input className="h-9 mt-1" value={newLot.unit || ""} onChange={e => setNewLot({ ...newLot, unit: e.target.value })} /></div>
+            <div><Label className="text-xs">الكمية المسلمة</Label><Input className="h-9 mt-1" type="number" value={newLot.delivered || ""} onChange={e => setNewLot({ ...newLot, delivered: Number(e.target.value), remaining: Number(e.target.value) })} /></div>
+            <div><Label className="text-xs">سعر البيع</Label><Input className="h-9 mt-1" type="number" value={newLot.sellingPrice || ""} onChange={e => setNewLot({ ...newLot, sellingPrice: Number(e.target.value) })} /></div>
+            <div><Label className="text-xs">التكلفة</Label><Input className="h-9 mt-1" type="number" value={newLot.storeCost || ""} onChange={e => setNewLot({ ...newLot, storeCost: Number(e.target.value) })} /></div>
+            <div><Label className="text-xs">تاريخ التسليم</Label><Input className="h-9 mt-1" type="date" value={newLot.deliveryDate || ""} onChange={e => setNewLot({ ...newLot, deliveryDate: e.target.value })} /></div>
+            <div><Label className="text-xs">تاريخ الانتهاء</Label><Input className="h-9 mt-1" type="date" value={newLot.expiry || ""} onChange={e => setNewLot({ ...newLot, expiry: e.target.value })} /></div>
+            <div><Label className="text-xs">رقم الطلب</Label><Input className="h-9 mt-1" placeholder="ORD-001" value={newLot.sourceOrder || ""} onChange={e => setNewLot({ ...newLot, sourceOrder: e.target.value })} /></div>
+            <div><Label className="text-xs">متوسط أسبوعي</Label><Input className="h-9 mt-1" type="number" value={newLot.avgWeeklyUsage || ""} onChange={e => setNewLot({ ...newLot, avgWeeklyUsage: Number(e.target.value) })} /></div>
+          </div>
+          <DialogFooter className="mt-2">
+            <Button variant="outline" size="sm" onClick={() => setAddDialogOpen(false)}>إلغاء</Button>
+            <Button size="sm" disabled={addMutation.isPending} onClick={() => addMutation.mutate({ ...newLot, status: "In Stock" })}>
+              {addMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "إضافة"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -385,115 +463,35 @@ export default function InventoryPage() {
       <Dialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{t.convertInventoryTitle} - {convertClient}</DialogTitle>
-            <DialogDescription>
-              {t.convertInventoryDesc}
-            </DialogDescription>
+            <DialogTitle>{t.createNewOrderTitle} — {convertClientName}</DialogTitle>
+            <DialogDescription>{t.selectMaterialsForRefill}</DialogDescription>
           </DialogHeader>
-
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-muted-foreground">{mockInventory.filter(item => item.client === convertClient && item.status !== "Expired").length} {t.materialsAvailable}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => {
-                const items = mockInventory.filter(item => item.client === convertClient && item.status !== "Expired");
-                const allSelected = items.every(item => selectedLots[item.id]);
-                if (allSelected) {
-                  setSelectedLots({});
-                } else {
-                  const all: Record<string, number> = {};
-                  items.forEach(item => { all[item.id] = selectedLots[item.id] || item.delivered; });
-                  setSelectedLots(all);
-                }
-              }}
-            >
-              {mockInventory.filter(item => item.client === convertClient && item.status !== "Expired").every(item => selectedLots[item.id]) ? t.deselectAll : t.selectAll}
-            </Button>
-          </div>
-          <div className="max-h-96 overflow-y-auto">
-            <div className="space-y-4">
-              {mockInventory
-                .filter(item => item.client === convertClient && item.status !== "Expired")
-                .map((item) => {
-                  const isSelected = selectedLots[item.id];
-                  const quantity = selectedLots[item.id] || item.delivered;
-                  
-                  return (
-                    <div key={item.id} className="flex items-center gap-4 p-3 border rounded-lg">
-                      <Checkbox
-                        checked={!!isSelected}
-                        onCheckedChange={() => toggleLotSelection(item.id, item.delivered)}
-                      />
-                      
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-medium">{item.material}</h4>
-                          <StatusBadge status={item.status} />
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {t.codeColon} {item.code} | {t.unitColon} {item.unit}
-                        </p>
-                      </div>
-
-                      {isSelected && (
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => adjustQuantity(item.id, -1)}
-                            disabled={quantity <= 1}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="w-12 text-center font-medium">{quantity}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => adjustQuantity(item.id, 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-
-                      {isSelected && (
-                        <div className="text-start">
-                          <div className="text-sm font-medium">
-                            {(quantity * item.storeCost).toLocaleString()} {t.currency}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {item.storeCost} × {quantity}
-                          </div>
-                        </div>
-                      )}
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {getClientItems(convertClientName).map(item => {
+              const isChecked = !!selectedLots[item.id];
+              return (
+                <div key={item.id} className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${isChecked ? "border-primary bg-primary/5" : "border-border"}`}>
+                  <Checkbox checked={isChecked} onCheckedChange={() => toggleLotSelection(item.id, item.delivered)} />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm">{item.material}</div>
+                    <div className="text-xs text-muted-foreground">{item.code} · {t.remaining}: {item.remaining} {item.unit}</div>
+                  </div>
+                  <StatusBadge status={item.status} />
+                  {isChecked && (
+                    <div className="flex items-center gap-1">
+                      <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => adjustQuantity(item.id, -1)}><Minus className="h-3 w-3" /></Button>
+                      <span className="w-8 text-center text-sm font-medium">{selectedLots[item.id]}</span>
+                      <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => adjustQuantity(item.id, 1)}><Plus className="h-3 w-3" /></Button>
                     </div>
-                  );
-                })}
-            </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-
-          {Object.keys(selectedLots).length > 0 && (
-            <div className="border-t pt-4">
-              <div className="flex justify-between items-center">
-                <span className="font-medium">{t.totalLabel}</span>
-                <span className="text-lg font-bold text-primary">
-                  {Object.entries(selectedLots).reduce((total, [lotId, quantity]) => {
-                    const item = mockInventory.find(i => i.id === lotId);
-                    return total + (quantity * (item?.storeCost || 0));
-                  }, 0).toLocaleString()} {t.currency}
-                </span>
-              </div>
-            </div>
-          )}
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConvertDialogOpen(false)}>
-              {t.cancel}
-            </Button>
+            <Button variant="outline" onClick={() => setConvertDialogOpen(false)}>{t.cancel}</Button>
             <Button onClick={handleCreateOrder} disabled={Object.keys(selectedLots).length === 0}>
-              {t.createOrderBtn}
+              <ShoppingCart className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.createOrderBtn} ({Object.keys(selectedLots).length})
             </Button>
           </DialogFooter>
         </DialogContent>

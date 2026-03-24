@@ -1,25 +1,52 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Package, ShoppingCart, AlertTriangle, TrendingDown, Users, Package2, CheckCircle2 } from "lucide-react";
+import { Package, ShoppingCart, AlertTriangle, TrendingDown, Users, Package2, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-const mockRefills = [
-  { id: 1, client: "عيادة د. أحمد", clientId: "C001", material: "حشو كمبوزيت ضوئي", code: "MAT-001", unit: "عبوة", currentStock: 45, avgWeeklyUsage: 12, coverageWeeks: 3.75, leadTimeWeeks: 2, safetyStock: 5, reorderPoint: 29, suggestedQty: 50, priority: "Normal" },
-  { id: 2, client: "عيادة د. أحمد", clientId: "C001", material: "إبر تخدير", code: "MAT-002", unit: "علبة", currentStock: 8, avgWeeklyUsage: 5, coverageWeeks: 1.6, leadTimeWeeks: 2, safetyStock: 3, reorderPoint: 13, suggestedQty: 25, priority: "Urgent" },
-  { id: 3, client: "عيادة د. أحمد", clientId: "C001", material: "قفازات لاتكس", code: "MAT-005", unit: "كرتونة", currentStock: 2, avgWeeklyUsage: 3, coverageWeeks: 0.67, leadTimeWeeks: 2, safetyStock: 2, reorderPoint: 8, suggestedQty: 15, priority: "Critical" },
-  { id: 4, client: "مركز نور لطب الأسنان", clientId: "C002", material: "حشو كمبوزيت ضوئي", code: "MAT-001", unit: "عبوة", currentStock: 65, avgWeeklyUsage: 18, coverageWeeks: 3.6, leadTimeWeeks: 2, safetyStock: 8, reorderPoint: 44, suggestedQty: 80, priority: "Normal" },
-  { id: 5, client: "مركز نور لطب الأسنان", clientId: "C002", material: "مبيض أسنان", code: "MAT-008", unit: "عبوة", currentStock: 0.5, avgWeeklyUsage: 0.8, coverageWeeks: 0.63, leadTimeWeeks: 3, safetyStock: 0.5, reorderPoint: 2.9, suggestedQty: 5, priority: "Critical" },
-  { id: 6, client: "عيادة جرين فالي", clientId: "C003", material: "إبر تخدير", code: "MAT-002", unit: "علبة", currentStock: 22, avgWeeklyUsage: 4, coverageWeeks: 5.5, leadTimeWeeks: 2, safetyStock: 3, reorderPoint: 11, suggestedQty: 0, priority: "OK" },
-  { id: 7, client: "المركز الملكي للأسنان", clientId: "C004", material: "فرز دوارة", code: "MAT-010", unit: "عبوة", currentStock: 4, avgWeeklyUsage: 0.5, coverageWeeks: 8, leadTimeWeeks: 3, safetyStock: 1, reorderPoint: 2.5, suggestedQty: 0, priority: "OK" },
-  { id: 8, client: "عيادة بلو مون", clientId: "C006", material: "قفازات لاتكس", code: "MAT-005", unit: "كرتونة", currentStock: 12, avgWeeklyUsage: 4, coverageWeeks: 3, leadTimeWeeks: 2, safetyStock: 3, reorderPoint: 11, suggestedQty: 20, priority: "Normal" },
-  { id: 9, client: "عيادة سمايل هاوس", clientId: "C005", material: "مادة طبع سيليكون", code: "MAT-003", unit: "عبوة", currentStock: 5, avgWeeklyUsage: 6, coverageWeeks: 0.83, leadTimeWeeks: 1, safetyStock: 3, reorderPoint: 9, suggestedQty: 30, priority: "Critical" },
-];
+type InventoryLot = {
+  id: string;
+  clientId: string;
+  clientName: string;
+  material: string;
+  code: string;
+  unit: string;
+  remaining: number;
+  avgWeeklyUsage: number;
+  leadTimeWeeks: number;
+  safetyStock: number;
+  status: string;
+};
+
+type RefillItem = {
+  id: string;
+  client: string;
+  clientId: string;
+  material: string;
+  code: string;
+  unit: string;
+  currentStock: number;
+  avgWeeklyUsage: number;
+  coverageWeeks: number;
+  leadTimeWeeks: number;
+  safetyStock: number;
+  reorderPoint: number;
+  suggestedQty: number;
+  priority: "Critical" | "Urgent" | "Normal" | "OK";
+};
+
+function computePriority(coverageWeeks: number, leadTimeWeeks: number): "Critical" | "Urgent" | "Normal" | "OK" {
+  if (coverageWeeks <= leadTimeWeeks * 0.5) return "Critical";
+  if (coverageWeeks <= leadTimeWeeks) return "Urgent";
+  if (coverageWeeks <= leadTimeWeeks * 2) return "Normal";
+  return "OK";
+}
 
 const priorityStyles: Record<string, string> = {
   "Critical": "bg-destructive/10 text-destructive",
@@ -43,20 +70,62 @@ export default function RefillPage() {
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [groupBy, setGroupBy] = useState<"client" | "material">("client");
   const [activePriorities, setActivePriorities] = useState<Set<string>>(new Set());
+
+  const { data: rawLots = [], isLoading } = useQuery<InventoryLot[]>({
+    queryKey: ["/api/client-inventory"],
+  });
+
+  const lots: InventoryLot[] = rawLots.map(l => ({
+    ...l,
+    remaining: Number(l.remaining),
+    avgWeeklyUsage: Number(l.avgWeeklyUsage),
+    leadTimeWeeks: Number(l.leadTimeWeeks),
+    safetyStock: Number(l.safetyStock),
+  }));
+
+  // Compute refill items from client inventory
+  const refillItems: RefillItem[] = useMemo(() => {
+    return lots
+      .filter(l => l.status !== "Expired")
+      .map(l => {
+        const coverageWeeks = l.avgWeeklyUsage > 0 ? l.remaining / l.avgWeeklyUsage : 999;
+        const reorderPoint = l.avgWeeklyUsage * l.leadTimeWeeks + l.safetyStock;
+        const priority = l.avgWeeklyUsage > 0 ? computePriority(coverageWeeks, l.leadTimeWeeks) : (l.remaining <= 0 ? "Critical" : "OK");
+        const suggestedQty = priority !== "OK" && l.avgWeeklyUsage > 0
+          ? Math.ceil(l.avgWeeklyUsage * (l.leadTimeWeeks * 3) - l.remaining + l.safetyStock)
+          : 0;
+        return {
+          id: l.id,
+          client: l.clientName,
+          clientId: l.clientId,
+          material: l.material,
+          code: l.code,
+          unit: l.unit,
+          currentStock: l.remaining,
+          avgWeeklyUsage: l.avgWeeklyUsage,
+          coverageWeeks: l.avgWeeklyUsage > 0 ? Math.round(coverageWeeks * 10) / 10 : 0,
+          leadTimeWeeks: l.leadTimeWeeks,
+          safetyStock: l.safetyStock,
+          reorderPoint: Math.round(reorderPoint * 10) / 10,
+          suggestedQty: Math.max(0, suggestedQty),
+          priority,
+        };
+      });
+  }, [lots]);
 
   useEffect(() => {
     const f = searchParams.get("filter");
     if (!f) setActivePriorities(new Set());
   }, [searchParams]);
 
-  const clients = [...new Set(mockRefills.map(r => r.client))];
+  const clientNames = [...new Set(refillItems.map(r => r.client))];
   const priorityLabel = (p: string) => p === "Critical" ? t.critical : p === "Urgent" ? t.urgent : p === "Normal" ? t.normal : t.ok;
 
   const priorityCounts = priorityOrder.reduce((acc, p) => {
-    acc[p] = mockRefills.filter(r => r.priority === p).length;
+    acc[p] = refillItems.filter(r => r.priority === p).length;
     return acc;
   }, {} as Record<string, number>);
 
@@ -66,7 +135,7 @@ export default function RefillPage() {
     setActivePriorities(next);
   };
 
-  const filtered = mockRefills.filter((r) => {
+  const filtered = refillItems.filter((r) => {
     const quickFilter = searchParams.get("filter");
     const matchQuickFilter = quickFilter !== "low_stock" || r.suggestedQty > 0;
     const matchSearch = !search || r.client.toLowerCase().includes(search.toLowerCase()) || r.material.toLowerCase().includes(search.toLowerCase());
@@ -75,31 +144,39 @@ export default function RefillPage() {
     return matchQuickFilter && matchSearch && matchPriority && matchClient;
   });
 
-  const groupedData = filtered.reduce((acc: Record<string, typeof filtered>, item) => {
+  const groupedData = filtered.reduce((acc: Record<string, RefillItem[]>, item) => {
     const key = groupBy === "client" ? item.client : item.material;
     if (!acc[key]) acc[key] = [];
     acc[key].push(item);
     return acc;
   }, {});
 
-  const criticalCount = mockRefills.filter(r => r.priority === "Critical").length;
-  const urgentCount = mockRefills.filter(r => r.priority === "Urgent").length;
-  const needsRefill = mockRefills.filter(r => r.suggestedQty > 0).length;
+  const criticalCount = refillItems.filter(r => r.priority === "Critical").length;
+  const urgentCount = refillItems.filter(r => r.priority === "Urgent").length;
+  const needsRefill = refillItems.filter(r => r.suggestedQty > 0).length;
 
-  const toggleSelect = (id: number) => { const next = new Set(selected); if (next.has(id)) next.delete(id); else next.add(id); setSelected(next); };
-  const selectAllNeedRefill = () => setSelected(new Set(filtered.filter(r => r.suggestedQty > 0).map(r => r.id)));
-  
-  const toggleSelectGroup = (items: typeof mockRefills) => {
-    const refillItems = items.filter(r => r.suggestedQty > 0);
-    const allSelected = refillItems.every(r => selected.has(r.id));
+  const toggleSelect = (id: string) => {
     const next = new Set(selected);
-    if (allSelected) {
-      refillItems.forEach(r => next.delete(r.id));
-    } else {
-      refillItems.forEach(r => next.add(r.id));
-    }
+    if (next.has(id)) next.delete(id); else next.add(id);
     setSelected(next);
   };
+
+  const selectAllNeedRefill = () => setSelected(new Set(filtered.filter(r => r.suggestedQty > 0).map(r => r.id)));
+
+  const toggleSelectGroup = (items: RefillItem[]) => {
+    const refillable = items.filter(r => r.suggestedQty > 0);
+    const allSelected = refillable.every(r => selected.has(r.id));
+    const next = new Set(selected);
+    if (allSelected) refillable.forEach(r => next.delete(r.id));
+    else refillable.forEach(r => next.add(r.id));
+    setSelected(next);
+  };
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center py-24">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -116,7 +193,7 @@ export default function RefillPage() {
           <StatCard title={t.urgentItems} value={urgentCount} change={t.stockRunningOut} changeType="negative" icon={TrendingDown} />
         </div>
         <div className="cursor-pointer" onClick={() => setActivePriorities(new Set(["Critical", "Urgent", "Normal"]))}>
-          <StatCard title={t.needsRefill} value={needsRefill} change={`${mockRefills.length} ${t.ofTracked}`} changeType="neutral" icon={Package} />
+          <StatCard title={t.needsRefill} value={needsRefill} change={`${refillItems.length} ${t.ofTracked}`} changeType="neutral" icon={Package} />
         </div>
       </div>
 
@@ -170,7 +247,7 @@ export default function RefillPage() {
         searchValue={search}
         onSearchChange={setSearch}
         filters={[
-          { label: t.client, value: "client", options: clients.map(c => ({ label: c, value: c })) },
+          { label: t.client, value: "client", options: clientNames.map(c => ({ label: c, value: c })) },
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
@@ -180,46 +257,35 @@ export default function RefillPage() {
             <Button size="sm" variant="outline" className="h-9" onClick={selectAllNeedRefill}>{t.selectAll}</Button>
             {selected.size > 0 && (
               <Button size="sm" className="h-9" onClick={() => {
-                // Prepare refill order data
-                const refillItems = filtered.filter(r => selected.has(r.id) && r.suggestedQty > 0);
+                const refillable = filtered.filter(r => selected.has(r.id) && r.suggestedQty > 0);
                 const refillOrderData = {
-                  items: refillItems.map(item => ({
-                    materialCode: item.code,
-                    materialName: item.material,
-                    quantity: item.suggestedQty,
-                    unit: item.unit,
-                    client: item.client,
-                    clientId: item.clientId,
-                    currentStock: item.currentStock,
-                    reorderPoint: item.reorderPoint,
-                    priority: item.priority
-                  })),
+                  items: refillable.map(item => ({ materialCode: item.code, materialName: item.material, quantity: item.suggestedQty, unit: item.unit, client: item.client, clientId: item.clientId, currentStock: item.currentStock, reorderPoint: item.reorderPoint, priority: item.priority })),
                   createdAt: Date.now()
                 };
-                
-                // Store data for Orders page
-                localStorage.setItem('refillOrderData', JSON.stringify(refillOrderData));
-                
-                navigate("/orders"); 
+                localStorage.setItem("refillOrderData", JSON.stringify(refillOrderData));
+                navigate("/orders");
                 toast.success(t.createOrderFromSelection);
-              }}><ShoppingCart className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.createOrderFromSelection} ({selected.size})</Button>
+              }}>
+                <ShoppingCart className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.createOrderFromSelection} ({selected.size})
+              </Button>
             )}
           </div>
         }
       />
 
-      {/* Results count */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <span>{filtered.length} / {mockRefills.length} {t.itemsCount}</span>
+        <span>{filtered.length} / {refillItems.length} {t.itemsCount}</span>
         {activePriorities.size > 0 && (
-          <span className="text-xs">
-            — {[...activePriorities].map(p => priorityLabel(p)).join(", ")}
-          </span>
+          <span className="text-xs">— {[...activePriorities].map(p => priorityLabel(p)).join(", ")}</span>
         )}
       </div>
 
       <div className="stat-card overflow-x-auto">
-        {Object.entries(groupedData).map(([groupKey, items]) => {
+        {refillItems.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            لا توجد بيانات مخزون عملاء. أضف دفعات من صفحة <span className="text-primary cursor-pointer" onClick={() => navigate("/inventory")}>المخزون</span>.
+          </div>
+        ) : Object.entries(groupedData).map(([groupKey, items]) => {
           const groupCritical = items.filter(i => i.priority === "Critical").length;
           const groupUrgent = items.filter(i => i.priority === "Urgent").length;
           return (
@@ -240,17 +306,12 @@ export default function RefillPage() {
                 )}
                 <div className="flex-1" />
                 {items.some(r => r.suggestedQty > 0) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => toggleSelectGroup(items)}
-                  >
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => toggleSelectGroup(items)}>
                     {items.filter(r => r.suggestedQty > 0).every(r => selected.has(r.id)) ? "إلغاء تحديد الكل" : "تحديد الكل"}
                   </Button>
                 )}
               </div>
-              
+
               <table className="w-full text-sm mb-6">
                 <thead>
                   <tr className="border-b border-border">
@@ -276,13 +337,15 @@ export default function RefillPage() {
                         <td className="py-3 px-3 hover:text-primary cursor-pointer" onClick={() => navigate("/materials")}>{r.material} <span className="text-muted-foreground text-xs">({r.unit})</span></td>
                       )}
                       <td className="py-3 px-3 text-end font-medium">{r.currentStock}</td>
-                      <td className="py-3 px-3 text-end text-muted-foreground">{r.avgWeeklyUsage}</td>
+                      <td className="py-3 px-3 text-end text-muted-foreground">{r.avgWeeklyUsage > 0 ? r.avgWeeklyUsage : "—"}</td>
                       <td className="py-3 px-3 text-end">
-                        <span className={r.coverageWeeks < 2 ? "text-destructive font-medium" : r.coverageWeeks < 4 ? "text-warning" : "text-muted-foreground"}>
-                          {r.coverageWeeks.toFixed(1)} {t.weeks}
-                        </span>
+                        {r.avgWeeklyUsage > 0 ? (
+                          <span className={r.coverageWeeks < 2 ? "text-destructive font-medium" : r.coverageWeeks < 4 ? "text-warning" : "text-muted-foreground"}>
+                            {r.coverageWeeks.toFixed(1)} {t.weeks}
+                          </span>
+                        ) : <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="py-3 px-3 text-end text-muted-foreground">{r.reorderPoint}</td>
+                      <td className="py-3 px-3 text-end text-muted-foreground">{r.avgWeeklyUsage > 0 ? r.reorderPoint : "—"}</td>
                       <td className="py-3 px-3 text-end font-semibold">{r.suggestedQty > 0 ? r.suggestedQty : "—"}</td>
                       <td className="py-3 px-3">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${priorityStyles[r.priority]}`}>
@@ -296,6 +359,9 @@ export default function RefillPage() {
             </div>
           );
         })}
+        {filtered.length === 0 && refillItems.length > 0 && (
+          <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>
+        )}
       </div>
     </div>
   );

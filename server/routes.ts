@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { createClient } from "@supabase/supabase-js";
+import { Pool } from "pg";
 
 const router = Router();
 
@@ -32,6 +33,9 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
+
+// ─── Local PG pool (for tables created in Replit's PostgreSQL) ────────────────
+const pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // ─── camelCase ↔ snake_case helpers ──────────────────────────────────────────
 const toCamel = (s: string) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
@@ -206,6 +210,109 @@ router.post("/inventory", async (req, res) => {
 router.patch("/inventory/:code", async (req, res) => {
   const body = { ...snakifyKeys(req.body), updated_at: new Date().toISOString() };
   sbOk(res, await supabaseAdmin.from("inventory").update(body).eq("material_code", req.params.code).select().single());
+});
+
+// ─── CLIENT INVENTORY (local PG) ─────────────────────────────────────────────
+function pgOk(res: any, rows: any[]) { return res.json(camelizeKeys(rows)); }
+function pgOne(res: any, rows: any[]) {
+  if (!rows.length) return res.status(404).json({ error: "Not found" });
+  return res.json(camelizeKeys(rows[0]));
+}
+
+router.get("/client-inventory", async (_req, res) => {
+  try {
+    const { rows } = await pgPool.query("SELECT * FROM client_inventory ORDER BY created_at DESC");
+    pgOk(res, rows);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.get("/client-inventory/:id", async (req, res) => {
+  try {
+    const { rows } = await pgPool.query("SELECT * FROM client_inventory WHERE id=$1", [req.params.id]);
+    pgOne(res, rows);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.post("/client-inventory", async (req, res) => {
+  try {
+    const body = snakifyKeys(req.body);
+    const keys = Object.keys(body);
+    const vals = keys.map((_, i) => `$${i + 1}`);
+    const { rows } = await pgPool.query(
+      `INSERT INTO client_inventory (${keys.join(",")}) VALUES (${vals.join(",")}) RETURNING *`,
+      Object.values(body)
+    );
+    pgOne(res, rows);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.patch("/client-inventory/:id", async (req, res) => {
+  try {
+    const body = snakifyKeys(req.body);
+    const keys = Object.keys(body);
+    const sets = keys.map((k, i) => `${k}=$${i + 1}`);
+    const { rows } = await pgPool.query(
+      `UPDATE client_inventory SET ${sets.join(",")} WHERE id=$${keys.length + 1} RETURNING *`,
+      [...Object.values(body), req.params.id]
+    );
+    pgOne(res, rows);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.delete("/client-inventory/:id", async (req, res) => {
+  try {
+    const { rows } = await pgPool.query("DELETE FROM client_inventory WHERE id=$1 RETURNING *", [req.params.id]);
+    pgOne(res, rows);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── AUDITS (local PG) ────────────────────────────────────────────────────────
+router.get("/audits", async (_req, res) => {
+  try {
+    const { rows } = await pgPool.query("SELECT * FROM audits ORDER BY created_at DESC");
+    pgOk(res, rows);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.get("/audits/next-id", async (_req, res) => {
+  try {
+    const { rows } = await pgPool.query("SELECT COUNT(*) FROM audits");
+    const nextNum = parseInt(rows[0].count, 10) + 1;
+    res.json({ nextId: `AUD-${String(nextNum).padStart(3, "0")}` });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.post("/audits", async (req, res) => {
+  try {
+    const body = snakifyKeys(req.body);
+    const keys = Object.keys(body).map(k => k === "comparison" ? k : k);
+    const vals = keys.map((_, i) => `$${i + 1}`);
+    const values = Object.keys(body).map(k => {
+      const v = body[k];
+      return typeof v === "object" && v !== null ? JSON.stringify(v) : v;
+    });
+    const { rows } = await pgPool.query(
+      `INSERT INTO audits (${keys.join(",")}) VALUES (${vals.join(",")}) RETURNING *`,
+      values
+    );
+    pgOne(res, rows);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.patch("/audits/:id", async (req, res) => {
+  try {
+    const body = snakifyKeys(req.body);
+    const keys = Object.keys(body);
+    const sets = keys.map((k, i) => `${k}=$${i + 1}`);
+    const values = keys.map(k => {
+      const v = body[k];
+      return typeof v === "object" && v !== null ? JSON.stringify(v) : v;
+    });
+    const { rows } = await pgPool.query(
+      `UPDATE audits SET ${sets.join(",")} WHERE id=$${keys.length + 1} RETURNING *`,
+      [...values, req.params.id]
+    );
+    pgOne(res, rows);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.delete("/audits/:id", async (req, res) => {
+  try {
+    const { rows } = await pgPool.query("DELETE FROM audits WHERE id=$1 RETURNING *", [req.params.id]);
+    pgOne(res, rows);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
