@@ -423,6 +423,19 @@ export async function printInvoice(data: {
   if (win) {
     win.document.write(html);
     win.document.close();
-    setTimeout(() => win.print(), 500);
+    // Wait for all images to load before printing
+    const waitForImages = () => {
+      const imgs = Array.from(win.document.images);
+      if (imgs.length === 0) { setTimeout(() => win.print(), 300); return; }
+      let loaded = 0;
+      const check = () => { loaded++; if (loaded >= imgs.length) win.print(); };
+      imgs.forEach(img => {
+        if (img.complete) { check(); }
+        else { img.onload = check; img.onerror = check; }
+      });
+      // Fallback in case images take too long
+      setTimeout(() => win.print(), 4000);
+    };
+    setTimeout(waitForImages, 300);
   }
 }

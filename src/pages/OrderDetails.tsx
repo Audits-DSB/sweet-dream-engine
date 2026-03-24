@@ -63,6 +63,8 @@ function mapOrder(raw: any): Order {
   };
 }
 
+type ExtMaterial = { sku: string; name: string; imageUrl: string };
+
 export default function OrderDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -77,10 +79,23 @@ export default function OrderDetails() {
     Promise.all([
       api.get<any[]>("/orders"),
       api.get<OrderLine[]>(`/orders/${id}/lines`).catch(() => []),
-    ]).then(([all, fetchedLines]) => {
+      api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] })),
+    ]).then(([all, fetchedLines, extData]) => {
       const found = (all || []).find((o: any) => o.id === id);
       if (found) setOrder(mapOrder(found));
-      setLines(fetchedLines || []);
+      // Build material lookup: sku/code → { name, imageUrl }
+      const map: Record<string, ExtMaterial> = {};
+      (extData?.products || []).forEach((p: any) => {
+        const key = p.sku || "";
+        if (key) map[key] = { sku: key, name: p.name || "", imageUrl: p.image_url || "" };
+      });
+      // Enrich lines with images and names from external catalog
+      const enriched = (fetchedLines || []).map((l: any) => ({
+        ...l,
+        materialName: l.materialName || map[l.materialCode]?.name || l.materialCode,
+        imageUrl: l.imageUrl || map[l.materialCode]?.imageUrl || "",
+      }));
+      setLines(enriched);
     }).catch(() => toast.error("تعذّر تحميل بيانات الطلب"))
       .finally(() => setLoading(false));
   }, [id]);
