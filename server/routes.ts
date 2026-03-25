@@ -68,6 +68,14 @@ pgPool.query(`
   )
 `).catch((e: any) => console.error("order_lines table init error:", e.message));
 
+pgPool.query(`
+  CREATE TABLE IF NOT EXISTS order_founder_contributions (
+    order_id      TEXT PRIMARY KEY,
+    contributions JSONB DEFAULT '[]'::jsonb,
+    updated_at    TIMESTAMPTZ DEFAULT NOW()
+  )
+`).catch((e: any) => console.error("order_founder_contributions table init error:", e.message));
+
 // Add shortage_qty column if missing (safe migration)
 pgPool.query(`ALTER TABLE client_inventory ADD COLUMN IF NOT EXISTS shortage_qty NUMERIC(14,2) DEFAULT 0`)
   .catch((e: any) => console.error("client_inventory shortage_qty migration error:", e.message));
@@ -277,21 +285,25 @@ router.get("/orders/next-id", async (_req, res) => {
   res.json({ nextId: `ORD-${String(max + 1).padStart(3, "0")}` });
 });
 router.get("/orders", async (_req, res) => {
-  const [ordersRes, clientsRes] = await Promise.all([
+  const [ordersRes, clientsRes, contribRows] = await Promise.all([
     supabaseAdmin.from("orders").select("*").order("created_at", { ascending: false }),
     supabaseAdmin.from("clients").select("id,name"),
+    pgPool.query("SELECT order_id, contributions FROM order_founder_contributions").catch(() => ({ rows: [] })),
   ]);
   if (ordersRes.error) return res.status(400).json({ error: ordersRes.error.message });
   const clientMap: Record<string, string> = {};
   for (const c of clientsRes.data || []) clientMap[c.id] = c.name || c.id;
+  const contribMap: Record<string, any[]> = {};
+  for (const r of (contribRows as any).rows || []) contribMap[r.order_id] = r.contributions || [];
   const orders = (ordersRes.data || []).map(o => ({
     ...o,
     client: clientMap[o.client_id] || o.client_id || "",
+    founder_contributions: contribMap[o.id] || [],
   }));
   res.json(camelizeKeys(orders));
 });
 router.post("/orders", async (req, res) => {
-  const { items, ...orderBody } = req.body;
+  const { items, founderContributions, ...orderBody } = req.body;
   const data = snakifyKeys(orderBody);
   const result = await supabaseAdmin.from("orders").insert(data).select().single();
   if (result.error) return res.status(400).json({ error: result.error.message });
@@ -325,7 +337,15 @@ router.post("/orders", async (req, res) => {
       return res.status(207).json({ ...camelizeKeys(result.data), _linesError: e.message });
     }
   }
-  res.json(camelizeKeys(result.data));
+  // Save founderContributions to pgPool
+  if (Array.isArray(founderContributions) && founderContributions.length > 0) {
+    await pgPool.query(
+      `INSERT INTO order_founder_contributions (order_id, contributions) VALUES ($1, $2)
+       ON CONFLICT (order_id) DO UPDATE SET contributions = $2, updated_at = NOW()`,
+      [orderId, JSON.stringify(founderContributions)]
+    ).catch((e: any) => console.error("founder_contributions insert error:", e.message));
+  }
+  res.json({ ...camelizeKeys(result.data), founderContributions: founderContributions || [] });
 });
 router.get("/orders/:id/lines", async (req, res) => {
   try {
@@ -353,12 +373,39 @@ router.patch("/order-lines/:id", async (req, res) => {
   }
 });
 router.patch("/orders/:id", async (req, res) => {
-  sbOk(res, await supabaseAdmin.from("orders").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
+  const { founderContributions, ...rest } = req.body;
+  // Update pgPool contributions if provided
+  if (Array.isArray(founderContributions)) {
+    await pgPool.query(
+      `INSERT INTO order_founder_contributions (order_id, contributions) VALUES ($1, $2)
+       ON CONFLICT (order_id) DO UPDATE SET contributions = $2, updated_at = NOW()`,
+      [req.params.id, JSON.stringify(founderContributions)]
+    ).catch((e: any) => console.error("patch founder_contributions error:", e.message));
+  }
+  // Only send non-empty rest to Supabase
+  if (Object.keys(rest).length === 0) {
+    const { rows } = await pgPool.query(
+      "SELECT contributions FROM order_founder_contributions WHERE order_id=$1",
+      [req.params.id]
+    ).catch(() => ({ rows: [] }));
+    return res.json({ id: req.params.id, founderContributions: rows[0]?.contributions || [] });
+  }
+  const { data, error } = await supabaseAdmin.from("orders").update(snakifyKeys(rest)).eq("id", req.params.id).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  // Enrich with contributions
+  const { rows } = await pgPool.query(
+    "SELECT contributions FROM order_founder_contributions WHERE order_id=$1",
+    [req.params.id]
+  ).catch(() => ({ rows: [] }));
+  return res.json({ ...camelizeKeys(data), founderContributions: rows[0]?.contributions || founderContributions || [] });
 });
 router.delete("/orders/:id", async (req, res) => {
   const { error } = await supabaseAdmin.from("orders").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
-  await pgPool.query("DELETE FROM order_lines WHERE order_id = $1", [req.params.id]).catch(() => {});
+  await Promise.all([
+    pgPool.query("DELETE FROM order_lines WHERE order_id = $1", [req.params.id]).catch(() => {}),
+    pgPool.query("DELETE FROM order_founder_contributions WHERE order_id = $1", [req.params.id]).catch(() => {}),
+  ]);
   res.json({ ok: true });
 });
 
