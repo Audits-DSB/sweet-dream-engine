@@ -3,10 +3,12 @@ import { useRef, useState, useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { logAudit } from "@/lib/auditLog";
+import { useBusinessRules } from "@/lib/useBusinessRules";
 import { printInvoice } from "@/lib/printInvoice";
 
 type OrderLine = {
@@ -15,7 +17,10 @@ type OrderLine = {
   sellingPrice: number; costPrice: number; lineTotal: number; lineCost: number;
 };
 type OrderDelivery = { id: string; date: string; actor: string; status: string; items: string };
-type FounderContrib = { founder: string; amount: number; percentage: number };
+type FounderContrib = {
+  founder: string; founderId?: string; amount: number; percentage: number;
+  paid?: boolean; paidAt?: string;
+};
 
 type Order = {
   id: string; client: string; clientId: string; date: string; status: string;
@@ -27,6 +32,7 @@ type Order = {
   founderContributions: FounderContrib[];
   totalSelling: string | number;
   totalCost: string | number;
+  companyProfitPercentage?: number;
 };
 
 function toNum(v: any): number {
@@ -60,6 +66,7 @@ function mapOrder(raw: any): Order {
     founderContributions: parseJsonField(raw.founderContributions ?? raw.founder_contributions),
     totalSelling: raw.totalSelling ?? raw.total_selling ?? 0,
     totalCost: raw.totalCost ?? raw.total_cost ?? 0,
+    companyProfitPercentage: raw.companyProfitPercentage ?? raw.company_profit_percentage,
   };
 }
 
@@ -69,13 +76,15 @@ export default function OrderDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { rules } = useBusinessRules();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
   const [lines, setLines] = useState<OrderLine[]>([]);
   const [loading, setLoading] = useState(true);
+  const [payingFounder, setPayingFounder] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadOrder = () =>
     Promise.all([
       api.get<any[]>("/orders"),
       api.get<OrderLine[]>(`/orders/${id}/lines`).catch(() => []),
@@ -83,22 +92,59 @@ export default function OrderDetails() {
     ]).then(([all, fetchedLines, extData]) => {
       const found = (all || []).find((o: any) => o.id === id);
       if (found) setOrder(mapOrder(found));
-      // Build material lookup: sku/code → { name, imageUrl }
       const map: Record<string, ExtMaterial> = {};
       (extData?.products || []).forEach((p: any) => {
         const key = p.sku || "";
         if (key) map[key] = { sku: key, name: p.name || "", imageUrl: p.image_url || "" };
       });
-      // Enrich lines with images and names from external catalog
       const enriched = (fetchedLines || []).map((l: any) => ({
         ...l,
         materialName: l.materialName || map[l.materialCode]?.name || l.materialCode,
         imageUrl: l.imageUrl || map[l.materialCode]?.imageUrl || "",
       }));
       setLines(enriched);
-    }).catch(() => toast.error("تعذّر تحميل بيانات الطلب"))
+    });
+
+  useEffect(() => {
+    loadOrder()
+      .catch(() => toast.error("تعذّر تحميل بيانات الطلب"))
       .finally(() => setLoading(false));
   }, [id]);
+
+  const handlePayFounder = async (fc: FounderContrib) => {
+    if (!order) return;
+    setPayingFounder(fc.founder);
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      await api.post("/founder-transactions", {
+        founderId: fc.founderId || undefined,
+        founderName: fc.founder,
+        type: "funding",
+        amount: toNum(fc.amount),
+        method: "transfer",
+        orderId: order.id,
+        notes: `حصة تمويل طلب ${order.id}`,
+        date: today,
+      });
+      const updatedContribs = order.founderContributions.map(f =>
+        f.founder === fc.founder ? { ...f, paid: true, paidAt: new Date().toISOString() } : f
+      );
+      const patchedOrder = await api.patch<any>(`/orders/${order.id}`, {
+        founderContributions: updatedContribs,
+      });
+      setOrder(mapOrder(patchedOrder));
+      await logAudit({
+        entity: "order", entityId: order.id, entityName: `${order.id} - ${order.client}`,
+        action: "edit", snapshot: { founderPaid: fc.founder, amount: fc.amount },
+        endpoint: `/orders/${order.id}`,
+      });
+      toast.success(`تم تسجيل دفع ${fc.founder}`);
+    } catch (err: any) {
+      toast.error(err?.message || "فشل تسجيل الدفع");
+    } finally {
+      setPayingFounder(null);
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -140,6 +186,24 @@ export default function OrderDetails() {
   const subscriptionAmt = order.subscription?.type === "percentage" ? linesTotal * subVal / 100 : subVal;
   const operatingRevenue = linesTotal + subscriptionAmt;
   const grossProfit = operatingRevenue - costTotal;
+
+  // Profit distribution (available after collection)
+  // companyProfitPercentage is snapshotted inside each founderContributions entry at order creation
+  const snappedPct = (order.founderContributions[0] as any)?.companyProfitPercentage;
+  const companyPct = snappedPct ?? order.companyProfitPercentage ?? rules.companyProfitPercentage ?? 15;
+  const companyProfit = grossProfit * companyPct / 100;
+  const foundersProfit = grossProfit - companyProfit;
+  const isCollected = ["Delivered", "Completed", "مُسلَّم", "مكتمل"].includes(order.status);
+
+  // Per-founder cost + profit share
+  const totalPct = order.founderContributions.reduce((s, f) => s + (f.percentage || 0), 0) || 100;
+  const isEqualSplit = !order.splitMode?.includes("مساهمة") && !order.splitMode?.toLowerCase().includes("contribution");
+  const founderPayments = order.founderContributions.map(fc => {
+    const profitShare = isEqualSplit
+      ? (order.founderContributions.length > 0 ? foundersProfit / order.founderContributions.length : 0)
+      : foundersProfit * (fc.percentage || 0) / totalPct;
+    return { ...fc, profitShare };
+  });
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -259,10 +323,26 @@ export default function OrderDetails() {
                       <div className="text-lg font-bold text-primary">×{line.quantity}</div>
                     </div>
 
-                    {/* Unit price */}
+                    {/* Unit sell price */}
                     <div className="text-center flex-shrink-0 hidden sm:block">
-                      <div className="text-xs text-muted-foreground">السعر</div>
+                      <div className="text-xs text-muted-foreground">سعر البيع</div>
                       <div className="font-medium text-sm">{toNum(line.sellingPrice).toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground">{t.currency}</div>
+                    </div>
+
+                    {/* Unit cost price */}
+                    <div className="text-center flex-shrink-0 hidden md:block">
+                      <div className="text-xs text-muted-foreground">سعر الشراء</div>
+                      <div className="font-medium text-sm text-muted-foreground">{toNum(line.costPrice).toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground">{t.currency}</div>
+                    </div>
+
+                    {/* Line profit */}
+                    <div className="text-center flex-shrink-0 hidden md:block">
+                      <div className="text-xs text-muted-foreground">الربح</div>
+                      <div className={`font-medium text-sm ${toNum(line.lineTotal) - toNum(line.lineCost) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
+                        {(toNum(line.lineTotal) - toNum(line.lineCost)).toLocaleString()}
+                      </div>
                       <div className="text-xs text-muted-foreground">{t.currency}</div>
                     </div>
 
@@ -338,25 +418,78 @@ export default function OrderDetails() {
 
         {/* ── FINANCIALS TAB ───────────────────────────────────────────── */}
         <TabsContent value="financials">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="stat-card space-y-3">
-              <h3 className="font-semibold text-sm">{t.expectedRevenue}</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">{t.totalSelling}</span><span className="font-medium">{linesTotal.toLocaleString()} {t.currency}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">{t.subscriptionLabel} ({subVal}%)</span><span className="font-medium">{subscriptionAmt.toLocaleString()} {t.currency}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">{t.cashback}</span><span className="font-medium">0 {t.currency}</span></div>
-                <div className="border-t border-border pt-2 flex justify-between font-semibold"><span>{t.operatingRevenue}</span><span>{operatingRevenue.toLocaleString()} {t.currency}</span></div>
+          <div className="space-y-4">
+            {/* Revenue + Cost summary */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="stat-card space-y-3">
+                <h3 className="font-semibold text-sm flex items-center gap-2"><TrendingUp className="h-4 w-4 text-primary" />{t.expectedRevenue}</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-muted-foreground">إجمالي المبيعات</span><span className="font-medium">{linesTotal.toLocaleString()} {t.currency}</span></div>
+                  {subVal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">{t.subscriptionLabel} ({subVal}%)</span><span className="font-medium">{subscriptionAmt.toLocaleString()} {t.currency}</span></div>}
+                  <div className="border-t border-border pt-2 flex justify-between font-semibold"><span>الإيراد التشغيلي</span><span>{operatingRevenue.toLocaleString()} {t.currency}</span></div>
+                  <div className="flex justify-between text-muted-foreground"><span>إجمالي التكلفة</span><span className="text-destructive">- {costTotal.toLocaleString()} {t.currency}</span></div>
+                  <div className="flex justify-between font-bold text-base"><span>الربح الإجمالي</span><span className={grossProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}>{grossProfit.toLocaleString()} {t.currency}</span></div>
+                </div>
+              </div>
+
+              {/* Profit distribution breakdown */}
+              <div className="stat-card space-y-3">
+                <h3 className="font-semibold text-sm flex items-center gap-2"><DollarSign className="h-4 w-4 text-primary" />توزيع الربح</h3>
+                {grossProfit > 0 ? (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="flex items-center gap-1.5 text-muted-foreground"><Building2 className="h-3.5 w-3.5" />نصيب الشركة ({companyPct}%)</span>
+                      <span className="font-semibold text-primary">{companyProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })} {t.currency}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="flex items-center gap-1.5 text-muted-foreground"><Users2 className="h-3.5 w-3.5" />نصيب المؤسسين ({(100 - companyPct).toFixed(0)}%)</span>
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400">{foundersProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })} {t.currency}</span>
+                    </div>
+                    <div className="border-t border-border pt-2 text-xs text-muted-foreground">
+                      {order.companyProfitPercentage != null ? "النسبة محفوظة من وقت إنشاء الطلب" : "النسبة من الإعدادات الحالية"}
+                    </div>
+                    {!isCollected && (
+                      <div className="mt-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md p-2 text-xs text-amber-700 dark:text-amber-400">
+                        ⚠️ توزيع الأرباح متاح فقط بعد التحصيل من العميل
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground py-2">لا يوجد ربح محسوب لهذا الطلب بعد</p>
+                )}
               </div>
             </div>
-            <div className="stat-card space-y-3">
-              <h3 className="font-semibold text-sm">{t.expectedProfit}</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">{t.operatingRevenue}</span><span className="font-medium">{operatingRevenue.toLocaleString()} {t.currency}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">{t.totalCost}</span><span className="font-medium text-destructive">- {costTotal.toLocaleString()} {t.currency}</span></div>
-                <div className="border-t border-border pt-2 flex justify-between font-semibold"><span>{t.grossProfit}</span><span className="text-success">{grossProfit.toLocaleString()} {t.currency}</span></div>
-                <div className="flex justify-between text-muted-foreground"><span>{t.deliveryFeeDisplay}</span><span>{order.deliveryFee} {t.currency}</span></div>
+
+            {/* Per-founder profit share (shown after collection) */}
+            {founderPayments.length > 0 && grossProfit > 0 && (
+              <div className="stat-card space-y-3">
+                <h3 className="font-semibold text-sm flex items-center gap-2"><Users2 className="h-4 w-4 text-primary" />حصة كل مؤسس من الأرباح</h3>
+                {isCollected ? (
+                  <div className="space-y-2">
+                    {founderPayments.map(fp => (
+                      <div key={fp.founder} className="flex items-center justify-between p-3 rounded-lg bg-muted/40 text-sm">
+                        <span className="font-medium">{fp.founder}</span>
+                        <div className="flex items-center gap-4 text-end">
+                          <div>
+                            <div className="text-xs text-muted-foreground">نسبته</div>
+                            <div className="font-medium">{isEqualSplit ? (100 / founderPayments.length).toFixed(1) : (fp.percentage || 0).toFixed(1)}%</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">حصته من الربح</div>
+                            <div className="font-bold text-emerald-600 dark:text-emerald-400">{fp.profitShare.toLocaleString(undefined, { maximumFractionDigits: 0 })} {t.currency}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-4 text-center text-muted-foreground text-sm">
+                    <Users2 className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <p>تفاصيل حصص الربح ستظهر بعد اكتمال التحصيل</p>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
           </div>
         </TabsContent>
 
@@ -394,23 +527,109 @@ export default function OrderDetails() {
 
         {/* ── FUNDING TAB ──────────────────────────────────────────────── */}
         <TabsContent value="funding">
-          <div className="stat-card">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-sm">{t.founderContributions} ({order.splitMode})</h3>
-              <span className="text-xs text-muted-foreground">{t.totalCost}: {costTotal.toLocaleString()} {t.currency}</span>
-            </div>
-            {order.founderContributions.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {order.founderContributions.map((fc) => (
-                  <div key={fc.founder} className="p-4 rounded-lg bg-muted/50 space-y-1 cursor-pointer hover:bg-muted/70" onClick={() => navigate("/founders")}>
-                    <p className="font-medium text-sm">{fc.founder}</p>
-                    <p className="text-xl font-bold">{toNum(fc.amount).toLocaleString()} {t.currency}</p>
-                    <p className="text-xs text-muted-foreground">{fc.percentage}% {t.sharePercent}</p>
-                  </div>
-                ))}
+          <div className="space-y-4">
+            {/* Summary bar */}
+            <div className="stat-card">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <h3 className="font-semibold text-sm flex items-center gap-2"><Users2 className="h-4 w-4 text-primary" />تمويل التكلفة قبل الشراء ({order.splitMode})</h3>
+                <span className="text-xs text-muted-foreground">إجمالي التكلفة: <span className="font-semibold text-foreground">{costTotal.toLocaleString()} {t.currency}</span></span>
               </div>
-            ) : (
-              <p className="py-6 text-center text-muted-foreground text-sm">لا توجد مساهمات مسجّلة لهذا الطلب</p>
+
+              {founderPayments.length > 0 ? (
+                <div className="space-y-3">
+                  {/* Progress bar */}
+                  {(() => {
+                    const paidCount = founderPayments.filter(f => f.paid).length;
+                    const paidPct = founderPayments.length > 0 ? (paidCount / founderPayments.length) * 100 : 0;
+                    const paidAmount = founderPayments.filter(f => f.paid).reduce((s, f) => s + toNum(f.amount), 0);
+                    return (
+                      <div className="mb-4">
+                        <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                          <span>تم الدفع: {paidCount}/{founderPayments.length} مؤسس</span>
+                          <span>{paidAmount.toLocaleString()} / {costTotal.toLocaleString()} {t.currency}</span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${paidPct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {founderPayments.map((fp) => (
+                    <div key={fp.founder} className={`flex items-center gap-4 p-4 rounded-xl border transition-colors ${fp.paid ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800" : "bg-muted/30 border-border"}`}>
+                      {/* Status icon */}
+                      <div className="flex-shrink-0">
+                        {fp.paid
+                          ? <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                          : <Circle className="h-5 w-5 text-muted-foreground" />}
+                      </div>
+
+                      {/* Founder name */}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm">{fp.founder}</p>
+                        {fp.paid && fp.paidAt && (
+                          <p className="text-xs text-muted-foreground">دفع في {new Date(fp.paidAt).toLocaleDateString("ar-SA")}</p>
+                        )}
+                        {!fp.paid && (
+                          <p className="text-xs text-muted-foreground">في انتظار الدفع</p>
+                        )}
+                      </div>
+
+                      {/* Amount + percentage */}
+                      <div className="text-end flex-shrink-0">
+                        <p className="font-bold text-base">{toNum(fp.amount).toLocaleString()} {t.currency}</p>
+                        <p className="text-xs text-muted-foreground">{fp.percentage?.toFixed(1)}% {t.sharePercent}</p>
+                      </div>
+
+                      {/* Mark as paid button */}
+                      {!fp.paid && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-shrink-0 h-8 text-xs border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                          disabled={payingFounder === fp.founder}
+                          onClick={() => handlePayFounder(fp)}
+                        >
+                          {payingFounder === fp.founder
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : "تسجيل الدفع"}
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 text-center text-muted-foreground">
+                  <Users2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm font-medium">لا توجد مساهمات مسجّلة لهذا الطلب</p>
+                  <p className="text-xs mt-1 opacity-70">الطلبات الجديدة تحفظ مساهمات المؤسسين تلقائياً عند الإنشاء</p>
+                </div>
+              )}
+            </div>
+
+            {/* Post-collection profit distribution note */}
+            {founderPayments.length > 0 && grossProfit > 0 && (
+              <div className={`stat-card space-y-3 ${isCollected ? "" : "opacity-60"}`}>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-sm flex items-center gap-2"><DollarSign className="h-4 w-4 text-primary" />توزيع الأرباح بعد التحصيل</h3>
+                  {!isCollected && <span className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">ينتظر التحصيل</span>}
+                  {isCollected && <span className="text-xs bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full">جاهز للتوزيع</span>}
+                </div>
+                <div className="space-y-2 text-sm">
+                  {founderPayments.map(fp => (
+                    <div key={fp.founder} className="flex justify-between items-center">
+                      <span className="text-muted-foreground">{fp.founder}</span>
+                      <span className={`font-semibold ${isCollected ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                        {fp.profitShare.toLocaleString(undefined, { maximumFractionDigits: 0 })} {t.currency}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="border-t border-border pt-2 flex justify-between text-xs text-muted-foreground">
+                    <span>+ نصيب الشركة ({companyPct}%)</span>
+                    <span>{companyProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })} {t.currency}</span>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </TabsContent>

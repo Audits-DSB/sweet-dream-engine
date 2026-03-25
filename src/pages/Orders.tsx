@@ -5,7 +5,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2, Users } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -74,11 +75,26 @@ export default function OrdersPage() {
   const [materialsLoading, setMaterialsLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Order | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [founders, setFounders] = useState<{ id: string; name: string }[]>([]);
+  const [selectedFounders, setSelectedFounders] = useState<string[]>([]);
+  const [founderPcts, setFounderPcts] = useState<Record<string, number>>({});
   const navigate = useNavigate();
 
   useEffect(() => {
     if (dialogOpen) {
       setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee) });
+      setSelectedFounders([]);
+      setFounderPcts({});
+      api.get<any[]>("/founders").then(data => {
+        const active = (data || []).filter((f: any) => f.active !== false).map((f: any) => ({ id: f.id, name: f.name }));
+        setFounders(active);
+        // Default: select all active founders equally
+        setSelectedFounders(active.map((f: any) => f.id));
+        const eqPct = active.length > 0 ? Math.floor(100 / active.length) : 0;
+        const pcts: Record<string, number> = {};
+        active.forEach((f: any, i: number) => { pcts[f.id] = i === active.length - 1 ? 100 - eqPct * (active.length - 1) : eqPct; });
+        setFounderPcts(pcts);
+      }).catch(() => {});
     }
   }, [dialogOpen, rules.defaultSplitMode, rules.defaultDeliveryFee]);
 
@@ -186,6 +202,15 @@ export default function OrdersPage() {
       const { nextId: newId } = await api.get<{ nextId: string }>("/orders/next-id");
       const today = new Date().toISOString().split("T")[0];
       const splitLabel = form.splitMode === "equal" ? t.equal : t.byContribution;
+      const participating = founders.filter(f => selectedFounders.includes(f.id));
+      const founderContributions = participating.map(f => {
+        const pct = form.splitMode === "equal"
+          ? (participating.length > 0 ? 100 / participating.length : 0)
+          : (founderPcts[f.id] || 0);
+        const share = totalCost * pct / 100;
+        // embed snapshot of companyProfitPercentage in each entry (no extra column needed)
+        return { founderId: f.id, founder: f.name, amount: Math.round(share * 100) / 100, percentage: Math.round(pct * 100) / 100, paid: false, companyProfitPercentage: rules.companyProfitPercentage };
+      });
       const saved = await api.post<any>("/orders", {
         id: newId, clientId: client.id, date: today,
         lines: orderItems.length,
@@ -193,6 +218,7 @@ export default function OrdersPage() {
         totalCost: String(totalCost),
         splitMode: splitLabel, deliveryFee: String(parseInt(form.deliveryFee) || 0),
         status: "Draft", source: t.manual,
+        founderContributions,
         items: orderItems,
       });
       if (saved._linesError) {
@@ -401,6 +427,42 @@ export default function OrdersPage() {
                   </Select>
                 </div>
               </div>
+
+              {founders.length > 0 && (
+                <div className="space-y-2 border border-border rounded-lg p-3 bg-muted/10">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users className="h-4 w-4 text-primary" />
+                    <span className="text-xs font-semibold">المؤسسون المشاركون في هذا الطلب</span>
+                    <span className="text-xs text-muted-foreground mr-auto">نسبة الشركة: {rules.companyProfitPercentage}%</span>
+                  </div>
+                  {founders.map(f => {
+                    const isSelected = selectedFounders.includes(f.id);
+                    const pct = form.splitMode === "equal"
+                      ? (selectedFounders.length > 0 ? 100 / selectedFounders.length : 0)
+                      : (founderPcts[f.id] || 0);
+                    const costShare = totalCost * pct / 100;
+                    return (
+                      <div key={f.id} className={`flex items-center gap-3 p-2 rounded-md transition-colors ${isSelected ? "bg-primary/5 border border-primary/20" : "opacity-50"}`}>
+                        <Checkbox checked={isSelected} onCheckedChange={(checked) => {
+                          setSelectedFounders(prev => checked ? [...prev, f.id] : prev.filter(id => id !== f.id));
+                        }} />
+                        <span className="text-sm font-medium flex-1">{f.name}</span>
+                        {form.splitMode === "contribution" && isSelected ? (
+                          <div className="flex items-center gap-1">
+                            <Input className="h-7 w-16 text-xs text-center" type="number" min={0} max={100} value={founderPcts[f.id] || 0} onChange={e => setFounderPcts(prev => ({ ...prev, [f.id]: Number(e.target.value) }))} />
+                            <span className="text-xs text-muted-foreground">%</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">{pct.toFixed(1)}%</span>
+                        )}
+                        {totalCost > 0 && isSelected && (
+                          <span className="text-xs font-medium text-primary min-w-[70px] text-end">{costShare.toLocaleString(undefined, { maximumFractionDigits: 0 })} {t.currency}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               <Button className="w-full" onClick={handleAdd} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t.createOrder}

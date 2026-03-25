@@ -13,7 +13,7 @@ import { StatCard } from "@/components/StatCard";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Plus, Eye, MoreHorizontal, ClipboardCheck, AlertTriangle, CheckCircle2, XCircle,
-  Upload, FileSpreadsheet, Printer, Download, FileText, Package, Loader2, Trash2,
+  Upload, FileSpreadsheet, Printer, Download, FileText, Package, Loader2, Trash2, Receipt,
 } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -105,6 +105,7 @@ export default function AuditsPage() {
   const [comparisonRows, setComparisonRows] = useState<ComparisonRow[]>([]);
   const [step, setStep] = useState<"form" | "compare">("form");
   const [saving, setSaving] = useState(false);
+  const [creatingCollection, setCreatingCollection] = useState<string | null>(null);
 
   const { data: rawAudits = [], isLoading } = useQuery<AuditRecord[]>({ queryKey: ["/api/audits"], queryFn: () => api.get<AuditRecord[]>("/audits") });
   const { data: clients = [] } = useQuery<{ id: string; name: string; city: string }[]>({ queryKey: ["/api/clients"], queryFn: () => api.get("/clients") });
@@ -248,6 +249,50 @@ export default function AuditsPage() {
     setComparisonRows([]); setStep("form"); setDialogOpen(false);
   };
 
+  const handleCreateCollection = async (audit: AuditRecord) => {
+    const shortages = audit.comparison.filter(r => r.result === "shortage");
+    if (shortages.length === 0) { toast.info("لا توجد نواقص في هذا الجرد لإنشاء تحصيل"); return; }
+    setCreatingCollection(audit.id);
+    try {
+      const extData = await api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] }));
+      const imgMap: Record<string, string> = {};
+      (extData?.products || []).forEach((p: any) => { if (p.sku) imgMap[p.sku] = p.image_url || ""; });
+
+      const clientInvData = await api.get<any[]>(`/client-inventory?clientId=${audit.clientId}`).catch(() => []);
+      const sourceOrders = [...new Set((clientInvData || []).map((i: any) => (i.sourceOrder || i.source_order || "")).filter(Boolean))];
+      const primarySourceOrder = sourceOrders[0] || "";
+
+      const lineItems = shortages.map(r => ({
+        code: r.code, material: r.material,
+        imageUrl: imgMap[r.code] || "",
+        unit: r.unit, quantity: Math.abs(r.diff),
+        sellingPrice: r.sellingPrice,
+        lineTotal: Math.abs(r.diff) * r.sellingPrice,
+      }));
+      const total = lineItems.reduce((s, l) => s + l.lineTotal, 0);
+      const today = new Date().toISOString().split("T")[0];
+
+      // Store audit meta + line items inside the payments JSONB field (no extra columns needed)
+      const paymentsData = {
+        meta: { auditId: audit.id, auditDate: audit.date, sourceOrder: primarySourceOrder, lineItems },
+        history: [],
+      };
+
+      const saved = await api.post<any>("/collections", {
+        clientId: audit.clientId, client: audit.clientName, clientName: audit.clientName,
+        total, paid: 0, remaining: total,
+        issueDate: today, dueDate: today, status: "Awaiting Confirmation",
+        payments: paymentsData,
+      });
+      await logAudit({ entity: "collection", entityId: saved.id, entityName: `${saved.id} - ${audit.clientName}`, action: "create", snapshot: { ...saved, auditId: audit.id }, endpoint: "/collections" });
+      toast.success(`تم إنشاء التحصيل ${saved.id} — ${audit.clientName} (${total.toLocaleString()} ر.س)`);
+    } catch (err: any) {
+      toast.error(err?.message || "فشل إنشاء التحصيل");
+    } finally {
+      setCreatingCollection(null);
+    }
+  };
+
   const printClientInvoice = (audit: AuditRecord) => {
     const rows = audit.comparison;
     const shortages = rows.filter(r => r.result === "shortage");
@@ -358,6 +403,12 @@ export default function AuditsPage() {
                       <DropdownMenuItem onClick={() => setSelectedAudit(audit)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewDetails}</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => printClientInvoice(audit)}><Printer className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.clientInvoice}</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => exportPurchaseSheet(audit)}><FileSpreadsheet className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.purchaseListLabel}</DropdownMenuItem>
+                      {audit.shortage > 0 && (
+                        <DropdownMenuItem onClick={() => handleCreateCollection(audit)} disabled={creatingCollection === audit.id}>
+                          <Receipt className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2 text-primary" />
+                          {creatingCollection === audit.id ? "جارٍ الإنشاء..." : "إنشاء تحصيل"}
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(audit)}><Trash2 className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />حذف</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -459,6 +510,18 @@ export default function AuditsPage() {
                         }}>
                           <FileText className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.printAuditReport}
                         </Button>
+                        {shortages.length > 0 && (
+                          <Button
+                            size="sm"
+                            className="bg-primary text-primary-foreground hover:bg-primary/90"
+                            disabled={creatingCollection === selectedAudit.id}
+                            onClick={() => handleCreateCollection(selectedAudit)}
+                          >
+                            {creatingCollection === selectedAudit.id
+                              ? <><Loader2 className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5 animate-spin" />جارٍ الإنشاء...</>
+                              : <><Receipt className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />إنشاء تحصيل ({shortageTotal.toLocaleString()} ر.س)</>}
+                          </Button>
+                        )}
                       </div>
                     </>
                   );

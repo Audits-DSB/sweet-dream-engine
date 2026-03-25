@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, CheckCircle2, Clock, Receipt, Eye, MoreHorizontal, DollarSign, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Receipt, Eye, MoreHorizontal, DollarSign, Trash2, Package, TrendingUp, Users2, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { logAudit } from "@/lib/auditLog";
@@ -20,16 +20,30 @@ import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 type TreasuryAccount = { id: string; name: string; balance: number };
+type LineItem = { code: string; material: string; imageUrl: string; unit: string; quantity: number; sellingPrice: number; lineTotal: number };
 type Collection = {
   id: string; order: string; client: string; clientId: string;
   issueDate: string; dueDate: string; total: number; paid: number;
   remaining: number; payments: { date: string; amount: number; method: string }[];
   status: string;
+  // Audit-sourced fields (stored inside payments JSONB meta)
+  auditId?: string; auditDate?: string; sourceOrder?: string; lineItems?: LineItem[];
 };
+
+function parsePaymentsField(raw: any): { payments: { date: string; amount: number; method: string }[]; meta: { auditId?: string; auditDate?: string; sourceOrder?: string; lineItems?: LineItem[] } } {
+  let parsed: any = raw;
+  if (typeof raw === "string") { try { parsed = JSON.parse(raw); } catch { parsed = []; } }
+  if (Array.isArray(parsed)) return { payments: parsed, meta: {} };
+  if (parsed && typeof parsed === "object") {
+    return { payments: Array.isArray(parsed.history) ? parsed.history : [], meta: parsed.meta || {} };
+  }
+  return { payments: [], meta: {} };
+}
 
 function mapCollection(raw: any): Collection {
   const total = Number(raw.total ?? raw.totalAmount ?? 0);
   const paid = Number(raw.paid ?? raw.paidAmount ?? 0);
+  const { payments, meta } = parsePaymentsField(raw.payments);
   return {
     id: raw.id,
     order: raw.order || raw.orderId || raw.order_id || "",
@@ -37,11 +51,12 @@ function mapCollection(raw: any): Collection {
     clientId: raw.clientId || raw.client_id || "",
     issueDate: raw.issueDate || raw.issue_date || raw.createdAt || "",
     dueDate: raw.dueDate || raw.due_date || "",
-    total,
-    paid,
+    total, paid,
     remaining: Number(raw.remaining ?? (total - paid)),
-    payments: Array.isArray(raw.payments) ? raw.payments : (typeof raw.payments === "string" ? JSON.parse(raw.payments || "[]") : []),
+    payments,
     status: raw.status || "Awaiting Confirmation",
+    auditId: meta.auditId || "", auditDate: meta.auditDate || "",
+    sourceOrder: meta.sourceOrder || "", lineItems: meta.lineItems || [],
   };
 }
 
@@ -120,15 +135,35 @@ export default function CollectionsPage() {
     if (!amt || amt <= 0) { toast.error(t.enterValidAmount); return; }
     if (amt > paymentInvoice.remaining) { toast.error(t.amountExceedsRemaining); return; }
 
-    // Update local collection state
-    setCollections(prev => prev.map(c => {
-      if (c.id !== paymentInvoice.id) return c;
-      const newPaid = c.paid + amt;
-      const newRemaining = c.total - newPaid;
-      const newPayments = [...c.payments, { date: new Date().toISOString().split("T")[0], amount: amt, method: paymentMethod === "cash" ? "Cash" : "Bank Transfer" }];
-      const newStatus = newRemaining <= 0 ? "Paid" : "Partially Paid";
-      return { ...c, paid: newPaid, remaining: newRemaining, payments: newPayments, status: newStatus };
-    }));
+    const newPaid = paymentInvoice.paid + amt;
+    const newRemaining = paymentInvoice.total - newPaid;
+    const newPaymentEntry = { date: new Date().toISOString().split("T")[0], amount: amt, method: paymentMethod === "cash" ? "Cash" : "Bank Transfer" };
+    const newPaymentHistory = [...paymentInvoice.payments, newPaymentEntry];
+    const newStatus = newRemaining <= 0 ? "Paid" : "Partially Paid";
+
+    // Persist to Supabase — preserve meta structure if present (audit-sourced)
+    const hasMeta = !!(paymentInvoice.auditId || (paymentInvoice.lineItems && paymentInvoice.lineItems.length > 0));
+    const updatedPaymentsField = hasMeta
+      ? { meta: { auditId: paymentInvoice.auditId, auditDate: paymentInvoice.auditDate, sourceOrder: paymentInvoice.sourceOrder, lineItems: paymentInvoice.lineItems }, history: newPaymentHistory }
+      : newPaymentHistory;
+
+    try {
+      await api.patch(`/collections/${paymentInvoice.id}`, {
+        paid: newPaid, remaining: newRemaining, status: newStatus, payments: updatedPaymentsField,
+      });
+    } catch (err: any) {
+      toast.error(err?.message || "فشل حفظ الدفعة");
+      return;
+    }
+
+    // Auto-unlock profit distribution when fully paid
+    if (newRemaining <= 0 && paymentInvoice.order) {
+      try {
+        await api.patch(`/orders/${paymentInvoice.order}`, { status: "Delivered" });
+        await logAudit({ entity: "order", entityId: paymentInvoice.order, entityName: `طلب ${paymentInvoice.order}`, action: "update", snapshot: { status: "Delivered", trigger: "collection_paid", collectionId: paymentInvoice.id }, endpoint: `/orders/${paymentInvoice.order}` });
+        toast.info("تم تحديث حالة الطلب — الأرباح جاهزة للتوزيع");
+      } catch { /* non-critical */ }
+    }
 
     // Link to treasury if enabled
     if (linkToTreasury && treasuryAccountId) {
@@ -136,20 +171,19 @@ export default function CollectionsPage() {
       if (account) {
         const newBalance = Number(account.balance) + amt;
         await api.post("/treasury/transactions", {
-          accountId: treasuryAccountId,
-          txType: "inflow",
-          amount: amt,
+          accountId: treasuryAccountId, txType: "inflow", amount: amt,
           balanceAfter: newBalance,
-          description: `${t.recordPayment}: ${paymentInvoice.id} - ${paymentInvoice.client}`,
-          referenceId: paymentInvoice.id,
-          performedBy: user?.id || null,
-          newBalance,
+          description: `تحصيل: ${paymentInvoice.id} - ${paymentInvoice.client}`,
+          referenceId: paymentInvoice.id, performedBy: user?.id || null, newBalance,
         });
         setTreasuryAccounts(prev => prev.map(a => a.id === treasuryAccountId ? { ...a, balance: newBalance } : a));
-        toast.success(t.paymentLinkedToTreasury);
       }
     }
 
+    await logAudit({ entity: "collection", entityId: paymentInvoice.id, entityName: `${paymentInvoice.id} - ${paymentInvoice.client}`, action: "update", snapshot: { paid: newPaid, remaining: newRemaining, status: newStatus, newPayment: newPaymentEntry }, endpoint: `/collections/${paymentInvoice.id}` });
+
+    // Update local state
+    setCollections(prev => prev.map(c => c.id !== paymentInvoice.id ? c : { ...c, paid: newPaid, remaining: newRemaining, payments: newPaymentHistory, status: newStatus }));
     toast.success(t.paymentRecorded);
     setPaymentDialogOpen(false);
     setPaymentInvoice(null);
@@ -255,18 +289,76 @@ export default function CollectionsPage() {
 
       {/* Invoice Detail Dialog */}
       <Dialog open={!!selectedInvoice && !paymentDialogOpen} onOpenChange={() => setSelectedInvoice(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{selectedInvoice?.id} — {selectedInvoice?.client}</DialogTitle></DialogHeader>
           {selectedInvoice && (
             <div className="space-y-4">
+              {/* Audit badge */}
+              {selectedInvoice.auditId && (
+                <div className="flex flex-wrap gap-2 text-xs p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                  <span className="text-amber-700 dark:text-amber-300 font-medium">مصدر: جرد</span>
+                  <span className="text-muted-foreground">#{selectedInvoice.auditId}</span>
+                  {selectedInvoice.auditDate && <span className="text-muted-foreground">— {selectedInvoice.auditDate}</span>}
+                  {selectedInvoice.sourceOrder && <span className="text-muted-foreground">| طلب: {selectedInvoice.sourceOrder}</span>}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.totalAmount}</p><p className="font-semibold">{selectedInvoice.total.toLocaleString()} {t.currency}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.remaining}</p><p className="font-semibold text-destructive">{selectedInvoice.remaining.toLocaleString()} {t.currency}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.remaining}</p><p className={`font-semibold ${selectedInvoice.remaining > 0 ? "text-destructive" : "text-success"}`}>{selectedInvoice.remaining > 0 ? `${selectedInvoice.remaining.toLocaleString()} ${t.currency}` : "مكتمل"}</p></div>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setSelectedInvoice(null); navigate(`/orders/${selectedInvoice.order}`); }}><p className="text-xs text-muted-foreground">{t.order}</p><p className="font-semibold text-primary">{selectedInvoice.order}</p></div>
+                {selectedInvoice.order ? (
+                  <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setSelectedInvoice(null); navigate(`/orders/${selectedInvoice.order}`); }}><p className="text-xs text-muted-foreground">{t.order}</p><p className="font-semibold text-primary">{selectedInvoice.order}</p></div>
+                ) : <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.order}</p><p className="text-muted-foreground text-sm">—</p></div>}
                 <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setSelectedInvoice(null); navigate(`/clients/${selectedInvoice.clientId}`); }}><p className="text-xs text-muted-foreground">{t.client}</p><p className="font-semibold text-primary">{selectedInvoice.client}</p></div>
               </div>
+
+              {/* Line items from audit */}
+              {selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5"><Package className="h-4 w-4 text-primary" />المواد المستهلكة</h4>
+                  <div className="overflow-x-auto rounded-lg border border-border">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/60">
+                        <tr>
+                          <th className="text-start py-2 px-2 font-medium text-muted-foreground">المادة</th>
+                          <th className="text-start py-2 px-2 font-medium text-muted-foreground">الكود</th>
+                          <th className="text-end py-2 px-2 font-medium text-muted-foreground">الكمية</th>
+                          <th className="text-end py-2 px-2 font-medium text-muted-foreground">سعر الوحدة</th>
+                          <th className="text-end py-2 px-2 font-medium text-muted-foreground">الإجمالي</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedInvoice.lineItems.map((item, i) => (
+                          <tr key={i} className="border-t border-border/50 hover:bg-muted/30">
+                            <td className="py-2 px-2">
+                              <div className="flex items-center gap-2">
+                                {item.imageUrl ? (
+                                  <img src={item.imageUrl} alt={item.material} className="h-8 w-8 rounded object-cover flex-shrink-0 border border-border" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                ) : (
+                                  <div className="h-8 w-8 rounded bg-muted flex items-center justify-center flex-shrink-0"><Package className="h-3.5 w-3.5 text-muted-foreground" /></div>
+                                )}
+                                <span className="font-medium">{item.material}</span>
+                              </div>
+                            </td>
+                            <td className="py-2 px-2 font-mono text-muted-foreground">{item.code}</td>
+                            <td className="py-2 px-2 text-end">{item.quantity} {item.unit}</td>
+                            <td className="py-2 px-2 text-end">{item.sellingPrice.toLocaleString()}</td>
+                            <td className="py-2 px-2 text-end font-semibold">{item.lineTotal.toLocaleString()} {t.currency}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-muted/40 border-t border-border">
+                        <tr>
+                          <td colSpan={4} className="py-2 px-2 font-semibold text-end">الإجمالي</td>
+                          <td className="py-2 px-2 text-end font-bold text-primary">{selectedInvoice.total.toLocaleString()} {t.currency}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <h4 className="text-sm font-semibold mb-2">{t.paymentHistory}</h4>
                 {selectedInvoice.payments.length === 0 ? (
