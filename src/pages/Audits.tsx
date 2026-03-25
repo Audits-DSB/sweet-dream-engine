@@ -167,30 +167,50 @@ export default function AuditsPage() {
   const normalize = (s: string) => s.toLowerCase().replace(/[-_\s]/g, "");
 
   const buildComparison = (uploadedData: { code: string; name: string; actual: number }[]) => {
-    const rows: ComparisonRow[] = clientInventory.map(inv => {
-      const match = uploadedData.find(u => {
-        // 1. Exact code match (case-insensitive)
-        if (u.code && inv.code && u.code.toUpperCase() === inv.code.toUpperCase()) return true;
-        // 2. Normalized code match (ignore dashes, underscores, spaces)
-        if (u.code && inv.code && normalize(u.code) === normalize(inv.code)) return true;
-        // 3. Name partial match (case-insensitive, either direction)
-        if (u.name && inv.material) {
+    // ── Step 1: merge uploaded CSV rows by code (sum actuals for duplicate codes) ──
+    const uploadedMerged = new Map<string, { name: string; actual: number }>();
+    for (const u of uploadedData) {
+      const key = normalize(u.code || u.name);
+      if (uploadedMerged.has(key)) {
+        uploadedMerged.get(key)!.actual += u.actual;
+      } else {
+        uploadedMerged.set(key, { name: u.name, actual: u.actual });
+      }
+    }
+
+    // ── Step 2: merge clientInventory lots by code (sum remaining) ──
+    // Keep lots sorted oldest-first for FIFO tracking
+    type MergedInv = { material: string; unit: string; expected: number; sellingPrice: number; storeCost: number; lots: InventoryLot[] };
+    const invMerged = new Map<string, MergedInv>();
+    for (const inv of clientInventory) {
+      const key = normalize(inv.code);
+      if (invMerged.has(key)) {
+        invMerged.get(key)!.expected += inv.remaining;
+        invMerged.get(key)!.lots.push(inv);
+      } else {
+        invMerged.set(key, { material: inv.material, unit: inv.unit, expected: inv.remaining, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost, lots: [inv] });
+      }
+    }
+
+    // ── Step 3: build one ComparisonRow per unique material code ──
+    const rows: ComparisonRow[] = [];
+    for (const [normCode, inv] of invMerged.entries()) {
+      // Find actual: try code match first, then name match
+      let actualEntry = uploadedMerged.get(normCode);
+      if (!actualEntry) {
+        // try name-based match
+        for (const [, u] of uploadedMerged.entries()) {
           const uName = u.name.toLowerCase();
           const invName = inv.material.toLowerCase();
-          if (invName.includes(uName) || uName.includes(invName)) return true;
+          if (invName.includes(uName) || uName.includes(invName)) { actualEntry = u; break; }
         }
-        // 4. Code appears in material name or vice versa (handles AMALGAM-CAPSULE vs "أمالجم" style)
-        if (u.code && inv.material && normalize(u.code).includes(normalize(inv.code))) return true;
-        return false;
-      });
-      const actual = match ? match.actual : inv.remaining; // default to expected if not in file
-      const diff = actual - inv.remaining;
+      }
+      const actual = actualEntry ? actualEntry.actual : inv.expected;
+      const diff = actual - inv.expected;
       const result: ComparisonRow["result"] = diff === 0 ? "matched" : diff < 0 ? "shortage" : "surplus";
-      return { material: inv.material, code: inv.code, unit: inv.unit, expected: inv.remaining, actual, diff, result, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost };
-    });
-
-    // Also add rows from uploaded file that had no inventory match (new items)
-    // (skipped for now — only inventory items are compared)
+      // Use original code (not normalized) from first lot
+      rows.push({ material: inv.material, code: inv.lots[0].code, unit: inv.unit, expected: inv.expected, actual, diff, result, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost });
+    }
 
     setComparisonRows(rows);
     setStep("compare");
@@ -234,25 +254,50 @@ export default function AuditsPage() {
       };
       await api.post("/audits", newAudit);
 
-      // 1. Update client inventory: sync remaining to actual counts from audit
-      //    Shortage items → status "Needs Refill" + store shortage qty for Refill page
-      //    Surplus/matched → update remaining + clear any old shortage flag
-      const clientLots = (rawLots as any[]).filter(l => l.clientId === selectedClientId || l.client_id === selectedClientId);
+      // 1. Update client inventory using FIFO: distribute actual qty across lots oldest-first
+      //    Shortage → "Needs Refill"; Surplus/Matched → "In Stock"
+      const clientLots = (rawLots as any[])
+        .filter(l => l.clientId === selectedClientId || l.client_id === selectedClientId)
+        .sort((a, b) => new Date(a.createdAt || a.created_at || 0).getTime() - new Date(b.createdAt || b.created_at || 0).getTime());
+
       const nonMatchedRows = comparisonRows.filter(r => r.result !== "matched");
       if (nonMatchedRows.length > 0 && clientLots.length > 0) {
         await Promise.allSettled(nonMatchedRows.map(async (r) => {
-          const lot = clientLots.find(l => l.code === r.code);
-          if (!lot) return;
-          const patch: Record<string, unknown> = { remaining: r.actual };
-          if (r.result === "shortage") {
-            patch.status = "Needs Refill";
-            patch.shortageQty = Math.abs(r.diff);
+          // Find all lots for this material code (may be >1 from different orders)
+          const materialLots = clientLots.filter(l => normalize(l.code || "") === normalize(r.code));
+          if (materialLots.length === 0) return;
+
+          if (materialLots.length === 1) {
+            // Simple single-lot update
+            const patch: Record<string, unknown> = { remaining: r.actual };
+            patch.status = r.result === "shortage" ? "Needs Refill" : "In Stock";
+            patch.shortageQty = r.result === "shortage" ? Math.abs(r.diff) : 0;
+            await api.patch(`/client-inventory/${materialLots[0].id}`, patch);
           } else {
-            // surplus or other — clear shortage flag
-            patch.status = "In Stock";
-            patch.shortageQty = 0;
+            // FIFO: fill oldest lots first, newest lot absorbs remainder
+            let remaining = r.actual;
+            await Promise.allSettled(materialLots.map(async (lot, idx) => {
+              const lotExpected = Number(lot.remaining ?? 0);
+              let lotActual: number;
+              if (idx < materialLots.length - 1) {
+                // Fill this lot first (up to its original remaining), then carry over
+                lotActual = Math.min(remaining, lotExpected);
+                remaining = Math.max(0, remaining - lotExpected);
+              } else {
+                // Last (newest) lot gets whatever is left
+                lotActual = remaining;
+              }
+              const patch: Record<string, unknown> = { remaining: lotActual };
+              if (lotActual < lotExpected) {
+                patch.status = "Needs Refill";
+                patch.shortageQty = lotExpected - lotActual;
+              } else {
+                patch.status = "In Stock";
+                patch.shortageQty = 0;
+              }
+              await api.patch(`/client-inventory/${lot.id}`, patch);
+            }));
           }
-          await api.patch(`/client-inventory/${lot.id}`, patch);
         }));
         qc.invalidateQueries({ queryKey: ["/api/client-inventory"] });
       }
@@ -389,7 +434,21 @@ export default function AuditsPage() {
 
   const initManualEntry = () => {
     if (clientInventory.length === 0) { toast.error(t.noInventoryForClient); return; }
-    setComparisonRows(clientInventory.map(inv => ({ material: inv.material, code: inv.code, unit: inv.unit, expected: inv.remaining, actual: inv.remaining, diff: 0, result: "matched" as const, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost })));
+    // Merge lots with the same code — show one row per unique material
+    const merged = new Map<string, { material: string; unit: string; expected: number; sellingPrice: number; storeCost: number; code: string }>();
+    for (const inv of clientInventory) {
+      const key = normalize(inv.code);
+      if (merged.has(key)) {
+        merged.get(key)!.expected += inv.remaining;
+      } else {
+        merged.set(key, { material: inv.material, code: inv.code, unit: inv.unit, expected: inv.remaining, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost });
+      }
+    }
+    setComparisonRows(Array.from(merged.values()).map(inv => ({
+      material: inv.material, code: inv.code, unit: inv.unit,
+      expected: inv.expected, actual: inv.expected, diff: 0,
+      result: "matched" as const, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost,
+    })));
     setStep("compare");
   };
 
