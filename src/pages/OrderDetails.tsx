@@ -3,7 +3,7 @@ import { useRef, useState, useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,11 @@ type OrderLine = {
   imageUrl: string; unit: string; quantity: number;
   sellingPrice: number; costPrice: number; lineTotal: number; lineCost: number;
 };
-type OrderDelivery = { id: string; date: string; actor: string; status: string; items: string };
+type OrderDelivery = {
+  id: string; orderId: string; client: string; clientId: string;
+  date: string; scheduledDate: string; status: string;
+  deliveredBy: string; deliveryFee: number; items: number; notes: string;
+};
 type FounderContrib = {
   founder: string; founderId?: string; amount: number; percentage: number;
   paid?: boolean; paidAt?: string;
@@ -88,6 +92,7 @@ export default function OrderDetails() {
   const [lines, setLines] = useState<OrderLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [payingFounder, setPayingFounder] = useState<string | null>(null);
+  const [orderDeliveries, setOrderDeliveries] = useState<OrderDelivery[]>([]);
 
   // Edit state
   const [editOpen, setEditOpen] = useState(false);
@@ -100,7 +105,8 @@ export default function OrderDetails() {
       api.get<any[]>("/orders"),
       api.get<OrderLine[]>(`/orders/${id}/lines`).catch(() => []),
       api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] })),
-    ]).then(([all, fetchedLines, extData]) => {
+      api.get<OrderDelivery[]>(`/deliveries?orderId=${id}`).catch(() => []),
+    ]).then(([all, fetchedLines, extData, deliveries]) => {
       const found = (all || []).find((o: any) => o.id === id);
       if (found) setOrder(mapOrder(found));
       const map: Record<string, ExtMaterial> = {};
@@ -114,6 +120,7 @@ export default function OrderDetails() {
         imageUrl: l.imageUrl || map[l.materialCode]?.imageUrl || "",
       }));
       setLines(enriched);
+      setOrderDeliveries(deliveries || []);
     });
 
   useEffect(() => {
@@ -702,32 +709,133 @@ export default function OrderDetails() {
 
         {/* ── DELIVERIES TAB ───────────────────────────────────────────── */}
         <TabsContent value="deliveries">
-          <div className="stat-card overflow-x-auto">
-            {order.deliveries.length > 0 ? (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.deliveryId}</th>
-                    <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.date}</th>
-                    <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.executor}</th>
-                    <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.deliveryItems}</th>
-                    <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {order.deliveries.map((del) => (
-                    <tr key={del.id} className="border-b border-border/50 cursor-pointer hover:bg-muted/30" onClick={() => navigate("/deliveries")}>
-                      <td className="py-2.5 px-3 font-mono text-xs text-primary">{del.id}</td>
-                      <td className="py-2.5 px-3">{del.date}</td>
-                      <td className="py-2.5 px-3">{del.actor}</td>
-                      <td className="py-2.5 px-3 text-muted-foreground">{del.items}</td>
-                      <td className="py-2.5 px-3"><StatusBadge status={del.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <div className="space-y-4">
+            {/* Header bar */}
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                {orderDeliveries.length > 0
+                  ? `${orderDeliveries.length} تسليم${orderDeliveries.length > 1 ? "ات" : ""} مسجّلة`
+                  : "لا توجد تسليمات مسجّلة لهذا الطلب"}
+              </p>
+              <Button variant="outline" size="sm" onClick={() => navigate("/deliveries")} data-testid="button-go-deliveries">
+                <ExternalLink className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />
+                إدارة التوصيلات
+              </Button>
+            </div>
+
+            {orderDeliveries.length === 0 ? (
+              <div className="stat-card flex flex-col items-center justify-center py-14 gap-3 text-center">
+                <Truck className="h-10 w-10 text-muted-foreground/40" />
+                <p className="text-muted-foreground text-sm">لا توجد توصيلات مرتبطة بهذا الطلب</p>
+                <Button size="sm" onClick={() => navigate("/deliveries")} data-testid="button-add-delivery">
+                  <Truck className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />
+                  تسجيل توصيلة جديدة
+                </Button>
+              </div>
             ) : (
-              <p className="py-10 text-center text-muted-foreground text-sm">لا توجد تسليمات مسجّلة لهذا الطلب</p>
+              <div className="space-y-3">
+                {orderDeliveries.map((del) => (
+                  <div
+                    key={del.id}
+                    className="stat-card p-0 overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => navigate("/deliveries")}
+                    data-testid={`card-delivery-${del.id}`}
+                  >
+                    {/* Card header */}
+                    <div className="flex items-center justify-between px-5 py-3.5 border-b border-border bg-muted/20">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10">
+                          <Truck className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <span className="font-mono text-sm font-bold text-primary" data-testid={`text-delivery-id-${del.id}`}>{del.id}</span>
+                        </div>
+                      </div>
+                      <StatusBadge status={del.status} />
+                    </div>
+
+                    {/* Card body — 2-col grid */}
+                    <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      {/* Who delivered */}
+                      <div className="flex items-start gap-2.5">
+                        <User className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="text-xs text-muted-foreground mb-0.5">المندوب / المسلِّم</div>
+                          <div className="text-sm font-semibold" data-testid={`text-deliveredby-${del.id}`}>
+                            {del.deliveredBy || "—"}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actual delivery date */}
+                      <div className="flex items-start gap-2.5">
+                        <CalendarDays className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="text-xs text-muted-foreground mb-0.5">تاريخ التسليم الفعلي</div>
+                          <div className="text-sm font-semibold" data-testid={`text-date-${del.id}`}>
+                            {del.date || "—"}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Scheduled date */}
+                      <div className="flex items-start gap-2.5">
+                        <CalendarDays className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="text-xs text-muted-foreground mb-0.5">الموعد المجدوَل</div>
+                          <div className="text-sm font-semibold" data-testid={`text-scheduleddate-${del.id}`}>
+                            {del.scheduledDate || "—"}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Items count */}
+                      <div className="flex items-start gap-2.5">
+                        <PackageCheck className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="text-xs text-muted-foreground mb-0.5">عدد العناصر</div>
+                          <div className="text-sm font-semibold" data-testid={`text-items-${del.id}`}>
+                            {del.items ?? 0} صنف
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Delivery fee */}
+                      <div className="flex items-start gap-2.5">
+                        <DollarSign className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="text-xs text-muted-foreground mb-0.5">رسوم التوصيل</div>
+                          <div className="text-sm font-semibold" data-testid={`text-deliveryfee-${del.id}`}>
+                            {toNum(del.deliveryFee).toLocaleString()} {t.currency}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Delivery number / tracking */}
+                      <div className="flex items-start gap-2.5">
+                        <Hash className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="text-xs text-muted-foreground mb-0.5">رقم التتبع</div>
+                          <div className="text-sm font-mono text-muted-foreground" data-testid={`text-tracking-${del.id}`}>
+                            {del.id}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Notes row (if any) */}
+                    {del.notes && (
+                      <div className="flex items-start gap-2.5 px-5 py-3 border-t border-border/50 bg-muted/10">
+                        <StickyNote className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="text-xs text-muted-foreground mb-0.5">ملاحظات</div>
+                          <div className="text-sm text-foreground" data-testid={`text-notes-${del.id}`}>{del.notes}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </TabsContent>

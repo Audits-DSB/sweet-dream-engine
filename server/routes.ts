@@ -445,8 +445,12 @@ router.delete("/requests/:id", async (req, res) => {
 });
 
 // ─── DELIVERIES ───────────────────────────────────────────────────────────────
-router.get("/deliveries", async (_req, res) => {
-  sbOk(res, await supabaseAdmin.from("deliveries").select("*").order("created_at", { ascending: false }));
+router.get("/deliveries", async (req, res) => {
+  const orderId = req.query.orderId ? String(req.query.orderId) : null;
+  const result = orderId
+    ? await supabaseAdmin.from("deliveries").select("*").eq("order_id", orderId).order("created_at", { ascending: false })
+    : await supabaseAdmin.from("deliveries").select("*").order("created_at", { ascending: false });
+  sbOk(res, result);
 });
 router.post("/deliveries", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("deliveries").insert(snakifyKeys(req.body)).select().single());
