@@ -4,6 +4,9 @@ import { Pool } from "pg";
 
 const router = Router();
 
+// ─── pgPool kept ONLY for migration endpoint (reads old local data) ───────────
+const pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
+
 // ─── EXTERNAL MATERIALS PROXY (queries the Lovable/catalog Supabase project) ──
 router.get("/external-materials", async (_req, res) => {
   try {
@@ -33,52 +36,6 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
-
-// ─── Local PG pool (for tables created in Replit's PostgreSQL) ────────────────
-const pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-// ─── Startup: ensure local tables exist ──────────────────────────────────────
-pgPool.query(`
-  CREATE TABLE IF NOT EXISTS delivery_actors (
-    id          TEXT PRIMARY KEY,
-    name        TEXT NOT NULL,
-    type        TEXT DEFAULT 'external',
-    phone       TEXT,
-    email       TEXT,
-    active      BOOLEAN DEFAULT TRUE,
-    founder_id  TEXT,
-    created_at  TIMESTAMPTZ DEFAULT NOW()
-  )
-`).catch((e: any) => console.error("delivery_actors table init error:", e.message));
-
-pgPool.query(`
-  CREATE TABLE IF NOT EXISTS order_lines (
-    id           SERIAL PRIMARY KEY,
-    order_id     TEXT NOT NULL,
-    material_code TEXT,
-    material_name TEXT,
-    image_url    TEXT,
-    unit         TEXT DEFAULT 'unit',
-    quantity     NUMERIC DEFAULT 1,
-    selling_price NUMERIC DEFAULT 0,
-    cost_price   NUMERIC DEFAULT 0,
-    line_total   NUMERIC DEFAULT 0,
-    line_cost    NUMERIC DEFAULT 0,
-    created_at   TIMESTAMPTZ DEFAULT NOW()
-  )
-`).catch((e: any) => console.error("order_lines table init error:", e.message));
-
-pgPool.query(`
-  CREATE TABLE IF NOT EXISTS order_founder_contributions (
-    order_id      TEXT PRIMARY KEY,
-    contributions JSONB DEFAULT '[]'::jsonb,
-    updated_at    TIMESTAMPTZ DEFAULT NOW()
-  )
-`).catch((e: any) => console.error("order_founder_contributions table init error:", e.message));
-
-// Add shortage_qty column if missing (safe migration)
-pgPool.query(`ALTER TABLE client_inventory ADD COLUMN IF NOT EXISTS shortage_qty NUMERIC(14,2) DEFAULT 0`)
-  .catch((e: any) => console.error("client_inventory shortage_qty migration error:", e.message));
 
 // ─── camelCase ↔ snake_case helpers ──────────────────────────────────────────
 const toCamel = (s: string) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
@@ -152,26 +109,23 @@ router.delete("/materials/:code", async (req, res) => {
 
 // ─── SUPPLIER MATERIALS ───────────────────────────────────────────────────────
 router.get("/suppliers/:id/materials", async (req, res) => {
-  try {
-    const { rows } = await pgPool.query("SELECT * FROM supplier_materials WHERE supplier_id=$1 ORDER BY material_name", [req.params.id]);
-    res.json(rows.map(camelizeKeys));
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  const { data, error } = await supabaseAdmin.from("supplier_materials").select("*").eq("supplier_id", req.params.id).order("material_name");
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(camelizeKeys(data));
 });
 router.post("/suppliers/:id/materials", async (req, res) => {
   const { materialCode, materialName } = req.body;
-  try {
-    await pgPool.query(
-      "INSERT INTO supplier_materials (supplier_id, material_code, material_name) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
-      [req.params.id, materialCode, materialName || ""]
-    );
-    res.json({ ok: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  const { error } = await supabaseAdmin.from("supplier_materials").upsert(
+    { supplier_id: req.params.id, material_code: materialCode, material_name: materialName || "" },
+    { onConflict: "supplier_id,material_code", ignoreDuplicates: true }
+  );
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
 });
 router.delete("/suppliers/:id/materials/:code", async (req, res) => {
-  try {
-    await pgPool.query("DELETE FROM supplier_materials WHERE supplier_id=$1 AND material_code=$2", [req.params.id, req.params.code]);
-    res.json({ ok: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  const { error } = await supabaseAdmin.from("supplier_materials").delete().eq("supplier_id", req.params.id).eq("material_code", req.params.code);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
 });
 
 // ─── FOUNDERS ─────────────────────────────────────────────────────────────────
@@ -183,12 +137,9 @@ router.post("/founders", async (req, res) => {
   if (!result.error && result.data) {
     const f = result.data;
     const actorId = `ACT-F-${f.id}`;
-    // Auto-create delivery actor for this founder (ignore if already exists)
-    await pgPool.query(
-      `INSERT INTO delivery_actors (id, name, type, phone, email, active, founder_id)
-       VALUES ($1, $2, 'founder', $3, $4, TRUE, $5)
-       ON CONFLICT (id) DO NOTHING`,
-      [actorId, f.name || "", f.phone || "", f.email || "", f.id]
+    await supabaseAdmin.from("delivery_actors").upsert(
+      { id: actorId, name: f.name || "", type: "founder", phone: f.phone || "", email: f.email || "", active: true, founder_id: f.id },
+      { onConflict: "id", ignoreDuplicates: true }
     ).catch(() => {});
   }
   sbOk(res, result);
@@ -198,80 +149,62 @@ router.patch("/founders/:id", async (req, res) => {
   if (!result.error && result.data) {
     const f = result.data;
     const actorId = `ACT-F-${f.id}`;
-    await pgPool.query(
-      `UPDATE delivery_actors SET name=$1, phone=$2, email=$3 WHERE id=$4`,
-      [f.name || "", f.phone || "", f.email || "", actorId]
-    ).catch(() => {});
+    await supabaseAdmin.from("delivery_actors").update({ name: f.name || "", phone: f.phone || "", email: f.email || "" }).eq("id", actorId).catch(() => {});
   }
   sbOk(res, result);
 });
 router.delete("/founders/:id", async (req, res) => {
   const { error } = await supabaseAdmin.from("founders").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
-  // Remove associated delivery actor
-  await pgPool.query("DELETE FROM delivery_actors WHERE founder_id = $1", [req.params.id]).catch(() => {});
+  await supabaseAdmin.from("delivery_actors").delete().eq("founder_id", req.params.id).catch(() => {});
   res.json({ ok: true });
 });
 
 // ─── DELIVERY ACTORS ──────────────────────────────────────────────────────────
 router.get("/delivery-actors/sync-founders", async (_req, res) => {
-  try {
-    const { data: founders } = await supabaseAdmin.from("founders").select("id,name,phone,email,active");
-    for (const f of founders || []) {
-      const actorId = `ACT-F-${f.id}`;
-      await pgPool.query(
-        `INSERT INTO delivery_actors (id, name, type, phone, email, active, founder_id)
-         VALUES ($1,$2,'founder',$3,$4,$5,$6)
-         ON CONFLICT (id) DO UPDATE SET name=$2, phone=$3, email=$4, active=$5`,
-        [actorId, f.name || "", f.phone || "", f.email || "", f.active !== false, f.id]
-      ).catch(() => {});
-    }
-    const { rows } = await pgPool.query("SELECT * FROM delivery_actors ORDER BY type DESC, name");
-    res.json(rows.map(camelizeKeys));
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  const { data: founders } = await supabaseAdmin.from("founders").select("id,name,phone,email,active");
+  for (const f of founders || []) {
+    const actorId = `ACT-F-${f.id}`;
+    await supabaseAdmin.from("delivery_actors").upsert(
+      { id: actorId, name: f.name || "", type: "founder", phone: f.phone || "", email: f.email || "", active: f.active !== false, founder_id: f.id },
+      { onConflict: "id" }
+    ).catch(() => {});
+  }
+  const { data, error } = await supabaseAdmin.from("delivery_actors").select("*").order("type", { ascending: false }).order("name");
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(camelizeKeys(data));
 });
 router.get("/delivery-actors", async (_req, res) => {
-  try {
-    const { rows } = await pgPool.query("SELECT * FROM delivery_actors ORDER BY type DESC, name");
-    res.json(rows.map(camelizeKeys));
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  const { data, error } = await supabaseAdmin.from("delivery_actors").select("*").order("type", { ascending: false }).order("name");
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(camelizeKeys(data));
 });
 router.post("/delivery-actors", async (req, res) => {
   const { id, name, type, phone, email, active, founderId } = req.body;
   const newId = id || `ACT-${Date.now()}`;
-  try {
-    const { rows } = await pgPool.query(
-      `INSERT INTO delivery_actors (id, name, type, phone, email, active, founder_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [newId, name || "", type || "external", phone || "", email || "", active !== false, founderId || null]
-    );
-    res.json(camelizeKeys(rows[0]));
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  const { data, error } = await supabaseAdmin.from("delivery_actors").insert(
+    { id: newId, name: name || "", type: type || "external", phone: phone || "", email: email || "", active: active !== false, founder_id: founderId || null }
+  ).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(camelizeKeys(data));
 });
 router.patch("/delivery-actors/:id", async (req, res) => {
   const { name, type, phone, email, active } = req.body;
-  try {
-    const sets: string[] = [];
-    const vals: any[] = [];
-    let i = 1;
-    if (name !== undefined)   { sets.push(`name=$${i++}`);   vals.push(name); }
-    if (type !== undefined)   { sets.push(`type=$${i++}`);   vals.push(type); }
-    if (phone !== undefined)  { sets.push(`phone=$${i++}`);  vals.push(phone); }
-    if (email !== undefined)  { sets.push(`email=$${i++}`);  vals.push(email); }
-    if (active !== undefined) { sets.push(`active=$${i++}`); vals.push(active); }
-    if (!sets.length) return res.json({ ok: true });
-    vals.push(req.params.id);
-    const { rows } = await pgPool.query(
-      `UPDATE delivery_actors SET ${sets.join(",")} WHERE id=$${i} RETURNING *`, vals
-    );
-    res.json(camelizeKeys(rows[0]));
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  const updates: any = {};
+  if (name !== undefined)   updates.name = name;
+  if (type !== undefined)   updates.type = type;
+  if (phone !== undefined)  updates.phone = phone;
+  if (email !== undefined)  updates.email = email;
+  if (active !== undefined) updates.active = active;
+  if (!Object.keys(updates).length) return res.json({ ok: true });
+  const { data, error } = await supabaseAdmin.from("delivery_actors").update(updates).eq("id", req.params.id).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(camelizeKeys(data));
 });
 router.delete("/delivery-actors/:id", async (req, res) => {
-  try {
-    await pgPool.query("DELETE FROM delivery_actors WHERE id=$1", [req.params.id]);
-    res.json({ ok: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  const { error } = await supabaseAdmin.from("delivery_actors").delete().eq("id", req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
 });
 
 // ─── ORDERS ───────────────────────────────────────────────────────────────────
@@ -285,16 +218,16 @@ router.get("/orders/next-id", async (_req, res) => {
   res.json({ nextId: `ORD-${String(max + 1).padStart(3, "0")}` });
 });
 router.get("/orders", async (_req, res) => {
-  const [ordersRes, clientsRes, contribRows] = await Promise.all([
+  const [ordersRes, clientsRes, contribRes] = await Promise.all([
     supabaseAdmin.from("orders").select("*").order("created_at", { ascending: false }),
     supabaseAdmin.from("clients").select("id,name"),
-    pgPool.query("SELECT order_id, contributions FROM order_founder_contributions").catch(() => ({ rows: [] })),
+    supabaseAdmin.from("order_founder_contributions").select("order_id,contributions"),
   ]);
   if (ordersRes.error) return res.status(400).json({ error: ordersRes.error.message });
   const clientMap: Record<string, string> = {};
   for (const c of clientsRes.data || []) clientMap[c.id] = c.name || c.id;
   const contribMap: Record<string, any[]> = {};
-  for (const r of (contribRows as any).rows || []) contribMap[r.order_id] = r.contributions || [];
+  for (const r of contribRes.data || []) contribMap[r.order_id] = r.contributions || [];
   const orders = (ordersRes.data || []).map(o => ({
     ...o,
     client: clientMap[o.client_id] || o.client_id || "",
@@ -312,99 +245,74 @@ router.post("/orders", async (req, res) => {
   }
   const orderId = result.data.id;
   if (Array.isArray(items) && items.length > 0) {
-    const values = items.map((item: any) => [
-      orderId,
-      String(item.materialCode || ""),
-      String(item.name || ""),
-      String(item.imageUrl || ""),
-      String(item.unit || "unit"),
-      Number(item.quantity) || 1,
-      Number(item.sellingPrice) || 0,
-      Number(item.costPrice) || 0,
-      (Number(item.sellingPrice) || 0) * (Number(item.quantity) || 1),
-      (Number(item.costPrice) || 0) * (Number(item.quantity) || 1),
-    ]);
-    const placeholders = values.map((_, i) =>
-      `($${i * 10 + 1},$${i * 10 + 2},$${i * 10 + 3},$${i * 10 + 4},$${i * 10 + 5},$${i * 10 + 6},$${i * 10 + 7},$${i * 10 + 8},$${i * 10 + 9},$${i * 10 + 10})`
-    ).join(",");
-    try {
-      await pgPool.query(
-        `INSERT INTO order_lines (order_id,material_code,material_name,image_url,unit,quantity,selling_price,cost_price,line_total,line_cost) VALUES ${placeholders}`,
-        values.flat()
-      );
-    } catch (e: any) {
-      console.error("order_lines insert error for", orderId, ":", e.message);
-      return res.status(207).json({ ...camelizeKeys(result.data), _linesError: e.message });
+    const lineRows = items.map((item: any) => ({
+      order_id: orderId,
+      material_code: String(item.materialCode || ""),
+      material_name: String(item.name || ""),
+      image_url: String(item.imageUrl || ""),
+      unit: String(item.unit || "unit"),
+      quantity: Number(item.quantity) || 1,
+      selling_price: Number(item.sellingPrice) || 0,
+      cost_price: Number(item.costPrice) || 0,
+      line_total: (Number(item.sellingPrice) || 0) * (Number(item.quantity) || 1),
+      line_cost: (Number(item.costPrice) || 0) * (Number(item.quantity) || 1),
+    }));
+    const { error: linesErr } = await supabaseAdmin.from("order_lines").insert(lineRows);
+    if (linesErr) {
+      console.error("order_lines insert error for", orderId, ":", linesErr.message);
+      return res.status(207).json({ ...camelizeKeys(result.data), _linesError: linesErr.message });
     }
   }
-  // Save founderContributions to pgPool
+  // Save founderContributions to Supabase
   if (Array.isArray(founderContributions) && founderContributions.length > 0) {
-    await pgPool.query(
-      `INSERT INTO order_founder_contributions (order_id, contributions) VALUES ($1, $2)
-       ON CONFLICT (order_id) DO UPDATE SET contributions = $2, updated_at = NOW()`,
-      [orderId, JSON.stringify(founderContributions)]
+    await supabaseAdmin.from("order_founder_contributions").upsert(
+      { order_id: orderId, contributions: founderContributions, updated_at: new Date().toISOString() },
+      { onConflict: "order_id" }
     ).catch((e: any) => console.error("founder_contributions insert error:", e.message));
   }
   res.json({ ...camelizeKeys(result.data), founderContributions: founderContributions || [] });
 });
 router.get("/orders/:id/lines", async (req, res) => {
-  try {
-    const { rows } = await pgPool.query(
-      "SELECT * FROM order_lines WHERE order_id = $1 ORDER BY id",
-      [req.params.id]
-    );
-    res.json(rows.map(camelizeKeys));
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
+  const { data, error } = await supabaseAdmin.from("order_lines").select("*").eq("order_id", req.params.id).order("id");
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(camelizeKeys(data));
 });
 router.patch("/order-lines/:id", async (req, res) => {
-  try {
-    const { quantity, sellingPrice, costPrice } = req.body;
-    const lineTotal = (quantity ?? 0) * (sellingPrice ?? 0);
-    const lineCost = (quantity ?? 0) * (costPrice ?? 0);
-    const { rows } = await pgPool.query(
-      `UPDATE order_lines SET quantity=$1, selling_price=$2, cost_price=$3, line_total=$4, line_cost=$5 WHERE id=$6 RETURNING *`,
-      [quantity, sellingPrice, costPrice, lineTotal, lineCost, req.params.id]
-    );
-    res.json(camelizeKeys(rows[0] || {}));
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
+  const { quantity, sellingPrice, costPrice } = req.body;
+  const lineTotal = (quantity ?? 0) * (sellingPrice ?? 0);
+  const lineCost = (quantity ?? 0) * (costPrice ?? 0);
+  const { data, error } = await supabaseAdmin.from("order_lines").update(
+    { quantity, selling_price: sellingPrice, cost_price: costPrice, line_total: lineTotal, line_cost: lineCost }
+  ).eq("id", req.params.id).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(camelizeKeys(data || {}));
 });
 router.patch("/orders/:id", async (req, res) => {
   const { founderContributions, ...rest } = req.body;
-  // Update pgPool contributions if provided
+  // Update Supabase contributions if provided
   if (Array.isArray(founderContributions)) {
-    await pgPool.query(
-      `INSERT INTO order_founder_contributions (order_id, contributions) VALUES ($1, $2)
-       ON CONFLICT (order_id) DO UPDATE SET contributions = $2, updated_at = NOW()`,
-      [req.params.id, JSON.stringify(founderContributions)]
+    await supabaseAdmin.from("order_founder_contributions").upsert(
+      { order_id: req.params.id, contributions: founderContributions, updated_at: new Date().toISOString() },
+      { onConflict: "order_id" }
     ).catch((e: any) => console.error("patch founder_contributions error:", e.message));
   }
   // Only send non-empty rest to Supabase
   if (Object.keys(rest).length === 0) {
-    const { rows } = await pgPool.query(
-      "SELECT contributions FROM order_founder_contributions WHERE order_id=$1",
-      [req.params.id]
-    ).catch(() => ({ rows: [] }));
-    return res.json({ id: req.params.id, founderContributions: rows[0]?.contributions || [] });
+    const { data: contribData } = await supabaseAdmin.from("order_founder_contributions").select("contributions").eq("order_id", req.params.id).single();
+    return res.json({ id: req.params.id, founderContributions: contribData?.contributions || [] });
   }
   const { data, error } = await supabaseAdmin.from("orders").update(snakifyKeys(rest)).eq("id", req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
   // Enrich with contributions
-  const { rows } = await pgPool.query(
-    "SELECT contributions FROM order_founder_contributions WHERE order_id=$1",
-    [req.params.id]
-  ).catch(() => ({ rows: [] }));
-  return res.json({ ...camelizeKeys(data), founderContributions: rows[0]?.contributions || founderContributions || [] });
+  const { data: contribData } = await supabaseAdmin.from("order_founder_contributions").select("contributions").eq("order_id", req.params.id).single();
+  return res.json({ ...camelizeKeys(data), founderContributions: contribData?.contributions || founderContributions || [] });
 });
 router.delete("/orders/:id", async (req, res) => {
   const { error } = await supabaseAdmin.from("orders").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   await Promise.all([
-    pgPool.query("DELETE FROM order_lines WHERE order_id = $1", [req.params.id]).catch(() => {}),
-    pgPool.query("DELETE FROM order_founder_contributions WHERE order_id = $1", [req.params.id]).catch(() => {}),
+    supabaseAdmin.from("order_lines").delete().eq("order_id", req.params.id).catch(() => {}),
+    supabaseAdmin.from("order_founder_contributions").delete().eq("order_id", req.params.id).catch(() => {}),
   ]);
   res.json({ ok: true });
 });
@@ -541,39 +449,29 @@ router.patch("/deliveries/:id", async (req, res) => {
     const deliveryDate = del.date || new Date().toISOString().split("T")[0];
     try {
       // Avoid duplicates: skip if already inserted for this order
-      const { rows: existing } = await pgPool.query(
-        "SELECT 1 FROM client_inventory WHERE source_order=$1 AND client_id=$2 LIMIT 1",
-        [orderId, clientId]
-      );
-      if (existing.length === 0) {
-        // Fetch order lines from local PG
-        const { rows: lines } = await pgPool.query(
-          "SELECT * FROM order_lines WHERE order_id=$1",
-          [orderId]
-        );
+      const { data: existing } = await supabaseAdmin.from("client_inventory").select("id").eq("source_order", orderId).eq("client_id", clientId).limit(1);
+      if (!existing || existing.length === 0) {
+        // Fetch order lines from Supabase
+        const { data: lines } = await supabaseAdmin.from("order_lines").select("*").eq("order_id", orderId);
         // Fetch client name from Supabase
         const { data: clientData } = await supabaseAdmin.from("clients").select("name").eq("id", clientId).single();
         const clientName = clientData?.name || clientId;
-        if (lines.length > 0) {
-          const vals: any[] = [];
-          const placeholders = lines.map((line: any, i: number) => {
-            const base = i * 12;
-            const id = `CI-${orderId}-${line.material_code || i}-${Date.now()}`;
-            vals.push(
-              id, clientId, clientName,
-              line.material_name || "", line.material_code || "", line.unit || "unit",
-              Number(line.quantity) || 0, Number(line.quantity) || 0,
-              Number(line.selling_price) || 0, Number(line.cost_price) || 0,
-              deliveryDate, orderId
-            );
-            return `($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12})`;
-          });
-          await pgPool.query(
-            `INSERT INTO client_inventory
-              (id,client_id,client_name,material,code,unit,delivered,remaining,selling_price,store_cost,delivery_date,source_order)
-             VALUES ${placeholders.join(",")}`,
-            vals
-          );
+        if (lines && lines.length > 0) {
+          const ciRows = lines.map((line: any) => ({
+            id: `CI-${orderId}-${line.material_code || line.id}-${Date.now()}`,
+            client_id: clientId,
+            client_name: clientName,
+            material: line.material_name || "",
+            code: line.material_code || "",
+            unit: line.unit || "unit",
+            delivered: Number(line.quantity) || 0,
+            remaining: Number(line.quantity) || 0,
+            selling_price: Number(line.selling_price) || 0,
+            store_cost: Number(line.cost_price) || 0,
+            delivery_date: deliveryDate,
+            source_order: orderId,
+          }));
+          await supabaseAdmin.from("client_inventory").insert(ciRows);
         }
       }
     } catch (e: any) {
@@ -616,110 +514,48 @@ router.patch("/inventory/:code", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("inventory").update(body).eq("material_code", req.params.code).select().single());
 });
 
-// ─── CLIENT INVENTORY (local PG) ─────────────────────────────────────────────
-function pgOk(res: any, rows: any[]) { return res.json(camelizeKeys(rows)); }
-function pgOne(res: any, rows: any[]) {
-  if (!rows.length) return res.status(404).json({ error: "Not found" });
-  return res.json(camelizeKeys(rows[0]));
-}
-
+// ─── CLIENT INVENTORY (Supabase) ─────────────────────────────────────────────
 router.get("/client-inventory", async (req, res) => {
-  try {
-    const { clientId } = req.query as { clientId?: string };
-    const { rows } = clientId
-      ? await pgPool.query("SELECT * FROM client_inventory WHERE client_id=$1 ORDER BY created_at DESC", [clientId])
-      : await pgPool.query("SELECT * FROM client_inventory ORDER BY created_at DESC");
-    pgOk(res, rows);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  const { clientId } = req.query as { clientId?: string };
+  let q = supabaseAdmin.from("client_inventory").select("*").order("created_at", { ascending: false });
+  if (clientId) q = q.eq("client_id", clientId);
+  const { data, error } = await q;
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(camelizeKeys(data));
 });
 router.get("/client-inventory/:id", async (req, res) => {
-  try {
-    const { rows } = await pgPool.query("SELECT * FROM client_inventory WHERE id=$1", [req.params.id]);
-    pgOne(res, rows);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  const { data, error } = await supabaseAdmin.from("client_inventory").select("*").eq("id", req.params.id).single();
+  if (error) return res.status(error.code === "PGRST116" ? 404 : 500).json({ error: error.message });
+  res.json(camelizeKeys(data));
 });
 router.post("/client-inventory", async (req, res) => {
-  try {
-    const body = snakifyKeys(req.body);
-    const keys = Object.keys(body);
-    const vals = keys.map((_, i) => `$${i + 1}`);
-    const { rows } = await pgPool.query(
-      `INSERT INTO client_inventory (${keys.join(",")}) VALUES (${vals.join(",")}) RETURNING *`,
-      Object.values(body)
-    );
-    pgOne(res, rows);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  sbOk(res, await supabaseAdmin.from("client_inventory").insert(snakifyKeys(req.body)).select().single());
 });
 router.patch("/client-inventory/:id", async (req, res) => {
-  try {
-    const body = snakifyKeys(req.body);
-    const keys = Object.keys(body);
-    const sets = keys.map((k, i) => `${k}=$${i + 1}`);
-    const { rows } = await pgPool.query(
-      `UPDATE client_inventory SET ${sets.join(",")} WHERE id=$${keys.length + 1} RETURNING *`,
-      [...Object.values(body), req.params.id]
-    );
-    pgOne(res, rows);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  sbOk(res, await supabaseAdmin.from("client_inventory").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
 router.delete("/client-inventory/:id", async (req, res) => {
-  try {
-    const { rows } = await pgPool.query("DELETE FROM client_inventory WHERE id=$1 RETURNING *", [req.params.id]);
-    pgOne(res, rows);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  sbOk(res, await supabaseAdmin.from("client_inventory").delete().eq("id", req.params.id).select().single());
 });
 
-// ─── AUDITS (local PG) ────────────────────────────────────────────────────────
+// ─── AUDITS (Supabase) ────────────────────────────────────────────────────────
 router.get("/audits", async (_req, res) => {
-  try {
-    const { rows } = await pgPool.query("SELECT * FROM audits ORDER BY created_at DESC");
-    pgOk(res, rows);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  sbOk(res, await supabaseAdmin.from("audits").select("*").order("created_at", { ascending: false }));
 });
 router.get("/audits/next-id", async (_req, res) => {
-  try {
-    const { rows } = await pgPool.query("SELECT COUNT(*) FROM audits");
-    const nextNum = parseInt(rows[0].count, 10) + 1;
-    res.json({ nextId: `AUD-${String(nextNum).padStart(3, "0")}` });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  const { count, error } = await supabaseAdmin.from("audits").select("*", { count: "exact", head: true });
+  if (error) return res.status(500).json({ error: error.message });
+  const nextNum = (count || 0) + 1;
+  res.json({ nextId: `AUD-${String(nextNum).padStart(3, "0")}` });
 });
 router.post("/audits", async (req, res) => {
-  try {
-    const body = snakifyKeys(req.body);
-    const keys = Object.keys(body).map(k => k === "comparison" ? k : k);
-    const vals = keys.map((_, i) => `$${i + 1}`);
-    const values = Object.keys(body).map(k => {
-      const v = body[k];
-      return typeof v === "object" && v !== null ? JSON.stringify(v) : v;
-    });
-    const { rows } = await pgPool.query(
-      `INSERT INTO audits (${keys.join(",")}) VALUES (${vals.join(",")}) RETURNING *`,
-      values
-    );
-    pgOne(res, rows);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  sbOk(res, await supabaseAdmin.from("audits").insert(snakifyKeys(req.body)).select().single());
 });
 router.patch("/audits/:id", async (req, res) => {
-  try {
-    const body = snakifyKeys(req.body);
-    const keys = Object.keys(body);
-    const sets = keys.map((k, i) => `${k}=$${i + 1}`);
-    const values = keys.map(k => {
-      const v = body[k];
-      return typeof v === "object" && v !== null ? JSON.stringify(v) : v;
-    });
-    const { rows } = await pgPool.query(
-      `UPDATE audits SET ${sets.join(",")} WHERE id=$${keys.length + 1} RETURNING *`,
-      [...values, req.params.id]
-    );
-    pgOne(res, rows);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  sbOk(res, await supabaseAdmin.from("audits").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
 router.delete("/audits/:id", async (req, res) => {
-  try {
-    const { rows } = await pgPool.query("DELETE FROM audits WHERE id=$1 RETURNING *", [req.params.id]);
-    pgOne(res, rows);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  sbOk(res, await supabaseAdmin.from("audits").delete().eq("id", req.params.id).select().single());
 });
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
@@ -877,29 +713,76 @@ router.delete("/founder-transactions/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── BUSINESS RULES (local PG) ────────────────────────────────────────────────
+// ─── BUSINESS RULES (Supabase) ────────────────────────────────────────────────
 router.get("/business-rules", async (_req, res) => {
-  try {
-    const { rows } = await pgPool.query("SELECT * FROM business_rules WHERE id = 'default'");
-    if (!rows.length) return res.json({});
-    res.json(camelizeKeys(rows[0]));
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  const { data, error } = await supabaseAdmin.from("business_rules").select("*").eq("id", "default").single();
+  if (error && error.code !== "PGRST116") return res.status(500).json({ error: error.message });
+  res.json(camelizeKeys(data || {}));
 });
 
 router.put("/business-rules", async (req, res) => {
+  const body = { ...snakifyKeys(req.body), id: "default", updated_at: new Date().toISOString() };
+  sbOk(res, await supabaseAdmin.from("business_rules").upsert(body, { onConflict: "id" }).select().single());
+});
+
+// ─── DATA MIGRATION: copy all local pgPool tables → Supabase ─────────────────
+// Run once after creating tables in Supabase SQL editor
+router.post("/migrate-to-supabase", async (req, res) => {
+  const results: Record<string, any> = {};
   try {
-    const body = snakifyKeys(req.body);
-    delete body.id;
-    body.updated_at = new Date().toISOString();
-    const keys = Object.keys(body);
-    const sets = keys.map((k, i) => `${k}=$${i + 1}`);
-    const { rows } = await pgPool.query(
-      `UPDATE business_rules SET ${sets.join(",")} WHERE id='default' RETURNING *`,
-      Object.values(body)
-    );
-    if (!rows.length) return res.status(404).json({ error: "Not found" });
-    res.json(camelizeKeys(rows[0]));
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+    // 1. order_lines
+    const { rows: lines } = await pgPool.query("SELECT * FROM order_lines").catch(() => ({ rows: [] }));
+    if (lines.length > 0) {
+      const { error } = await supabaseAdmin.from("order_lines").upsert(lines, { onConflict: "id" });
+      results.order_lines = error ? `error: ${error.message}` : `migrated ${lines.length}`;
+    } else results.order_lines = "empty or table missing";
+
+    // 2. order_founder_contributions
+    const { rows: contribs } = await pgPool.query("SELECT * FROM order_founder_contributions").catch(() => ({ rows: [] }));
+    if (contribs.length > 0) {
+      const { error } = await supabaseAdmin.from("order_founder_contributions").upsert(contribs, { onConflict: "order_id" });
+      results.order_founder_contributions = error ? `error: ${error.message}` : `migrated ${contribs.length}`;
+    } else results.order_founder_contributions = "empty or table missing";
+
+    // 3. client_inventory
+    const { rows: ci } = await pgPool.query("SELECT * FROM client_inventory").catch(() => ({ rows: [] }));
+    if (ci.length > 0) {
+      const { error } = await supabaseAdmin.from("client_inventory").upsert(ci, { onConflict: "id" });
+      results.client_inventory = error ? `error: ${error.message}` : `migrated ${ci.length}`;
+    } else results.client_inventory = "empty or table missing";
+
+    // 4. delivery_actors
+    const { rows: da } = await pgPool.query("SELECT * FROM delivery_actors").catch(() => ({ rows: [] }));
+    if (da.length > 0) {
+      const { error } = await supabaseAdmin.from("delivery_actors").upsert(da, { onConflict: "id" });
+      results.delivery_actors = error ? `error: ${error.message}` : `migrated ${da.length}`;
+    } else results.delivery_actors = "empty or table missing";
+
+    // 5. supplier_materials
+    const { rows: sm } = await pgPool.query("SELECT * FROM supplier_materials").catch(() => ({ rows: [] }));
+    if (sm.length > 0) {
+      const { error } = await supabaseAdmin.from("supplier_materials").upsert(sm, { onConflict: "supplier_id,material_code" });
+      results.supplier_materials = error ? `error: ${error.message}` : `migrated ${sm.length}`;
+    } else results.supplier_materials = "empty or table missing";
+
+    // 6. audits
+    const { rows: au } = await pgPool.query("SELECT * FROM audits").catch(() => ({ rows: [] }));
+    if (au.length > 0) {
+      const { error } = await supabaseAdmin.from("audits").upsert(au, { onConflict: "id" });
+      results.audits = error ? `error: ${error.message}` : `migrated ${au.length}`;
+    } else results.audits = "empty or table missing";
+
+    // 7. business_rules
+    const { rows: br } = await pgPool.query("SELECT * FROM business_rules").catch(() => ({ rows: [] }));
+    if (br.length > 0) {
+      const { error } = await supabaseAdmin.from("business_rules").upsert(br, { onConflict: "id" });
+      results.business_rules = error ? `error: ${error.message}` : `migrated ${br.length}`;
+    } else results.business_rules = "empty or table missing";
+
+    res.json({ ok: true, results });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message, results });
+  }
 });
 
 export default router;
