@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { logAudit } from "@/lib/auditLog";
+import { useQueryClient } from "@tanstack/react-query";
 import { useBusinessRules } from "@/lib/useBusinessRules";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import {
@@ -79,6 +80,7 @@ export default function OrdersPage() {
   const [selectedFounders, setSelectedFounders] = useState<string[]>([]);
   const [founderPcts, setFounderPcts] = useState<Record<string, number>>({});
   const [collectionsMap, setCollectionsMap] = useState<Record<string, { paid: number; total: number; collectionId: string }>>({});
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -254,9 +256,13 @@ export default function OrdersPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
+      const snapshot = { ...deleteTarget, collectionPaid: collectionsMap[deleteTarget.id]?.paid ?? 0, collectionTotal: collectionsMap[deleteTarget.id]?.total ?? 0 };
       await api.delete(`/orders/${deleteTarget.id}`);
-      await logAudit({ entity: "order", entityId: deleteTarget.id, entityName: `${deleteTarget.id} - ${deleteTarget.client}`, action: "delete", snapshot: deleteTarget as any, endpoint: "/orders" });
+      await logAudit({ entity: "order", entityId: deleteTarget.id, entityName: `${deleteTarget.id} - ${deleteTarget.client}`, action: "delete", snapshot: snapshot as any, endpoint: "/orders" });
       setOrders(prev => prev.filter(o => o.id !== deleteTarget.id));
+      setCollectionsMap(prev => { const next = { ...prev }; delete next[deleteTarget.id]; return next; });
+      // Invalidate profit page cache so it reflects the deletion immediately
+      queryClient.invalidateQueries({ queryKey: ["orders_full"] });
       setDeleteTarget(null);
       toast.success(`تم حذف الطلب: ${deleteTarget.id}`);
     } catch (err: any) {

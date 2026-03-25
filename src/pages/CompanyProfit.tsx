@@ -4,7 +4,8 @@ import { useBusinessRules, getCompanyShareRatio, getFounderShareRatio } from "@/
 import { StatCard } from "@/components/StatCard";
 import {
   TrendingUp, TrendingDown, DollarSign, Percent, Download, Wallet,
-  Plus, ArrowUpRight, ArrowDownRight, Minus, ShoppingCart, Receipt, Trash2, Loader2
+  Plus, ArrowUpRight, ArrowDownRight, Minus, Receipt, Trash2, Loader2,
+  Users, Building2, ChevronDown, ChevronUp, ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { exportToCsv } from "@/lib/exportCsv";
@@ -31,14 +32,22 @@ import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 
 const EXPENSE_CATEGORIES = ["marketing", "operations", "salaries", "supplies", "rent", "utilities", "logistics", "maintenance", "other"] as const;
 
-type MonthDetail = {
-  month: string;
-  monthKey: string;
-  revenue: number;
-  cost: number;
-  profit: number;
-  orders: Array<{ id: string; orderNumber?: string; order_number?: string; clientName?: string; client_name?: string; totalCost?: number; total_cost?: number; status: string; createdAt?: string; created_at?: string }>;
-  expenses: Array<{ id: string; amount: number; category: string | null; description: string | null; created_at: string }>;
+type ProfitEntry = {
+  collectionId: string;
+  orderId: string;
+  client: string;
+  date: string;
+  totalCollection: number;
+  paidAmount: number;
+  paidRatio: number;
+  grossProfit: number;
+  realizedProfit: number;
+  companyProfitPct: number;
+  companyProfit: number;
+  foundersProfit: number;
+  founderShares: Array<{ id: string; name: string; amount: number; pct: number }>;
+  status: string;
+  lastPaymentDate: string;
 };
 
 export default function CompanyProfitPage() {
@@ -49,11 +58,12 @@ export default function CompanyProfitPage() {
   const queryClient = useQueryClient();
   const [monthsFilter, setMonthsFilter] = useState("6");
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState<MonthDetail | null>(null);
   const [expenseForm, setExpenseForm] = useState({ amount: "", category: "operations" as typeof EXPENSE_CATEGORIES[number], description: "", accountId: "" });
   const [submitting, setSubmitting] = useState(false);
-  const [deleteTxTarget, setDeleteTxTarget] = useState<MonthDetail["expenses"][number] | null>(null);
+  const [deleteTxTarget, setDeleteTxTarget] = useState<any | null>(null);
   const [deletingTx, setDeletingTx] = useState(false);
+  const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
+  const [selectedProfitEntry, setSelectedProfitEntry] = useState<ProfitEntry | null>(null);
   const { rules } = useBusinessRules();
 
   const parseAmount = (val: unknown): number => {
@@ -61,6 +71,21 @@ export default function CompanyProfitPage() {
     if (typeof val === "number") return val;
     const cleaned = String(val).replace(/[^\d.-]/g, "");
     return parseFloat(cleaned) || 0;
+  };
+
+  const parseJsonField = (v: unknown) => {
+    if (!v) return [];
+    if (typeof v === "object") return v as any;
+    try { return JSON.parse(v as string); } catch { return []; }
+  };
+
+  const parsePaymentsHistory = (raw: any): { date: string; amount: number; method: string }[] => {
+    if (!raw) return [];
+    let parsed = raw;
+    if (typeof raw === "string") { try { parsed = JSON.parse(raw); } catch { return []; } }
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed?.history && Array.isArray(parsed.history)) return parsed.history;
+    return [];
   };
 
   const { data: accounts, isLoading: loadingAccounts } = useQuery({
@@ -73,9 +98,19 @@ export default function CompanyProfitPage() {
     queryFn: () => api.get<any[]>("/treasury/transactions"),
   });
 
-  const { data: orders, isLoading: loadingOrders } = useQuery({
-    queryKey: ["orders"],
+  const { data: rawOrders, isLoading: loadingOrders } = useQuery({
+    queryKey: ["orders_full"],
     queryFn: () => api.get<any[]>("/orders"),
+  });
+
+  const { data: collections, isLoading: loadingCollections } = useQuery({
+    queryKey: ["collections"],
+    queryFn: () => api.get<any[]>("/collections"),
+  });
+
+  const { data: founders, isLoading: loadingFounders } = useQuery({
+    queryKey: ["founders"],
+    queryFn: () => api.get<any[]>("/founders"),
   });
 
   const totalBalance = useMemo(() => {
@@ -83,30 +118,110 @@ export default function CompanyProfitPage() {
     return accounts.reduce((sum, a) => sum + parseAmount(a.balance), 0);
   }, [accounts]);
 
-  const { monthlyPnL, totals, expenseBreakdown, comparison, monthDetails } = useMemo(() => {
+  // Build order map: orderId → full order data
+  const orderMap = useMemo(() => {
+    const map: Record<string, any> = {};
+    (rawOrders || []).forEach((o: any) => { map[o.id] = o; });
+    return map;
+  }, [rawOrders]);
+
+  // Build founder map: founderId → name
+  const founderMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    (founders || []).forEach((f: any) => { map[f.id] = f.name || f.alias || f.id; });
+    return map;
+  }, [founders]);
+
+  // Build profit ledger from collections × orders (only where order still exists)
+  const profitLedger = useMemo((): ProfitEntry[] => {
+    if (!collections || !rawOrders) return [];
     const cutoff = subMonths(new Date(), parseInt(monthsFilter));
-    const monthlyData: Record<string, {
-      revenue: number;
-      cost: number;
-      expCats: Record<string, number>;
-      orders: typeof orders;
-      expenses: typeof transactions;
-    }> = {};
+
+    return (collections as any[])
+      .filter((col: any) => {
+        const orderId = col.order || col.orderId || col.order_id || "";
+        return orderId && orderMap[orderId]; // only show if linked order still exists
+      })
+      .map((col: any): ProfitEntry | null => {
+        const orderId = col.order || col.orderId || col.order_id || "";
+        const order = orderMap[orderId];
+        if (!order) return null;
+
+        const issueDate = col.issueDate || col.issue_date || col.createdAt || col.created_at || "";
+        let d: Date;
+        try { d = parseISO(issueDate); } catch { return null; }
+        if (d < cutoff) return null;
+
+        const totalCollection = parseAmount(col.total ?? col.totalAmount);
+        const paidAmount = parseAmount(col.paid ?? col.paidAmount);
+        const paidRatio = totalCollection > 0 ? paidAmount / totalCollection : 0;
+
+        const totalSelling = parseAmount(order.totalSelling ?? order.total_selling);
+        const totalCost = parseAmount(order.totalCost ?? order.total_cost);
+        const grossProfit = totalSelling - totalCost;
+        const realizedProfit = grossProfit * paidRatio;
+
+        // Get company profit percentage from order (snapshotted at creation)
+        const contribs = parseJsonField(order.founderContributions ?? order.founder_contributions);
+        const contribArray = Array.isArray(contribs) ? contribs : [];
+        const snappedPct = contribArray[0]?.companyProfitPercentage ?? rules.companyProfitPercentage ?? 15;
+        const companyProfit = Math.round(realizedProfit * snappedPct / 100);
+        const foundersProfit = Math.round(realizedProfit * (1 - snappedPct / 100));
+
+        // Founder shares
+        const founderShares = contribArray.map((fc: any) => {
+          const founderName = fc.founder || founderMap[fc.founderId] || fc.founderId || "مؤسس";
+          const founderPct = fc.percentage || 0;
+          const founderAmount = Math.round(fc.amount * paidRatio);
+          return { id: fc.founderId || founderName, name: founderName, amount: founderAmount, pct: founderPct };
+        });
+
+        // Last payment date from history
+        const paymentHistory = parsePaymentsHistory(col.payments);
+        const sortedPayments = [...paymentHistory].sort((a, b) => a.date > b.date ? -1 : 1);
+        const lastPaymentDate = sortedPayments[0]?.date || issueDate;
+
+        return {
+          collectionId: col.id,
+          orderId,
+          client: col.client || order.client || "",
+          date: issueDate.split("T")[0],
+          totalCollection,
+          paidAmount,
+          paidRatio,
+          grossProfit,
+          realizedProfit,
+          companyProfitPct: snappedPct,
+          companyProfit,
+          foundersProfit,
+          founderShares,
+          status: col.status || "Pending",
+          lastPaymentDate: lastPaymentDate.split("T")[0],
+        };
+      })
+      .filter(Boolean) as ProfitEntry[];
+  }, [collections, rawOrders, orderMap, founderMap, monthsFilter, rules.companyProfitPercentage]);
+
+  // Monthly chart data from profit ledger
+  const { monthlyPnL, totals, expenseBreakdown, comparison } = useMemo(() => {
+    const cutoff = subMonths(new Date(), parseInt(monthsFilter));
+    const monthlyData: Record<string, { revenue: number; cost: number; companyProfit: number; foundersProfit: number }> = {};
 
     const ensureMonth = (key: string) => {
-      if (!monthlyData[key]) monthlyData[key] = { revenue: 0, cost: 0, expCats: {}, orders: [], expenses: [] };
+      if (!monthlyData[key]) monthlyData[key] = { revenue: 0, cost: 0, companyProfit: 0, foundersProfit: 0 };
     };
 
-    (orders || []).forEach((o) => {
-      const d = parseISO(o.createdAt || o.created_at);
-      if (d < cutoff) return;
-      const key = format(d, "yyyy-MM");
+    // Revenue from collections
+    profitLedger.forEach((entry) => {
+      const key = entry.date.substring(0, 7); // yyyy-MM
       ensureMonth(key);
-      monthlyData[key].revenue += parseAmount(o.totalCost ?? o.total_cost);
-      monthlyData[key].orders = [...(monthlyData[key].orders || []), o];
+      monthlyData[key].revenue += entry.paidAmount;
+      monthlyData[key].companyProfit += entry.companyProfit;
+      monthlyData[key].foundersProfit += entry.foundersProfit;
     });
 
-    (transactions || []).forEach((tx) => {
+    // Expenses from treasury transactions
+    (transactions || []).forEach((tx: any) => {
       const d = parseISO(tx.createdAt || tx.created_at);
       if (d < cutoff) return;
       const key = format(d, "yyyy-MM");
@@ -114,49 +229,24 @@ export default function CompanyProfitPage() {
       const txType = tx.txType || tx.tx_type;
       if (txType === "expense" || txType === "withdrawal") {
         monthlyData[key].cost += Math.abs(parseAmount(tx.amount));
-        const cat = tx.category || "other";
-        monthlyData[key].expCats[cat] = (monthlyData[key].expCats[cat] || 0) + Math.abs(parseAmount(tx.amount));
-        monthlyData[key].expenses = [...(monthlyData[key].expenses || []), tx];
       }
     });
 
     const sorted = Object.entries(monthlyData).sort(([a], [b]) => a.localeCompare(b));
-
-    const pnl = sorted.map(([key, d]) => {
-      const profit = d.revenue - d.cost;
-      return {
-        month: format(parseISO(key + "-01"), "MMM yyyy"),
-        monthKey: key,
-        revenue: d.revenue,
-        cost: d.cost,
-        profit,
-        companyShare: profit > 0 ? Math.round(profit * getCompanyShareRatio(rules)) : 0,
-        founderShare: profit > 0 ? Math.round(profit * getFounderShareRatio(rules)) : 0,
-      };
-    });
-
-    const details: Record<string, MonthDetail> = {};
-    sorted.forEach(([key, d]) => {
-      const profit = d.revenue - d.cost;
-      details[key] = {
-        month: format(parseISO(key + "-01"), "MMM yyyy"),
-        monthKey: key,
-        revenue: d.revenue,
-        cost: d.cost,
-        profit,
-        orders: (d.orders || []) as MonthDetail["orders"],
-        expenses: ((d.expenses || []) as MonthDetail["expenses"]),
-      };
-    });
+    const pnl = sorted.map(([key, d]) => ({
+      month: format(parseISO(key + "-01"), "MMM yyyy"),
+      monthKey: key,
+      revenue: d.revenue,
+      cost: d.cost,
+      profit: d.companyProfit + d.foundersProfit,
+      companyShare: d.companyProfit,
+      founderShare: d.foundersProfit,
+    }));
 
     const comparisonData = pnl.map((m, i) => {
       const prev = i > 0 ? pnl[i - 1] : null;
       return {
-        month: m.month,
-        monthKey: m.monthKey,
-        revenue: m.revenue,
-        cost: m.cost,
-        profit: m.profit,
+        ...m,
         revenueChange: prev ? m.revenue - prev.revenue : 0,
         revenueChangePercent: prev && prev.revenue > 0 ? ((m.revenue - prev.revenue) / prev.revenue) * 100 : 0,
         costChange: prev ? m.cost - prev.cost : 0,
@@ -166,18 +256,21 @@ export default function CompanyProfitPage() {
       };
     });
 
+    // Expense breakdown by category
     const expAgg: Record<string, number> = {};
-    sorted.forEach(([, d]) => {
-      Object.entries(d.expCats).forEach(([cat, val]) => {
-        expAgg[cat] = (expAgg[cat] || 0) + val;
-      });
+    (transactions || []).forEach((tx: any) => {
+      const d = parseISO(tx.createdAt || tx.created_at);
+      if (d < cutoff) return;
+      const txType = tx.txType || tx.tx_type;
+      if (txType === "expense" || txType === "withdrawal") {
+        const cat = tx.category || "other";
+        expAgg[cat] = (expAgg[cat] || 0) + Math.abs(parseAmount(tx.amount));
+      }
     });
     const totalExp = Object.values(expAgg).reduce((s, v) => s + v, 0) || 1;
     const colors = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
     const breakdown = Object.entries(expAgg).map(([name, value], i) => ({
-      name,
-      value: Math.round((value / totalExp) * 100),
-      color: colors[i % colors.length],
+      name, value: Math.round((value / totalExp) * 100), color: colors[i % colors.length],
     }));
 
     const tRev = pnl.reduce((s, m) => s + m.revenue, 0);
@@ -190,38 +283,32 @@ export default function CompanyProfitPage() {
       totals: { revenue: tRev, cost: tCost, profit: tProfit, companyShare: tCompany, margin: tRev > 0 ? ((tProfit / tRev) * 100).toFixed(1) : "0" },
       expenseBreakdown: breakdown.length > 0 ? breakdown : [{ name: "other", value: 100, color: colors[0] }],
       comparison: comparisonData,
-      monthDetails: details,
     };
-  }, [orders, transactions, monthsFilter, rules.companyProfitPercentage]);
+  }, [profitLedger, transactions, monthsFilter]);
 
-  const isLoading = loadingAccounts || loadingTx || loadingOrders;
+  const isLoading = loadingAccounts || loadingTx || loadingOrders || loadingCollections || loadingFounders;
 
   const categoryLabel = (key: string | null) => {
     if (!key) return t.other;
     const map: Record<string, string> = {
-      marketing: t.treasury_cat_marketing,
-      operations: t.operations,
-      salaries: t.treasury_cat_salaries,
-      supplies: t.treasury_cat_supplies,
-      rent: t.treasury_cat_rent,
-      utilities: t.treasury_cat_utilities,
-      logistics: t.deliveryCost,
-      maintenance: t.treasury_cat_maintenance,
-      other: t.other,
+      marketing: t.treasury_cat_marketing, operations: t.operations, salaries: t.treasury_cat_salaries,
+      supplies: t.treasury_cat_supplies, rent: t.treasury_cat_rent, utilities: t.treasury_cat_utilities,
+      logistics: t.deliveryCost, maintenance: t.treasury_cat_maintenance, other: t.other,
     };
     return map[key] || key;
   };
 
   const fmtNum = (n: number) => n.toLocaleString(lang === "ar" ? "ar-EG" : "en-US");
 
-  const handleChartClick = (data: { activePayload?: Array<{ payload: { monthKey: string } }> }) => {
-    if (!data?.activePayload?.[0]) return;
-    const key = data.activePayload[0].payload.monthKey;
-    if (monthDetails[key]) setSelectedMonth(monthDetails[key]);
+  const statusColor = (s: string) => {
+    if (s === "Paid") return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
+    if (s === "Partial") return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
+    return "bg-muted text-muted-foreground";
   };
-
-  const handleBarClick = (data: { monthKey: string }) => {
-    if (data?.monthKey && monthDetails[data.monthKey]) setSelectedMonth(monthDetails[data.monthKey]);
+  const statusLabel = (s: string) => {
+    if (s === "Paid") return "مكتمل";
+    if (s === "Partial") return "جزئي";
+    return "معلّق";
   };
 
   const handleAddExpense = async () => {
@@ -236,21 +323,13 @@ export default function CompanyProfitPage() {
     }
     const account = accounts?.find(a => a.id === expenseForm.accountId);
     if (!account) return;
-
     setSubmitting(true);
     try {
       const newBalance = account.balance - amount;
       await api.post("/treasury/transactions", {
-        id: `TX-${Date.now()}`,
-        accountId: expenseForm.accountId,
-        amount: -amount,
-        txType: "expense",
-        category: expenseForm.category,
-        description: expenseForm.description || null,
-        balanceAfter: newBalance,
-        performedBy: user?.id || null,
-        date: new Date().toISOString().split("T")[0],
-        newBalance,
+        id: `TX-${Date.now()}`, accountId: expenseForm.accountId, amount: -amount,
+        txType: "expense", category: expenseForm.category, description: expenseForm.description || null,
+        balanceAfter: newBalance, performedBy: user?.id || null, date: new Date().toISOString().split("T")[0], newBalance,
       });
       toast({ title: t.success, description: t.expenseAdded });
       setExpenseDialogOpen(false);
@@ -259,9 +338,7 @@ export default function CompanyProfitPage() {
       queryClient.invalidateQueries({ queryKey: ["treasury_accounts"] });
     } catch (err) {
       toast({ title: t.error, description: String(err), variant: "destructive" });
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
   };
 
   const handleDeleteExpense = async () => {
@@ -270,31 +347,17 @@ export default function CompanyProfitPage() {
     try {
       await api.delete(`/treasury/transactions/${deleteTxTarget.id}`);
       await logAudit({
-        entity: "treasury_transaction",
-        entityId: deleteTxTarget.id,
+        entity: "treasury_transaction", entityId: deleteTxTarget.id,
         entityName: `${categoryLabel(deleteTxTarget.category)} — ${Math.abs(deleteTxTarget.amount).toLocaleString()} ${t.currency}`,
-        action: "delete",
-        snapshot: deleteTxTarget as any,
-        endpoint: "/treasury/transactions",
+        action: "delete", snapshot: deleteTxTarget, endpoint: "/treasury/transactions",
       });
       queryClient.invalidateQueries({ queryKey: ["treasury_transactions"] });
       queryClient.invalidateQueries({ queryKey: ["treasury_accounts"] });
-      // Remove from selectedMonth view
-      if (selectedMonth) {
-        setSelectedMonth(prev => prev ? {
-          ...prev,
-          expenses: prev.expenses.filter(e => e.id !== deleteTxTarget.id),
-          cost: prev.cost - Math.abs(deleteTxTarget.amount),
-          profit: prev.profit + Math.abs(deleteTxTarget.amount),
-        } : prev);
-      }
-      toast({ title: t.success, description: "تم حذف العملية بنجاح وتم تعديل رصيد الحساب" });
+      toast({ title: t.success, description: "تم حذف العملية بنجاح" });
       setDeleteTxTarget(null);
     } catch (err) {
       toast({ title: t.error, description: String(err), variant: "destructive" });
-    } finally {
-      setDeletingTx(false);
-    }
+    } finally { setDeletingTx(false); }
   };
 
   const ChangeIndicator = ({ value, percent }: { value: number; percent: number }) => {
@@ -316,6 +379,7 @@ export default function CompanyProfitPage() {
           {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-28" />)}
         </div>
         <Skeleton className="h-72" />
+        <Skeleton className="h-64" />
       </div>
     );
   }
@@ -330,9 +394,7 @@ export default function CompanyProfitPage() {
         </div>
         <div className="flex items-center gap-2">
           <Select value={monthsFilter} onValueChange={setMonthsFilter}>
-            <SelectTrigger className="w-[140px] h-9">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger className="w-[140px] h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="3">3 {t.monthsLabel}</SelectItem>
               <SelectItem value="6">6 {t.monthsLabel}</SelectItem>
@@ -341,14 +403,10 @@ export default function CompanyProfitPage() {
           </Select>
           <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" className="h-9">
-                <Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addExpense}
-              </Button>
+              <Button size="sm" className="h-9"><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addExpense}</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{t.addExpense}</DialogTitle>
-              </DialogHeader>
+              <DialogHeader><DialogTitle>{t.addExpense}</DialogTitle></DialogHeader>
               <div className="space-y-4 pt-2">
                 <div className="space-y-2">
                   <Label>{t.treasurySelectAccount} *</Label>
@@ -370,9 +428,7 @@ export default function CompanyProfitPage() {
                   <Select value={expenseForm.category} onValueChange={(v) => setExpenseForm(f => ({ ...f, category: v as typeof EXPENSE_CATEGORIES[number] }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {EXPENSE_CATEGORIES.map(c => (
-                        <SelectItem key={c} value={c}>{categoryLabel(c)}</SelectItem>
-                      ))}
+                      {EXPENSE_CATEGORIES.map(c => <SelectItem key={c} value={c}>{categoryLabel(c)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -381,12 +437,14 @@ export default function CompanyProfitPage() {
                   <Textarea value={expenseForm.description} onChange={(e) => setExpenseForm(f => ({ ...f, description: e.target.value }))} placeholder={t.optionalDesc} />
                 </div>
                 <Button onClick={handleAddExpense} disabled={submitting} className="w-full">
-                  {submitting ? t.loading : t.addExpense}
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : t.addExpense}
                 </Button>
               </div>
             </DialogContent>
           </Dialog>
-          <Button variant="outline" size="sm" className="h-9" onClick={() => exportToCsv("company_profit", [t.month, t.revenue, t.cost, t.profit, t.companyCol, t.foundersCol], monthlyPnL.map(m => [m.month, m.revenue, m.cost, m.profit, m.companyShare, m.founderShare]))}>
+          <Button variant="outline" size="sm" className="h-9"
+            onClick={() => exportToCsv("company_profit", ["التاريخ", "رقم التحصيل", "الطلب", "العميل", "المُحصَّل", "الربح الإجمالي", "ربح الشركة", "ربح المؤسسين", "الحالة"],
+              profitLedger.map(e => [e.date, e.collectionId, e.orderId, e.client, e.paidAmount, e.realizedProfit, e.companyProfit, e.foundersProfit, statusLabel(e.status)]))}>
             <Download className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.export}
           </Button>
         </div>
@@ -395,10 +453,141 @@ export default function CompanyProfitPage() {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard title={t.totalBalance} value={`${fmtNum(totalBalance)} ${t.currency}`} change={`${accounts?.length || 0} ${t.accountsCount}`} changeType="neutral" icon={Wallet} />
-        <StatCard title={t.totalRevenue} value={`${fmtNum(totals.revenue)} ${t.currency}`} change={`${monthsFilter} ${t.monthsLabel}`} changeType="neutral" icon={DollarSign} />
-        <StatCard title={t.totalProfitsCompany} value={`${fmtNum(totals.profit)} ${t.currency}`} change={`${t.marginPercent} ${totals.margin}%`} changeType="positive" icon={TrendingUp} />
-        <StatCard title={t.companyShare} value={`${fmtNum(totals.companyShare)} ${t.currency}`} change={t.retained} changeType="positive" icon={Percent} />
-        <StatCard title={t.totalCostCompany} value={`${fmtNum(totals.cost)} ${t.currency}`} change={`${totals.revenue > 0 ? ((totals.cost / totals.revenue) * 100).toFixed(0) : 0}% ${t.ofRevenue}`} changeType="negative" icon={TrendingDown} />
+        <StatCard title="إجمالي المُحصَّل" value={`${fmtNum(totals.revenue)} ${t.currency}`} change={`${monthsFilter} ${t.monthsLabel}`} changeType="neutral" icon={DollarSign} />
+        <StatCard title="إجمالي الأرباح المحققة" value={`${fmtNum(totals.profit)} ${t.currency}`} change={`هامش ${totals.margin}%`} changeType="positive" icon={TrendingUp} />
+        <StatCard title={t.companyShare} value={`${fmtNum(totals.companyShare)} ${t.currency}`} change={`${profitLedger.length} تحصيل`} changeType="positive" icon={Percent} />
+        <StatCard title={t.totalCostCompany} value={`${fmtNum(totals.cost)} ${t.currency}`} change={`${totals.revenue > 0 ? ((totals.cost / totals.revenue) * 100).toFixed(0) : 0}% من المُحصَّل`} changeType="negative" icon={TrendingDown} />
+      </div>
+
+      {/* ===== PROFIT LEDGER ===== */}
+      <div className="stat-card overflow-x-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-sm flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-primary" />
+            سجل الأرباح من التحصيلات
+          </h3>
+          <span className="text-xs text-muted-foreground">{profitLedger.length} سجل · انقر لعرض التوزيع</span>
+        </div>
+        {profitLedger.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            <p>لا توجد أرباح مسجّلة من التحصيلات في هذه الفترة</p>
+            <p className="text-xs mt-1">تظهر الأرباح تلقائياً عند تسجيل مدفوعات في صفحة التحصيلات</p>
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">التاريخ</th>
+                <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">الطلب</th>
+                <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">العميل</th>
+                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">المُحصَّل</th>
+                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">الربح المحقق</th>
+                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">حصة الشركة</th>
+                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">حصة المؤسسين</th>
+                <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">الحالة</th>
+                <th className="py-2.5 px-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {profitLedger.map((entry) => (
+                <>
+                  <tr
+                    key={entry.collectionId}
+                    className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => setExpandedEntry(expandedEntry === entry.collectionId ? null : entry.collectionId)}
+                  >
+                    <td className="py-2.5 px-3 text-muted-foreground text-xs">{entry.lastPaymentDate}</td>
+                    <td className="py-2.5 px-3">
+                      <button
+                        className="font-mono text-xs text-primary hover:underline"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/orders/${entry.orderId}`); }}
+                        data-testid={`link-profit-order-${entry.orderId}`}
+                      >
+                        {entry.orderId}
+                      </button>
+                    </td>
+                    <td className="py-2.5 px-3 font-medium text-sm">{entry.client}</td>
+                    <td className="py-2.5 px-3 text-end">
+                      <span className="font-medium">{fmtNum(entry.paidAmount)}</span>
+                      <span className="text-muted-foreground text-xs"> / {fmtNum(entry.totalCollection)}</span>
+                    </td>
+                    <td className="py-2.5 px-3 text-end font-semibold text-success">{fmtNum(entry.realizedProfit)} {t.currency}</td>
+                    <td className="py-2.5 px-3 text-end">
+                      <span className="text-primary font-medium">{fmtNum(entry.companyProfit)}</span>
+                      <span className="text-muted-foreground text-xs"> ({entry.companyProfitPct}%)</span>
+                    </td>
+                    <td className="py-2.5 px-3 text-end">{fmtNum(entry.foundersProfit)} {t.currency}</td>
+                    <td className="py-2.5 px-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor(entry.status)}`}>
+                        {statusLabel(entry.status)}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      {expandedEntry === entry.collectionId
+                        ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground inline" />
+                        : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground inline" />}
+                    </td>
+                  </tr>
+                  {expandedEntry === entry.collectionId && (
+                    <tr key={`${entry.collectionId}-expanded`} className="bg-muted/20 border-b border-border/50">
+                      <td colSpan={9} className="px-4 py-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* Company share box */}
+                          <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Building2 className="h-4 w-4 text-primary" />
+                              <span className="text-xs font-semibold text-primary">حصة الشركة</span>
+                            </div>
+                            <p className="text-lg font-bold text-primary">{fmtNum(entry.companyProfit)} {t.currency}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {entry.companyProfitPct}% من الربح المحقق · محفوظة في <span className="font-medium">حسابات الشركة</span>
+                            </p>
+                          </div>
+                          {/* Founders shares */}
+                          <div className="rounded-lg border border-border bg-muted/30 p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Users className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-xs font-semibold">توزيع المؤسسين</span>
+                            </div>
+                            {entry.founderShares.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">لا يوجد توزيع للمؤسسين</p>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {entry.founderShares.map((fs) => (
+                                  <div key={fs.id} className="flex items-center justify-between text-xs">
+                                    <span className="font-medium">{fs.name}</span>
+                                    <div className="text-end">
+                                      <span className="font-semibold">{fmtNum(fs.amount)} {t.currency}</span>
+                                      <span className="text-muted-foreground mr-1">({fs.pct}%)</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {/* Meta info */}
+                          <div className="sm:col-span-2 flex flex-wrap gap-4 text-xs text-muted-foreground pt-1">
+                            <span>رقم التحصيل: <span className="font-mono text-foreground">{entry.collectionId}</span></span>
+                            <span>تاريخ آخر دفعة: <span className="text-foreground">{entry.lastPaymentDate}</span></span>
+                            <span>نسبة التحصيل: <span className="text-foreground">{(entry.paidRatio * 100).toFixed(0)}%</span></span>
+                            <span>الربح الإجمالي للطلب: <span className="text-foreground">{fmtNum(entry.grossProfit)} {t.currency}</span></span>
+                            <button
+                              className="text-primary hover:underline flex items-center gap-1"
+                              onClick={() => navigate(`/collections?orderId=${entry.orderId}`)}
+                            >
+                              <ExternalLink className="h-3 w-3" /> فتح التحصيل
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Monthly Comparison */}
@@ -411,18 +600,19 @@ export default function CompanyProfitPage() {
             <thead>
               <tr className="border-b border-border">
                 <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.month}</th>
-                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.revenue}</th>
+                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">المُحصَّل</th>
                 <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.change}</th>
                 <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.cost}</th>
                 <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.change}</th>
-                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.profit}</th>
+                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">الربح</th>
                 <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.change}</th>
-                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground"></th>
+                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">الشركة</th>
+                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">المؤسسون</th>
               </tr>
             </thead>
             <tbody>
               {comparison.map((m, i) => (
-                <tr key={m.month} className="border-b border-border/50 hover:bg-muted/30 cursor-pointer" onClick={() => monthDetails[m.monthKey] && setSelectedMonth(monthDetails[m.monthKey])}>
+                <tr key={m.month} className="border-b border-border/50 hover:bg-muted/30">
                   <td className="py-2.5 px-3 font-medium">{m.month}</td>
                   <td className="py-2.5 px-3 text-end">{fmtNum(m.revenue)} {t.currency}</td>
                   <td className="py-2.5 px-3 text-end">{i > 0 ? <ChangeIndicator value={m.revenueChange} percent={m.revenueChangePercent} /> : "-"}</td>
@@ -430,7 +620,8 @@ export default function CompanyProfitPage() {
                   <td className="py-2.5 px-3 text-end">{i > 0 ? <ChangeIndicator value={-m.costChange} percent={-m.costChangePercent} /> : "-"}</td>
                   <td className="py-2.5 px-3 text-end font-medium text-success">{fmtNum(m.profit)} {t.currency}</td>
                   <td className="py-2.5 px-3 text-end">{i > 0 ? <ChangeIndicator value={m.profitChange} percent={m.profitChangePercent} /> : "-"}</td>
-                  <td className="py-2.5 px-3 text-end text-xs text-muted-foreground">{t.viewDetails} →</td>
+                  <td className="py-2.5 px-3 text-end text-primary font-medium">{fmtNum(m.companyShare)} {t.currency}</td>
+                  <td className="py-2.5 px-3 text-end">{fmtNum(m.founderShare)} {t.currency}</td>
                 </tr>
               ))}
             </tbody>
@@ -442,17 +633,16 @@ export default function CompanyProfitPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="stat-card lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm">{t.revenueProfitTrend}</h3>
-            <span className="text-xs text-muted-foreground">{t.clickForDetails}</span>
+            <h3 className="font-semibold text-sm">اتجاه التحصيل والأرباح</h3>
           </div>
           <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={monthlyPnL} onClick={handleChartClick} className="cursor-pointer">
+            <LineChart data={monthlyPnL}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <ReTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
-              <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} name={t.revenue} dot={{ r: 4, cursor: "pointer" }} activeDot={{ r: 6 }} />
-              <Line type="monotone" dataKey="profit" stroke="hsl(var(--chart-2))" strokeWidth={2} name={t.profit} dot={{ r: 4, cursor: "pointer" }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} name="المُحصَّل" dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey="profit" stroke="hsl(var(--chart-2))" strokeWidth={2} name="الربح" dot={{ r: 4 }} activeDot={{ r: 6 }} />
               <Line type="monotone" dataKey="cost" stroke="hsl(var(--muted-foreground))" strokeWidth={1} strokeDasharray="5 5" name={t.cost} />
             </LineChart>
           </ResponsiveContainer>
@@ -480,160 +670,71 @@ export default function CompanyProfitPage() {
 
       {/* Profit Distribution Bar */}
       <div className="stat-card">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-sm">{t.profitDistribution}</h3>
-          <span className="text-xs text-muted-foreground">{t.clickForDetails}</span>
-        </div>
+        <h3 className="font-semibold text-sm mb-4">{t.profitDistribution}</h3>
         <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={monthlyPnL} onClick={handleChartClick} className="cursor-pointer">
+          <BarChart data={monthlyPnL}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
             <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
             <ReTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
-            <Bar dataKey="companyShare" stackId="a" fill="hsl(var(--primary))" name={t.company15} />
-            <Bar dataKey="founderShare" stackId="a" fill="hsl(var(--chart-2))" name={t.founders85} radius={[4, 4, 0, 0]}
-              onClick={handleBarClick}
-            />
+            <Bar dataKey="companyShare" stackId="a" fill="hsl(var(--primary))" name="الشركة" />
+            <Bar dataKey="founderShare" stackId="a" fill="hsl(var(--chart-2))" name="المؤسسون" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Monthly PnL Table */}
+      {/* Expenses from Treasury */}
       <div className="stat-card overflow-x-auto">
-        <h3 className="font-semibold text-sm mb-4">{t.monthlyPnL}</h3>
-        {monthlyPnL.length === 0 ? (
-          <p className="text-muted-foreground text-sm text-center py-8">{t.noDataPeriod}</p>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-sm flex items-center gap-2">
+            <Receipt className="h-4 w-4 text-destructive" />
+            سجل المصروفات
+          </h3>
+        </div>
+        {(transactions || []).filter((tx: any) => ["expense", "withdrawal"].includes(tx.txType || tx.tx_type)).length === 0 ? (
+          <p className="text-muted-foreground text-sm text-center py-6">لا توجد مصروفات مسجّلة</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.month}</th>
-                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.revenue}</th>
-                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.cost}</th>
-                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.profit}</th>
-                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.margin}</th>
-                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.companyCol}</th>
-                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">{t.foundersCol}</th>
+                <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">التاريخ</th>
+                <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">الفئة</th>
+                <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">الوصف</th>
+                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">المبلغ</th>
+                <th className="py-2.5 px-3"></th>
               </tr>
             </thead>
             <tbody>
-              {monthlyPnL.map((m) => (
-                <tr key={m.month} className="border-b border-border/50 hover:bg-muted/30 cursor-pointer" onClick={() => monthDetails[m.monthKey] && setSelectedMonth(monthDetails[m.monthKey])}>
-                  <td className="py-2.5 px-3 font-medium">{m.month}</td>
-                  <td className="py-2.5 px-3 text-end">{fmtNum(m.revenue)} {t.currency}</td>
-                  <td className="py-2.5 px-3 text-end text-muted-foreground">{fmtNum(m.cost)} {t.currency}</td>
-                  <td className="py-2.5 px-3 text-end font-medium text-success">{fmtNum(m.profit)} {t.currency}</td>
-                  <td className="py-2.5 px-3 text-end">{m.revenue > 0 ? ((m.profit / m.revenue) * 100).toFixed(1) : "0"}%</td>
-                  <td className="py-2.5 px-3 text-end text-primary font-medium">{fmtNum(m.companyShare)} {t.currency}</td>
-                  <td className="py-2.5 px-3 text-end">{fmtNum(m.founderShare)} {t.currency}</td>
-                </tr>
-              ))}
+              {(transactions || [])
+                .filter((tx: any) => ["expense", "withdrawal"].includes(tx.txType || tx.tx_type))
+                .sort((a: any, b: any) => (b.createdAt || b.created_at || "").localeCompare(a.createdAt || a.created_at || ""))
+                .map((tx: any) => (
+                  <tr key={tx.id} className="border-b border-border/50 hover:bg-muted/30 group">
+                    <td className="py-2.5 px-3 text-xs text-muted-foreground">{(tx.date || tx.createdAt || tx.created_at || "").split("T")[0]}</td>
+                    <td className="py-2.5 px-3"><span className="text-xs bg-muted px-2 py-0.5 rounded">{categoryLabel(tx.category)}</span></td>
+                    <td className="py-2.5 px-3 text-muted-foreground text-xs">{tx.description || "—"}</td>
+                    <td className="py-2.5 px-3 text-end font-medium text-destructive">{fmtNum(Math.abs(parseAmount(tx.amount)))} {t.currency}</td>
+                    <td className="py-2.5 px-3 text-end">
+                      <button
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive/80"
+                        onClick={() => setDeleteTxTarget(tx)}
+                        data-testid={`button-delete-expense-${tx.id}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         )}
       </div>
 
-      {/* Month Detail Sheet */}
-      <Sheet open={!!selectedMonth} onOpenChange={(o) => !o && setSelectedMonth(null)}>
-        <SheetContent side={lang === "ar" ? "left" : "right"} className="w-full sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle className="flex items-center justify-between">
-              <span>{selectedMonth?.month} — {t.details}</span>
-            </SheetTitle>
-          </SheetHeader>
-          {selectedMonth && (
-            <div className="mt-4 space-y-6">
-              {/* Summary */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="stat-card p-3 text-center">
-                  <p className="text-xs text-muted-foreground">{t.revenue}</p>
-                  <p className="font-semibold text-sm mt-1">{fmtNum(selectedMonth.revenue)}</p>
-                </div>
-                <div className="stat-card p-3 text-center">
-                  <p className="text-xs text-muted-foreground">{t.cost}</p>
-                  <p className="font-semibold text-sm mt-1 text-destructive">{fmtNum(selectedMonth.cost)}</p>
-                </div>
-                <div className="stat-card p-3 text-center">
-                  <p className="text-xs text-muted-foreground">{t.profit}</p>
-                  <p className="font-semibold text-sm mt-1 text-success">{fmtNum(selectedMonth.profit)}</p>
-                </div>
-              </div>
-
-              {/* Orders */}
-              <div>
-                <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                  <ShoppingCart className="h-4 w-4 text-primary" />
-                  {t.orders} ({selectedMonth.orders.length})
-                </h4>
-                {selectedMonth.orders.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">{t.noDataPeriod}</p>
-                ) : (
-                  <div className="space-y-2">
-                    {selectedMonth.orders.map((o) => (
-                      <div key={o.id} className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-muted/20 cursor-pointer hover:bg-muted/40" onClick={() => navigate(`/orders/${o.id}`)}>
-                        <div>
-                          <p className="text-xs font-medium">{o.orderNumber || o.order_number || o.id}</p>
-                          <p className="text-xs text-muted-foreground">{o.clientName || o.client_name || o.client}</p>
-                        </div>
-                        <div className="text-end">
-                          <p className="text-xs font-semibold">{fmtNum(parseAmount(o.totalCost ?? o.total_cost))} {t.currency}</p>
-                          <Badge variant="outline" className="text-xs mt-0.5">{o.status}</Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Expenses */}
-              <div>
-                <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                  <Receipt className="h-4 w-4 text-destructive" />
-                  {t.expenses || t.totalCostCompany} ({selectedMonth.expenses.length})
-                </h4>
-                {selectedMonth.expenses.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">{t.noDataPeriod}</p>
-                ) : (
-                  <div className="space-y-2">
-                    {selectedMonth.expenses.map((e) => (
-                      <div key={e.id} className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-muted/20 group">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium">{categoryLabel(e.category)}</p>
-                          {e.description && <p className="text-xs text-muted-foreground truncate">{e.description}</p>}
-                          <p className="text-xs text-muted-foreground">{e.created_at ? format(parseISO(e.created_at), "d MMM") : ""}</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <p className="text-xs font-semibold text-destructive">-{fmtNum(Math.abs(e.amount))} {t.currency}</p>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => setDeleteTxTarget(e)}
-                            data-testid={`button-delete-tx-${e.id}`}
-                            title="حذف العملية"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
-
       <ConfirmDeleteDialog
         open={!!deleteTxTarget}
-        onOpenChange={(open) => !open && setDeleteTxTarget(null)}
-        title="حذف العملية المالية"
-        description={
-          deleteTxTarget
-            ? `هل تريد حذف عملية "${categoryLabel(deleteTxTarget.category)}" بقيمة ${Math.abs(deleteTxTarget.amount).toLocaleString()} ${t.currency}؟ سيتم استعادة المبلغ لرصيد الحساب تلقائياً.`
-            : ""
-        }
+        onOpenChange={(o) => !o && setDeleteTxTarget(null)}
+        title="حذف المصروف"
+        description={`هل تريد حذف هذا المصروف؟ سيتم إعادة المبلغ إلى رصيد الحساب.`}
         onConfirm={handleDeleteExpense}
         loading={deletingTx}
       />
