@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "start": "node server.js"
+    "start": "tsx server/index.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
