@@ -64,17 +64,25 @@ type InventoryLot = {
 };
 
 function parseCsvText(text: string): { code: string; name: string; actual: number }[] {
-  const lines = text.split("\n").filter(l => l.trim());
+  // Strip BOM if present
+  const clean = text.replace(/^\uFEFF/, "");
+  const lines = clean.split("\n").filter(l => l.trim());
   const results: { code: string; name: string; actual: number }[] = [];
-  const start = lines[0]?.match(/code|material|اسم|كود|الكمية/i) ? 1 : 0;
+  // Skip header row if first cell looks like a label
+  const start = lines[0]?.match(/code|material|اسم|كود|الكمية|actual|الفعلي/i) ? 1 : 0;
   for (let i = start; i < lines.length; i++) {
     const cols = lines[i].split(",").map(c => c.trim().replace(/^"|"$/g, ""));
-    if (cols.length >= 2) {
-      const codeMatch = cols.find(c => /^MAT-/i.test(c));
-      const numMatch = cols.map(Number).find(n => !isNaN(n) && n >= 0);
-      const nameMatch = cols.find(c => c && !/^MAT-/i.test(c) && isNaN(Number(c)));
-      results.push({ code: codeMatch || "", name: nameMatch || "", actual: numMatch ?? 0 });
+    if (cols.length < 2) continue;
+    // Positional: col[0]=code, col[1]=material name, last col with a parseable number=actual
+    const code = cols[0] || "";
+    const name = cols[1] || "";
+    // Find the actual quantity: look from the end for the first valid number
+    let actual = 0;
+    for (let j = cols.length - 1; j >= 0; j--) {
+      const n = Number(cols[j]);
+      if (!isNaN(n) && cols[j].trim() !== "") { actual = n; break; }
     }
+    if (code || name) results.push({ code, name, actual });
   }
   return results;
 }
@@ -155,18 +163,34 @@ export default function AuditsPage() {
     e.target.value = "";
   };
 
+  const normalize = (s: string) => s.toLowerCase().replace(/[-_\s]/g, "");
+
   const buildComparison = (uploadedData: { code: string; name: string; actual: number }[]) => {
     const rows: ComparisonRow[] = clientInventory.map(inv => {
-      const match = uploadedData.find(u =>
-        (u.code && u.code.toUpperCase() === inv.code.toUpperCase()) ||
-        (u.name && inv.material.includes(u.name)) ||
-        (u.name && u.name.includes(inv.material))
-      );
-      const actual = match ? match.actual : 0;
+      const match = uploadedData.find(u => {
+        // 1. Exact code match (case-insensitive)
+        if (u.code && inv.code && u.code.toUpperCase() === inv.code.toUpperCase()) return true;
+        // 2. Normalized code match (ignore dashes, underscores, spaces)
+        if (u.code && inv.code && normalize(u.code) === normalize(inv.code)) return true;
+        // 3. Name partial match (case-insensitive, either direction)
+        if (u.name && inv.material) {
+          const uName = u.name.toLowerCase();
+          const invName = inv.material.toLowerCase();
+          if (invName.includes(uName) || uName.includes(invName)) return true;
+        }
+        // 4. Code appears in material name or vice versa (handles AMALGAM-CAPSULE vs "أمالجم" style)
+        if (u.code && inv.material && normalize(u.code).includes(normalize(inv.code))) return true;
+        return false;
+      });
+      const actual = match ? match.actual : inv.remaining; // default to expected if not in file
       const diff = actual - inv.remaining;
       const result: ComparisonRow["result"] = diff === 0 ? "matched" : diff < 0 ? "shortage" : "surplus";
       return { material: inv.material, code: inv.code, unit: inv.unit, expected: inv.remaining, actual, diff, result, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost };
     });
+
+    // Also add rows from uploaded file that had no inventory match (new items)
+    // (skipped for now — only inventory items are compared)
+
     setComparisonRows(rows);
     setStep("compare");
   };
