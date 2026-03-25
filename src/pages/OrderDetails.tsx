@@ -3,8 +3,13 @@ import { useRef, useState, useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { logAudit } from "@/lib/auditLog";
@@ -84,6 +89,12 @@ export default function OrderDetails() {
   const [loading, setLoading] = useState(true);
   const [payingFounder, setPayingFounder] = useState<string | null>(null);
 
+  // Edit state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ status: "", date: "", source: "", deliveryFee: "" });
+  const [editLines, setEditLines] = useState<Array<OrderLine & { _qty: string; _sell: string; _cost: string }>>([]);
+  const [editSaving, setEditSaving] = useState(false);
+
   const loadOrder = () =>
     Promise.all([
       api.get<any[]>("/orders"),
@@ -135,7 +146,7 @@ export default function OrderDetails() {
       setOrder(mapOrder(patchedOrder));
       await logAudit({
         entity: "order", entityId: order.id, entityName: `${order.id} - ${order.client}`,
-        action: "edit", snapshot: { founderPaid: fc.founder, amount: fc.amount },
+        action: "update", snapshot: { founderPaid: fc.founder, amount: fc.amount },
         endpoint: `/orders/${order.id}`,
       });
       toast.success(`تم تسجيل دفع ${fc.founder}`);
@@ -143,6 +154,105 @@ export default function OrderDetails() {
       toast.error(err?.message || "فشل تسجيل الدفع");
     } finally {
       setPayingFounder(null);
+    }
+  };
+
+  const handleOpenEdit = () => {
+    if (!order) return;
+    setEditForm({
+      status: order.status || "",
+      date: order.date || "",
+      source: order.source || "",
+      deliveryFee: String(order.deliveryFee ?? ""),
+    });
+    setEditLines(lines.map(l => ({ ...l, _qty: String(l.quantity), _sell: String(l.sellingPrice), _cost: String(l.costPrice) })));
+    setEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!order) return;
+    setEditSaving(true);
+    try {
+      // Snapshot before
+      const beforeOrder = { status: order.status, date: order.date, source: order.source, deliveryFee: order.deliveryFee };
+      const beforeLines = lines.map(l => ({ id: l.id, quantity: l.quantity, sellingPrice: l.sellingPrice, costPrice: l.costPrice, lineTotal: l.lineTotal, lineCost: l.lineCost }));
+
+      // PATCH order header
+      const orderPatch: Record<string, any> = {};
+      if (editForm.status !== order.status) orderPatch.status = editForm.status;
+      if (editForm.date !== order.date) orderPatch.date = editForm.date;
+      if (editForm.source !== (order.source || "")) orderPatch.source = editForm.source;
+      const newFee = Number(editForm.deliveryFee) || 0;
+      if (newFee !== (order.deliveryFee || 0)) orderPatch.deliveryFee = newFee;
+
+      // PATCH changed lines + recalc totals
+      let newTotalSelling = 0;
+      let newTotalCost = 0;
+      const linePatches: Promise<any>[] = [];
+      const afterLines: typeof beforeLines = [];
+
+      for (const el of editLines) {
+        const qty = Number(el._qty) || 0;
+        const sell = Number(el._sell) || 0;
+        const cost = Number(el._cost) || 0;
+        newTotalSelling += qty * sell;
+        newTotalCost += qty * cost;
+        afterLines.push({ id: el.id, quantity: qty, sellingPrice: sell, costPrice: cost, lineTotal: qty * sell, lineCost: qty * cost });
+        const orig = lines.find(l => l.id === el.id);
+        if (orig && (orig.quantity !== qty || orig.sellingPrice !== sell || orig.costPrice !== cost)) {
+          linePatches.push(api.patch(`/order-lines/${el.id}`, { quantity: qty, sellingPrice: sell, costPrice: cost }));
+        }
+      }
+
+      // If we have lines, also update totalSelling/totalCost on the order
+      if (editLines.length > 0) {
+        orderPatch.totalSelling = newTotalSelling;
+        orderPatch.totalCost = newTotalCost;
+      }
+
+      // Apply changes
+      await Promise.all(linePatches);
+      let refreshedOrder = order;
+      if (Object.keys(orderPatch).length > 0) {
+        const updated = await api.patch<any>(`/orders/${order.id}`, orderPatch);
+        refreshedOrder = mapOrder(updated);
+      }
+
+      // Detect changes for summary
+      const changedFields = Object.keys(orderPatch);
+      if (linePatches.length > 0) changedFields.push("سطور الطلب");
+
+      // Log audit with before/after
+      if (changedFields.length > 0) {
+        await logAudit({
+          entity: "order",
+          entityId: order.id,
+          entityName: `${order.id} - ${order.client}`,
+          action: "update",
+          snapshot: {
+            before: { order: beforeOrder, lines: beforeLines },
+            after: { order: orderPatch, lines: afterLines },
+            changes: changedFields,
+            orderId: order.id,
+          },
+          endpoint: `/orders/${order.id}`,
+        });
+        toast.success("تم حفظ التعديلات بنجاح");
+      } else {
+        toast.info("لا توجد تغييرات للحفظ");
+      }
+
+      setOrder(refreshedOrder);
+      if (linePatches.length > 0) {
+        // Reload lines from server
+        const freshLines = await api.get<any[]>(`/orders/${order.id}/lines`);
+        setLines(freshLines || []);
+      }
+      setEditOpen(false);
+    } catch (err: any) {
+      toast.error(err?.message || "فشل حفظ التعديلات");
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -250,9 +360,106 @@ export default function OrderDetails() {
               footer: `${t.deliveryFeeDisplay}: ${order.deliveryFee} ${t.currency}`,
             });
           }}><Printer className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.print}</Button>
+          <Button variant="outline" size="sm" onClick={handleOpenEdit} data-testid="button-edit-order">
+            <Pencil className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />تعديل
+          </Button>
           <Button size="sm" onClick={() => navigate("/deliveries")}><Truck className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.registerDelivery}</Button>
         </div>
       </div>
+
+      {/* ── EDIT SHEET ─────────────────────────────────────────────────── */}
+      <Sheet open={editOpen} onOpenChange={setEditOpen}>
+        <SheetContent side="left" className="w-full sm:max-w-2xl p-0 flex flex-col" dir="rtl">
+          <SheetHeader className="px-6 py-4 border-b border-border shrink-0">
+            <SheetTitle className="text-start">تعديل الطلب: {order.id}</SheetTitle>
+          </SheetHeader>
+          <ScrollArea className="flex-1">
+            <div className="p-6 space-y-6">
+              {/* Order metadata */}
+              <div>
+                <h3 className="text-sm font-semibold mb-4 text-muted-foreground">بيانات الطلب</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-status">الحالة</Label>
+                    <Select value={editForm.status} onValueChange={(v) => setEditForm(f => ({ ...f, status: v }))}>
+                      <SelectTrigger id="edit-status" data-testid="select-edit-status">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Draft">مسودة</SelectItem>
+                        <SelectItem value="Processing">قيد المعالجة</SelectItem>
+                        <SelectItem value="Delivered">تم التسليم</SelectItem>
+                        <SelectItem value="Cancelled">ملغي</SelectItem>
+                        <SelectItem value="Pending">معلق</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-date">التاريخ</Label>
+                    <Input id="edit-date" type="date" value={editForm.date} onChange={(e) => setEditForm(f => ({ ...f, date: e.target.value }))} data-testid="input-edit-date" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-source">المصدر</Label>
+                    <Input id="edit-source" value={editForm.source} onChange={(e) => setEditForm(f => ({ ...f, source: e.target.value }))} placeholder="مثال: واتساب، موقع..." data-testid="input-edit-source" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-fee">رسوم التوصيل</Label>
+                    <Input id="edit-fee" type="number" min="0" value={editForm.deliveryFee} onChange={(e) => setEditForm(f => ({ ...f, deliveryFee: e.target.value }))} data-testid="input-edit-deliveryfee" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Order lines */}
+              {editLines.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-4 text-muted-foreground">سطور الطلب</h3>
+                  <div className="space-y-3">
+                    {editLines.map((el, idx) => (
+                      <div key={el.id} className="rounded-lg border border-border p-4 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-md border border-border overflow-hidden bg-muted/50 flex-shrink-0 flex items-center justify-center">
+                            {el.imageUrl
+                              ? <img src={el.imageUrl} alt={el.materialName} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                              : <Package className="h-4 w-4 text-muted-foreground" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">{el.materialName}</div>
+                            <div className="text-xs text-muted-foreground font-mono">{el.materialCode} · {el.unit}</div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="space-y-1">
+                            <Label className="text-xs">الكمية</Label>
+                            <Input type="number" min="0" value={el._qty} onChange={(e) => setEditLines(prev => prev.map((p, i) => i === idx ? { ...p, _qty: e.target.value } : p))} className="h-8 text-sm" data-testid={`input-qty-${el.id}`} />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">سعر البيع</Label>
+                            <Input type="number" min="0" value={el._sell} onChange={(e) => setEditLines(prev => prev.map((p, i) => i === idx ? { ...p, _sell: e.target.value } : p))} className="h-8 text-sm" data-testid={`input-sell-${el.id}`} />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">سعر الشراء</Label>
+                            <Input type="number" min="0" value={el._cost} onChange={(e) => setEditLines(prev => prev.map((p, i) => i === idx ? { ...p, _cost: e.target.value } : p))} className="h-8 text-sm" data-testid={`input-cost-${el.id}`} />
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
+                          <span>إجمالي البيع: <span className="font-semibold text-foreground">{((Number(el._qty) || 0) * (Number(el._sell) || 0)).toLocaleString()}</span></span>
+                          <span>إجمالي التكلفة: <span className="font-semibold text-foreground">{((Number(el._qty) || 0) * (Number(el._cost) || 0)).toLocaleString()}</span></span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+          <div className="px-6 py-4 border-t border-border flex justify-end gap-3 shrink-0">
+            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving} data-testid="button-edit-cancel">إلغاء</Button>
+            <Button onClick={handleSaveEdit} disabled={editSaving} data-testid="button-edit-save">
+              {editSaving ? <><Loader2 className="h-3.5 w-3.5 animate-spin ltr:mr-1.5 rtl:ml-1.5" />جاري الحفظ...</> : "حفظ التعديلات"}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <Tabs defaultValue="invoice" className="space-y-4">
         <TabsList className="bg-muted">

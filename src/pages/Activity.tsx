@@ -149,14 +149,45 @@ export default function ActivityPage() {
       const payload = cleanSnapshot(data.entity, data.snapshot);
       await api.post(data.endpoint, payload);
       toast.success(`✅ تمت استعادة ${entityLabels[data.entity] || data.entity}: ${data.entityName}`);
-      // Mark this log entry as restored (update title)
-      await api.patch(`/notifications/${entry.id}`, {
-        title: `[مُستعاد] ${entry.title}`,
-        read: true,
-      }).catch(() => {});
+      await api.patch(`/notifications/${entry.id}`, { title: `[مُستعاد] ${entry.title}`, read: true }).catch(() => {});
       setEntries(prev => prev.map(e => e.id === entry.id ? { ...e, title: `[مُستعاد] ${e.title}`, read: true } : e));
     } catch (err: any) {
       toast.error(`فشلت الاستعادة: ${err?.message || String(err)}`);
+    } finally {
+      setRestoring(null);
+    }
+  };
+
+  const handleRevert = async (entry: AuditNotification) => {
+    const data = parseAuditData(entry.message);
+    if (!data || data.action !== "update") return;
+    const before = data.snapshot?.before;
+    if (!before || !data.endpoint) {
+      toast.error("لا تتوفر بيانات الرجوع");
+      return;
+    }
+
+    setRestoring(entry.id);
+    try {
+      // Revert order header fields
+      if (before.order && Object.keys(before.order).length > 0) {
+        await api.patch(data.endpoint, before.order);
+      }
+      // Revert individual order lines
+      if (Array.isArray(before.lines) && before.lines.length > 0) {
+        await Promise.all(before.lines.map((line: any) =>
+          api.patch(`/order-lines/${line.id}`, {
+            quantity: line.quantity,
+            sellingPrice: line.sellingPrice,
+            costPrice: line.costPrice,
+          })
+        ));
+      }
+      toast.success(`↩️ تم الرجوع عن التعديل: ${data.entityName}`);
+      await api.patch(`/notifications/${entry.id}`, { title: `[مُرجَع] ${entry.title}`, read: true }).catch(() => {});
+      setEntries(prev => prev.map(e => e.id === entry.id ? { ...e, title: `[مُرجَع] ${e.title}`, read: true } : e));
+    } catch (err: any) {
+      toast.error(`فشل الرجوع عن التعديل: ${err?.message || String(err)}`);
     } finally {
       setRestoring(null);
     }
@@ -311,6 +342,19 @@ export default function ActivityPage() {
                           >
                             <RotateCcw className={`h-3 w-3 ${restoring === entry.id ? "animate-spin" : ""}`} />
                             {restoring === entry.id ? "..." : "استعادة"}
+                          </Button>
+                        )}
+                        {action === "update" && data?.snapshot?.before && !entry.title.startsWith("[مُرجَع]") && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs gap-1.5 text-amber-600 border-amber-400/50 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                            onClick={() => handleRevert(entry)}
+                            disabled={restoring === entry.id}
+                            data-testid={`button-revert-${entry.id}`}
+                          >
+                            <RotateCcw className={`h-3 w-3 ${restoring === entry.id ? "animate-spin" : ""}`} />
+                            {restoring === entry.id ? "..." : "رجوع"}
                           </Button>
                         )}
                         <Button

@@ -338,6 +338,20 @@ router.get("/orders/:id/lines", async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+router.patch("/order-lines/:id", async (req, res) => {
+  try {
+    const { quantity, sellingPrice, costPrice } = req.body;
+    const lineTotal = (quantity ?? 0) * (sellingPrice ?? 0);
+    const lineCost = (quantity ?? 0) * (costPrice ?? 0);
+    const { rows } = await pgPool.query(
+      `UPDATE order_lines SET quantity=$1, selling_price=$2, cost_price=$3, line_total=$4, line_cost=$5 WHERE id=$6 RETURNING *`,
+      [quantity, sellingPrice, costPrice, lineTotal, lineCost, req.params.id]
+    );
+    res.json(camelizeKeys(rows[0] || {}));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
 router.patch("/orders/:id", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("orders").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
