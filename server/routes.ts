@@ -137,10 +137,12 @@ router.post("/founders", async (req, res) => {
   if (!result.error && result.data) {
     const f = result.data;
     const actorId = `ACT-F-${f.id}`;
-    await supabaseAdmin.from("delivery_actors").upsert(
-      { id: actorId, name: f.name || "", type: "founder", phone: f.phone || "", email: f.email || "", active: true, founder_id: f.id },
-      { onConflict: "id", ignoreDuplicates: true }
-    ).catch(() => {});
+    try {
+      await supabaseAdmin.from("delivery_actors").upsert(
+        { id: actorId, name: f.name || "", type: "founder", phone: f.phone || "", email: f.email || "", active: true, founder_id: f.id },
+        { onConflict: "id", ignoreDuplicates: true }
+      );
+    } catch { /* ignore */ }
   }
   sbOk(res, result);
 });
@@ -165,10 +167,12 @@ router.get("/delivery-actors/sync-founders", async (_req, res) => {
   const { data: founders } = await supabaseAdmin.from("founders").select("id,name,phone,email,active");
   for (const f of founders || []) {
     const actorId = `ACT-F-${f.id}`;
-    await supabaseAdmin.from("delivery_actors").upsert(
-      { id: actorId, name: f.name || "", type: "founder", phone: f.phone || "", email: f.email || "", active: f.active !== false, founder_id: f.id },
-      { onConflict: "id" }
-    ).catch(() => {});
+    try {
+      await supabaseAdmin.from("delivery_actors").upsert(
+        { id: actorId, name: f.name || "", type: "founder", phone: f.phone || "", email: f.email || "", active: f.active !== false, founder_id: f.id },
+        { onConflict: "id" }
+      );
+    } catch { /* ignore */ }
   }
   const { data, error } = await supabaseAdmin.from("delivery_actors").select("*").order("type", { ascending: false }).order("name");
   if (error) return res.status(500).json({ error: error.message });
@@ -265,10 +269,12 @@ router.post("/orders", async (req, res) => {
   }
   // Save founderContributions to Supabase
   if (Array.isArray(founderContributions) && founderContributions.length > 0) {
-    await supabaseAdmin.from("order_founder_contributions").upsert(
-      { order_id: orderId, contributions: founderContributions, updated_at: new Date().toISOString() },
-      { onConflict: "order_id" }
-    ).catch((e: any) => console.error("founder_contributions insert error:", e.message));
+    try {
+      await supabaseAdmin.from("order_founder_contributions").upsert(
+        { order_id: orderId, contributions: founderContributions, updated_at: new Date().toISOString() },
+        { onConflict: "order_id" }
+      );
+    } catch (e: any) { console.error("founder_contributions insert error:", e.message); }
   }
   res.json({ ...camelizeKeys(result.data), founderContributions: founderContributions || [] });
 });
@@ -291,15 +297,20 @@ router.patch("/orders/:id", async (req, res) => {
   const { founderContributions, ...rest } = req.body;
   // Update Supabase contributions if provided
   if (Array.isArray(founderContributions)) {
-    await supabaseAdmin.from("order_founder_contributions").upsert(
-      { order_id: req.params.id, contributions: founderContributions, updated_at: new Date().toISOString() },
-      { onConflict: "order_id" }
-    ).catch((e: any) => console.error("patch founder_contributions error:", e.message));
+    try {
+      await supabaseAdmin.from("order_founder_contributions").upsert(
+        { order_id: req.params.id, contributions: founderContributions, updated_at: new Date().toISOString() },
+        { onConflict: "order_id" }
+      );
+    } catch (e: any) { console.error("patch founder_contributions error:", e.message); }
   }
   // Only send non-empty rest to Supabase
   if (Object.keys(rest).length === 0) {
-    const { data: contribData } = await supabaseAdmin.from("order_founder_contributions").select("contributions").eq("order_id", req.params.id).single();
-    return res.json({ id: req.params.id, founderContributions: contribData?.contributions || [] });
+    const [contribRes, orderRes] = await Promise.all([
+      supabaseAdmin.from("order_founder_contributions").select("contributions").eq("order_id", req.params.id).single(),
+      supabaseAdmin.from("orders").select("*").eq("id", req.params.id).single(),
+    ]);
+    return res.json({ ...camelizeKeys(orderRes.data || {}), id: req.params.id, founderContributions: contribRes.data?.contributions || [] });
   }
   const { data, error } = await supabaseAdmin.from("orders").update(snakifyKeys(rest)).eq("id", req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
@@ -651,8 +662,22 @@ router.delete("/treasury/transactions/:id", async (req, res) => {
 
 // ─── FOUNDER TRANSACTIONS (stored in treasury_transactions with special txTypes) ──
 // txType: "founder_contribution" | "founder_withdrawal" | "order_funding"
-// performedBy = founderId, referenceId = founderName, linkedAccountId = orderId, category = method, description = notes
+// performedBy = founderId, referenceId = founderName, category = method
+// description = "[orderId:ORD-xxx] notes..." (linked_account_id is UUID, can't store order IDs there)
 const FOUNDER_TX_TYPES = ["founder_contribution", "founder_withdrawal", "order_funding"];
+
+// Parse orderId and notes from description field
+function parseFounderDesc(desc: string | null): { orderId: string; notes: string } {
+  if (!desc) return { orderId: "", notes: "" };
+  const match = desc.match(/^\[orderId:([^\]]*)\]\s*(.*)/s);
+  if (match) return { orderId: match[1] || "", notes: match[2] || "" };
+  return { orderId: "", notes: desc };
+}
+function encodeFounderDesc(orderId: string | null, notes: string | null): string | null {
+  if (!orderId && !notes) return null;
+  if (!orderId) return notes || null;
+  return `[orderId:${orderId}] ${notes || ""}`.trim();
+}
 
 router.get("/founder-transactions", async (_req, res) => {
   const { data, error } = await supabaseAdmin
@@ -661,18 +686,21 @@ router.get("/founder-transactions", async (_req, res) => {
     .in("tx_type", FOUNDER_TX_TYPES)
     .order("created_at", { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
-  const mapped = (data || []).map((tx: any) => ({
-    id: tx.id,
-    founderId: tx.performed_by || "",
-    founderName: tx.reference_id || "",
-    type: tx.tx_type === "founder_contribution" ? "contribution" : tx.tx_type === "founder_withdrawal" ? "withdrawal" : "funding",
-    amount: Math.abs(Number(tx.amount)),
-    method: tx.category || "bank",
-    orderId: tx.linked_account_id || "",
-    notes: tx.description || "",
-    date: tx.date || (tx.created_at ? tx.created_at.split("T")[0] : ""),
-    createdAt: tx.created_at,
-  }));
+  const mapped = (data || []).map((tx: any) => {
+    const { orderId, notes } = parseFounderDesc(tx.description);
+    return {
+      id: tx.id,
+      founderId: tx.performed_by || "",
+      founderName: tx.reference_id || "",
+      type: tx.tx_type === "founder_contribution" ? "contribution" : tx.tx_type === "founder_withdrawal" ? "withdrawal" : "funding",
+      amount: Math.abs(Number(tx.amount)),
+      method: tx.category || "bank",
+      orderId,
+      notes,
+      date: tx.date || (tx.created_at ? tx.created_at.split("T")[0] : ""),
+      createdAt: tx.created_at,
+    };
+  });
   res.json(mapped);
 });
 
@@ -686,13 +714,13 @@ router.post("/founder-transactions", async (req, res) => {
     balance_after: 0,
     performed_by: founderId || null,
     reference_id: founderName || null,
-    linked_account_id: orderId || null,
     category: method || "bank",
-    description: notes || null,
+    description: encodeFounderDesc(orderId || null, notes || null),
     date: date || new Date().toISOString().split("T")[0],
   };
   const { data, error } = await supabaseAdmin.from("treasury_transactions").insert(txData).select().single();
   if (error) return res.status(500).json({ error: error.message });
+  const parsed = parseFounderDesc(data.description);
   res.json({
     id: data.id,
     founderId: data.performed_by || "",
@@ -700,8 +728,8 @@ router.post("/founder-transactions", async (req, res) => {
     type,
     amount: Math.abs(Number(data.amount)),
     method: data.category || "bank",
-    orderId: data.linked_account_id || "",
-    notes: data.description || "",
+    orderId: parsed.orderId,
+    notes: parsed.notes,
     date: data.date || data.created_at?.split("T")[0] || "",
     createdAt: data.created_at,
   });
