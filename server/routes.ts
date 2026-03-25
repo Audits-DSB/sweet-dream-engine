@@ -319,12 +319,29 @@ router.patch("/orders/:id", async (req, res) => {
   return res.json({ ...camelizeKeys(data), founderContributions: contribData?.contributions || founderContributions || [] });
 });
 router.delete("/orders/:id", async (req, res) => {
-  const { error } = await supabaseAdmin.from("orders").delete().eq("id", req.params.id);
-  if (error) return res.status(500).json({ error: error.message });
-  await Promise.allSettled([
-    supabaseAdmin.from("order_lines").delete().eq("order_id", req.params.id),
-    supabaseAdmin.from("order_founder_contributions").delete().eq("order_id", req.params.id),
+  const orderId = req.params.id;
+
+  // ── Step 1: delete all child records that FK-reference orders (must be before deleting the order) ──
+  const childDeletes = await Promise.allSettled([
+    supabaseAdmin.from("order_lines").delete().eq("order_id", orderId),
+    supabaseAdmin.from("order_founder_contributions").delete().eq("order_id", orderId),
+    supabaseAdmin.from("deliveries").delete().eq("order_id", orderId),
+    supabaseAdmin.from("collections").delete().eq("order_id", orderId),
+    supabaseAdmin.from("client_inventory").delete().eq("source_order", orderId),
   ]);
+
+  // Log any child delete errors (non-fatal — table may not exist yet)
+  childDeletes.forEach((r, i) => {
+    const names = ["order_lines", "order_founder_contributions", "deliveries", "collections", "client_inventory"];
+    if (r.status === "fulfilled" && (r.value as any).error) {
+      console.warn(`[delete-order] ${names[i]} error:`, (r.value as any).error.message);
+    }
+  });
+
+  // ── Step 2: delete the order itself ──
+  const { error } = await supabaseAdmin.from("orders").delete().eq("id", orderId);
+  if (error) return res.status(500).json({ error: error.message });
+
   res.json({ ok: true });
 });
 
