@@ -125,7 +125,7 @@ export default function ActivityPage() {
     collection: ["id", "orderId", "clientId", "client", "invoiceDate", "dueDate", "totalAmount", "paidAmount", "outstanding", "status", "paymentMethod", "notes"],
     material: ["code", "name", "category", "unit", "sellingPrice", "storeCost", "supplier", "supplierId", "manufacturer", "hasExpiry", "active"],
     founder: ["id", "name", "alias", "email", "phone", "active"],
-    "founder-transaction": ["id", "founderId", "type", "amount", "date", "note"],
+    "founder-transaction": ["id", "founderId", "founderName", "type", "amount", "method", "orderId", "date", "notes"],
     "treasury-account": ["id", "name", "type", "balance", "currency"],
     "treasury-transaction": ["id", "accountId", "type", "amount", "date", "description"],
   };

@@ -776,8 +776,30 @@ router.post("/founder-transactions", async (req, res) => {
 });
 
 router.delete("/founder-transactions/:id", async (req, res) => {
+  // Fetch before delete to reverse founder totals
+  const { data: tx } = await supabaseAdmin.from("treasury_transactions").select("*").eq("id", req.params.id).single();
   const { error } = await supabaseAdmin.from("treasury_transactions").delete().eq("id", req.params.id).in("tx_type", FOUNDER_TX_TYPES);
   if (error) return res.status(500).json({ error: error.message });
+
+  // ── Reverse founder totals ──────────────────────────────────────────────────
+  if (tx && tx.performed_by) {
+    try {
+      const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", tx.performed_by).single();
+      if (f) {
+        const absAmt = Math.abs(Number(tx.amount));
+        const patch: Record<string, number> = {};
+        if (tx.tx_type === "founder_contribution" || tx.tx_type === "order_funding") {
+          patch.total_contributed = Math.max(0, Number(f.total_contributed || 0) - absAmt);
+        } else if (tx.tx_type === "founder_withdrawal") {
+          patch.total_withdrawn = Math.max(0, Number(f.total_withdrawn || 0) - absAmt);
+        }
+        if (Object.keys(patch).length > 0) {
+          await supabaseAdmin.from("founders").update(patch).eq("id", tx.performed_by);
+        }
+      }
+    } catch (e: any) { console.warn("[founder-tx] reverse totals error:", e.message); }
+  }
+
   res.json({ ok: true });
 });
 

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Users, TrendingUp, Wallet, Pencil, Plus, Loader2, Trash2, ChevronDown, ChevronUp, ExternalLink, ShoppingBag, Clock } from "lucide-react";
+import { Users, TrendingUp, Wallet, Pencil, Plus, Loader2, Trash2, ChevronDown, ChevronUp, ExternalLink, ShoppingBag, Clock, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
@@ -72,6 +72,9 @@ export default function FoundersPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteTxOpen, setDeleteTxOpen] = useState(false);
+  const [deletingTx, setDeletingTx] = useState<FounderTx | null>(null);
+  const [deletingTxSaving, setDeletingTxSaving] = useState(false);
   const [editingFounder, setEditingFounder] = useState<Founder | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [editForm, setEditForm] = useState({ name: "", alias: "", email: "", phone: "" });
@@ -149,6 +152,40 @@ export default function FoundersPage() {
       toast.error("فشل حذف المؤسس");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteTx = async () => {
+    if (!deletingTx) return;
+    setDeletingTxSaving(true);
+    try {
+      await api.delete(`/founder-transactions/${deletingTx.id}`);
+      await logAudit({
+        entity: "founder-transaction",
+        entityId: deletingTx.id,
+        entityName: `${deletingTx.founderName} — ${deletingTx.amount.toLocaleString()} ${deletingTx.orderId ? `(${deletingTx.orderId})` : ""}`,
+        action: "delete",
+        snapshot: deletingTx as any,
+        endpoint: "/founder-transactions",
+      });
+      // Update local state: remove tx and recalc founder totals
+      setFounderTxs(prev => prev.filter(t => t.id !== deletingTx.id));
+      const absAmt = deletingTx.amount;
+      setFounders(prev => prev.map(f => {
+        if ((deletingTx.founderId && f.id === deletingTx.founderId) || f.name === deletingTx.founderName) {
+          return deletingTx.type === "withdrawal"
+            ? { ...f, totalWithdrawn: Math.max(0, f.totalWithdrawn - absAmt) }
+            : { ...f, totalContributed: Math.max(0, f.totalContributed - absAmt) };
+        }
+        return f;
+      }));
+      setDeletingTx(null);
+      setDeleteTxOpen(false);
+      toast.success("تم حذف المعاملة — يمكن استعادتها من سجل الأنشطة");
+    } catch {
+      toast.error("فشل حذف المعاملة");
+    } finally {
+      setDeletingTxSaving(false);
     }
   };
 
@@ -326,6 +363,16 @@ export default function FoundersPage() {
                               {tx.type === "withdrawal" ? "-" : "+"}{tx.amount.toLocaleString()}
                               <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
                             </div>
+
+                            {/* Delete button */}
+                            <button
+                              className="flex-shrink-0 h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                              onClick={() => { setDeletingTx(tx); setDeleteTxOpen(true); }}
+                              data-testid={`button-delete-tx-${tx.id}`}
+                              title="حذف المعاملة"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -399,6 +446,52 @@ export default function FoundersPage() {
             <Button variant="outline" onClick={() => setDeleteOpen(false)}>إلغاء</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "حذف"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Transaction Confirm Dialog */}
+      <Dialog open={deleteTxOpen} onOpenChange={(v) => { if (!v) { setDeleteTxOpen(false); setDeletingTx(null); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              حذف المعاملة
+            </DialogTitle>
+          </DialogHeader>
+          {deletingTx && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">سيتم حذف هذه المعاملة وتعديل إجمالي المؤسس تلقائياً:</p>
+              <div className="rounded-lg border border-border p-3 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">النوع</span>
+                  <span className="font-medium">{typeLabel(deletingTx.type)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">المبلغ</span>
+                  <span className="font-bold">{deletingTx.amount.toLocaleString()} {t.currency}</span>
+                </div>
+                {deletingTx.orderId && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">الطلب</span>
+                    <span className="font-mono text-primary">{deletingTx.orderId}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">التاريخ</span>
+                  <span>{deletingTx.date}</span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground bg-muted/50 rounded px-3 py-2">
+                يمكن استعادة هذه المعاملة لاحقاً من <strong>سجل الأنشطة</strong>
+              </p>
+            </div>
+          )}
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => { setDeleteTxOpen(false); setDeletingTx(null); }}>إلغاء</Button>
+            <Button variant="destructive" onClick={handleDeleteTx} disabled={deletingTxSaving} data-testid="button-confirm-delete-tx">
+              {deletingTxSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Trash2 className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />حذف</>}
             </Button>
           </DialogFooter>
         </DialogContent>
