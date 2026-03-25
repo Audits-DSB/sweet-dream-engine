@@ -5,7 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Eye, MoreHorizontal, Truck, Plus, Loader2, Trash2 } from "lucide-react";
+import { Eye, MoreHorizontal, Truck, Plus, Loader2, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
@@ -61,7 +61,8 @@ export default function DeliveriesPage() {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>(() => {
     const status = searchParams.get("status");
-    return status ? { status } : {};
+    const orderId = searchParams.get("orderId");
+    return { ...(status ? { status } : {}), ...(orderId ? { orderId } : {}) };
   });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailItem, setDetailItem] = useState<Delivery | null>(null);
@@ -94,14 +95,16 @@ export default function DeliveriesPage() {
 
   useEffect(() => {
     const status = searchParams.get("status");
-    setFilters(status ? { status } : {});
+    const orderId = searchParams.get("orderId");
+    setFilters({ ...(status ? { status } : {}), ...(orderId ? { orderId } : {}) });
   }, [searchParams]);
 
   const filtered = deliveries.filter((d) => {
     const s = search.toLowerCase();
     const matchSearch = !s || d.client.toLowerCase().includes(s) || d.id.toLowerCase().includes(s) || d.orderId.toLowerCase().includes(s);
     const matchStatus = !filters.status || filters.status === "all" || d.status === filters.status;
-    return matchSearch && matchStatus;
+    const matchOrder = !filters.orderId || d.orderId === filters.orderId;
+    return matchSearch && matchStatus && matchOrder;
   });
 
   const sendNotification = async (title: string, body: string, type: string = "info") => {
@@ -186,6 +189,14 @@ export default function DeliveriesPage() {
         <h1 className="page-header">{t.deliveriesTitle}</h1>
         <p className="page-description">{deliveries.length} {t.deliveryCount} · {deliveries.filter(d => d.status === "Pending").length} {t.pendingCount}</p>
       </div>
+
+      {filters.orderId && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-sm">
+          <Truck className="h-4 w-4 text-primary shrink-0" />
+          <span className="text-primary font-medium">تسليمات الطلب: <span className="font-mono">{filters.orderId}</span></span>
+          <button className="mr-auto text-primary/70 hover:text-primary" onClick={() => setFilters({})}><X className="h-3.5 w-3.5" /></button>
+        </div>
+      )}
 
       <DataToolbar
         searchPlaceholder={t.searchDeliveries}

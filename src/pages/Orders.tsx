@@ -78,6 +78,7 @@ export default function OrdersPage() {
   const [founders, setFounders] = useState<{ id: string; name: string }[]>([]);
   const [selectedFounders, setSelectedFounders] = useState<string[]>([]);
   const [founderPcts, setFounderPcts] = useState<Record<string, number>>({});
+  const [collectionsMap, setCollectionsMap] = useState<Record<string, { paid: number; total: number; collectionId: string }>>({});
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -102,7 +103,8 @@ export default function OrdersPage() {
     Promise.all([
       api.get<any[]>("/orders"),
       api.get<any[]>("/clients"),
-    ]).then(([ordersData, clientsData]) => {
+      api.get<any[]>("/collections"),
+    ]).then(([ordersData, clientsData, collectionsData]) => {
       const clientMap: Record<string, string> = {};
       const clientArr = (clientsData || []).map((c: any) => {
         clientMap[c.id] = c.name || "";
@@ -114,6 +116,18 @@ export default function OrdersPage() {
         if (!o.client && o.clientId) o.client = clientMap[o.clientId] || o.clientId;
         return o;
       }));
+      // Build map orderId -> collection payment info
+      const cmap: Record<string, { paid: number; total: number; collectionId: string }> = {};
+      (collectionsData || []).forEach((c: any) => {
+        const orderId = c.order || c.orderId || c.order_id || "";
+        if (!orderId) return;
+        const paid = Number(c.paid ?? c.paidAmount ?? 0);
+        const total = Number(c.total ?? c.totalAmount ?? 0);
+        if (!cmap[orderId] || paid > cmap[orderId].paid) {
+          cmap[orderId] = { paid, total, collectionId: c.id };
+        }
+      });
+      setCollectionsMap(cmap);
     }).catch(() => toast.error(t.failedToLoadData))
       .finally(() => setLoading(false));
   }, []);
@@ -293,6 +307,7 @@ export default function OrdersPage() {
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.splitMode}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.source}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
+                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">ما دفعه العميل</th>
                 <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.actions}</th>
               </tr>
             </thead>
@@ -309,13 +324,26 @@ export default function OrdersPage() {
                   <td className="py-3 px-3 text-xs text-muted-foreground">{order.source}</td>
                   <td className="py-3 px-3"><StatusBadge status={order.status} /></td>
                   <td className="py-3 px-3 text-end" onClick={(e) => e.stopPropagation()}>
+                    {collectionsMap[order.id] ? (
+                      <button
+                        className="text-xs font-medium text-primary hover:underline"
+                        onClick={() => navigate(`/collections?orderId=${order.id}`)}
+                        data-testid={`link-collection-paid-${order.id}`}
+                      >
+                        {collectionsMap[order.id].paid.toLocaleString()} / {collectionsMap[order.id].total.toLocaleString()}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-3 text-end" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => navigate(`/orders/${order.id}`)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewDetails}</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => navigate("/deliveries")}><Truck className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.registerDelivery}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => navigate(`/deliveries?orderId=${order.id}`)}><Truck className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.registerDelivery}</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => toast.success(`${t.createInvoice}: ${order.id}`)}><FileText className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.createInvoice}</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => toast.success(`${t.copy}: ${order.id}`)}><Copy className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.copy}</DropdownMenuItem>
                         <DropdownMenuSeparator />

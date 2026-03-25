@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, CheckCircle2, Clock, Receipt, Eye, MoreHorizontal, DollarSign, Trash2, Package, TrendingUp, Users2, Building2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Receipt, Eye, MoreHorizontal, DollarSign, Trash2, Package, TrendingUp, Users2, Building2, X } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { logAudit } from "@/lib/auditLog";
@@ -66,9 +66,10 @@ export default function CollectionsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const urlStatus = searchParams.get("status") || "";
+  const urlOrderId = searchParams.get("orderId") || "";
   const [collections, setCollections] = useState<Collection[]>([]);
   const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState<Record<string, string>>(urlStatus ? { status: urlStatus } : {});
+  const [filters, setFilters] = useState<Record<string, string>>({ ...(urlStatus ? { status: urlStatus } : {}), ...(urlOrderId ? { orderId: urlOrderId } : {}) });
   const [selectedInvoice, setSelectedInvoice] = useState<Collection | null>(null);
   const [loadingCollections, setLoadingCollections] = useState(true);
 
@@ -96,7 +97,8 @@ export default function CollectionsPage() {
   const filtered = collections.filter((c) => {
     const matchSearch = !search || c.client.toLowerCase().includes(search.toLowerCase()) || c.id.toLowerCase().includes(search.toLowerCase()) || c.order.toLowerCase().includes(search.toLowerCase());
     const matchStatus = !filters.status || filters.status === "all" || c.status === filters.status;
-    return matchSearch && matchStatus;
+    const matchOrder = !filters.orderId || c.order === filters.orderId;
+    return matchSearch && matchStatus && matchOrder;
   });
 
   const totalOutstanding = collections.reduce((sum, c) => sum + c.remaining, 0);
@@ -197,6 +199,14 @@ export default function CollectionsPage() {
         <h1 className="page-header">{t.collectionsTitle}</h1>
         <p className="page-description">{t.collectionsDesc}</p>
       </div>
+
+      {filters.orderId && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-sm">
+          <Receipt className="h-4 w-4 text-primary shrink-0" />
+          <span className="text-primary font-medium">تحصيلات الطلب: <span className="font-mono">{filters.orderId}</span></span>
+          <button className="mr-auto text-primary/70 hover:text-primary" onClick={() => setFilters({})}><X className="h-3.5 w-3.5" /></button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="cursor-pointer" onClick={() => setFilters({ ...filters, status: "Paid" })}>
