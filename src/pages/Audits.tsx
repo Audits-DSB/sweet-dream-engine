@@ -233,9 +233,41 @@ export default function AuditsPage() {
         comparison: comparisonRows,
       };
       await api.post("/audits", newAudit);
+
+      // 1. Update client inventory: sync remaining to actual counts from audit
+      //    Shortage items → status "Needs Refill" + store shortage qty for Refill page
+      //    Surplus/matched → update remaining + clear any old shortage flag
+      const clientLots = (rawLots as any[]).filter(l => l.clientId === selectedClientId || l.client_id === selectedClientId);
+      const nonMatchedRows = comparisonRows.filter(r => r.result !== "matched");
+      if (nonMatchedRows.length > 0 && clientLots.length > 0) {
+        await Promise.allSettled(nonMatchedRows.map(async (r) => {
+          const lot = clientLots.find(l => l.code === r.code);
+          if (!lot) return;
+          const patch: Record<string, unknown> = { remaining: r.actual };
+          if (r.result === "shortage") {
+            patch.status = "Needs Refill";
+            patch.shortageQty = Math.abs(r.diff);
+          } else {
+            // surplus or other — clear shortage flag
+            patch.status = "In Stock";
+            patch.shortageQty = 0;
+          }
+          await api.patch(`/client-inventory/${lot.id}`, patch);
+        }));
+        qc.invalidateQueries({ queryKey: ["/api/client-inventory"] });
+      }
+
+      // 2. Refill planning reads client_inventory; "Needs Refill" items will surface automatically.
+
       qc.invalidateQueries({ queryKey: ["/api/audits"] });
       resetDialog();
-      toast.success(t.auditScheduled);
+
+      const shortagesCount = comparisonRows.filter(r => r.result === "shortage").length;
+      if (shortagesCount > 0) {
+        toast.success(`${t.auditScheduled} — تم تحديث المخزون (${nonMatchedRows.length} مادة). تحقق من خطة إعادة التوريد.`);
+      } else {
+        toast.success(t.auditScheduled);
+      }
       setSelectedAudit({ ...newAudit, createdAt: new Date().toISOString() });
     } catch {
       toast.error("فشل حفظ الجرد");

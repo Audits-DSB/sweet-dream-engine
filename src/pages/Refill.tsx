@@ -22,6 +22,7 @@ type InventoryLot = {
   leadTimeWeeks: number;
   safetyStock: number;
   status: string;
+  shortageQty: number;
 };
 
 type RefillItem = {
@@ -39,6 +40,7 @@ type RefillItem = {
   reorderPoint: number;
   suggestedQty: number;
   priority: "Critical" | "Urgent" | "Normal" | "OK";
+  fromAudit: boolean;
 };
 
 function computePriority(coverageWeeks: number, leadTimeWeeks: number): "Critical" | "Urgent" | "Normal" | "OK" {
@@ -84,6 +86,7 @@ export default function RefillPage() {
     avgWeeklyUsage: Number(l.avgWeeklyUsage),
     leadTimeWeeks: Number(l.leadTimeWeeks),
     safetyStock: Number(l.safetyStock),
+    shortageQty: Number((l as any).shortageQty || 0),
   }));
 
   // Compute refill items from client inventory
@@ -91,12 +94,28 @@ export default function RefillPage() {
     return lots
       .filter(l => l.status !== "Expired")
       .map(l => {
+        const fromAudit = l.status === "Needs Refill" && l.shortageQty > 0;
         const coverageWeeks = l.avgWeeklyUsage > 0 ? l.remaining / l.avgWeeklyUsage : 999;
         const reorderPoint = l.avgWeeklyUsage * l.leadTimeWeeks + l.safetyStock;
-        const priority = l.avgWeeklyUsage > 0 ? computePriority(coverageWeeks, l.leadTimeWeeks) : (l.remaining <= 0 ? "Critical" : "OK");
-        const suggestedQty = priority !== "OK" && l.avgWeeklyUsage > 0
-          ? Math.ceil(l.avgWeeklyUsage * (l.leadTimeWeeks * 3) - l.remaining + l.safetyStock)
-          : 0;
+
+        // Items flagged by audit are always Urgent (or Critical if depleted)
+        let priority: "Critical" | "Urgent" | "Normal" | "OK";
+        if (fromAudit) {
+          priority = l.remaining <= 0 ? "Critical" : "Urgent";
+        } else if (l.avgWeeklyUsage > 0) {
+          priority = computePriority(coverageWeeks, l.leadTimeWeeks);
+        } else {
+          priority = l.remaining <= 0 ? "Critical" : "OK";
+        }
+
+        // Suggested qty: audit shortage takes precedence over computed qty
+        let suggestedQty = 0;
+        if (fromAudit) {
+          suggestedQty = l.shortageQty;
+        } else if (priority !== "OK" && l.avgWeeklyUsage > 0) {
+          suggestedQty = Math.ceil(l.avgWeeklyUsage * (l.leadTimeWeeks * 3) - l.remaining + l.safetyStock);
+        }
+
         return {
           id: l.id,
           client: l.clientName,
@@ -112,6 +131,7 @@ export default function RefillPage() {
           reorderPoint: Math.round(reorderPoint * 10) / 10,
           suggestedQty: Math.max(0, suggestedQty),
           priority,
+          fromAudit,
         };
       });
   }, [lots]);
@@ -328,13 +348,19 @@ export default function RefillPage() {
                 </thead>
                 <tbody>
                   {items.map((r) => (
-                    <tr key={r.id} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${selected.has(r.id) ? "bg-primary/5" : ""}`}>
+                    <tr key={r.id} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${selected.has(r.id) ? "bg-primary/5" : ""} ${r.fromAudit ? "bg-amber-50/40 dark:bg-amber-950/10" : ""}`}>
                       <td className="py-3 px-3">{r.suggestedQty > 0 && <input type="checkbox" className="rounded" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} />}</td>
                       {groupBy === "material" && (
-                        <td className="py-3 px-3 font-medium hover:text-primary cursor-pointer" onClick={() => navigate(`/clients/${r.clientId}`)}>{r.client}</td>
+                        <td className="py-3 px-3 font-medium hover:text-primary cursor-pointer" onClick={() => navigate(`/clients/${r.clientId}`)}>
+                          {r.client}
+                          {r.fromAudit && <span className="ms-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">جرد</span>}
+                        </td>
                       )}
                       {groupBy === "client" && (
-                        <td className="py-3 px-3 hover:text-primary cursor-pointer" onClick={() => navigate("/materials")}>{r.material} <span className="text-muted-foreground text-xs">({r.unit})</span></td>
+                        <td className="py-3 px-3 hover:text-primary cursor-pointer" onClick={() => navigate("/materials")}>
+                          {r.material} <span className="text-muted-foreground text-xs">({r.unit})</span>
+                          {r.fromAudit && <span className="ms-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">جرد</span>}
+                        </td>
                       )}
                       <td className="py-3 px-3 text-end font-medium">{r.currentStock}</td>
                       <td className="py-3 px-3 text-end text-muted-foreground">{r.avgWeeklyUsage > 0 ? r.avgWeeklyUsage : "—"}</td>
@@ -343,10 +369,14 @@ export default function RefillPage() {
                           <span className={r.coverageWeeks < 2 ? "text-destructive font-medium" : r.coverageWeeks < 4 ? "text-warning" : "text-muted-foreground"}>
                             {r.coverageWeeks.toFixed(1)} {t.weeks}
                           </span>
-                        ) : <span className="text-muted-foreground">—</span>}
+                        ) : r.fromAudit ? <span className="text-amber-600 text-xs">من الجرد</span> : <span className="text-muted-foreground">—</span>}
                       </td>
                       <td className="py-3 px-3 text-end text-muted-foreground">{r.avgWeeklyUsage > 0 ? r.reorderPoint : "—"}</td>
-                      <td className="py-3 px-3 text-end font-semibold">{r.suggestedQty > 0 ? r.suggestedQty : "—"}</td>
+                      <td className="py-3 px-3 text-end font-semibold">
+                        {r.suggestedQty > 0
+                          ? <span className={r.fromAudit ? "text-amber-700 dark:text-amber-400" : ""}>{r.suggestedQty}</span>
+                          : "—"}
+                      </td>
                       <td className="py-3 px-3">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${priorityStyles[r.priority]}`}>
                           {priorityLabel(r.priority)}

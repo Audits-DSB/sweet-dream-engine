@@ -68,6 +68,10 @@ pgPool.query(`
   )
 `).catch((e: any) => console.error("order_lines table init error:", e.message));
 
+// Add shortage_qty column if missing (safe migration)
+pgPool.query(`ALTER TABLE client_inventory ADD COLUMN IF NOT EXISTS shortage_qty NUMERIC(14,2) DEFAULT 0`)
+  .catch((e: any) => console.error("client_inventory shortage_qty migration error:", e.message));
+
 // ─── camelCase ↔ snake_case helpers ──────────────────────────────────────────
 const toCamel = (s: string) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 const toSnake = (s: string) => s.replace(/([A-Z])/g, (c) => `_${c.toLowerCase()}`);
