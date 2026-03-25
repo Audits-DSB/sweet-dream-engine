@@ -741,6 +741,25 @@ router.post("/founder-transactions", async (req, res) => {
   };
   const { data, error } = await supabaseAdmin.from("treasury_transactions").insert(txData).select().single();
   if (error) return res.status(500).json({ error: error.message });
+
+  // ── Sync totals to founders table ──────────────────────────────────────────
+  if (founderId) {
+    try {
+      const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", founderId).single();
+      if (f) {
+        const patch: Record<string, number> = {};
+        if (type === "contribution" || type === "funding") {
+          patch.total_contributed = Number(f.total_contributed || 0) + Math.abs(Number(amount));
+        } else if (type === "withdrawal") {
+          patch.total_withdrawn = Number(f.total_withdrawn || 0) + Math.abs(Number(amount));
+        }
+        if (Object.keys(patch).length > 0) {
+          await supabaseAdmin.from("founders").update(patch).eq("id", founderId);
+        }
+      }
+    } catch (e: any) { console.warn("[founder-tx] sync totals error:", e.message); }
+  }
+
   const parsed = parseFounderDesc(data.description);
   res.json({
     id: data.id,
