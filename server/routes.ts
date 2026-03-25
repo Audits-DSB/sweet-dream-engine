@@ -149,14 +149,14 @@ router.patch("/founders/:id", async (req, res) => {
   if (!result.error && result.data) {
     const f = result.data;
     const actorId = `ACT-F-${f.id}`;
-    await supabaseAdmin.from("delivery_actors").update({ name: f.name || "", phone: f.phone || "", email: f.email || "" }).eq("id", actorId).catch(() => {});
+    await supabaseAdmin.from("delivery_actors").update({ name: f.name || "", phone: f.phone || "", email: f.email || "" }).eq("id", actorId).then(() => {}).catch(() => {});
   }
   sbOk(res, result);
 });
 router.delete("/founders/:id", async (req, res) => {
   const { error } = await supabaseAdmin.from("founders").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
-  await supabaseAdmin.from("delivery_actors").delete().eq("founder_id", req.params.id).catch(() => {});
+  await supabaseAdmin.from("delivery_actors").delete().eq("founder_id", req.params.id).then(() => {}).catch(() => {});
   res.json({ ok: true });
 });
 
@@ -310,9 +310,9 @@ router.patch("/orders/:id", async (req, res) => {
 router.delete("/orders/:id", async (req, res) => {
   const { error } = await supabaseAdmin.from("orders").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
-  await Promise.all([
-    supabaseAdmin.from("order_lines").delete().eq("order_id", req.params.id).catch(() => {}),
-    supabaseAdmin.from("order_founder_contributions").delete().eq("order_id", req.params.id).catch(() => {}),
+  await Promise.allSettled([
+    supabaseAdmin.from("order_lines").delete().eq("order_id", req.params.id),
+    supabaseAdmin.from("order_founder_contributions").delete().eq("order_id", req.params.id),
   ]);
   res.json({ ok: true });
 });
