@@ -293,15 +293,47 @@ export default function AuditsPage() {
     }
   };
 
-  const printClientInvoice = (audit: AuditRecord) => {
+  const printClientInvoice = async (audit: AuditRecord) => {
     const rows = audit.comparison;
     const shortages = rows.filter(r => r.result === "shortage");
     if (shortages.length === 0) { toast.info(t.noResults); return; }
+    const loadingToast = toast.loading("جارٍ تحميل صور المواد...");
+
+    // Fetch external material images and convert to base64 for reliable printing
+    const extData = await api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] }));
+    const imgUrlMap: Record<string, string> = {};
+    (extData?.products || []).forEach((p: any) => { if (p.sku && p.image_url) imgUrlMap[p.sku] = p.image_url; });
+
+    const toBase64 = async (url: string): Promise<string> => {
+      try {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => resolve('');
+          reader.readAsDataURL(blob);
+        });
+      } catch { return ''; }
+    };
+
+    const b64Map: Record<string, string> = {};
+    await Promise.all(shortages.map(async (r) => {
+      if (imgUrlMap[r.code]) b64Map[r.code] = await toBase64(imgUrlMap[r.code]);
+    }));
+
+    toast.dismiss(loadingToast);
     printInvoice({
       title: "فاتورة مواد جديدة للعميل", companyName: "DSB", subtitle: `جرد ${audit.id} — مواد مطلوب توصيلها`,
       clientName: audit.clientName, invoiceNumber: `INV-${audit.id}`, date: audit.date,
-      columns: [t.material, t.codeCol, t.unit, t.qtyRequired, `${t.priceColon} (${t.currency})`, `${t.total} (${t.currency})`],
-      rows: shortages.map(r => [r.material, r.code, r.unit, Math.abs(r.diff), r.sellingPrice, (Math.abs(r.diff) * r.sellingPrice).toLocaleString()]),
+      columns: ["الصورة", t.material, t.codeCol, t.unit, t.qtyRequired, `${t.priceColon} (${t.currency})`, `${t.total} (${t.currency})`],
+      rows: shortages.map(r => [
+        b64Map[r.code]
+          ? `<img src="${b64Map[r.code]}" class="item-img" alt="${r.material}" />`
+          : `<div style="width:42px;height:42px;background:#f1f5f9;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:18px;">📦</div>`,
+        r.material, r.code, r.unit, Math.abs(r.diff), r.sellingPrice,
+        (Math.abs(r.diff) * r.sellingPrice).toLocaleString(),
+      ]),
       totals: [
         { label: t.totalShortageItems, value: String(shortages.length) },
         { label: t.totalCostForClient, value: `${shortages.reduce((s, r) => s + Math.abs(r.diff) * r.sellingPrice, 0).toLocaleString()} ${t.currency}` },
