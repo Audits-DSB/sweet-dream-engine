@@ -25,7 +25,7 @@ type Delivery = {
   requestedDate: string; actualDate: string; actor: string;
   items: number | string; type: string; status: string;
 };
-type Order = { id: string; client: string; clientId: string; status: string };
+type Order = { id: string; client: string; clientId: string; status: string; deliveryFee: number; itemsCount: number };
 type Actor = { id: string; name: string; label: string };
 
 const statusVariant: Record<string, string> = {
@@ -84,7 +84,14 @@ export default function DeliveriesPage() {
     ]).then(([dels, ords, founders, clients]) => {
       const clientMap: Record<string, string> = {};
       (clients || []).forEach((c: any) => { clientMap[c.id] = c.name || ""; });
-      setOrders((ords || []).map((o: any) => ({ id: o.id, client: o.client || clientMap[o.clientId || o.client_id] || "", clientId: o.clientId || o.client_id || "", status: o.status || "" })));
+      setOrders((ords || []).map((o: any) => ({
+        id: o.id,
+        client: o.client || clientMap[o.clientId || o.client_id] || "",
+        clientId: o.clientId || o.client_id || "",
+        status: o.status || "",
+        deliveryFee: Number(o.deliveryFee ?? o.delivery_fee ?? 0),
+        itemsCount: Number(o.itemsCount ?? o.items_count ?? 0),
+      })));
       setDeliveries((dels || []).map(d => mapDelivery(d, clientMap)));
       const founderActors: Actor[] = (founders || []).map((f: any) => ({
         id: f.id, name: f.name || "", label: f.alias ? `${f.name} (${f.alias})` : f.name,
@@ -125,15 +132,23 @@ export default function DeliveriesPage() {
     const typeLabel = deliveryType === "full" ? (t.full || "كامل") : (t.partialType || "جزئي");
     const newId = `DEL-${Date.now().toString().slice(-6)}`;
     const actorName = selectedActor === "__other__" ? (customActor.trim() || "") : (selectedActor || "");
+
+    // Fetch order lines count to populate items field
+    let itemsCount = 0;
+    try {
+      const lines = await api.get<any[]>(`/orders/${order.id}/lines`);
+      itemsCount = (lines || []).length;
+    } catch { /* fallback to 0 */ }
+
     const payload = {
       id: newId,
       orderId: order.id,
       clientId: order.clientId,
       scheduledDate: today,
       deliveredBy: actorName,
-      items: 0,
+      items: itemsCount,
       notes: typeLabel,
-      deliveryFee: 0,
+      deliveryFee: order.deliveryFee || 0,
       status: "Pending",
     };
     try {
