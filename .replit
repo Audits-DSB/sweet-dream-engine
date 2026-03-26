@@ -52,9 +52,9 @@ externalPort = 3002
 [userenv.shared]
 EXTERNAL_SUPABASE_URL = "https://qelguwdtxlyhulrtfyyb.supabase.co"
 EXTERNAL_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlbGd1d2R0eGx5aHVscnRmeXliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyNjM4NDgsImV4cCI6MjA4NjgzOTg0OH0.MBLHMkBVfG-LNso4Je-T2LXAD6rlyYPeT3msvd6_-BY"
-VITE_SUPABASE_URL = "https://nhmrwmseowokjiqccsjd.supabase.co"
-VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5obXJ3bXNlb3dva2ppcWNjc2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5OTI3MjAsImV4cCI6MjA4ODU2ODcyMH0.VSoifjw26qik414_Sri8cIisauRWLIlTE4Dc1KonVdw"
-VITE_SUPABASE_PROJECT_ID = "nhmrwmseowokjiqccsjd"
+VITE_SUPABASE_URL = "https://qelguwdtxlyhulrtfyyb.supabase.co"
+VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlbGd1d2R0eGx5aHVscnRmeXliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyNjM4NDgsImV4cCI6MjA4NjgzOTg0OH0.MBLHMkBVfG-LNso4Je-T2LXAD6rlyYPeT3msvd6_-BY"
+VITE_SUPABASE_PROJECT_ID = "qelguwdtxlyhulrtfyyb"
 
 [postMerge]
 path = "scripts/post-merge.sh"
