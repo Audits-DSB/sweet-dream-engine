@@ -40,19 +40,20 @@ function parsePaymentsField(raw: any): { payments: { date: string; amount: numbe
   return { payments: [], meta: {} };
 }
 
-function mapCollection(raw: any): Collection {
-  const total = Number(raw.total ?? raw.totalAmount ?? 0);
-  const paid = Number(raw.paid ?? raw.paidAmount ?? 0);
+function mapCollection(raw: any, clientsMap: Record<string, string> = {}): Collection {
+  const total = Number(raw.totalAmount ?? raw.total_amount ?? raw.total ?? 0);
+  const paid = Number(raw.paidAmount ?? raw.paid_amount ?? raw.paid ?? 0);
+  const clientId = raw.clientId || raw.client_id || "";
   const { payments, meta } = parsePaymentsField(raw.payments);
   return {
     id: raw.id,
     order: raw.order || raw.orderId || raw.order_id || "",
-    client: raw.client || raw.clientName || raw.client_name || "",
-    clientId: raw.clientId || raw.client_id || "",
-    issueDate: raw.issueDate || raw.issue_date || raw.createdAt || "",
+    client: raw.client || raw.clientName || raw.client_name || clientsMap[clientId] || clientId,
+    clientId,
+    issueDate: raw.issueDate || raw.invoice_date || raw.invoiceDate || raw.createdAt || "",
     dueDate: raw.dueDate || raw.due_date || "",
     total, paid,
-    remaining: Number(raw.remaining ?? (total - paid)),
+    remaining: Number(raw.outstanding ?? raw.remaining ?? (total - paid)),
     payments,
     status: raw.status || "Awaiting Confirmation",
     auditId: meta.auditId || "", auditDate: meta.auditDate || "",
@@ -88,8 +89,11 @@ export default function CollectionsPage() {
     Promise.all([
       api.get<any[]>("/collections"),
       api.get<any[]>("/treasury/accounts"),
-    ]).then(([cols, accounts]) => {
-      setCollections((cols || []).map(mapCollection));
+      api.get<any[]>("/clients"),
+    ]).then(([cols, accounts, clients]) => {
+      const clientsMap: Record<string, string> = {};
+      (clients || []).forEach((c: any) => { clientsMap[c.id] = c.name; });
+      setCollections((cols || []).map(c => mapCollection(c, clientsMap)));
       setTreasuryAccounts((accounts || []).filter((a: any) => a.isActive).map((a: any) => ({ id: a.id, name: a.name, balance: Number(a.balance) })));
     }).finally(() => setLoadingCollections(false));
   }, []);
@@ -151,7 +155,8 @@ export default function CollectionsPage() {
 
     try {
       await api.patch(`/collections/${paymentInvoice.id}`, {
-        paid: newPaid, remaining: newRemaining, status: newStatus, payments: updatedPaymentsField,
+        paidAmount: newPaid, outstanding: newRemaining, status: newStatus,
+        notes: paymentInvoice.auditId ? `جرد: ${paymentInvoice.auditId}` : undefined,
       });
     } catch (err: any) {
       toast.error(err?.message || "فشل حفظ الدفعة");

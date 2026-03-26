@@ -534,7 +534,9 @@ router.get("/collections", async (_req, res) => {
   sbOk(res, await supabaseAdmin.from("collections").select("*").order("created_at", { ascending: false }));
 });
 router.post("/collections", async (req, res) => {
-  sbOk(res, await supabaseAdmin.from("collections").insert(snakifyKeys(req.body)).select().single());
+  const body = { ...req.body };
+  if (!body.id) body.id = `COL-${Date.now()}`;
+  sbOk(res, await supabaseAdmin.from("collections").insert(snakifyKeys(body)).select().single());
 });
 router.patch("/collections/:id", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("collections").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
