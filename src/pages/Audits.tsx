@@ -356,13 +356,13 @@ export default function AuditsPage() {
       };
 
       const saved = await api.post<any>("/collections", {
-        clientId: audit.clientId, client: audit.clientName, clientName: audit.clientName,
+        clientId: audit.clientId, clientName: audit.clientName,
         total, paid: 0, remaining: total,
         issueDate: today, dueDate: today, status: "Awaiting Confirmation",
         payments: paymentsData,
       });
       await logAudit({ entity: "collection", entityId: saved.id, entityName: `${saved.id} - ${audit.clientName}`, action: "create", snapshot: { ...saved, auditId: audit.id }, endpoint: "/collections" });
-      toast.success(`تم إنشاء التحصيل ${saved.id} — ${audit.clientName} (${total.toLocaleString()} ر.س)`);
+      toast.success(`تم إنشاء التحصيل ${saved.id} — ${audit.clientName} (${total.toLocaleString()} ج.م)`);
     } catch (err: any) {
       toast.error(err?.message || "فشل إنشاء التحصيل");
     } finally {
@@ -642,7 +642,7 @@ export default function AuditsPage() {
                           >
                             {creatingCollection === selectedAudit.id
                               ? <><Loader2 className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5 animate-spin" />جارٍ الإنشاء...</>
-                              : <><Receipt className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />إنشاء تحصيل ({shortageTotal.toLocaleString()} ر.س)</>}
+                              : <><Receipt className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />إنشاء تحصيل ({shortageTotal.toLocaleString()} ج.م)</>}
                           </Button>
                         )}
                       </div>
