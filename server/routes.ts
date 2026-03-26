@@ -5,7 +5,18 @@ import { Pool } from "pg";
 const router = Router();
 
 // ─── pgPool kept ONLY for migration endpoint (reads old local data) ───────────
-const pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Lazy initialization — only connect if DATABASE_URL is provided.
+// On Cloud Run (Supabase-only mode) this is optional and won't crash on startup.
+let _pgPool: InstanceType<typeof Pool> | null = null;
+function getPgPool(): InstanceType<typeof Pool> {
+  if (!_pgPool) {
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL not set — /migrate-to-supabase endpoint unavailable.");
+    }
+    _pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
+  }
+  return _pgPool;
+}
 
 // ─── EXTERNAL MATERIALS PROXY (queries the Lovable/catalog Supabase project) ──
 router.get("/external-materials", async (_req, res) => {
@@ -821,49 +832,49 @@ router.post("/migrate-to-supabase", async (req, res) => {
   const results: Record<string, any> = {};
   try {
     // 1. order_lines
-    const { rows: lines } = await pgPool.query("SELECT * FROM order_lines").catch(() => ({ rows: [] }));
+    const { rows: lines } = await getPgPool().query("SELECT * FROM order_lines").catch(() => ({ rows: [] }));
     if (lines.length > 0) {
       const { error } = await supabaseAdmin.from("order_lines").upsert(lines, { onConflict: "id" });
       results.order_lines = error ? `error: ${error.message}` : `migrated ${lines.length}`;
     } else results.order_lines = "empty or table missing";
 
     // 2. order_founder_contributions
-    const { rows: contribs } = await pgPool.query("SELECT * FROM order_founder_contributions").catch(() => ({ rows: [] }));
+    const { rows: contribs } = await getPgPool().query("SELECT * FROM order_founder_contributions").catch(() => ({ rows: [] }));
     if (contribs.length > 0) {
       const { error } = await supabaseAdmin.from("order_founder_contributions").upsert(contribs, { onConflict: "order_id" });
       results.order_founder_contributions = error ? `error: ${error.message}` : `migrated ${contribs.length}`;
     } else results.order_founder_contributions = "empty or table missing";
 
     // 3. client_inventory
-    const { rows: ci } = await pgPool.query("SELECT * FROM client_inventory").catch(() => ({ rows: [] }));
+    const { rows: ci } = await getPgPool().query("SELECT * FROM client_inventory").catch(() => ({ rows: [] }));
     if (ci.length > 0) {
       const { error } = await supabaseAdmin.from("client_inventory").upsert(ci, { onConflict: "id" });
       results.client_inventory = error ? `error: ${error.message}` : `migrated ${ci.length}`;
     } else results.client_inventory = "empty or table missing";
 
     // 4. delivery_actors
-    const { rows: da } = await pgPool.query("SELECT * FROM delivery_actors").catch(() => ({ rows: [] }));
+    const { rows: da } = await getPgPool().query("SELECT * FROM delivery_actors").catch(() => ({ rows: [] }));
     if (da.length > 0) {
       const { error } = await supabaseAdmin.from("delivery_actors").upsert(da, { onConflict: "id" });
       results.delivery_actors = error ? `error: ${error.message}` : `migrated ${da.length}`;
     } else results.delivery_actors = "empty or table missing";
 
     // 5. supplier_materials
-    const { rows: sm } = await pgPool.query("SELECT * FROM supplier_materials").catch(() => ({ rows: [] }));
+    const { rows: sm } = await getPgPool().query("SELECT * FROM supplier_materials").catch(() => ({ rows: [] }));
     if (sm.length > 0) {
       const { error } = await supabaseAdmin.from("supplier_materials").upsert(sm, { onConflict: "supplier_id,material_code" });
       results.supplier_materials = error ? `error: ${error.message}` : `migrated ${sm.length}`;
     } else results.supplier_materials = "empty or table missing";
 
     // 6. audits
-    const { rows: au } = await pgPool.query("SELECT * FROM audits").catch(() => ({ rows: [] }));
+    const { rows: au } = await getPgPool().query("SELECT * FROM audits").catch(() => ({ rows: [] }));
     if (au.length > 0) {
       const { error } = await supabaseAdmin.from("audits").upsert(au, { onConflict: "id" });
       results.audits = error ? `error: ${error.message}` : `migrated ${au.length}`;
     } else results.audits = "empty or table missing";
 
     // 7. business_rules
-    const { rows: br } = await pgPool.query("SELECT * FROM business_rules").catch(() => ({ rows: [] }));
+    const { rows: br } = await getPgPool().query("SELECT * FROM business_rules").catch(() => ({ rows: [] }));
     if (br.length > 0) {
       const { error } = await supabaseAdmin.from("business_rules").upsert(br, { onConflict: "id" });
       results.business_rules = error ? `error: ${error.message}` : `migrated ${br.length}`;
