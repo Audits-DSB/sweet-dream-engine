@@ -12,6 +12,19 @@ import {
   inventoryList, notificationsList,
 } from "../src/data/store";
 
+// ─── Environment validation ───────────────────────────────────────────────────
+const REQUIRED_ENV = ["VITE_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];
+const missingEnv = REQUIRED_ENV.filter(k => !process.env[k]);
+if (missingEnv.length > 0) {
+  console.error("
+❌ MISSING REQUIRED ENVIRONMENT VARIABLES:");
+  missingEnv.forEach(k => console.error("   -", k));
+  console.error("
+Set these in Cloud Run: Edit & Deploy → Variables & Secrets
+");
+  process.exit(1);
+}
+
 const app = express();
 const PORT = Number(process.env.PORT || 5000);
 const VITE_PORT = 5001;
