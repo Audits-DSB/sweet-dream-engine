@@ -16,12 +16,9 @@ import {
 const REQUIRED_ENV = ["VITE_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];
 const missingEnv = REQUIRED_ENV.filter(k => !process.env[k]);
 if (missingEnv.length > 0) {
-  console.error("
-❌ MISSING REQUIRED ENVIRONMENT VARIABLES:");
+  console.error("\n❌ MISSING REQUIRED ENVIRONMENT VARIABLES:");
   missingEnv.forEach(k => console.error("   -", k));
-  console.error("
-Set these in Cloud Run: Edit & Deploy → Variables & Secrets
-");
+  console.error("\nSet these in Cloud Run: Edit & Deploy → Variables & Secrets\n");
   process.exit(1);
 }
 
