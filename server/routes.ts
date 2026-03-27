@@ -764,21 +764,35 @@ function encodeFounderDesc(orderId: string | null, notes: string | null, extra?:
 // ── Founder capital balances (mirrors TreasuryAccounts logic) ──
 router.get("/founder-balances", async (_req, res) => {
   try {
-    const [{ data: founders }, { data: txData }, { data: cols }, { data: ords }] = await Promise.all([
+    const [{ data: founders }, { data: txData }, { data: cols }, { data: ords }, { data: rulesRows }, { data: contribRows }, { data: lineRows }] = await Promise.all([
       supabaseAdmin.from("founders").select("id,name"),
       supabaseAdmin.from("treasury_transactions").select("*").in("tx_type", FOUNDER_TX_TYPES),
       supabaseAdmin.from("collections").select("id,order_id,paid_amount,total_amount,notes"),
       supabaseAdmin.from("orders").select("*"),
+      supabaseAdmin.from("business_rules").select("*").eq("id", "default").maybeSingle(),
+      supabaseAdmin.from("order_founder_contributions").select("order_id,contributions"),
+      supabaseAdmin.from("order_lines").select("order_id,line_cost"),
     ]);
     const fList = (founders || []) as { id: string; name: string }[];
     const txList = (txData || []) as any[];
     const colList = (cols || []) as any[];
     const ordList = (ords || []) as any[];
+    const globalPct = Number(rulesRows?.company_profit_percentage ?? 40);
+
+    const contribMap: Record<string, any[]> = {};
+    for (const r of contribRows || []) contribMap[r.order_id] = r.contributions || [];
+    const costMap: Record<string, number> = {};
+    for (const l of lineRows || []) costMap[l.order_id] = (costMap[l.order_id] || 0) + (Number(l.line_cost) || 0);
 
     const orderMap: Record<string, any> = {};
-    ordList.forEach(o => { orderMap[o.id] = o; });
+    ordList.forEach(o => {
+      orderMap[o.id] = {
+        ...o,
+        founder_contributions: contribMap[o.id] || [],
+        total_cost: costMap[o.id] || 0,
+      };
+    });
 
-    // Auto capital (recovered) + auto profits — both from paid collections
     const autoCapital: Record<string, number> = {};
     const autoProfit: Record<string, number> = {};
     fList.forEach(f => { autoCapital[f.id] = 0; autoProfit[f.id] = 0; });
@@ -793,8 +807,7 @@ router.get("/founder-balances", async (_req, res) => {
       const rawC = order.founder_contributions;
       if (Array.isArray(rawC)) contribs = rawC;
       else if (typeof rawC === "string") { try { contribs = JSON.parse(rawC); } catch { contribs = []; } }
-      const rawPct = contribs[0]?.companyProfitPercentage ?? order.company_profit_percentage;
-      const companyPct = rawPct != null ? (Number(rawPct) >= 2 ? Number(rawPct) : Number(rawPct) * 100) : 40;
+      const companyPct = globalPct;
       const qp = quickProfit({ orderTotal: totalSelling, totalCost, paidValue: paid, companyProfitPct: companyPct });
       const capitalReturn = Math.round(qp.recoveredCapital);
       const foundersProfit = qp.foundersProfit;
@@ -816,8 +829,6 @@ router.get("/founder-balances", async (_req, res) => {
       });
     });
 
-    // Manual capital_return additions & capital_withdrawal deductions per founder
-    // Profits are now auto-included — no manual registration needed
     const balances = fList.map(f => {
       const myTxs = txList.filter((tx: any) => tx.performed_by === f.id || tx.reference_id === f.name);
       const manualReturn = myTxs.filter((tx: any) => tx.tx_type === "capital_return").reduce((s: number, tx: any) => s + Math.abs(Number(tx.amount)), 0);
@@ -825,7 +836,7 @@ router.get("/founder-balances", async (_req, res) => {
       return {
         founderId: f.id,
         founderName: f.name,
-        balance: Math.round((autoCapital[f.id] || 0) + (autoProfit[f.id] || 0) + manualReturn - withdrawn),
+        balance: (autoCapital[f.id] || 0) + (autoProfit[f.id] || 0) + manualReturn - withdrawn,
       };
     });
     res.json(balances);
