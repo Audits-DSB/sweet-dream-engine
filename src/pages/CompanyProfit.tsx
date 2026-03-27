@@ -147,6 +147,21 @@ export default function CompanyProfitPage() {
 
     const entries: ProfitEntry[] = [];
 
+    const getOrderPct = (oid: string): number => {
+      const order = orderMap[oid];
+      if (!order) return rules.companyProfitPercentage;
+      const contribs = parseJsonField(order.founderContributions ?? order.founder_contributions);
+      const contribArray = Array.isArray(contribs) ? contribs : [];
+      return contribArray[0]?.companyProfitPercentage ?? rules.companyProfitPercentage;
+    };
+
+    const getOrderContribs = (oid: string) => {
+      const order = orderMap[oid];
+      if (!order) return [];
+      const contribs = parseJsonField(order.founderContributions ?? order.founder_contributions);
+      return Array.isArray(contribs) ? contribs : [];
+    };
+
     (collections as any[]).forEach((col: any) => {
       const issueDate = col.invoiceDate || col.invoice_date || col.issueDate || col.issue_date || col.createdAt || col.created_at || "";
       let d: Date;
@@ -167,78 +182,156 @@ export default function CompanyProfitPage() {
       })();
 
       const lineItems: any[] = notesMeta.lineItems || [];
-      const fromLines = [...new Set(lineItems.map((l: any) => l.sourceOrderId).filter(Boolean))] as string[];
       const primaryOrderId = col.order || col.orderId || col.order_id || "";
-      const sourceOrderIds = fromLines.length > 0 ? fromLines
-        : (notesMeta.sourceOrders?.length > 0 ? notesMeta.sourceOrders : (primaryOrderId ? [primaryOrderId] : []));
 
-      const validOrderIds = sourceOrderIds.filter((oid: string) => orderMap[oid]);
-      if (validOrderIds.length === 0) return;
+      let totalGrossProfit = 0;
+      let totalCompanyProfit = 0;
+      let totalFoundersProfit = 0;
+      let totalRealizedProfit = 0;
+      let totalItemsSelling = 0;
+      let weightedPctSum = 0;
+      const founderAmounts: Record<string, { name: string; amount: number; pct: number }> = {};
 
-      const orderTotals: Record<string, number> = {};
-      let allOrdersTotal = 0;
-      validOrderIds.forEach((oid: string) => {
-        const o = orderMap[oid];
-        const ts = parseAmount(o.totalSelling ?? o.total_selling);
-        orderTotals[oid] = ts;
-        allOrdersTotal += ts;
-      });
-
-      validOrderIds.forEach((oid: string) => {
-        const order = orderMap[oid];
-        const totalSelling = parseAmount(order.totalSelling ?? order.total_selling);
-        const totalCost = parseAmount(order.totalCost ?? order.total_cost);
-        const orderShare = allOrdersTotal > 0 ? totalSelling / allOrdersTotal : 1 / validOrderIds.length;
-        const paidAmount = Math.round(totalPaid * orderShare * 100) / 100;
-
-        const contribs = parseJsonField(order.founderContributions ?? order.founder_contributions);
-        const contribArray = Array.isArray(contribs) ? contribs : [];
-        const snappedPct = contribArray[0]?.companyProfitPercentage ?? rules.companyProfitPercentage;
-
-        const qp = quickProfit({ orderTotal: totalSelling, totalCost, paidValue: paidAmount, companyProfitPct: snappedPct });
-        const grossProfit = qp.expectedProfit;
-        const paidRatio = totalSelling > 0 ? Math.min(paidAmount / totalSelling, 1) : 0;
-        const realizedProfit = qp.realizedProfit;
-        const companyProfit = Math.round(qp.companyProfit);
-        const foundersProfit = Math.round(qp.foundersProfit);
-
-        let founderShares: Array<{ id: string; name: string; amount: number; pct: number }>;
-        if (contribArray.length > 0) {
-          const totalFounderPct = contribArray.reduce((s: number, fc: any) => s + (fc.percentage || 0), 0) || 100;
-          founderShares = contribArray.map((fc: any) => {
-            const founderName = fc.founder || founderMap[fc.founderId] || fc.founderId || "مؤسس";
-            const founderPct = fc.percentage || 0;
-            const founderAmount = Math.round(foundersProfit * founderPct / totalFounderPct);
-            return { id: fc.founderId || founderName, name: founderName, amount: founderAmount, pct: Math.round((founderPct / totalFounderPct) * 100 * 10) / 10 };
-          });
-        } else {
-          const numFounders = foundersList.length || 1;
-          const equalPct = Math.round((100 / numFounders) * 10) / 10;
-          const equalAmount = Math.round(foundersProfit / numFounders);
-          founderShares = foundersList.map((f: any) => ({
-            id: f.id, name: f.name || f.alias || f.id, amount: equalAmount, pct: equalPct,
-          }));
-        }
-
-        entries.push({
-          collectionId: col.id,
-          orderId: oid,
-          clientId: order.clientId || order.client_id || col.clientId || col.client_id || "",
-          client: col.client || col.clientName || col.client_name || order.client || "",
-          date: issueDate.split("T")[0],
-          totalCollection: Math.round(totalCollection * orderShare * 100) / 100,
-          orderTotal: totalSelling,
-          paidAmount,
-          paidRatio,
-          grossProfit,
-          realizedProfit,
-          companyProfitPct: snappedPct,
-          companyProfit,
-          foundersProfit,
-          founderShares,
-          status: col.status || "Pending",
-          lastPaymentDate: lastPaymentDate.split("T")[0],
+      if (lineItems.length > 0 && lineItems.some((li: any) => li.sourceOrderId)) {
+        lineItems.forEach((li: any) => {
+          const oid = li.sourceOrderId || primaryOrderId;
+          if (!orderMap[oid]) return;
+          const itemSelling = parseAmount(li.sellingPrice ?? li.selling_price ?? 0);
+          const itemCost = parseAmount(li.costPrice ?? li.cost_price ?? li.cost ?? 0);
+          const qty = parseAmount(li.quantity ?? 1);
+          const lineSelling = itemSelling * qty;
+          const lineCost = itemCost * qty;
+          totalItemsSelling += lineSelling;
         });
+
+        const payRatio = totalItemsSelling > 0 ? Math.min(totalPaid / totalItemsSelling, 1) : 0;
+
+        lineItems.forEach((li: any) => {
+          const oid = li.sourceOrderId || primaryOrderId;
+          const order = orderMap[oid];
+          if (!order) return;
+          const itemSelling = parseAmount(li.sellingPrice ?? li.selling_price ?? 0);
+          const itemCost = parseAmount(li.costPrice ?? li.cost_price ?? li.cost ?? 0);
+          const qty = parseAmount(li.quantity ?? 1);
+          const lineSelling = itemSelling * qty;
+          const lineCost = itemCost * qty;
+          const pct = getOrderPct(oid);
+          const normPct = pct >= 2 ? pct / 100 : pct;
+
+          const lineGross = lineSelling - lineCost;
+          const lineRealized = lineGross * payRatio;
+          const lineCompany = lineRealized * normPct;
+          const lineFounders = lineRealized - lineCompany;
+
+          totalGrossProfit += lineGross;
+          totalRealizedProfit += lineRealized;
+          totalCompanyProfit += lineCompany;
+          totalFoundersProfit += lineFounders;
+          weightedPctSum += normPct * lineSelling;
+
+          const contribArray = getOrderContribs(oid);
+          if (contribArray.length > 0) {
+            const totalFPct = contribArray.reduce((s: number, fc: any) => s + (fc.percentage || 0), 0) || 100;
+            contribArray.forEach((fc: any) => {
+              const fid = fc.founderId || fc.founder || "unknown";
+              const fName = fc.founder || founderMap[fc.founderId] || fc.founderId || "مؤسس";
+              const fPct = fc.percentage || 0;
+              const fAmount = lineFounders * fPct / totalFPct;
+              if (!founderAmounts[fid]) founderAmounts[fid] = { name: fName, amount: 0, pct: fPct };
+              founderAmounts[fid].amount += fAmount;
+            });
+          } else {
+            const numFounders = foundersList.length || 1;
+            foundersList.forEach((f: any) => {
+              const fid = f.id;
+              if (!founderAmounts[fid]) founderAmounts[fid] = { name: f.name || f.alias || f.id, amount: 0, pct: 100 / numFounders };
+              founderAmounts[fid].amount += lineFounders / numFounders;
+            });
+          }
+        });
+      } else {
+        const srcOrders = notesMeta.sourceOrders?.length > 0
+          ? notesMeta.sourceOrders.filter((oid: string) => orderMap[oid])
+          : (primaryOrderId && orderMap[primaryOrderId] ? [primaryOrderId] : []);
+        if (srcOrders.length === 0) return;
+
+        let allSelling = 0;
+        const orderSelling: Record<string, number> = {};
+        srcOrders.forEach((oid: string) => {
+          const ts = parseAmount(orderMap[oid].totalSelling ?? orderMap[oid].total_selling);
+          orderSelling[oid] = ts;
+          allSelling += ts;
+        });
+
+        srcOrders.forEach((oid: string) => {
+          const order = orderMap[oid];
+          const oSelling = parseAmount(order.totalSelling ?? order.total_selling);
+          const oCost = parseAmount(order.totalCost ?? order.total_cost);
+          const share = allSelling > 0 ? oSelling / allSelling : 1 / srcOrders.length;
+          const oPaid = totalPaid * share;
+          const pct = getOrderPct(oid);
+          const normPct = pct >= 2 ? pct / 100 : pct;
+
+          const qp = quickProfit({ orderTotal: oSelling, totalCost: oCost, paidValue: oPaid, companyProfitPct: pct });
+          totalGrossProfit += qp.expectedProfit;
+          totalRealizedProfit += qp.realizedProfit;
+          totalCompanyProfit += qp.companyProfit;
+          totalFoundersProfit += qp.foundersProfit;
+          totalItemsSelling += oSelling;
+          weightedPctSum += normPct * oSelling;
+
+          const contribArray = getOrderContribs(oid);
+          if (contribArray.length > 0) {
+            const totalFPct = contribArray.reduce((s: number, fc: any) => s + (fc.percentage || 0), 0) || 100;
+            contribArray.forEach((fc: any) => {
+              const fid = fc.founderId || fc.founder || "unknown";
+              const fName = fc.founder || founderMap[fc.founderId] || fc.founderId || "مؤسس";
+              const fAmount = qp.foundersProfit * (fc.percentage || 0) / totalFPct;
+              if (!founderAmounts[fid]) founderAmounts[fid] = { name: fName, amount: 0, pct: 0 };
+              founderAmounts[fid].amount += fAmount;
+            });
+          } else {
+            const numFounders = foundersList.length || 1;
+            foundersList.forEach((f: any) => {
+              const fid = f.id;
+              if (!founderAmounts[fid]) founderAmounts[fid] = { name: f.name || f.alias || f.id, amount: 0, pct: 0 };
+              founderAmounts[fid].amount += qp.foundersProfit / numFounders;
+            });
+          }
+        });
+      }
+
+      const blendedPct = totalItemsSelling > 0 ? Math.round(weightedPctSum / totalItemsSelling * 100 * 10) / 10 : rules.companyProfitPercentage;
+      const paidRatio = totalItemsSelling > 0 ? Math.min(totalPaid / totalItemsSelling, 1) : 0;
+
+      const totalFounderAmount = Object.values(founderAmounts).reduce((s, v) => s + v.amount, 0) || 1;
+      const founderShares = Object.entries(founderAmounts).map(([fid, v]) => ({
+        id: fid,
+        name: v.name,
+        amount: Math.round(v.amount),
+        pct: Math.round(v.amount / totalFounderAmount * 100 * 10) / 10,
+      }));
+
+      const order0 = orderMap[primaryOrderId];
+
+      entries.push({
+        collectionId: col.id,
+        orderId: primaryOrderId,
+        clientId: order0?.clientId || order0?.client_id || col.clientId || col.client_id || "",
+        client: col.client || col.clientName || col.client_name || order0?.client || "",
+        date: issueDate.split("T")[0],
+        totalCollection,
+        orderTotal: totalItemsSelling,
+        paidAmount: totalPaid,
+        paidRatio,
+        grossProfit: totalGrossProfit,
+        realizedProfit: totalRealizedProfit,
+        companyProfitPct: blendedPct,
+        companyProfit: Math.round(totalCompanyProfit),
+        foundersProfit: Math.round(totalFoundersProfit),
+        founderShares,
+        status: col.status || "Pending",
+        lastPaymentDate: lastPaymentDate.split("T")[0],
       });
     });
 
