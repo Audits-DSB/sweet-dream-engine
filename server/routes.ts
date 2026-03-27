@@ -702,20 +702,33 @@ router.delete("/treasury/transactions/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── FOUNDER TRANSACTIONS (stored in treasury_transactions with special txTypes) ──
-// txType: "founder_contribution" | "founder_withdrawal" | "order_funding"
-// performedBy = founderId, referenceId = founderName, category = method
-// description = "[orderId:ORD-xxx] notes..." (linked_account_id is UUID, can't store order IDs there)
-const FOUNDER_TX_TYPES = ["founder_contribution", "founder_withdrawal", "order_funding"];
+// ─── FOUNDER TRANSACTIONS ────────────────────────────────────────────────────
+// txTypes: contribution | withdrawal | order_funding | capital_return | capital_withdrawal
+// performedBy = founderId, referenceId = founderName
+// description = JSON string for capital_return, "[orderId:X] notes" for others
+const FOUNDER_TX_TYPES = [
+  "founder_contribution", "founder_withdrawal", "order_funding",
+  "capital_return", "capital_withdrawal"
+];
 
-// Parse orderId and notes from description field
-function parseFounderDesc(desc: string | null): { orderId: string; notes: string } {
-  if (!desc) return { orderId: "", notes: "" };
+function parseFounderDesc(desc: string | null): { orderId: string; collectionId: string; clientName: string; notes: string } {
+  if (!desc) return { orderId: "", collectionId: "", clientName: "", notes: "" };
+  // JSON format (capital_return)
+  if (desc.trim().startsWith("{")) {
+    try {
+      const j = JSON.parse(desc);
+      return { orderId: j.orderId || "", collectionId: j.collectionId || "", clientName: j.clientName || "", notes: j.notes || "" };
+    } catch {}
+  }
+  // Legacy format: [orderId:X] notes
   const match = desc.match(/^\[orderId:([^\]]*)\]\s*(.*)/s);
-  if (match) return { orderId: match[1] || "", notes: match[2] || "" };
-  return { orderId: "", notes: desc };
+  if (match) return { orderId: match[1] || "", collectionId: "", clientName: "", notes: match[2] || "" };
+  return { orderId: "", collectionId: "", clientName: "", notes: desc };
 }
-function encodeFounderDesc(orderId: string | null, notes: string | null): string | null {
+function encodeFounderDesc(orderId: string | null, notes: string | null, extra?: { collectionId?: string; clientName?: string }): string | null {
+  if (extra?.collectionId) {
+    return JSON.stringify({ orderId: orderId || "", collectionId: extra.collectionId, clientName: extra.clientName || "", notes: notes || "" });
+  }
   if (!orderId && !notes) return null;
   if (!orderId) return notes || null;
   return `[orderId:${orderId}] ${notes || ""}`.trim();
@@ -729,15 +742,24 @@ router.get("/founder-transactions", async (_req, res) => {
     .order("created_at", { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
   const mapped = (data || []).map((tx: any) => {
-    const { orderId, notes } = parseFounderDesc(tx.description);
+    const { orderId, collectionId, clientName, notes } = parseFounderDesc(tx.description);
+    const typeMap: Record<string, string> = {
+      founder_contribution: "contribution",
+      founder_withdrawal: "withdrawal",
+      order_funding: "funding",
+      capital_return: "capital_return",
+      capital_withdrawal: "capital_withdrawal",
+    };
     return {
       id: tx.id,
       founderId: tx.performed_by || "",
       founderName: tx.reference_id || "",
-      type: tx.tx_type === "founder_contribution" ? "contribution" : tx.tx_type === "founder_withdrawal" ? "withdrawal" : "funding",
+      type: typeMap[tx.tx_type] || "funding",
       amount: Math.abs(Number(tx.amount)),
       method: tx.category || "bank",
       orderId,
+      collectionId,
+      clientName,
       notes,
       date: tx.date || (tx.created_at ? tx.created_at.split("T")[0] : ""),
       createdAt: tx.created_at,
@@ -747,9 +769,17 @@ router.get("/founder-transactions", async (_req, res) => {
 });
 
 router.post("/founder-transactions", async (req, res) => {
-  const { founderId, founderName, type, amount, method, orderId, notes, date } = req.body;
-  const txType = type === "contribution" ? "founder_contribution" : type === "withdrawal" ? "founder_withdrawal" : "order_funding";
-  const signedAmount = type === "withdrawal" ? -Math.abs(Number(amount)) : Math.abs(Number(amount));
+  const { founderId, founderName, type, amount, method, orderId, collectionId, clientName, notes, date } = req.body;
+  const txTypeMap: Record<string, string> = {
+    contribution: "founder_contribution",
+    withdrawal: "founder_withdrawal",
+    funding: "order_funding",
+    capital_return: "capital_return",
+    capital_withdrawal: "capital_withdrawal",
+  };
+  const txType = txTypeMap[type] || "order_funding";
+  const isNegative = type === "withdrawal" || type === "capital_withdrawal";
+  const signedAmount = isNegative ? -Math.abs(Number(amount)) : Math.abs(Number(amount));
   const txData = {
     tx_type: txType,
     amount: signedAmount,
@@ -757,13 +787,13 @@ router.post("/founder-transactions", async (req, res) => {
     performed_by: founderId || null,
     reference_id: founderName || null,
     category: method || "bank",
-    description: encodeFounderDesc(orderId || null, notes || null),
+    description: encodeFounderDesc(orderId || null, notes || null, { collectionId: collectionId || undefined, clientName: clientName || undefined }),
     date: date || new Date().toISOString().split("T")[0],
   };
   const { data, error } = await supabaseAdmin.from("treasury_transactions").insert(txData).select().single();
   if (error) return res.status(500).json({ error: error.message });
 
-  // ── Sync totals to founders table ──────────────────────────────────────────
+  // ── Sync totals to founders table (contributions/fundings/withdrawals only) ──
   if (founderId) {
     try {
       const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", founderId).single();
@@ -774,6 +804,7 @@ router.post("/founder-transactions", async (req, res) => {
         } else if (type === "withdrawal") {
           patch.total_withdrawn = Number(f.total_withdrawn || 0) + Math.abs(Number(amount));
         }
+        // capital_return / capital_withdrawal are tracked separately in their own txs
         if (Object.keys(patch).length > 0) {
           await supabaseAdmin.from("founders").update(patch).eq("id", founderId);
         }
@@ -783,26 +814,19 @@ router.post("/founder-transactions", async (req, res) => {
 
   const parsed = parseFounderDesc(data.description);
   res.json({
-    id: data.id,
-    founderId: data.performed_by || "",
-    founderName: data.reference_id || "",
-    type,
-    amount: Math.abs(Number(data.amount)),
-    method: data.category || "bank",
-    orderId: parsed.orderId,
-    notes: parsed.notes,
-    date: data.date || data.created_at?.split("T")[0] || "",
-    createdAt: data.created_at,
+    id: data.id, founderId: data.performed_by || "", founderName: data.reference_id || "",
+    type, amount: Math.abs(Number(data.amount)), method: data.category || "bank",
+    orderId: parsed.orderId, collectionId: parsed.collectionId, clientName: parsed.clientName, notes: parsed.notes,
+    date: data.date || data.created_at?.split("T")[0] || "", createdAt: data.created_at,
   });
 });
 
 router.delete("/founder-transactions/:id", async (req, res) => {
-  // Fetch before delete to reverse founder totals
   const { data: tx } = await supabaseAdmin.from("treasury_transactions").select("*").eq("id", req.params.id).single();
   const { error } = await supabaseAdmin.from("treasury_transactions").delete().eq("id", req.params.id).in("tx_type", FOUNDER_TX_TYPES);
   if (error) return res.status(500).json({ error: error.message });
 
-  // ── Reverse founder totals ──────────────────────────────────────────────────
+  // ── Reverse founder totals (only for contribution/funding/withdrawal) ──
   if (tx && tx.performed_by) {
     try {
       const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", tx.performed_by).single();
@@ -820,7 +844,6 @@ router.delete("/founder-transactions/:id", async (req, res) => {
       }
     } catch (e: any) { console.warn("[founder-tx] reverse totals error:", e.message); }
   }
-
   res.json({ ok: true });
 });
 

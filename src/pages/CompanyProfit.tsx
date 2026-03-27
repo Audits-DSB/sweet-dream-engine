@@ -1,3 +1,4 @@
+import React from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
 import { useBusinessRules, getCompanyShareRatio, getFounderShareRatio } from "@/lib/useBusinessRules";
@@ -517,9 +518,8 @@ export default function CompanyProfitPage() {
             </thead>
             <tbody>
               {profitLedger.map((entry) => (
-                <>
+                <React.Fragment key={entry.collectionId}>
                   <tr
-                    key={entry.collectionId}
                     className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer"
                     onClick={() => setExpandedEntry(expandedEntry === entry.collectionId ? null : entry.collectionId)}
                   >
@@ -634,7 +634,7 @@ export default function CompanyProfitPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               ))}
             </tbody>
           </table>
