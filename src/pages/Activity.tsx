@@ -126,7 +126,7 @@ export default function ActivityPage() {
     material: ["code", "name", "category", "unit", "sellingPrice", "storeCost", "supplier", "supplierId", "manufacturer", "hasExpiry", "active"],
     founder: ["id", "name", "alias", "email", "phone", "active"],
     "founder-transaction": ["id", "founderId", "founderName", "type", "amount", "method", "orderId", "date", "notes"],
-    "treasury-account": ["id", "name", "type", "balance", "currency"],
+    "treasury-account": ["name", "accountType", "custodianName", "bankName", "accountNumber", "description"],
     "treasury-transaction": ["id", "accountId", "type", "amount", "date", "description"],
   };
 

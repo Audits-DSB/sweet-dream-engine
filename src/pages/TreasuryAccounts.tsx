@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
-import { Building, Plus, Pencil, Trash2, ArrowRight } from "lucide-react";
+import { Building, Plus, Pencil, Trash2, ArrowRight, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { logAudit } from "@/lib/auditLog";
 
 type Account = {
   id: string; name: string; account_type: string; custodian_name: string;
@@ -31,6 +32,8 @@ export default function TreasuryAccountsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
   const [form, setForm] = useState({ name: "", account_type: "cashbox" as string, custodian_name: "", bank_name: "", account_number: "", description: "" });
+  const [deleteTarget, setDeleteTarget] = useState<Account | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => { fetchAccounts(); }, []);
 
@@ -70,12 +73,39 @@ export default function TreasuryAccountsPage() {
     fetchAccounts();
   };
 
-  const toggleActive = async (a: Account) => {
-    await api.patch(`/treasury/accounts/${a.id}`, { isActive: !a.is_active });
-    fetchAccounts();
+  const confirmDelete = (a: Account) => setDeleteTarget(a);
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/treasury/accounts/${deleteTarget.id}`);
+      await logAudit({
+        entity: "treasury-account",
+        entityId: deleteTarget.id,
+        entityName: deleteTarget.name,
+        action: "delete",
+        snapshot: {
+          name: deleteTarget.name,
+          accountType: deleteTarget.account_type,
+          custodianName: deleteTarget.custodian_name,
+          bankName: deleteTarget.bank_name ?? null,
+          accountNumber: deleteTarget.account_number ?? null,
+          description: deleteTarget.description ?? null,
+        },
+        endpoint: "/treasury/accounts",
+      });
+      toast.success(`تم حذف الحساب "${deleteTarget.name}" بنجاح`);
+      setDeleteTarget(null);
+      fetchAccounts();
+    } catch {
+      toast.error("فشل حذف الحساب");
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const fmtMoney = (n: number) => n.toLocaleString(lang === "ar" ? "ar-EG" : "en-US", { minimumFractionDigits: 2 });
+  const fmtMoney = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2 });
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -122,7 +152,7 @@ export default function TreasuryAccountsPage() {
                     <td className="py-3 px-3">
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(a)} data-testid={`button-edit-account-${a.id}`}><Pencil className="h-3.5 w-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleActive(a)} data-testid={`button-toggle-account-${a.id}`}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => confirmDelete(a)} data-testid={`button-delete-account-${a.id}`}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                       </div>
                     </td>
                   )}
@@ -132,6 +162,34 @@ export default function TreasuryAccountsPage() {
           </table>
         )}
       </div>
+
+      {/* ── Delete Confirmation Dialog ── */}
+      <Dialog open={!!deleteTarget} onOpenChange={open => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              تأكيد حذف الحساب
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-2">
+            <p className="text-sm">هل أنت متأكد من حذف الحساب:</p>
+            <p className="font-semibold text-base">{deleteTarget?.name}</p>
+            {deleteTarget && Number(deleteTarget.balance) !== 0 && (
+              <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-sm text-destructive">
+                ⚠️ هذا الحساب لديه رصيد {fmtMoney(Number(deleteTarget.balance))} ج.م. تأكد من تصفية المعاملات أولاً.
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">يمكن استرجاع الحساب لاحقاً من سجل الأنشطة.</p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>إلغاء</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting ? "جارٍ الحذف..." : "حذف الحساب"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

@@ -643,6 +643,11 @@ router.patch("/treasury/accounts/:id", async (req, res) => {
   const body = { ...snakifyKeys(req.body), updated_at: new Date().toISOString() };
   sbOk(res, await supabaseAdmin.from("treasury_accounts").update(body).eq("id", req.params.id).select().single());
 });
+router.delete("/treasury/accounts/:id", async (req, res) => {
+  const { error } = await supabaseAdmin.from("treasury_accounts").delete().eq("id", req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
 
 // ─── TREASURY TRANSACTIONS ────────────────────────────────────────────────────
 router.get("/treasury/transactions", async (_req, res) => {
