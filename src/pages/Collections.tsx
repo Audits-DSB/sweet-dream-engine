@@ -283,15 +283,15 @@ export default function CollectionsPage() {
                 <td className="py-3 px-3 font-mono text-xs font-medium">{inv.id}</td>
                 <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
                   {inv.sourceOrders && inv.sourceOrders.length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap gap-1.5">
                       {inv.sourceOrders.map(ordId => (
-                        <span key={ordId} className="font-mono text-xs text-primary underline-offset-2 hover:underline cursor-pointer" onClick={() => navigate(`/orders/${ordId}`)}>{ordId}</span>
+                        <span key={ordId} className="font-mono font-medium text-primary hover:text-primary/70 cursor-pointer transition-colors" onClick={() => navigate(`/orders/${ordId}`)}>{ordId}</span>
                       ))}
                     </div>
                   ) : inv.order ? (
-                    <span className="font-mono text-xs text-primary underline-offset-2 hover:underline cursor-pointer" onClick={() => navigate(`/orders/${inv.order}`)}>{inv.order}</span>
+                    <span className="font-mono font-medium text-primary hover:text-primary/70 cursor-pointer transition-colors" onClick={() => navigate(`/orders/${inv.order}`)}>{inv.order}</span>
                   ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
+                    <span className="text-muted-foreground">—</span>
                   )}
                 </td>
                 <td className="py-3 px-3 font-medium hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${inv.clientId}`); }}>{inv.client}</td>
