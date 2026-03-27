@@ -91,11 +91,51 @@ export function NotificationBell() {
     refreshData();
   };
 
-  const typeColor: Record<string, string> = {
+    const typeColor: Record<string, string> = {
     info: "bg-primary/10 text-primary",
     warning: "bg-yellow-500/10 text-yellow-600",
     error: "bg-destructive/10 text-destructive",
     success: "bg-green-500/10 text-green-600",
+    audit_create: "bg-green-500/10 text-green-600",
+    audit_update: "bg-blue-500/10 text-blue-600",
+    audit_delete: "bg-destructive/10 text-destructive",
+  };
+
+  const typeLabel: Record<string, string> = {
+    info: "معلومة",
+    warning: "تحذير",
+    error: "خطأ",
+    success: "نجاح",
+    audit_create: "إنشاء",
+    audit_update: "تعديل",
+    audit_delete: "حذف",
+  };
+
+  const formatNotifMessage = (msg: string | undefined): string | null => {
+    if (!msg) return null;
+    try {
+      const parsed = JSON.parse(msg);
+      if (parsed.entity && parsed.action) {
+        const entityLabels: Record<string, string> = {
+          client: "عميل", order: "طلب", delivery: "توصيل", supplier: "مورّد",
+          material: "مادة", collection: "تحصيل", request: "طلب عميل",
+          founder: "مؤسس", "founder-transaction": "معاملة مؤسس",
+          "treasury-account": "حساب خزينة", "treasury-transaction": "معاملة خزينة",
+          audits: "جرد", "client-inventory": "مخزون عميل",
+        };
+        const actionLabels: Record<string, string> = { create: "تم إنشاء", update: "تم تعديل", delete: "تم حذف" };
+        const label = entityLabels[parsed.entity] || parsed.entity;
+        const action = actionLabels[parsed.action] || parsed.action;
+        const parts: string[] = [`${action} ${label}`];
+        if (parsed.changes && Array.isArray(parsed.changes) && parsed.changes.length > 0) {
+          parts.push(`الحقول: ${parsed.changes.join("، ")}`);
+        }
+        return parts.join(" — ");
+      }
+      return null;
+    } catch {
+      return msg.length > 100 ? null : msg;
+    }
   };
 
   return (
@@ -213,7 +253,9 @@ export function NotificationBell() {
                     </button>
                   </div>
                 )}
-                {notifications.slice(0, 20).map((n) => (
+                {notifications.slice(0, 20).map((n) => {
+                  const friendlyMsg = formatNotifMessage(n.message);
+                  return (
                   <div
                     key={n.id}
                     className={`px-3 py-2.5 flex gap-2.5 cursor-pointer hover:bg-accent/50 transition-colors border-b border-border/30 ${!n.read ? "bg-primary/5" : ""}`}
@@ -225,11 +267,11 @@ export function NotificationBell() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-0.5">
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${typeColor[n.type] ?? typeColor.info}`}>
-                          {n.type === "info" ? t.info : n.type === "warning" ? t.warning : n.type === "error" ? t.error : t.success}
+                          {typeLabel[n.type] || n.type}
                         </span>
                       </div>
                       <p className="text-xs font-medium">{n.title}</p>
-                      {n.message && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>}
+                      {friendlyMsg && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{friendlyMsg}</p>}
                       <p className="text-[10px] text-muted-foreground mt-1">{n.date} {n.time}</p>
                     </div>
                     {!n.read && (
@@ -238,7 +280,8 @@ export function NotificationBell() {
                       </button>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )
           )}
