@@ -37,9 +37,10 @@ type ProfitEntry = {
   orderId: string;
   client: string;
   date: string;
-  totalCollection: number;
+  totalCollection: number;  // قيمة الفاتورة / ما تم استهلاكه
+  orderTotal: number;       // إجمالي الأوردر الكامل
   paidAmount: number;
-  paidRatio: number;
+  paidRatio: number;        // paidAmount / orderTotal
   grossProfit: number;
   realizedProfit: number;
   companyProfitPct: number;
@@ -156,11 +157,14 @@ export default function CompanyProfitPage() {
 
         const totalCollection = parseAmount(col.totalAmount ?? col.total_amount ?? col.total);
         const paidAmount = parseAmount(col.paidAmount ?? col.paid_amount ?? col.paid);
-        const paidRatio = totalCollection > 0 ? paidAmount / totalCollection : 0;
 
         const totalSelling = parseAmount(order.totalSelling ?? order.total_selling);
         const totalCost = parseAmount(order.totalCost ?? order.total_cost);
         const grossProfit = totalSelling - totalCost;
+
+        // paidRatio = المدفوع ÷ إجمالي الأوردر الكامل (ليس قيمة التحصيل فقط)
+        // مثال: دفع 1000 من أوردر قيمته 1956 → النسبة 51.1% وليس 89.8%
+        const paidRatio = totalSelling > 0 ? Math.min(paidAmount / totalSelling, 1) : 0;
         const realizedProfit = grossProfit * paidRatio;
 
         // Company profit % — from order snapshot or business rules
@@ -208,6 +212,7 @@ export default function CompanyProfitPage() {
           client: col.client || col.clientName || col.client_name || order.client || "",
           date: issueDate.split("T")[0],
           totalCollection,
+          orderTotal: totalSelling,
           paidAmount,
           paidRatio,
           grossProfit,
@@ -604,17 +609,26 @@ export default function CompanyProfitPage() {
                             )}
                           </div>
                           {/* Meta info */}
-                          <div className="sm:col-span-2 flex flex-wrap gap-4 text-xs text-muted-foreground pt-1">
-                            <span>رقم التحصيل: <span className="font-mono text-foreground">{entry.collectionId}</span></span>
-                            <span>تاريخ آخر دفعة: <span className="text-foreground">{entry.lastPaymentDate}</span></span>
-                            <span>نسبة التحصيل: <span className="text-foreground">{(entry.paidRatio * 100).toFixed(0)}%</span></span>
-                            <span>الربح الإجمالي للطلب: <span className="text-foreground">{fmtNum(entry.grossProfit)} {t.currency}</span></span>
-                            <button
-                              className="text-primary hover:underline flex items-center gap-1"
-                              onClick={() => navigate(`/collections?orderId=${entry.orderId}`)}
-                            >
-                              <ExternalLink className="h-3 w-3" /> فتح التحصيل
-                            </button>
+                          <div className="sm:col-span-2 rounded-lg border border-border/50 bg-muted/10 p-3">
+                            <p className="text-xs font-semibold mb-2 text-muted-foreground">تفاصيل الحساب</p>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-xs">
+                              <div><span className="text-muted-foreground">إجمالي الأوردر</span><br/><span className="font-semibold text-foreground">{fmtNum(entry.orderTotal)} {t.currency}</span></div>
+                              <div><span className="text-muted-foreground">قيمة التحصيل (مستهلك)</span><br/><span className="font-semibold text-foreground">{fmtNum(entry.totalCollection)} {t.currency}</span></div>
+                              <div><span className="text-muted-foreground">المدفوع فعلياً</span><br/><span className="font-semibold text-success">{fmtNum(entry.paidAmount)} {t.currency}</span></div>
+                              <div><span className="text-muted-foreground">نسبة الدفع من الأوردر</span><br/><span className="font-semibold text-foreground">{(entry.paidRatio * 100).toFixed(1)}% <span className="font-normal text-muted-foreground">({fmtNum(entry.paidAmount)} ÷ {fmtNum(entry.orderTotal)})</span></span></div>
+                              <div><span className="text-muted-foreground">ربح الأوردر الكامل</span><br/><span className="font-semibold text-foreground">{fmtNum(entry.grossProfit)} {t.currency}</span></div>
+                              <div><span className="text-muted-foreground">الربح المحقق = {(entry.paidRatio * 100).toFixed(1)}% × {fmtNum(entry.grossProfit)}</span><br/><span className="font-semibold text-success">{fmtNum(entry.realizedProfit)} {t.currency}</span></div>
+                              <div><span className="text-muted-foreground">رقم التحصيل</span><br/><span className="font-mono text-foreground">{entry.collectionId}</span></div>
+                              <div><span className="text-muted-foreground">آخر دفعة</span><br/><span className="text-foreground">{entry.lastPaymentDate}</span></div>
+                            </div>
+                            <div className="mt-2 pt-2 border-t border-border/30">
+                              <button
+                                className="text-primary hover:underline flex items-center gap-1 text-xs"
+                                onClick={() => navigate(`/collections?orderId=${entry.orderId}`)}
+                              >
+                                <ExternalLink className="h-3 w-3" /> فتح التحصيل
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </td>
