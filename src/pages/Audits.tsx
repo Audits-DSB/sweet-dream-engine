@@ -426,7 +426,12 @@ export default function AuditsPage() {
         notes: notesPayload,
       });
       await logAudit({ entity: "collection", entityId: saved.id, entityName: `${saved.id} - ${audit.clientName}`, action: "create", snapshot: { ...saved, auditId: audit.id }, endpoint: "/collections" });
+
+      await api.patch(`/audits/${audit.id}`, { status: "تم التحصيل" }).catch(() => {});
+      await logAudit({ entity: "audits", entityId: audit.id, entityName: `${audit.id} — ${audit.clientName}`, action: "update", snapshot: { ...audit, status: "تم التحصيل", collectionId: saved.id }, endpoint: "/api/audits" });
+
       qc.invalidateQueries({ queryKey: ["/api/collections"] });
+      qc.invalidateQueries({ queryKey: ["/api/audits"] });
       toast.success(`تم إنشاء التحصيل ${saved.id} — ${audit.clientName} (${total.toLocaleString()} ج.م)`);
       navigate("/collections");
     } catch (err: any) {
@@ -496,7 +501,7 @@ export default function AuditsPage() {
   };
 
   const resultLabel = (r: string) => r === "matched" ? t.matched : r === "shortage" ? t.shortage : t.surplus;
-  const statusLabel = (s: string) => ({ "Completed": t.completed, "Discrepancy": t.discrepancy, "Scheduled": t.scheduled, "In Progress": t.inProgress }[s] || s);
+  const statusLabel = (s: string) => ({ "Completed": t.completed, "Discrepancy": t.discrepancy, "Scheduled": t.scheduled, "In Progress": t.inProgress, "تم التحصيل": "تم التحصيل" }[s] || s);
 
   const initManualEntry = () => {
     if (clientInventory.length === 0) { toast.error(t.noInventoryForClient); return; }
@@ -547,7 +552,7 @@ export default function AuditsPage() {
         searchValue={search}
         onSearchChange={setSearch}
         filters={[
-          { label: t.status, value: "status", options: [{ label: t.completed, value: "Completed" }, { label: t.discrepancy, value: "Discrepancy" }, { label: t.scheduled, value: "Scheduled" }, { label: t.inProgress, value: "In Progress" }] },
+          { label: t.status, value: "status", options: [{ label: t.completed, value: "Completed" }, { label: t.discrepancy, value: "Discrepancy" }, { label: "تم التحصيل", value: "تم التحصيل" }, { label: t.scheduled, value: "Scheduled" }, { label: t.inProgress, value: "In Progress" }] },
           { label: t.client, value: "client", options: auditClientNames.map(c => ({ label: c, value: c })) },
         ]}
         filterValues={filters}

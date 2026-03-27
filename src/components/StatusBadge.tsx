@@ -56,6 +56,7 @@ const statusVariantMap: Record<string, string> = {
   // Audits
   "Completed": "success",
   "Discrepancy": "warning",
+  "تم التحصيل": "success",
   "Scheduled": "info",
   "In Progress": "primary",
 };
