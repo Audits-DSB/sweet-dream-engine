@@ -460,58 +460,96 @@ export default function FoundersPage() {
     }
   };
 
+  const globalStats = useMemo(() => {
+    const allEntries = founders.flatMap(f => orderFundingByFounder[f.id] || []);
+    return {
+      totalOwed: allEntries.filter(e => !e.paid).reduce((s, e) => s + e.amount, 0),
+      totalPaid: allEntries.filter(e => e.paid).reduce((s, e) => s + e.amount, 0),
+      unpaidCount: allEntries.filter(e => !e.paid).length,
+      paidCount: allEntries.filter(e => e.paid).length,
+      totalEntries: allEntries.length,
+    };
+  }, [founders, orderFundingByFounder]);
+
   if (loading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* ── Header ── */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="page-header">{t.foundersTitle}</h1>
-          <p className="page-description">{t.foundersDesc}</p>
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Users className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="page-header">{t.foundersTitle}</h1>
+            <p className="page-description">{t.foundersDesc}</p>
+          </div>
         </div>
-        <Button size="sm" onClick={() => setAddOpen(true)}>
-          <Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addFounder}
+        <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
+          <Plus className="h-3.5 w-3.5" />{t.addFounder}
         </Button>
       </div>
 
       {/* ── Top Stats ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {(() => {
-          const allEntries = founders.flatMap(f => orderFundingByFounder[f.id] || []);
-          const totalOwed = allEntries.filter(e => !e.paid).reduce((s, e) => s + e.amount, 0);
-          const totalPaid = allEntries.filter(e => e.paid).reduce((s, e) => s + e.amount, 0);
-          const unpaidCount = allEntries.filter(e => !e.paid).length;
-          return (
-            <>
-              <StatCard title="عليهم فلوس (غير مدفوع)"
-                value={totalOwed > 0 ? `${totalOwed.toLocaleString()} ${t.currency}` : "—"}
-                change={unpaidCount > 0 ? `${unpaidCount} حصة في انتظار الدفع` : "الكل مدفوع"}
-                changeType={totalOwed > 0 ? "negative" : "positive"} icon={AlertTriangle} />
-              <StatCard title="تم الدفع (مساهمات)"
-                value={totalPaid > 0 ? `${totalPaid.toLocaleString()} ${t.currency}` : "—"}
-                change={`${allEntries.filter(e => e.paid).length} حصة مدفوعة`}
-                changeType={totalPaid > 0 ? "positive" : "neutral"} icon={Wallet} />
-            </>
-          );
-        })()}
-        <div className="cursor-pointer" onClick={() => navigate("/company-profit")}>
-          <StatCard title={t.totalProfits} value="عرض الأرباح" change="صفحة الأرباح التفصيلية" changeType="positive" icon={TrendingUp} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="stat-card p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${globalStats.totalOwed > 0 ? "bg-red-500/10" : "bg-emerald-500/10"}`}>
+              <AlertTriangle className={`h-4 w-4 ${globalStats.totalOwed > 0 ? "text-red-600" : "text-emerald-600"}`} />
+            </div>
+            {globalStats.unpaidCount > 0 && <Badge variant="destructive" className="text-[10px] h-5">{globalStats.unpaidCount}</Badge>}
+          </div>
+          <p className="text-[10px] text-muted-foreground">عليهم فلوس</p>
+          <p className={`text-lg font-bold ${globalStats.totalOwed > 0 ? "text-red-600" : "text-emerald-600"}`}>
+            {globalStats.totalOwed > 0 ? `${globalStats.totalOwed.toLocaleString()} ${t.currency}` : "✓ الكل مدفوع"}
+          </p>
         </div>
-        <StatCard title="رأس المال المتاح"
-          value={totalAvailableCapital > 0 ? `${totalAvailableCapital.toLocaleString()} ${t.currency}` : "—"}
-          change="غير مسحوب — جاهز للاستخدام" changeType={totalAvailableCapital > 0 ? "positive" : "neutral"} icon={Coins} />
+        <div className="stat-card p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            </div>
+            <Badge variant="secondary" className="text-[10px] h-5">{globalStats.paidCount}</Badge>
+          </div>
+          <p className="text-[10px] text-muted-foreground">تم الدفع (مساهمات)</p>
+          <p className="text-lg font-bold text-emerald-600">{globalStats.totalPaid > 0 ? `${globalStats.totalPaid.toLocaleString()} ${t.currency}` : "—"}</p>
+        </div>
+        <div className="stat-card p-4 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => navigate("/company-profit")}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <TrendingUp className="h-4 w-4 text-blue-600" />
+            </div>
+            <ExternalLink className="h-3 w-3 text-muted-foreground" />
+          </div>
+          <p className="text-[10px] text-muted-foreground">{t.totalProfits}</p>
+          <p className="text-lg font-bold text-blue-600">عرض التفاصيل</p>
+        </div>
+        <div className="stat-card p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${totalAvailableCapital > 0 ? "bg-indigo-500/10" : "bg-muted"}`}>
+              <Coins className={`h-4 w-4 ${totalAvailableCapital > 0 ? "text-indigo-600" : "text-muted-foreground"}`} />
+            </div>
+          </div>
+          <p className="text-[10px] text-muted-foreground">رأس المال المتاح</p>
+          <p className={`text-lg font-bold ${totalAvailableCapital > 0 ? "text-indigo-600" : "text-muted-foreground"}`}>
+            {totalAvailableCapital > 0 ? `${totalAvailableCapital.toLocaleString()} ${t.currency}` : "—"}
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">جاهز للاستخدام</p>
+        </div>
       </div>
 
       {founders.length === 0 ? (
         <div className="stat-card py-20 text-center">
+          <Users className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
           <p className="text-muted-foreground text-sm mb-4">لا يوجد مؤسسون مسجّلون بعد</p>
-          <Button size="sm" onClick={() => setAddOpen(true)}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addFounder}</Button>
+          <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5"><Plus className="h-3.5 w-3.5" />{t.addFounder}</Button>
         </div>
       ) : (
         <div className="space-y-4">
-          {founders.map((f) => {
+          {founders.map((f, fIdx) => {
             const myTxs = founderTxs.filter(tx => tx.founderId === f.id || tx.founderName === f.name)
               .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
 
@@ -540,73 +578,98 @@ export default function FoundersPage() {
 
             const txContribTotal = [...contributions, ...fundings].reduce((s, tx) => s + tx.amount, 0);
             const displayTotal = txContribTotal > 0 ? txContribTotal : f.totalContributed;
+            const paymentPct = totalOrderFunding > 0 ? (totalPaidFunding / totalOrderFunding) * 100 : 0;
+
+            const avatarColors = [
+              "from-blue-500 to-indigo-600", "from-emerald-500 to-teal-600",
+              "from-orange-500 to-red-600", "from-purple-500 to-violet-600",
+              "from-cyan-500 to-blue-600", "from-rose-500 to-pink-600",
+            ];
 
             return (
               <div key={f.id} className="stat-card p-0 overflow-hidden">
                 {/* ── Header ── */}
-                <div className="flex items-start justify-between p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <span className="text-lg font-bold text-primary">{f.name.charAt(0)}</span>
+                <div className="p-5">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3.5">
+                      <div className={`h-12 w-12 rounded-xl bg-gradient-to-br ${avatarColors[fIdx % avatarColors.length]} flex items-center justify-center flex-shrink-0 shadow-sm`}>
+                        <span className="text-lg font-bold text-white">{f.name.charAt(0)}</span>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-base">{f.name}</p>
+                          <Badge variant="secondary" className={`text-[10px] h-5 ${f.active ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-muted text-muted-foreground"}`}>
+                            {f.active ? t.active : t.inactive}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                          {f.alias && <span>{f.alias}</span>}
+                          {f.alias && (f.email || f.phone) && <span>·</span>}
+                          {f.email && <span>{f.email}</span>}
+                          {f.email && f.phone && <span>·</span>}
+                          {f.phone && <span>{f.phone}</span>}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-semibold text-base">{f.name}</p>
-                      <p className="text-xs text-muted-foreground">{f.alias}{f.alias && f.email ? " · " : ""}{f.email}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{f.phone}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="default" className={f.active ? "bg-success/10 text-success border-0" : "bg-muted text-muted-foreground border-0"}>
-                      {f.active ? t.active : t.inactive}
-                    </Badge>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setEditingFounder(f); setEditForm({ name: f.name, alias: f.alias, email: f.email, phone: f.phone }); setEditOpen(true); }}>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                      onClick={() => { setEditingFounder(f); setEditForm({ name: f.name, alias: f.alias, email: f.email, phone: f.phone }); setEditOpen(true); }}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                   </div>
+
+                  {/* ── Stats Mini Cards ── */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className={`rounded-xl p-3 ${totalOwed > 0 ? "bg-red-50 dark:bg-red-950/20 border border-red-200/50 dark:border-red-800/30" : "bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-800/30"}`}>
+                      <p className="text-[10px] text-muted-foreground mb-1">عليه فلوس</p>
+                      <p className={`text-sm font-bold ${totalOwed > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                        {totalOwed > 0 ? totalOwed.toLocaleString() : "✓ مدفوع"}
+                      </p>
+                      {unpaidFunding.length > 0 && <p className="text-[10px] text-red-500 mt-0.5">{unpaidFunding.length} أوردر</p>}
+                    </div>
+                    <div className="rounded-xl p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-800/30">
+                      <p className="text-[10px] text-muted-foreground mb-1">مساهمات مدفوعة</p>
+                      <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{totalPaidFunding > 0 ? totalPaidFunding.toLocaleString() : "—"}</p>
+                      {paidFunding.length > 0 && <p className="text-[10px] text-emerald-500 mt-0.5">{paidFunding.length} أوردر</p>}
+                    </div>
+                    <div className="rounded-xl p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/30">
+                      <p className="text-[10px] text-muted-foreground mb-1">أرباح محصّلة</p>
+                      <p className="text-sm font-bold text-blue-600 dark:text-blue-400">{autoProfitTotal > 0 ? autoProfitTotal.toLocaleString() : "—"}</p>
+                      {myProfits.length > 0 && <p className="text-[10px] text-blue-500 mt-0.5">{myProfits.length} عملية</p>}
+                    </div>
+                    <div className={`rounded-xl p-3 ${capitalBalance > 0 ? "bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200/50 dark:border-indigo-800/30" : "bg-muted/50 border border-border/50"}`}>
+                      <p className="text-[10px] text-muted-foreground mb-1">رأس مال متاح</p>
+                      <p className={`text-sm font-bold ${capitalBalance > 0 ? "text-indigo-600 dark:text-indigo-400" : "text-muted-foreground"}`}>
+                        {capitalBalance > 0 ? capitalBalance.toLocaleString() : "—"}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{t.currency}</p>
+                    </div>
+                  </div>
+
+                  {/* ── Payment Progress Bar ── */}
+                  {totalOrderFunding > 0 && (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+                        <span>نسبة السداد</span>
+                        <span className="font-medium">{paymentPct.toFixed(0)}% · {totalPaidFunding.toLocaleString()} / {totalOrderFunding.toLocaleString()} {t.currency}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${paymentPct >= 100 ? "bg-emerald-500" : paymentPct >= 50 ? "bg-blue-500" : "bg-amber-500"}`}
+                          style={{ width: `${Math.min(paymentPct, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* ── Stats Row ── */}
-                <div className="grid grid-cols-5 gap-0 border-t border-border">
-                  <div className="p-3 text-center border-l border-border rtl:border-r rtl:border-l-0">
-                    <div className="text-xs text-muted-foreground mb-1">عليه فلوس</div>
-                    <div className={`font-bold text-sm ${totalOwed > 0 ? "text-destructive" : "text-success"}`}>
-                      {totalOwed > 0 ? totalOwed.toLocaleString() : "✓"}
-                    </div>
-                    <div className="text-xs text-muted-foreground">{unpaidFunding.length > 0 ? `${unpaidFunding.length} أوردر` : "مدفوع الكل"}</div>
-                  </div>
-                  <div className="p-3 text-center border-l border-border rtl:border-r rtl:border-l-0">
-                    <div className="text-xs text-muted-foreground mb-1">تم الدفع (مساهمات)</div>
-                    <div className="font-bold text-sm text-success">{totalPaidFunding > 0 ? totalPaidFunding.toLocaleString() : "—"}</div>
-                    <div className="text-xs text-muted-foreground">{paidFunding.length > 0 ? `${paidFunding.length} أوردر` : t.currency}</div>
-                  </div>
-                  <div className="p-3 text-center border-l border-border rtl:border-r rtl:border-l-0">
-                    <div className="text-xs text-muted-foreground mb-1">إجمالي التمويل</div>
-                    <div className="font-bold text-sm text-blue-600 dark:text-blue-400">{totalOrderFunding > 0 ? totalOrderFunding.toLocaleString() : "—"}</div>
-                    <div className="text-xs text-muted-foreground">{myOrderFunding.length > 0 ? `${myOrderFunding.length} طلب` : t.currency}</div>
-                  </div>
-                  <div className="p-3 text-center border-l border-border rtl:border-r rtl:border-l-0">
-                    <div className="text-xs text-muted-foreground mb-1">أرباح محصّلة</div>
-                    <div className="font-bold text-sm text-success">{myProfits.length > 0 ? myProfits.length : "—"}</div>
-                    <div className="text-xs text-muted-foreground">عملية</div>
-                  </div>
-                  <div className="p-3 text-center">
-                    <div className="text-xs text-muted-foreground mb-1">رأس مال متاح</div>
-                    <div className={`font-bold text-sm ${capitalBalance > 0 ? "text-primary" : "text-muted-foreground"}`}>
-                      {capitalBalance > 0 ? capitalBalance.toLocaleString() : "—"}
-                    </div>
-                    <div className="text-xs text-muted-foreground">{t.currency}</div>
-                  </div>
-                </div>
-
-                {/* ── Section Tabs ── */}
+                {/* ── Expand Toggle ── */}
                 <div className="border-t border-border">
                   <button
-                    className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs text-muted-foreground hover:bg-muted/30 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
                     onClick={() => setExpandedFounder(isExpanded ? null : f.id)}
                   >
-                    <ShoppingBag className="h-3.5 w-3.5" />
-                    {isExpanded ? "إخفاء التفاصيل" : "عرض السجل التفصيلي"}
                     {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    {isExpanded ? "إخفاء التفاصيل" : "عرض السجل التفصيلي"}
                   </button>
                 </div>
 
@@ -614,13 +677,23 @@ export default function FoundersPage() {
                 {isExpanded && (
                   <div className="border-t border-border">
                     {/* Section Selector */}
-                    <div className="flex border-b border-border">
-                      {(["ledger", "order_funding", "profits", "capital"] as ExpandedSection[]).map(s => {
-                        const labels: Record<ExpandedSection, string> = { ledger: "التمويلات والمساهمات", order_funding: `التمويل من الأوردرات (${myOrderFunding.length})`, profits: `الأرباح (${myProfits.length})`, capital: `رأس المال (${capitalBalance.toLocaleString()})` };
+                    <div className="flex border-b border-border bg-muted/20">
+                      {(["order_funding", "ledger", "profits", "capital"] as ExpandedSection[]).map(s => {
+                        const tabIcons: Record<ExpandedSection, typeof ShoppingBag> = { order_funding: ShoppingBag, ledger: Receipt, profits: TrendingUp, capital: Coins };
+                        const TabIcon = tabIcons[s];
+                        const labels: Record<ExpandedSection, string> = {
+                          order_funding: `الأوردرات (${myOrderFunding.length})`,
+                          ledger: "السجل",
+                          profits: `الأرباح (${myProfits.length})`,
+                          capital: `رأس المال`,
+                        };
+                        const hasAlert = s === "order_funding" && unpaidFunding.length > 0;
                         return (
-                          <button key={s} className={`flex-1 py-2 text-xs font-medium transition-colors border-b-2 ${section === s ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                          <button key={s} className={`flex-1 py-2.5 text-xs font-medium transition-colors border-b-2 flex items-center justify-center gap-1.5 relative ${section === s ? "border-primary text-primary bg-background" : "border-transparent text-muted-foreground hover:text-foreground"}`}
                             onClick={() => setActiveSection(prev => ({ ...prev, [f.id]: s }))}>
+                            <TabIcon className="h-3 w-3" />
                             {labels[s]}
+                            {hasAlert && <span className="absolute top-1.5 end-2 h-2 w-2 rounded-full bg-red-500 animate-pulse" />}
                           </button>
                         );
                       })}
