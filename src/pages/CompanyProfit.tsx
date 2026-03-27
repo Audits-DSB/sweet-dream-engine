@@ -171,7 +171,7 @@ export default function CompanyProfitPage() {
         // Company profit % — from order snapshot or business rules
         const contribs = parseJsonField(order.founderContributions ?? order.founder_contributions);
         const contribArray = Array.isArray(contribs) ? contribs : [];
-        const snappedPct = contribArray[0]?.companyProfitPercentage ?? rules.companyProfitPercentage ?? 40;
+        const snappedPct = contribArray[0]?.companyProfitPercentage ?? rules.companyProfitPercentage;
         const companyProfit = Math.round(realizedProfit * snappedPct / 100);
         const foundersProfit = Math.round(realizedProfit * (1 - snappedPct / 100));
 
@@ -313,7 +313,7 @@ export default function CompanyProfitPage() {
     // Weighted-average company profit percentage across all entries in period
     const avgCompanyPct = profitLedger.length > 0
       ? Math.round(profitLedger.reduce((s, e) => s + e.companyProfitPct, 0) / profitLedger.length * 10) / 10
-      : (rules.companyProfitPercentage ?? 40);
+      : rules.companyProfitPercentage;
     const companyMargin = tRev > 0 ? ((tCompany / tRev) * 100).toFixed(1) : "0";
 
     return {

@@ -16,6 +16,7 @@ import { AlertTriangle, CheckCircle2, Clock, Receipt, Eye, MoreHorizontal, Dolla
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { logAudit } from "@/lib/auditLog";
+import { useBusinessRules } from "@/lib/useBusinessRules";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
@@ -92,7 +93,8 @@ export default function CollectionsPage() {
   const [loadingCollections, setLoadingCollections] = useState(true);
   const [selectedOrderData, setSelectedOrderData] = useState<{ totalSelling: number; totalCost: number; splitMode: string; founderContributions: any[] } | null>(null);
   const [founders, setFounders] = useState<{ id: string; name: string }[]>([]);
-  const [companyProfitPct, setCompanyProfitPct] = useState(40);
+  const { rules } = useBusinessRules();
+  const companyProfitPct = rules.companyProfitPercentage;
   const [loadingOrderData, setLoadingOrderData] = useState(false);
 
   // Payment dialog state
