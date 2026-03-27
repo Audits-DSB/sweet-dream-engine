@@ -1,10 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-import { quickProfit, founderSplit } from "@/lib/orderProfit";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
-import { Building, Plus, Pencil, Trash2, ArrowRight, AlertTriangle, Users, ArrowUpRight, Coins } from "lucide-react";
+import { Building, Plus, Pencil, Trash2, ArrowRight, AlertTriangle, Users, ArrowUpRight, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -22,11 +21,9 @@ type Account = {
 };
 
 type Founder = { id: string; name: string; alias: string; active: boolean };
-type FounderTx = { id: string; founderId: string; founderName: string; type: string; amount: number; date: string; notes: string; orderId?: string; collectionId?: string };
 
 const ACCOUNT_TYPES = ["cashbox", "bank", "wallet", "founder_held", "other"] as const;
 
-const toNum = (v: unknown) => Number(v) || 0;
 
 export default function TreasuryAccountsPage() {
   const { t, lang } = useLanguage();
@@ -41,11 +38,9 @@ export default function TreasuryAccountsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Account | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // ── Founder capital state ──
+  // ── Founder capital state — sourced directly from /founder-balances ──
   const [founders, setFounders] = useState<Founder[]>([]);
-  const [founderTxs, setFounderTxs] = useState<FounderTx[]>([]);
-  const [collections, setCollections] = useState<any[]>([]);
-  const [orders, setOrders] = useState<Record<string, any>>({});
+  const [founderBalancesData, setFounderBalancesData] = useState<{ founderId: string; founderName: string; balance: number }[]>([]);
   const [foundersLoading, setFoundersLoading] = useState(true);
 
   // ── Withdraw dialog ──
@@ -67,68 +62,21 @@ export default function TreasuryAccountsPage() {
   const fetchFounderData = async () => {
     setFoundersLoading(true);
     try {
-      const [f, txs, cols, ords] = await Promise.all([
+      const [f, balances] = await Promise.all([
         api.get<any[]>("/founders"),
-        api.get<FounderTx[]>("/founder-transactions").catch(() => [] as FounderTx[]),
-        api.get<any[]>("/collections").catch(() => [] as any[]),
-        api.get<any[]>("/orders").catch(() => [] as any[]),
+        api.get<{ founderId: string; founderName: string; balance: number }[]>("/founder-balances").catch(() => []),
       ]);
       setFounders((f || []).map((x: any) => ({ id: x.id, name: x.name || "", alias: x.alias || "", active: x.active !== false })));
-      setFounderTxs(txs || []);
-      setCollections(cols || []);
-      const om: Record<string, any> = {};
-      (ords || []).forEach((o: any) => { om[o.id] = o; });
-      setOrders(om);
+      setFounderBalancesData(balances || []);
     } catch { /* silent */ } finally {
       setFoundersLoading(false);
     }
   };
 
-  // ── Capital balance calculation (mirrors Founders.tsx logic) ──
-  const capitalByFounder = useMemo(() => {
-    const capitalMap: Record<string, number> = {};
-    founders.forEach(f => { capitalMap[f.id] = 0; });
-
-    collections.forEach((col: any) => {
-      const orderId = col.orderId ?? col.order_id;
-      const paidAmount = toNum(col.paidAmount ?? col.paid_amount ?? col.amount);
-      const order = orderId ? orders[orderId] : null;
-      if (!orderId || !order || paidAmount <= 0) return;
-
-      const totalSelling = toNum(order.totalSelling ?? order.total_selling);
-      const totalCost = toNum(order.totalCost ?? order.total_cost);
-      if (totalSelling <= 0) return;
-
-      const qp = quickProfit({ orderTotal: totalSelling, totalCost, paidValue: paidAmount, companyProfitPct: 40 });
-      const capitalReturn = Math.round(qp.recoveredCapital);
-      if (capitalReturn <= 0) return;
-
-      const contribs = Array.isArray(order.founderContributions) ? order.founderContributions
-        : Array.isArray(order.founder_contributions) ? order.founder_contributions : [];
-      const sm = (order as any).splitMode || (order as any).split_mode || "equal";
-      const isWeighted = sm.includes("مساهمة") || sm.toLowerCase().includes("contribution") || sm === "weighted";
-      const splits = founderSplit(0, capitalReturn, contribs, isWeighted ? "weighted" : "equal");
-
-      founders.forEach(f => {
-        let share = 0;
-        if (contribs.length > 0) {
-          const match = splits.find(s => s.id === f.id || s.name === f.name);
-          if (match) share = match.capitalShare;
-        } else {
-          share = capitalReturn / (founders.length || 1);
-        }
-        if (share > 0) capitalMap[f.id] = (capitalMap[f.id] || 0) + Math.round(share);
-      });
-    });
-    return capitalMap;
-  }, [collections, orders, founders]);
-
-  function founderCapitalBalance(founderId: string): number {
-    const myTxs = founderTxs.filter(tx => tx.founderId === founderId || (tx as any).founder_id === founderId);
-    const autoCapital = capitalByFounder[founderId] || 0;
-    const manualReturn = myTxs.filter(tx => tx.type === "capital_return").reduce((s, tx) => s + toNum(tx.amount), 0);
-    const withdrawn = myTxs.filter(tx => tx.type === "capital_withdrawal").reduce((s, tx) => s + toNum(tx.amount), 0);
-    return autoCapital + manualReturn - withdrawn;
+  // Lookup balance by founderId — same source as Founders page
+  function getFounderBalance(founderId: string): number {
+    const entry = founderBalancesData.find(b => b.founderId === founderId);
+    return entry ? entry.balance : 0;
   }
 
   // ── Withdraw action ──
@@ -136,7 +84,7 @@ export default function TreasuryAccountsPage() {
     if (!withdrawFounder) return;
     const amt = parseFloat(withdrawAmount);
     if (!amt || amt <= 0) { toast.error("أدخل مبلغاً صحيحاً"); return; }
-    const balance = founderCapitalBalance(withdrawFounder.id);
+    const balance = getFounderBalance(withdrawFounder.id);
     if (amt > balance) { toast.error(`المبلغ يتجاوز الرصيد المتاح (${balance.toLocaleString()} ج.م)`); return; }
     setWithdrawSaving(true);
     try {
@@ -285,6 +233,15 @@ export default function TreasuryAccountsPage() {
         </div>
 
         <div className="stat-card overflow-x-auto">
+          <div className="flex items-center justify-between px-1 pb-2">
+            <p className="text-xs text-muted-foreground">يتزامن تلقائياً مع أرصدة المؤسسين — رأس المال + الأرباح − المسحوب</p>
+            <button
+              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              onClick={fetchFounderData}
+            >
+              <RefreshCw className="h-3 w-3" />تحديث
+            </button>
+          </div>
           {foundersLoading ? (
             <div className="text-center py-10 text-muted-foreground text-sm">جارٍ التحميل...</div>
           ) : founders.length === 0 ? (
@@ -295,20 +252,13 @@ export default function TreasuryAccountsPage() {
                 <tr className="border-b border-border">
                   <th className="text-start py-3 px-4 text-xs font-medium text-muted-foreground">المؤسس</th>
                   <th className="text-start py-3 px-4 text-xs font-medium text-muted-foreground">الحالة</th>
-                  <th className="text-start py-3 px-4 text-xs font-medium text-muted-foreground">من تحصيلات</th>
-                  <th className="text-start py-3 px-4 text-xs font-medium text-muted-foreground">مسحوب</th>
-                  <th className="text-start py-3 px-4 text-xs font-medium text-muted-foreground">الرصيد المتاح</th>
+                  <th className="text-end py-3 px-4 text-xs font-medium text-muted-foreground">الرصيد المتاح</th>
                   {canManage && <th className="text-start py-3 px-4 text-xs font-medium text-muted-foreground">إجراءات</th>}
                 </tr>
               </thead>
               <tbody>
                 {founders.map(f => {
-                  const autoCapital = capitalByFounder[f.id] || 0;
-                  const myTxs = founderTxs.filter(tx => tx.founderId === f.id || (tx as any).founder_id === f.id);
-                  const manualReturn = myTxs.filter(tx => tx.type === "capital_return").reduce((s, tx) => s + toNum(tx.amount), 0);
-                  const withdrawn = myTxs.filter(tx => tx.type === "capital_withdrawal").reduce((s, tx) => s + toNum(tx.amount), 0);
-                  const balance = autoCapital + manualReturn - withdrawn;
-
+                  const balance = getFounderBalance(f.id);
                   return (
                     <tr key={f.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                       <td className="py-3 px-4">
@@ -327,20 +277,7 @@ export default function TreasuryAccountsPage() {
                           {f.active ? t.active : t.inactive}
                         </Badge>
                       </td>
-                      <td className="py-3 px-4 text-muted-foreground">
-                        {autoCapital > 0
-                          ? <span className="text-foreground font-medium">{autoCapital.toLocaleString("en-US")} {t.egp}</span>
-                          : "—"}
-                        {manualReturn > 0 && (
-                          <div className="text-xs text-success">+ {manualReturn.toLocaleString("en-US")} مضاف</div>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        {withdrawn > 0
-                          ? <span className="text-destructive font-medium">−{withdrawn.toLocaleString("en-US")} {t.egp}</span>
-                          : <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 text-end">
                         <span className={`text-base font-bold ${balance > 0 ? "text-primary" : balance < 0 ? "text-destructive" : "text-muted-foreground"}`}>
                           {balance.toLocaleString("en-US")} {t.egp}
                         </span>
@@ -362,9 +299,9 @@ export default function TreasuryAccountsPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border bg-muted/20">
-                  <td colSpan={4} className="py-2.5 px-4 text-xs font-medium text-muted-foreground">إجمالي رأس المال المتاح</td>
-                  <td className="py-2.5 px-4 font-bold text-primary">
-                    {founders.reduce((s, f) => s + Math.max(0, founderCapitalBalance(f.id)), 0).toLocaleString("en-US")} {t.egp}
+                  <td colSpan={2} className="py-2.5 px-4 text-xs font-medium text-muted-foreground">إجمالي رأس المال المتاح</td>
+                  <td className="py-2.5 px-4 text-end font-bold text-primary">
+                    {founders.reduce((s, f) => s + Math.max(0, getFounderBalance(f.id)), 0).toLocaleString("en-US")} {t.egp}
                   </td>
                   {canManage && <td />}
                 </tr>
@@ -442,7 +379,7 @@ export default function TreasuryAccountsPage() {
           <div className="space-y-4 py-2">
             {withdrawFounder && (
               <div className="rounded-lg bg-muted/50 p-3 text-sm">
-                الرصيد المتاح: <span className="font-bold text-primary">{founderCapitalBalance(withdrawFounder.id).toLocaleString("en-US")} {t.egp}</span>
+                الرصيد المتاح: <span className="font-bold text-primary">{getFounderBalance(withdrawFounder.id).toLocaleString("en-US")} {t.egp}</span>
               </div>
             )}
             <div>
