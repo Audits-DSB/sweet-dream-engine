@@ -439,19 +439,33 @@ export default function CollectionsPage() {
               {loadingOrderData ? (
                 <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (() => {
-                const sourceLines: LineItem[] =
+                const rawLines: LineItem[] =
                   (selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0)
                   ? selectedInvoice.lineItems
                   : selectedOrderLines;
 
-                if (sourceLines.length === 0 && selectedOrdersData.length === 0) return (
+                if (rawLines.length === 0 && selectedOrdersData.length === 0) return (
                   <p className="text-sm text-muted-foreground text-center py-4">لا توجد تفاصيل مواد</p>
                 );
+
+                // Build code → sourceOrderId lookup from API lines (always have sourceOrderId)
+                const codeToOrderId: Record<string, string> = {};
+                for (const l of selectedOrderLines) {
+                  if (l.code && l.sourceOrderId) codeToOrderId[l.code] = l.sourceOrderId;
+                }
+                // Fallback key: collection's primary linked order
+                const primaryOrderId = selectedInvoice.order || selectedInvoice.sourceOrders?.[0] || selectedOrdersData[0]?.orderId || "—";
+
+                // Enrich lines: fill missing sourceOrderId via code lookup or primary order
+                const sourceLines: LineItem[] = rawLines.map(line => ({
+                  ...line,
+                  sourceOrderId: line.sourceOrderId || codeToOrderId[line.code] || primaryOrderId,
+                }));
 
                 // Group lines by sourceOrderId
                 const linesByOrder: Record<string, LineItem[]> = {};
                 for (const line of sourceLines) {
-                  const key = line.sourceOrderId || selectedOrdersData[0]?.orderId || "—";
+                  const key = line.sourceOrderId || primaryOrderId;
                   if (!linesByOrder[key]) linesByOrder[key] = [];
                   linesByOrder[key].push(line);
                 }
@@ -459,19 +473,25 @@ export default function CollectionsPage() {
                   for (const od of selectedOrdersData) linesByOrder[od.orderId] = [];
                 }
 
+                // Sequential coverage: shared `rem` across all order groups
+                let covRem = selectedInvoice.paid;
+                const linesByOrderWithCov = Object.fromEntries(
+                  Object.entries(linesByOrder).map(([oid, lines]) => [
+                    oid,
+                    lines.map(item => {
+                      if (covRem <= 0) return { ...item, coveredTotal: 0, cov: "pending" as const };
+                      if (covRem >= item.lineTotal) { covRem -= item.lineTotal; return { ...item, coveredTotal: item.lineTotal, cov: "covered" as const }; }
+                      const amt = covRem; covRem = 0;
+                      return { ...item, coveredTotal: amt, cov: "partial" as const };
+                    }),
+                  ])
+                );
+
                 return (
                   <div className="space-y-3">
                     {Object.entries(linesByOrder).map(([orderId, lines]) => {
                       const od = selectedOrdersData.find(o => o.orderId === orderId) || selectedOrdersData[0];
-
-                      // Coverage calc (sequential by paid amount)
-                      let rem = selectedInvoice.paid;
-                      const linesWithCov = lines.map(item => {
-                        if (rem <= 0) return { ...item, coveredTotal: 0, cov: "pending" as const };
-                        if (rem >= item.lineTotal) { rem -= item.lineTotal; return { ...item, coveredTotal: item.lineTotal, cov: "covered" as const }; }
-                        const amt = rem; rem = 0;
-                        return { ...item, coveredTotal: amt, cov: "partial" as const };
-                      });
+                      const linesWithCov = linesByOrderWithCov[orderId] || [];
 
                       // Profit calc for this order
                       let profitBox: React.ReactNode = null;
