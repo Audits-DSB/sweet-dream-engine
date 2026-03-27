@@ -54,9 +54,10 @@ export default function TreasuryAccountsPage() {
 
   const fetchAccounts = async () => {
     setLoading(true);
-    const data = await api.get<Account[]>("/treasury/accounts");
-    setAccounts(data.map(a => ({ ...a, account_type: a.accountType ?? a.account_type, custodian_name: a.custodianName ?? a.custodian_name, bank_name: a.bankName ?? a.bank_name, account_number: a.accountNumber ?? a.account_number, is_active: a.isActive ?? a.is_active, created_at: a.createdAt ?? a.created_at })) as Account[]);
-    setLoading(false);
+    try {
+      const data = await api.get<Account[]>("/treasury/accounts");
+      setAccounts(data.map(a => ({ ...a, account_type: a.accountType ?? a.account_type, custodian_name: a.custodianName ?? a.custodian_name, bank_name: a.bankName ?? a.bank_name, account_number: a.accountNumber ?? a.account_number, is_active: a.isActive ?? a.is_active, created_at: a.createdAt ?? a.created_at })) as Account[]);
+    } catch { toast.error("فشل تحميل الحسابات"); } finally { setLoading(false); }
   };
 
   const fetchFounderData = async () => {

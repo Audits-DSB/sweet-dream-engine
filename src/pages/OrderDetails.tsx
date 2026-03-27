@@ -1070,10 +1070,7 @@ export default function OrderDetails() {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className={`p-2.5 rounded-lg border ${hasBalance ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800" : "bg-muted/30 border-border"}`}>
                     <p className={`text-xs mb-0.5 ${hasBalance ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>رصيد متاح</p>
-                    {hasBalance
-                      ? <p className="font-bold text-amber-700 dark:text-amber-300">{balanceDialog.available.toLocaleString("en-US")} ج.م</p>
-                      : <p className="font-medium text-muted-foreground">لا يوجد رصيد</p>
-                    }
+                    <p className={`font-bold ${hasBalance ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>{balanceDialog.available.toLocaleString("en-US")} ج.م</p>
                   </div>
                   <div className="p-2.5 rounded-lg bg-muted/50 border border-border">
                     <p className="text-xs text-muted-foreground mb-0.5">الحصة المطلوبة</p>
@@ -1081,32 +1078,15 @@ export default function OrderDetails() {
                   </div>
                 </div>
 
-                {/* Checkbox: deduct from balance */}
-                {hasBalance && (
-                  <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${useBalance ? "bg-primary/5 border-primary/30" : "bg-muted/20 border-border"}`}>
-                    <Checkbox
-                      checked={useBalance}
-                      onCheckedChange={(v) => setUseBalance(!!v)}
-                    />
-                    <div className="flex-1">
-                      <span className="text-sm font-medium">السحب من الرصيد</span>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        سيُخصم {Math.min(balanceDialog.available, required).toLocaleString("en-US")} ج.م من رصيده المتاح
-                        {cashPortion > 0 && useBalance && ` — الباقي ${cashPortion.toLocaleString("en-US")} ج.م تمويل مالي`}
-                      </p>
-                    </div>
-                  </label>
-                )}
-
                 {/* Breakdown */}
                 <div className="rounded-lg border border-border p-3 space-y-2 text-sm">
-                  {hasBalance && useBalance && (
+                  {useBalance && walletUsed > 0 && (
                     <div className="flex justify-between items-center">
                       <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
                         <Wallet className="h-3.5 w-3.5" />من الرصيد
                       </span>
                       <span className="font-semibold text-amber-700 dark:text-amber-300">
-                        {walletUsed.toLocaleString("en-US")} ج.م
+                        −{walletUsed.toLocaleString("en-US")} ج.م
                       </span>
                     </div>
                   )}
@@ -1124,6 +1104,26 @@ export default function OrderDetails() {
                       {required.toLocaleString("en-US")} ج.م
                     </span>
                   </div>
+
+                  {/* Checkbox: deduct from balance — always visible, disabled when no balance */}
+                  <label className={`flex items-center gap-3 p-3 mt-1 rounded-lg border transition-colors ${!hasBalance ? "opacity-50 cursor-not-allowed bg-muted/10 border-border" : useBalance ? "cursor-pointer bg-primary/5 border-primary/30" : "cursor-pointer bg-muted/20 border-border"}`}>
+                    <Checkbox
+                      checked={useBalance}
+                      disabled={!hasBalance}
+                      onCheckedChange={(v) => setUseBalance(!!v)}
+                    />
+                    <div className="flex-1">
+                      <span className="text-sm font-medium">السحب من الرصيد</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {!hasBalance
+                          ? "لا يوجد رصيد متاح للسحب"
+                          : useBalance
+                            ? `سيُخصم ${walletUsed.toLocaleString("en-US")} ج.م من رصيده${cashPortion > 0 ? ` — الباقي ${cashPortion.toLocaleString("en-US")} ج.م تمويل مالي` : " — لا حاجة لتمويل إضافي"}`
+                            : `رصيد متاح: ${balanceDialog.available.toLocaleString("en-US")} ج.م — اضغط للخصم`
+                        }
+                      </p>
+                    </div>
+                  </label>
                 </div>
               </div>
             );
