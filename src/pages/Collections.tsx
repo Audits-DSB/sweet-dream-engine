@@ -86,8 +86,9 @@ export default function CollectionsPage() {
   const [searchParams] = useSearchParams();
   const urlStatus = searchParams.get("status") || "";
   const urlOrderId = searchParams.get("orderId") || "";
+  const urlSearch = searchParams.get("search") || "";
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(urlSearch);
   const [filters, setFilters] = useState<Record<string, string>>({ ...(urlStatus ? { status: urlStatus } : {}), ...(urlOrderId ? { orderId: urlOrderId } : {}) });
   const [selectedInvoice, setSelectedInvoice] = useState<Collection | null>(null);
   const [loadingCollections, setLoadingCollections] = useState(true);
@@ -107,6 +108,10 @@ export default function CollectionsPage() {
   const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<Collection | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    if (urlSearch) setSearch(urlSearch);
+  }, [urlSearch]);
 
   useEffect(() => {
     Promise.all([
