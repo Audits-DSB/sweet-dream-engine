@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
-import { Building, Plus, Pencil, Trash2, ArrowRight, AlertTriangle, Users, ArrowUpRight, ArrowDownLeft, Coins } from "lucide-react";
+import { Building, Plus, Pencil, Trash2, ArrowRight, AlertTriangle, Users, ArrowUpRight, Coins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -53,13 +53,6 @@ export default function TreasuryAccountsPage() {
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawNotes, setWithdrawNotes] = useState("");
   const [withdrawSaving, setWithdrawSaving] = useState(false);
-
-  // ── Reinject dialog ──
-  const [reinjectOpen, setReinjectOpen] = useState(false);
-  const [reinjectFounder, setReinjectFounder] = useState<Founder | null>(null);
-  const [reinjectAmount, setReinjectAmount] = useState("");
-  const [reinjectNotes, setReinjectNotes] = useState("");
-  const [reinjectSaving, setReinjectSaving] = useState(false);
 
   useEffect(() => { fetchAccounts(); fetchFounderData(); }, []);
 
@@ -156,25 +149,6 @@ export default function TreasuryAccountsPage() {
       setWithdrawOpen(false); setWithdrawAmount(""); setWithdrawNotes("");
       fetchFounderData();
     } catch { toast.error("فشل تسجيل السحب"); } finally { setWithdrawSaving(false); }
-  };
-
-  // ── Reinject action ──
-  const handleReinject = async () => {
-    if (!reinjectFounder) return;
-    const amt = parseFloat(reinjectAmount);
-    if (!amt || amt <= 0) { toast.error("أدخل مبلغاً صحيحاً"); return; }
-    setReinjectSaving(true);
-    try {
-      await api.post("/founder-transactions", {
-        founderId: reinjectFounder.id, founderName: reinjectFounder.name,
-        type: "capital_return", amount: amt,
-        notes: reinjectNotes || "إعادة ضخ رأس مال",
-        date: new Date().toISOString().split("T")[0],
-      });
-      toast.success(`تم تسجيل إعادة ضخ ${amt.toLocaleString()} ج.م لرصيد ${reinjectFounder.name}`);
-      setReinjectOpen(false); setReinjectAmount(""); setReinjectNotes("");
-      fetchFounderData();
-    } catch { toast.error("فشل تسجيل إعادة الضخ"); } finally { setReinjectSaving(false); }
   };
 
   const openNew = () => {
@@ -305,7 +279,7 @@ export default function TreasuryAccountsPage() {
           </div>
           <div>
             <h2 className="text-base font-semibold">حسابات رأس مال المؤسسين</h2>
-            <p className="text-xs text-muted-foreground">الرصيد المتاح لكل مؤسس — قابل للسحب أو إعادة الضخ</p>
+            <p className="text-xs text-muted-foreground">الرصيد المتاح لكل مؤسس — قابل للسحب</p>
           </div>
         </div>
 
@@ -372,21 +346,13 @@ export default function TreasuryAccountsPage() {
                       </td>
                       {canManage && (
                         <td className="py-3 px-4">
-                          <div className="flex gap-1.5 flex-wrap">
-                            <button
-                              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-40"
-                              disabled={balance <= 0}
-                              onClick={() => { setWithdrawFounder(f); setWithdrawAmount(""); setWithdrawNotes(""); setWithdrawOpen(true); }}
-                            >
-                              <ArrowUpRight className="h-3 w-3" />سحب
-                            </button>
-                            <button
-                              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                              onClick={() => { setReinjectFounder(f); setReinjectAmount(""); setReinjectNotes(""); setReinjectOpen(true); }}
-                            >
-                              <ArrowDownLeft className="h-3 w-3" />إعادة ضخ
-                            </button>
-                          </div>
+                          <button
+                            className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-40"
+                            disabled={balance <= 0}
+                            onClick={() => { setWithdrawFounder(f); setWithdrawAmount(""); setWithdrawNotes(""); setWithdrawOpen(true); }}
+                          >
+                            <ArrowUpRight className="h-3 w-3" />سحب
+                          </button>
                         </td>
                       )}
                     </tr>
@@ -500,40 +466,6 @@ export default function TreasuryAccountsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Reinject Capital Dialog ── */}
-      <Dialog open={reinjectOpen} onOpenChange={open => { if (!open) setReinjectOpen(false); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ArrowDownLeft className="h-5 w-5 text-primary" />
-              إعادة ضخ رأس مال — {reinjectFounder?.name}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
-              سيُضاف هذا المبلغ إلى رصيد رأس المال المتاح للمؤسس ويمكن استخدامه في تمويل الأوردرات.
-            </div>
-            <div>
-              <Label>المبلغ ({t.egp})</Label>
-              <Input
-                type="number" min="1" placeholder="0"
-                value={reinjectAmount}
-                onChange={e => setReinjectAmount(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>ملاحظات (اختياري)</Label>
-              <Input value={reinjectNotes} onChange={e => setReinjectNotes(e.target.value)} placeholder="مصدر الرأس المال..." />
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setReinjectOpen(false)} disabled={reinjectSaving}>إلغاء</Button>
-            <Button onClick={handleReinject} disabled={reinjectSaving}>
-              {reinjectSaving ? "جارٍ الحفظ..." : "تأكيد إعادة الضخ"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

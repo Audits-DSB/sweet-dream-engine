@@ -79,7 +79,6 @@ export default function OrdersPage() {
   const [founders, setFounders] = useState<{ id: string; name: string }[]>([]);
   const [selectedFounders, setSelectedFounders] = useState<string[]>([]);
   const [founderPcts, setFounderPcts] = useState<Record<string, number>>({});
-  const [founderBalances, setFounderBalances] = useState<Record<string, number>>({});
   const [collectionsMap, setCollectionsMap] = useState<Record<string, { paid: number; total: number; collectionId: string }>>({});
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -89,11 +88,7 @@ export default function OrdersPage() {
       setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee) });
       setSelectedFounders([]);
       setFounderPcts({});
-      setFounderBalances({});
-      Promise.all([
-        api.get<any[]>("/founders"),
-        api.get<any[]>("/founder-transactions").catch(() => [] as any[]),
-      ]).then(([data, txs]) => {
+      api.get<any[]>("/founders").then((data) => {
         const active = (data || []).filter((f: any) => f.active !== false).map((f: any) => ({ id: f.id, name: f.name }));
         setFounders(active);
         setSelectedFounders(active.map((f: any) => f.id));
@@ -101,19 +96,6 @@ export default function OrdersPage() {
         const pcts: Record<string, number> = {};
         active.forEach((f: any, i: number) => { pcts[f.id] = i === active.length - 1 ? 100 - eqPct * (active.length - 1) : eqPct; });
         setFounderPcts(pcts);
-        // Compute available balance per founder from transaction ledger
-        const INFLOW = ["contribution", "capital_return"];
-        const OUTFLOW = ["withdrawal", "capital_withdrawal", "funding", "order_funding"];
-        const balances: Record<string, number> = {};
-        active.forEach((f: any) => { balances[f.id] = 0; });
-        (txs || []).forEach((tx: any) => {
-          const fid = tx.founderId || tx.founder_id;
-          if (!fid || !(fid in balances)) return;
-          const amt = Number(tx.amount) || 0;
-          if (INFLOW.includes(tx.type)) balances[fid] += amt;
-          else if (OUTFLOW.includes(tx.type)) balances[fid] -= amt;
-        });
-        setFounderBalances(balances);
       }).catch(() => {});
     }
   }, [dialogOpen, rules.defaultSplitMode, rules.defaultDeliveryFee]);
@@ -258,23 +240,6 @@ export default function OrdersPage() {
         toast.warning(`تم حفظ الطلب لكن فشل حفظ تفاصيل المواد: ${saved._linesError}`);
       }
       await logAudit({ entity: "order", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${client.name}`, action: "create", snapshot: saved, endpoint: "/orders" });
-
-      // Record a "funding" transaction per founder to deduct from their capital balance
-      if (totalCost > 0) {
-        const today = new Date().toISOString().split("T")[0];
-        await Promise.all(founderContributions.map(fc =>
-          fc.amount > 0
-            ? api.post("/founder-transactions", {
-                founderId: fc.founderId, founderName: fc.founder,
-                type: "funding",
-                amount: Math.round(fc.amount * 100) / 100,
-                orderId: saved.id || newId,
-                notes: `تمويل طلب ${saved.id || newId} — ${client.name}`,
-                date: today,
-              }).catch(() => null) // non-critical, don't block order creation
-            : Promise.resolve(null)
-        ));
-      }
 
       setOrders(prev => [mapOrder(saved), ...prev]);
       setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee) });
@@ -510,20 +475,12 @@ export default function OrdersPage() {
                       ? (selectedFounders.length > 0 ? 100 / selectedFounders.length : 0)
                       : (founderPcts[f.id] || 0);
                     const costShare = totalCost * pct / 100;
-                    const balance = founderBalances[f.id] ?? 0;
-                    const insufficient = isSelected && totalCost > 0 && balance < costShare;
                     return (
-                      <div key={f.id} className={`flex items-center gap-3 p-2 rounded-md transition-colors ${isSelected ? (insufficient ? "bg-destructive/5 border border-destructive/20" : "bg-primary/5 border border-primary/20") : "opacity-50"}`}>
+                      <div key={f.id} className={`flex items-center gap-3 p-2 rounded-md transition-colors ${isSelected ? "bg-primary/5 border border-primary/20" : "opacity-50"}`}>
                         <Checkbox checked={isSelected} onCheckedChange={(checked) => {
                           setSelectedFounders(prev => checked ? [...prev, f.id] : prev.filter(id => id !== f.id));
                         }} />
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm font-medium block">{f.name}</span>
-                          <span className={`text-[10px] ${balance < 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                            رصيده: {balance.toLocaleString("en-US", { maximumFractionDigits: 0 })} {t.currency}
-                            {insufficient && <span className="text-destructive font-medium"> ← عجز {(costShare - balance).toLocaleString("en-US", { maximumFractionDigits: 0 })} ج.م</span>}
-                          </span>
-                        </div>
+                        <span className="flex-1 text-sm font-medium">{f.name}</span>
                         {form.splitMode === "contribution" && isSelected ? (
                           <div className="flex items-center gap-1">
                             <Input className="h-7 w-16 text-xs text-center" type="number" min={0} max={100} value={founderPcts[f.id] || 0} onChange={e => setFounderPcts(prev => ({ ...prev, [f.id]: Number(e.target.value) }))} />
@@ -533,7 +490,7 @@ export default function OrdersPage() {
                           <span className="text-xs text-muted-foreground">{pct.toFixed(1)}%</span>
                         )}
                         {totalCost > 0 && isSelected && (
-                          <span className={`text-xs font-medium min-w-[70px] text-end ${insufficient ? "text-destructive" : "text-primary"}`}>{costShare.toLocaleString("en-US", { maximumFractionDigits: 0 })} {t.currency}</span>
+                          <span className="text-xs font-medium min-w-[70px] text-end text-primary">{costShare.toLocaleString("en-US", { maximumFractionDigits: 0 })} {t.currency}</span>
                         )}
                       </div>
                     );
