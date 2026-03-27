@@ -88,6 +88,7 @@ export default function DeliveriesPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailOtherDeliveries, setDetailOtherDeliveries] = useState<Delivery[]>([]);
   const [confirmingDelivery, setConfirmingDelivery] = useState(false);
+  const [materialImageMap, setMaterialImageMap] = useState<Record<string, string>>({});
 
   const getDeliveredQtyMap = (orderDeliveries: any[]): Record<string, number> => {
     const map: Record<string, number> = {};
@@ -182,9 +183,15 @@ export default function DeliveriesPage() {
       api.get<any[]>("/orders"),
       api.get<any[]>("/founders"),
       api.get<any[]>("/clients"),
-    ]).then(([dels, ords, founders, clients]) => {
+      api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] })),
+    ]).then(([dels, ords, founders, clients, extData]) => {
       const clientMap: Record<string, string> = {};
       (clients || []).forEach((c: any) => { clientMap[c.id] = c.name || ""; });
+      const imgMap: Record<string, string> = {};
+      (extData?.products || []).forEach((p: any) => {
+        if (p.sku && p.image_url) imgMap[p.sku] = p.image_url;
+      });
+      setMaterialImageMap(imgMap);
       setOrders((ords || []).map((o: any) => ({
         id: o.id,
         client: o.client || clientMap[o.clientId || o.client_id] || "",
@@ -412,6 +419,7 @@ export default function DeliveriesPage() {
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.requestedDate}</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.actualDate}</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.executor}</th>
+              <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">المواد</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.type}</th>
               <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
               <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.actions}</th>
@@ -426,6 +434,41 @@ export default function DeliveriesPage() {
                 <td className="py-3 px-3 text-muted-foreground text-xs">{del.requestedDate}</td>
                 <td className="py-3 px-3 text-xs">{del.actualDate}</td>
                 <td className="py-3 px-3 text-muted-foreground">{del.actor}</td>
+                <td className="py-3 px-3 max-w-[220px]">
+                  {(() => {
+                    let items: { name: string; code: string; qty: number }[] = [];
+                    try {
+                      const p = JSON.parse(del.type);
+                      if (p && Array.isArray(p.items) && p.items.length > 0) {
+                        items = p.items.map((i: any) => ({ name: i.materialName || "", code: i.materialCode || "", qty: Number(i.qty) || 0 }));
+                      }
+                    } catch {}
+                    if (items.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
+                    return (
+                      <div className="flex flex-col gap-1.5">
+                        {items.slice(0, 3).map((item, idx) => {
+                          const img = materialImageMap[item.code] || "";
+                          return (
+                            <div key={idx} className="flex items-center gap-2">
+                              {img ? (
+                                <img src={img} alt="" className="h-7 w-7 rounded-lg object-contain bg-white border flex-shrink-0" />
+                              ) : (
+                                <div className="h-7 w-7 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                                  <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium truncate leading-tight">{item.name}</p>
+                                <p className="text-[10px] text-muted-foreground">×{item.qty}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {items.length > 3 && <span className="text-[10px] text-muted-foreground">+{items.length - 3} أخرى</span>}
+                      </div>
+                    );
+                  })()}
+                </td>
                 <td className="py-3 px-3"><span className="text-xs bg-muted px-2 py-0.5 rounded">{(() => { try { const p = JSON.parse(del.type); return p.type || del.type; } catch { return del.type; } })()}</span></td>
                 <td className="py-3 px-3"><StatusBadge status={del.status} variant={statusVariant[del.status] as any} /></td>
                 <td className="py-3 px-3 text-end" onClick={(e) => e.stopPropagation()}>
@@ -562,11 +605,16 @@ export default function DeliveriesPage() {
                           <div className="border rounded-xl divide-y overflow-hidden">
                             {parsedItems.map((item: any, idx: number) => {
                               const orderLine = detailOrderLines.find(l => String(l.id) === String(item.lineId));
+                              const imgUrl = orderLine?.imageUrl || "";
                               const totalQty = orderLine?.quantity || 0;
                               const pct = totalQty > 0 ? Math.round((Number(item.qty) / totalQty) * 100) : 0;
                               return (
                                 <div key={idx} className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted/30">
-                                  <div className="h-9 w-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 font-bold text-xs flex-shrink-0">{idx + 1}</div>
+                                  {imgUrl ? (
+                                    <img src={imgUrl} alt={item.materialName} className="h-10 w-10 rounded-xl object-contain bg-white border flex-shrink-0" />
+                                  ) : (
+                                    <div className="h-10 w-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 font-bold text-xs flex-shrink-0">{idx + 1}</div>
+                                  )}
                                   <div className="flex-1 min-w-0">
                                     <p className="font-medium truncate">{item.materialName}</p>
                                     <p className="text-xs text-muted-foreground">{item.materialCode} · {item.unit}</p>
