@@ -73,7 +73,18 @@ function typeLabel(type: string) {
   return type;
 }
 
-type ExpandedSection = "ledger" | "profits" | "capital";
+type ExpandedSection = "ledger" | "order_funding" | "profits" | "capital";
+
+type OrderFundingEntry = {
+  orderId: string;
+  clientName: string;
+  amount: number;
+  percentage: number;
+  totalCost: number;
+  totalSelling: number;
+  status: string;
+  date: string;
+};
 
 export default function FoundersPage() {
   const { t } = useLanguage();
@@ -229,6 +240,40 @@ export default function FoundersPage() {
     return { profitsByFounder: profitMap, capitalByFounder: capitalMap };
   }, [collections, orders, founders, founderTxs, rules.companyProfitPercentage]);
 
+  const orderFundingByFounder = useMemo(() => {
+    const map: Record<string, OrderFundingEntry[]> = {};
+    founders.forEach(f => { map[f.id] = []; });
+
+    Object.values(orders).forEach((order: any) => {
+      const contribs = Array.isArray(order.founderContributions) ? order.founderContributions : [];
+      if (contribs.length === 0) return;
+
+      const orderId = order.id;
+      const clientName = order.client || order.clientName || order.client_name || "";
+      const totalCost = toNum(order.totalCost ?? order.total_cost);
+      const totalSelling = toNum(order.totalSelling ?? order.total_selling);
+      const status = order.status || "";
+      const date = order.date || order.createdAt || "";
+
+      contribs.forEach((c: any) => {
+        const fId = c.founderId || c.founder_id;
+        if (!fId) return;
+        if (!map[fId]) map[fId] = [];
+        map[fId].push({
+          orderId,
+          clientName,
+          amount: toNum(c.amount),
+          percentage: toNum(c.percentage),
+          totalCost,
+          totalSelling,
+          status,
+          date: typeof date === "string" ? date.split("T")[0] : "",
+        });
+      });
+    });
+    return map;
+  }, [orders, founders]);
+
   const totalContributed = founders.reduce((s, f) => s + f.totalContributed, 0);
 
   // Available capital per founder = auto capital (recovered) + auto profits + manual capital_returns - withdrawals
@@ -381,10 +426,14 @@ export default function FoundersPage() {
       </div>
 
       {/* ── Top Stats ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title={t.totalContributions}
           value={totalContributed > 0 ? `${(totalContributed / 1000).toFixed(0)}ك ${t.currency}` : "—"}
           change={`${founders.length} ${t.foundersCount}`} changeType="neutral" icon={Wallet} />
+        <StatCard title="إجمالي التمويل من الأوردرات"
+          value={(() => { const total = founders.reduce((s, f) => s + (orderFundingByFounder[f.id] || []).reduce((ss, e) => ss + e.amount, 0), 0); return total > 0 ? `${total.toLocaleString()} ${t.currency}` : "—"; })()}
+          change={`${Object.values(orderFundingByFounder).reduce((s, arr) => s + arr.length, 0)} أوردر`}
+          changeType="neutral" icon={ShoppingBag} />
         <div className="cursor-pointer" onClick={() => navigate("/company-profit")}>
           <StatCard title={t.totalProfits} value="عرض الأرباح" change="صفحة الأرباح التفصيلية" changeType="positive" icon={TrendingUp} />
         </div>
@@ -412,6 +461,8 @@ export default function FoundersPage() {
 
             const myProfits = profitsByFounder[f.id] || [];
             const myCapital = capitalByFounder[f.id] || [];
+            const myOrderFunding = orderFundingByFounder[f.id] || [];
+            const totalOrderFunding = myOrderFunding.reduce((s, e) => s + e.amount, 0);
             const isExpanded = expandedFounder === f.id;
             const section = activeSection[f.id] || "ledger";
 
@@ -449,14 +500,19 @@ export default function FoundersPage() {
                 </div>
 
                 {/* ── Stats Row ── */}
-                <div className="grid grid-cols-4 gap-0 border-t border-border">
+                <div className="grid grid-cols-5 gap-0 border-t border-border">
                   <div className="p-3 text-center border-l border-border rtl:border-r rtl:border-l-0">
                     <div className="text-xs text-muted-foreground mb-1">إجمالي المساهمات</div>
                     <div className="font-bold text-sm">{displayTotal > 0 ? displayTotal.toLocaleString() : "—"}</div>
                     <div className="text-xs text-muted-foreground">{t.currency}</div>
                   </div>
                   <div className="p-3 text-center border-l border-border rtl:border-r rtl:border-l-0">
-                    <div className="text-xs text-muted-foreground mb-1">تمويل أوردرات</div>
+                    <div className="text-xs text-muted-foreground mb-1">تمويل من الأوردرات</div>
+                    <div className="font-bold text-sm text-blue-600 dark:text-blue-400">{totalOrderFunding > 0 ? totalOrderFunding.toLocaleString() : "—"}</div>
+                    <div className="text-xs text-muted-foreground">{myOrderFunding.length > 0 ? `${myOrderFunding.length} طلب` : t.currency}</div>
+                  </div>
+                  <div className="p-3 text-center border-l border-border rtl:border-r rtl:border-l-0">
+                    <div className="text-xs text-muted-foreground mb-1">تمويل يدوي</div>
                     <div className="font-bold text-sm text-primary">{fundings.length > 0 ? fundings.length : "—"}</div>
                     <div className="text-xs text-muted-foreground">طلب</div>
                   </div>
@@ -491,8 +547,8 @@ export default function FoundersPage() {
                   <div className="border-t border-border">
                     {/* Section Selector */}
                     <div className="flex border-b border-border">
-                      {(["ledger", "profits", "capital"] as ExpandedSection[]).map(s => {
-                        const labels: Record<ExpandedSection, string> = { ledger: "التمويلات والمساهمات", profits: `الأرباح (${myProfits.length})`, capital: `رأس المال (${capitalBalance.toLocaleString()})` };
+                      {(["ledger", "order_funding", "profits", "capital"] as ExpandedSection[]).map(s => {
+                        const labels: Record<ExpandedSection, string> = { ledger: "التمويلات والمساهمات", order_funding: `التمويل من الأوردرات (${myOrderFunding.length})`, profits: `الأرباح (${myProfits.length})`, capital: `رأس المال (${capitalBalance.toLocaleString()})` };
                         return (
                           <button key={s} className={`flex-1 py-2 text-xs font-medium transition-colors border-b-2 ${section === s ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
                             onClick={() => setActiveSection(prev => ({ ...prev, [f.id]: s }))}>
@@ -553,6 +609,60 @@ export default function FoundersPage() {
                           <span>إجمالي المساهمات والتمويل</span>
                           <span className="font-bold text-foreground">{[...contributions, ...fundings].reduce((s, tx) => s + tx.amount, 0).toLocaleString()} {t.currency}</span>
                         </div>
+                      </>
+                    )}
+
+                    {/* ── ORDER FUNDING: aggregated from order contributions ── */}
+                    {section === "order_funding" && (
+                      <>
+                        {myOrderFunding.length === 0 ? (
+                          <div className="py-10 text-center text-sm text-muted-foreground">
+                            <ShoppingBag className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                            <p>لا يوجد تمويل مرتبط بأوردرات لهذا المؤسس</p>
+                            <p className="text-xs mt-1">يظهر التمويل تلقائياً عند تعيين المؤسس في الأوردرات</p>
+                          </div>
+                        ) : (
+                          <div className="max-h-[500px] overflow-y-auto">
+                            <div className="divide-y divide-border/50">
+                              {myOrderFunding
+                                .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+                                .map((entry, idx) => (
+                                  <div key={`of-${entry.orderId}-${idx}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-blue-500/10 flex items-center justify-center">
+                                      <ShoppingBag className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-medium">تمويل أوردر</span>
+                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                        </button>
+                                        {entry.clientName && <span className="text-xs text-muted-foreground">· {entry.clientName}</span>}
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">{entry.status}</Badge>
+                                      </div>
+                                      <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
+                                        <span><Clock className="h-3 w-3 inline ml-0.5" />{entry.date}</span>
+                                        <span>نسبة: <span className="text-foreground font-medium">{entry.percentage.toFixed(1)}%</span></span>
+                                        <span>تكلفة الأوردر: <span className="text-foreground font-medium">{entry.totalCost.toLocaleString()} {t.currency}</span></span>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-0.5">
+                                      <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                                        {entry.amount.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">{t.currency}</span>
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        )}
+                        {myOrderFunding.length > 0 && (
+                          <div className="flex items-center justify-between px-5 py-2.5 bg-muted/20 border-t border-border text-xs text-muted-foreground">
+                            <span>إجمالي التمويل من {myOrderFunding.length} أوردر</span>
+                            <span className="font-bold text-blue-600 dark:text-blue-400">{totalOrderFunding.toLocaleString()} {t.currency}</span>
+                          </div>
+                        )}
                       </>
                     )}
 
