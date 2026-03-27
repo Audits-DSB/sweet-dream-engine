@@ -139,32 +139,57 @@ export default function CompanyProfitPage() {
   }, [founders]);
 
   // Build profit ledger from collections × orders (only where order still exists)
+  // Multi-order collections are split proportionally per order with each order's own companyProfitPercentage
   const profitLedger = useMemo((): ProfitEntry[] => {
     if (!collections || !rawOrders) return [];
     const cutoff = subMonths(new Date(), parseInt(monthsFilter));
     const foundersList = founders || [];
 
-    return (collections as any[])
-      .filter((col: any) => {
-        const orderId = col.order || col.orderId || col.order_id || "";
-        return orderId && orderMap[orderId]; // only show if linked order still exists
-      })
-      .map((col: any): ProfitEntry | null => {
-        const orderId = col.order || col.orderId || col.order_id || "";
-        const order = orderMap[orderId];
-        if (!order) return null;
+    const entries: ProfitEntry[] = [];
 
-        // Support both issueDate and invoiceDate field names
-        const issueDate = col.invoiceDate || col.invoice_date || col.issueDate || col.issue_date || col.createdAt || col.created_at || "";
-        let d: Date;
-        try { d = parseISO(issueDate); } catch { return null; }
-        if (d < cutoff) return null;
+    (collections as any[]).forEach((col: any) => {
+      const issueDate = col.invoiceDate || col.invoice_date || col.issueDate || col.issue_date || col.createdAt || col.created_at || "";
+      let d: Date;
+      try { d = parseISO(issueDate); } catch { return; }
+      if (d < cutoff) return;
 
-        const totalCollection = parseAmount(col.totalAmount ?? col.total_amount ?? col.total);
-        const paidAmount = parseAmount(col.paidAmount ?? col.paid_amount ?? col.paid);
+      const totalCollection = parseAmount(col.totalAmount ?? col.total_amount ?? col.total);
+      const totalPaid = parseAmount(col.paidAmount ?? col.paid_amount ?? col.paid);
+      const paymentHistory = parsePaymentsHistory(col.payments);
+      const sortedPayments = [...paymentHistory].sort((a, b) => a.date > b.date ? -1 : 1);
+      const lastPaymentDate = sortedPayments[0]?.date || issueDate;
 
+      const notesMeta = (() => {
+        const raw = col.notes || col._notesObj;
+        if (!raw) return {} as any;
+        if (typeof raw === "object") return raw;
+        try { return JSON.parse(raw); } catch { return {}; }
+      })();
+
+      const lineItems: any[] = notesMeta.lineItems || [];
+      const fromLines = [...new Set(lineItems.map((l: any) => l.sourceOrderId).filter(Boolean))] as string[];
+      const primaryOrderId = col.order || col.orderId || col.order_id || "";
+      const sourceOrderIds = fromLines.length > 0 ? fromLines
+        : (notesMeta.sourceOrders?.length > 0 ? notesMeta.sourceOrders : (primaryOrderId ? [primaryOrderId] : []));
+
+      const validOrderIds = sourceOrderIds.filter((oid: string) => orderMap[oid]);
+      if (validOrderIds.length === 0) return;
+
+      const orderTotals: Record<string, number> = {};
+      let allOrdersTotal = 0;
+      validOrderIds.forEach((oid: string) => {
+        const o = orderMap[oid];
+        const ts = parseAmount(o.totalSelling ?? o.total_selling);
+        orderTotals[oid] = ts;
+        allOrdersTotal += ts;
+      });
+
+      validOrderIds.forEach((oid: string) => {
+        const order = orderMap[oid];
         const totalSelling = parseAmount(order.totalSelling ?? order.total_selling);
         const totalCost = parseAmount(order.totalCost ?? order.total_cost);
+        const orderShare = allOrdersTotal > 0 ? totalSelling / allOrdersTotal : 1 / validOrderIds.length;
+        const paidAmount = Math.round(totalPaid * orderShare * 100) / 100;
 
         const contribs = parseJsonField(order.founderContributions ?? order.founder_contributions);
         const contribArray = Array.isArray(contribs) ? contribs : [];
@@ -177,17 +202,8 @@ export default function CompanyProfitPage() {
         const companyProfit = Math.round(qp.companyProfit);
         const foundersProfit = Math.round(qp.foundersProfit);
 
-        // Split mode from order
-        const splitMode = order.splitMode || order.split_mode || "equal";
-
-        // Founder shares — use order contributions if available, otherwise equal split
-        // NOTE: fc.percentage is the founder's % of the FOUNDERS' PORTION (not total profit)
         let founderShares: Array<{ id: string; name: string; amount: number; pct: number }>;
-
         if (contribArray.length > 0) {
-          // Use stored percentages from order — correct for both equal & custom splits.
-          // Equal-split orders save equal % per participating founder at creation time,
-          // so new founders added later do NOT retroactively get a share of old orders.
           const totalFounderPct = contribArray.reduce((s: number, fc: any) => s + (fc.percentage || 0), 0) || 100;
           founderShares = contribArray.map((fc: any) => {
             const founderName = fc.founder || founderMap[fc.founderId] || fc.founderId || "مؤسس";
@@ -196,30 +212,21 @@ export default function CompanyProfitPage() {
             return { id: fc.founderId || founderName, name: founderName, amount: founderAmount, pct: Math.round((founderPct / totalFounderPct) * 100 * 10) / 10 };
           });
         } else {
-          // Fallback for legacy orders with no explicit contributions
           const numFounders = foundersList.length || 1;
           const equalPct = Math.round((100 / numFounders) * 10) / 10;
           const equalAmount = Math.round(foundersProfit / numFounders);
           founderShares = foundersList.map((f: any) => ({
-            id: f.id,
-            name: f.name || f.alias || f.id,
-            amount: equalAmount,
-            pct: equalPct,
+            id: f.id, name: f.name || f.alias || f.id, amount: equalAmount, pct: equalPct,
           }));
         }
 
-        // Last payment date from history
-        const paymentHistory = parsePaymentsHistory(col.payments);
-        const sortedPayments = [...paymentHistory].sort((a, b) => a.date > b.date ? -1 : 1);
-        const lastPaymentDate = sortedPayments[0]?.date || issueDate;
-
-        return {
+        entries.push({
           collectionId: col.id,
-          orderId,
+          orderId: oid,
           clientId: order.clientId || order.client_id || col.clientId || col.client_id || "",
           client: col.client || col.clientName || col.client_name || order.client || "",
           date: issueDate.split("T")[0],
-          totalCollection,
+          totalCollection: Math.round(totalCollection * orderShare * 100) / 100,
           orderTotal: totalSelling,
           paidAmount,
           paidRatio,
@@ -231,9 +238,11 @@ export default function CompanyProfitPage() {
           founderShares,
           status: col.status || "Pending",
           lastPaymentDate: lastPaymentDate.split("T")[0],
-        };
-      })
-      .filter(Boolean) as ProfitEntry[];
+        });
+      });
+    });
+
+    return entries;
   }, [collections, rawOrders, orderMap, founderMap, founders, monthsFilter, rules.companyProfitPercentage]);
 
   // Filtered ledger — respects selectedMonth click from bar chart
