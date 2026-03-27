@@ -461,7 +461,7 @@ export default function CompanyProfitPage() {
   };
 
   const handleAddExpense = async () => {
-    if (!expenseForm.amount || !expenseForm.accountId) {
+    if (!expenseForm.amount) {
       toast({ title: t.error, description: t.fillRequiredFields, variant: "destructive" });
       return;
     }
@@ -470,15 +470,15 @@ export default function CompanyProfitPage() {
       toast({ title: t.error, description: t.invalidAmount, variant: "destructive" });
       return;
     }
-    const account = accounts?.find(a => a.id === expenseForm.accountId);
-    if (!account) return;
+    const account = expenseForm.accountId ? accounts?.find(a => a.id === expenseForm.accountId) : null;
     setSubmitting(true);
     try {
-      const newBalance = account.balance - amount;
+      const newBalance = account ? account.balance - amount : 0;
       await api.post("/treasury/transactions", {
-        id: `TX-${Date.now()}`, accountId: expenseForm.accountId, amount: -amount,
+        id: `TX-${Date.now()}`, accountId: expenseForm.accountId || null, amount: -amount,
         txType: "expense", category: expenseForm.category, description: expenseForm.description || null,
-        balanceAfter: newBalance, performedBy: user?.id || null, date: new Date().toISOString().split("T")[0], newBalance,
+        balanceAfter: newBalance, performedBy: user?.id || null, date: new Date().toISOString().split("T")[0],
+        ...(account ? { newBalance } : {}),
       });
       toast({ title: t.success, description: t.expenseAdded });
       setExpenseDialogOpen(false);
@@ -558,7 +558,7 @@ export default function CompanyProfitPage() {
               <DialogHeader><DialogTitle>{t.addExpense}</DialogTitle></DialogHeader>
               <div className="space-y-4 pt-2">
                 <div className="space-y-2">
-                  <Label>{t.treasurySelectAccount} *</Label>
+                  <Label>{t.treasurySelectAccount} {(accounts?.length ?? 0) > 0 ? "" : "(اختياري)"}</Label>
                   <Select value={expenseForm.accountId} onValueChange={(v) => setExpenseForm(f => ({ ...f, accountId: v }))}>
                     <SelectTrigger><SelectValue placeholder={t.selectAccount} /></SelectTrigger>
                     <SelectContent>
