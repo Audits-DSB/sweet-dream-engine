@@ -42,6 +42,7 @@ import ForgotPasswordPage from "./pages/ForgotPassword";
 import ResetPasswordPage from "./pages/ResetPassword";
 import Walkthrough from "./pages/Walkthrough";
 import ActivityPage from "./pages/Activity";
+import TrashPage from "./pages/Trash";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -95,6 +96,7 @@ const App = () => (
                 <Route path="/user-management" element={<UserManagementPage />} />
                 <Route path="/walkthrough" element={<Walkthrough />} />
                 <Route path="/activity" element={<ActivityPage />} />
+                <Route path="/trash" element={<TrashPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

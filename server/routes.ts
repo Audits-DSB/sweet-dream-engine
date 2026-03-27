@@ -5,18 +5,29 @@ import { quickProfit, founderSplit } from "../src/lib/orderProfit";
 
 const router = Router();
 
-// ─── pgPool kept ONLY for migration endpoint (reads old local data) ───────────
-// Lazy initialization — only connect if DATABASE_URL is provided.
-// On Cloud Run (Supabase-only mode) this is optional and won't crash on startup.
 let _pgPool: InstanceType<typeof Pool> | null = null;
 function getPgPool(): InstanceType<typeof Pool> {
   if (!_pgPool) {
     if (!process.env.DATABASE_URL) {
-      throw new Error("DATABASE_URL not set — /migrate-to-supabase endpoint unavailable.");
+      throw new Error("DATABASE_URL not set.");
     }
     _pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
   }
   return _pgPool;
+}
+
+async function softDelete(entityType: string, entityId: string, entityName: string, snapshot: any, relatedData: any = {}) {
+  const id = `DEL-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  try {
+    await getPgPool().query(
+      `INSERT INTO deleted_items (id, entity_type, entity_id, entity_name, snapshot, related_data, deleted_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [id, entityType, entityId, entityName, JSON.stringify(snapshot), JSON.stringify(relatedData), ""]
+    );
+  } catch (e: any) {
+    console.warn("[softDelete] Could not save to trash:", e.message);
+  }
+  return id;
 }
 
 // ─── EXTERNAL MATERIALS PROXY (queries the Lovable/catalog Supabase project) ──
@@ -82,6 +93,8 @@ router.patch("/clients/:id", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("clients").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
 router.delete("/clients/:id", async (req, res) => {
+  const { data: snap } = await supabaseAdmin.from("clients").select("*").eq("id", req.params.id).single();
+  if (snap) await softDelete("client", req.params.id, snap.name || req.params.id, snap);
   const { error } = await supabaseAdmin.from("clients").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
@@ -98,6 +111,9 @@ router.patch("/suppliers/:id", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("suppliers").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
 router.delete("/suppliers/:id", async (req, res) => {
+  const { data: snap } = await supabaseAdmin.from("suppliers").select("*").eq("id", req.params.id).single();
+  const { data: mats } = await supabaseAdmin.from("supplier_materials").select("*").eq("supplier_id", req.params.id);
+  if (snap) await softDelete("supplier", req.params.id, snap.name || req.params.id, snap, { supplierMaterials: mats || [] });
   const { error } = await supabaseAdmin.from("suppliers").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
@@ -114,6 +130,8 @@ router.patch("/materials/:code", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("materials").update(snakifyKeys(req.body)).eq("code", req.params.code).select().single());
 });
 router.delete("/materials/:code", async (req, res) => {
+  const { data: snap } = await supabaseAdmin.from("materials").select("*").eq("code", req.params.code).single();
+  if (snap) await softDelete("material", req.params.code, snap.name || req.params.code, snap);
   const { error } = await supabaseAdmin.from("materials").delete().eq("code", req.params.code);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
@@ -168,6 +186,8 @@ router.patch("/founders/:id", async (req, res) => {
   sbOk(res, result);
 });
 router.delete("/founders/:id", async (req, res) => {
+  const { data: snap } = await supabaseAdmin.from("founders").select("*").eq("id", req.params.id).single();
+  if (snap) await softDelete("founder", req.params.id, snap.name || req.params.id, snap);
   const { error } = await supabaseAdmin.from("founders").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   await supabaseAdmin.from("delivery_actors").delete().eq("founder_id", req.params.id).then(() => {}).catch(() => {});
@@ -218,6 +238,8 @@ router.patch("/delivery-actors/:id", async (req, res) => {
   res.json(camelizeKeys(data));
 });
 router.delete("/delivery-actors/:id", async (req, res) => {
+  const { data: snap } = await supabaseAdmin.from("delivery_actors").select("*").eq("id", req.params.id).single();
+  if (snap) await softDelete("delivery-actor", req.params.id, snap.name || req.params.id, snap);
   const { error } = await supabaseAdmin.from("delivery_actors").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
@@ -385,7 +407,10 @@ router.delete("/orders/:id", async (req, res) => {
     }
   });
 
-  // ── Step 2: delete the order itself ──
+  // ── Step 2: soft-delete snapshot (before physical delete) ──
+  if (orderRes.data) await softDelete("order", orderId, `${orderId} — ${orderRes.data.client || ""}`, orderRes.data, relatedSnapshot);
+
+  // ── Step 3: delete the order itself ──
   const { error } = await supabaseAdmin.from("orders").delete().eq("id", orderId);
   if (error) return res.status(500).json({ error: error.message });
 
@@ -613,6 +638,8 @@ router.patch("/requests/:id", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("requests").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
 router.delete("/requests/:id", async (req, res) => {
+  const { data: snap } = await supabaseAdmin.from("requests").select("*").eq("id", req.params.id).single();
+  if (snap) await softDelete("request", req.params.id, `${req.params.id} — ${snap.client || ""}`, snap);
   const { error } = await supabaseAdmin.from("requests").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
@@ -764,6 +791,8 @@ router.patch("/deliveries/:id", async (req, res) => {
   sbOk(res, result);
 });
 router.delete("/deliveries/:id", async (req, res) => {
+  const { data: snap } = await supabaseAdmin.from("deliveries").select("*").eq("id", req.params.id).single();
+  if (snap) await softDelete("delivery", req.params.id, `${req.params.id} — ${snap.client || ""}`, snap);
   const { error } = await supabaseAdmin.from("deliveries").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
@@ -782,6 +811,8 @@ router.patch("/collections/:id", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("collections").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
 router.delete("/collections/:id", async (req, res) => {
+  const { data: snap } = await supabaseAdmin.from("collections").select("*").eq("id", req.params.id).single();
+  if (snap) await softDelete("collection", req.params.id, `${req.params.id} — ${snap.client || ""}`, snap);
   const { error } = await supabaseAdmin.from("collections").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
@@ -835,6 +866,8 @@ router.patch("/client-inventory/:id", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("client_inventory").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
 router.delete("/client-inventory/:id", async (req, res) => {
+  const { data: snap } = await supabaseAdmin.from("client_inventory").select("*").eq("id", req.params.id).single();
+  if (snap) await softDelete("client-inventory", req.params.id, `${snap.material || ""} — ${snap.client_name || ""}`, snap);
   sbOk(res, await supabaseAdmin.from("client_inventory").delete().eq("id", req.params.id).select().single());
 });
 
@@ -855,6 +888,8 @@ router.patch("/audits/:id", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("audits").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
 router.delete("/audits/:id", async (req, res) => {
+  const { data: snap } = await supabaseAdmin.from("audits").select("*").eq("id", req.params.id).single();
+  if (snap) await softDelete("audit", req.params.id, `${req.params.id} — ${snap.client_name || ""}`, snap);
   sbOk(res, await supabaseAdmin.from("audits").delete().eq("id", req.params.id).select().single());
 });
 
@@ -891,6 +926,9 @@ router.patch("/treasury/accounts/:id", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("treasury_accounts").update(body).eq("id", req.params.id).select().single());
 });
 router.delete("/treasury/accounts/:id", async (req, res) => {
+  const { data: snap } = await supabaseAdmin.from("treasury_accounts").select("*").eq("id", req.params.id).single();
+  const { data: txns } = await supabaseAdmin.from("treasury_transactions").select("*").eq("account_id", req.params.id);
+  if (snap) await softDelete("treasury-account", req.params.id, snap.name || req.params.id, snap, { transactions: txns || [] });
   const { error } = await supabaseAdmin.from("treasury_accounts").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
@@ -938,14 +976,15 @@ router.delete("/treasury/transactions/:id", async (req, res) => {
     .single();
   if (fetchErr || !tx) return res.status(404).json({ error: "Transaction not found" });
 
+  if (tx) await softDelete("treasury-transaction", req.params.id, `${tx.description || tx.tx_type || req.params.id}`, tx);
+
   const { error } = await supabaseAdmin.from("treasury_transactions").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
 
-  // Reverse the balance: add back the amount (which was negative for expenses)
   if (tx.account_id && tx.amount !== null) {
     const { data: acc } = await supabaseAdmin.from("treasury_accounts").select("balance").eq("id", tx.account_id).single();
     if (acc) {
-      const restored = Number(acc.balance) - Number(tx.amount); // subtract negative = add back
+      const restored = Number(acc.balance) - Number(tx.amount);
       await supabaseAdmin.from("treasury_accounts")
         .update({ balance: restored, updated_at: new Date().toISOString() })
         .eq("id", tx.account_id);
@@ -1263,6 +1302,7 @@ router.post("/founder-transactions", async (req, res) => {
 
 router.delete("/founder-transactions/:id", async (req, res) => {
   const { data: tx } = await supabaseAdmin.from("treasury_transactions").select("*").eq("id", req.params.id).single();
+  if (tx) await softDelete("founder-transaction", req.params.id, `${tx.description || tx.tx_type || req.params.id}`, tx);
   const { error } = await supabaseAdmin.from("treasury_transactions").delete().eq("id", req.params.id).in("tx_type", FOUNDER_TX_TYPES);
   if (error) return res.status(500).json({ error: error.message });
 
@@ -1356,6 +1396,118 @@ router.post("/migrate-to-supabase", async (req, res) => {
     res.json({ ok: true, results });
   } catch (e: any) {
     res.status(500).json({ error: e.message, results });
+  }
+});
+
+// ─── TRASH / DELETED ITEMS ────────────────────────────────────────────────────
+const ENTITY_TABLE_MAP: Record<string, { table: string; idField: string }> = {
+  client: { table: "clients", idField: "id" },
+  supplier: { table: "suppliers", idField: "id" },
+  material: { table: "materials", idField: "code" },
+  founder: { table: "founders", idField: "id" },
+  "delivery-actor": { table: "delivery_actors", idField: "id" },
+  order: { table: "orders", idField: "id" },
+  request: { table: "requests", idField: "id" },
+  delivery: { table: "deliveries", idField: "id" },
+  collection: { table: "collections", idField: "id" },
+  "client-inventory": { table: "client_inventory", idField: "id" },
+  audit: { table: "audits", idField: "id" },
+  "treasury-account": { table: "treasury_accounts", idField: "id" },
+  "treasury-transaction": { table: "treasury_transactions", idField: "id" },
+  "founder-transaction": { table: "treasury_transactions", idField: "id" },
+};
+
+router.get("/trash", async (_req, res) => {
+  try {
+    const { rows } = await getPgPool().query("SELECT * FROM deleted_items ORDER BY deleted_at DESC");
+    res.json(rows);
+  } catch (e: any) {
+    res.json([]);
+  }
+});
+
+router.get("/trash/count", async (_req, res) => {
+  try {
+    const { rows } = await getPgPool().query("SELECT count(*) as count FROM deleted_items");
+    res.json({ count: Number(rows[0]?.count || 0) });
+  } catch {
+    res.json({ count: 0 });
+  }
+});
+
+router.post("/trash/:id/restore", async (req, res) => {
+  try {
+    const { rows } = await getPgPool().query("SELECT * FROM deleted_items WHERE id = $1", [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ error: "Item not found in trash" });
+
+    const item = rows[0];
+    const entityType = item.entity_type;
+    const snapshot = typeof item.snapshot === "string" ? JSON.parse(item.snapshot) : item.snapshot;
+    const relatedData = typeof item.related_data === "string" ? JSON.parse(item.related_data) : item.related_data;
+    const mapping = ENTITY_TABLE_MAP[entityType];
+
+    if (!mapping) return res.status(400).json({ error: `Unknown entity type: ${entityType}` });
+
+    if (entityType === "order") {
+      const { error: orderErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
+      if (orderErr) return res.status(500).json({ error: `Restore order failed: ${orderErr.message}` });
+
+      const restoreOps: Promise<any>[] = [];
+      if (relatedData.orderLines?.length) restoreOps.push(supabaseAdmin.from("order_lines").upsert(relatedData.orderLines, { onConflict: "id" }));
+      if (relatedData.founderContributions?.length) restoreOps.push(supabaseAdmin.from("order_founder_contributions").upsert(relatedData.founderContributions, { onConflict: "order_id" }));
+      if (relatedData.deliveries?.length) restoreOps.push(supabaseAdmin.from("deliveries").upsert(relatedData.deliveries, { onConflict: "id" }));
+      if (relatedData.collections?.length) restoreOps.push(supabaseAdmin.from("collections").upsert(relatedData.collections, { onConflict: "id" }));
+      if (relatedData.clientInventory?.length) restoreOps.push(supabaseAdmin.from("client_inventory").upsert(relatedData.clientInventory, { onConflict: "id" }));
+      if (relatedData.audits?.length) restoreOps.push(supabaseAdmin.from("audits").upsert(relatedData.audits, { onConflict: "id" }));
+      await Promise.allSettled(restoreOps);
+    } else if (entityType === "supplier") {
+      const { error: supErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
+      if (supErr) return res.status(500).json({ error: `Restore failed: ${supErr.message}` });
+      if (relatedData.supplierMaterials?.length) {
+        await supabaseAdmin.from("supplier_materials").upsert(relatedData.supplierMaterials, { onConflict: "supplier_id,material_code" });
+      }
+    } else if (entityType === "treasury-account") {
+      const { error: accErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
+      if (accErr) return res.status(500).json({ error: `Restore failed: ${accErr.message}` });
+      if (relatedData.transactions?.length) {
+        await supabaseAdmin.from("treasury_transactions").upsert(relatedData.transactions, { onConflict: "id" });
+      }
+    } else if (entityType === "founder") {
+      const { error: fErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
+      if (fErr) return res.status(500).json({ error: `Restore failed: ${fErr.message}` });
+      const actorId = `ACT-F-${snapshot.id}`;
+      await supabaseAdmin.from("delivery_actors").upsert(
+        { id: actorId, name: snapshot.name || "", type: "founder", phone: snapshot.phone || "", email: snapshot.email || "", active: true, founder_id: snapshot.id },
+        { onConflict: "id", ignoreDuplicates: true }
+      ).catch(() => {});
+    } else {
+      const { error: restoreErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
+      if (restoreErr) return res.status(500).json({ error: `Restore failed: ${restoreErr.message}` });
+    }
+
+    await getPgPool().query("DELETE FROM deleted_items WHERE id = $1", [req.params.id]);
+    res.json({ ok: true, entityType, entityId: item.entity_id });
+  } catch (e: any) {
+    console.error("[trash/restore]", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.delete("/trash/:id", async (req, res) => {
+  try {
+    await getPgPool().query("DELETE FROM deleted_items WHERE id = $1", [req.params.id]);
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.delete("/trash", async (_req, res) => {
+  try {
+    const { rowCount } = await getPgPool().query("DELETE FROM deleted_items");
+    res.json({ ok: true, deleted: rowCount });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 

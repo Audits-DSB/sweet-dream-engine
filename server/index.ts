@@ -166,7 +166,36 @@ if (isProduction) {
   );
 }
 
+async function ensureDeletedItemsTable() {
+  try {
+    const pgUrl = process.env.DATABASE_URL;
+    if (pgUrl) {
+      const { Pool } = await import("pg");
+      const pool = new Pool({ connectionString: pgUrl });
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS deleted_items (
+          id text PRIMARY KEY,
+          entity_type text NOT NULL,
+          entity_id text NOT NULL,
+          entity_name text NOT NULL DEFAULT '',
+          snapshot jsonb NOT NULL DEFAULT '{}',
+          related_data jsonb NOT NULL DEFAULT '{}',
+          deleted_at timestamptz NOT NULL DEFAULT now(),
+          deleted_by text NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_deleted_items_entity ON deleted_items(entity_type);
+        CREATE INDEX IF NOT EXISTS idx_deleted_items_date ON deleted_items(deleted_at DESC);
+      `);
+      await pool.end();
+      console.log("✅ deleted_items table ready.");
+    }
+  } catch (e: any) {
+    console.warn("⚠️ deleted_items table setup:", e.message);
+  }
+}
+
 app.listen(PORT, "0.0.0.0", async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   await seedIfEmpty();
+  await ensureDeletedItemsTable();
 });

@@ -32,14 +32,17 @@ All business data in main Supabase project:
   - Standard: inflow, expense, withdrawal, transfer
   - Founder transactions: founder_contribution, founder_withdrawal, order_funding (stored with performedBy=founderId, referenceId=founderName, linkedAccountId=orderId, category=method)
 
-## Delete & Audit Log System
+## Soft-Delete & Trash System
+- **Soft-Delete**: All DELETE routes snapshot the entity BEFORE physical deletion and save to `deleted_items` table (local Postgres via `DATABASE_URL`, not Supabase)
+- **`deleted_items` table**: Columns — id, entity_type, entity_id, entity_name, snapshot (jsonb), related_data (jsonb), deleted_at, deleted_by
+- **Trash Page** (`src/pages/Trash.tsx`) — Full trash management: type-filter badges, search, expand/collapse snapshot details, restore, permanent delete, clear-all
+- **Trash API Endpoints**: `GET /api/trash`, `GET /api/trash/count`, `POST /api/trash/:id/restore`, `DELETE /api/trash/:id`, `DELETE /api/trash`
+- **Cascade Restore**: Orders restore with all related records (order_lines, founder_contributions, deliveries, collections, client_inventory, audits). Suppliers restore with materials. Treasury accounts restore with transactions. Founders restore linked delivery actors.
 - **ConfirmDeleteDialog** (`src/components/ConfirmDeleteDialog.tsx`) — Reusable confirmation dialog before any delete
-- **auditLog utility** (`src/lib/auditLog.ts`) — Logs all create/update/delete operations to `notifications` table (type: `audit_create`/`audit_update`/`audit_delete`) with full entity snapshot for restore
-- **Activity Page** (`src/pages/Activity.tsx`) — Displays audit history grouped by date; allows restoring deleted items by re-inserting the snapshot via API
-- **Delete enabled on**: Clients, Orders, Deliveries, Suppliers, Collections, Materials, Founders (all with confirmation dialog + audit log)
-- **Restore**: Activity page reads `notifications` where type starts with `audit_`, shows "استعادة" button for deleted items
-- **Order Cascade Delete**: Deleting an order also deletes all related records (order_lines, order_founder_contributions, deliveries, collections, client_inventory, audits). Full related data is saved in the audit snapshot under `_related` key.
-- **Order Cascade Restore**: `POST /orders/:id/cascade-restore` re-creates the order and all related records from the saved snapshot. All foreign keys are enforced to match the target order ID server-side.
+- **auditLog utility** (`src/lib/auditLog.ts`) — Logs create/update/delete operations to `notifications` table for activity tracking
+- **Activity Page** (`src/pages/Activity.tsx`) — Displays audit history grouped by date
+- **Order Cascade Delete**: Deleting an order also deletes all related records. Full related data is saved in the trash snapshot.
+- **Order Cascade Restore**: `POST /orders/:id/cascade-restore` re-creates the order and all related records from the saved snapshot.
 
 ## Key API Endpoints (server/routes.ts)
 - `/api/clients`, `/api/suppliers`, `/api/materials`, `/api/founders` — CRUD
