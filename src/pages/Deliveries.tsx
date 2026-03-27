@@ -650,7 +650,7 @@ export default function DeliveriesPage() {
               <Select value={selectedOrder} onValueChange={setSelectedOrder}>
                 <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t.selectOrderPlaceholder} /></SelectTrigger>
                 <SelectContent>
-                  {orders.filter(o => !["Cancelled", "Closed", "Completed"].includes(o.status)).map(o => (
+                  {orders.filter(o => !["Cancelled", "Closed", "Completed", "Delivered", "مُسلَّم", "مكتمل", "تم التسليم"].includes(o.status)).map(o => (
                     <SelectItem key={o.id} value={o.id}>{o.id} — {o.client} ({o.status})</SelectItem>
                   ))}
                 </SelectContent>
