@@ -233,20 +233,27 @@ router.get("/orders/next-id", async (_req, res) => {
   res.json({ nextId: `ORD-${String(max + 1).padStart(3, "0")}` });
 });
 router.get("/orders", async (_req, res) => {
-  const [ordersRes, clientsRes, contribRes] = await Promise.all([
+  const [ordersRes, clientsRes, contribRes, linesRes] = await Promise.all([
     supabaseAdmin.from("orders").select("*").order("created_at", { ascending: false }),
     supabaseAdmin.from("clients").select("id,name"),
     supabaseAdmin.from("order_founder_contributions").select("order_id,contributions"),
+    supabaseAdmin.from("order_lines").select("order_id,line_cost"),
   ]);
   if (ordersRes.error) return res.status(400).json({ error: ordersRes.error.message });
   const clientMap: Record<string, string> = {};
   for (const c of clientsRes.data || []) clientMap[c.id] = c.name || c.id;
   const contribMap: Record<string, any[]> = {};
   for (const r of contribRes.data || []) contribMap[r.order_id] = r.contributions || [];
+  // Compute total_cost per order from order_lines (sum of line_cost)
+  const costMap: Record<string, number> = {};
+  for (const l of linesRes.data || []) {
+    costMap[l.order_id] = (costMap[l.order_id] || 0) + (Number(l.line_cost) || 0);
+  }
   const orders = (ordersRes.data || []).map(o => ({
     ...o,
     client: clientMap[o.client_id] || o.client_id || "",
     founder_contributions: contribMap[o.id] || [],
+    total_cost: costMap[o.id] || 0,
   }));
   res.json(camelizeKeys(orders));
 });

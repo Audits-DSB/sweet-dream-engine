@@ -659,12 +659,23 @@ export default function CompanyProfitPage() {
                           <div className="sm:col-span-2 rounded-lg border border-border/50 bg-muted/10 p-3">
                             <p className="text-xs font-semibold mb-2 text-muted-foreground">تفاصيل الحساب</p>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-xs">
-                              <div><span className="text-muted-foreground">إجمالي الأوردر</span><br/><span className="font-semibold text-foreground">{fmtNum(entry.orderTotal)} {t.currency}</span></div>
-                              <div><span className="text-muted-foreground">قيمة التحصيل (مستهلك)</span><br/><span className="font-semibold text-foreground">{fmtNum(entry.totalCollection)} {t.currency}</span></div>
-                              <div><span className="text-muted-foreground">المدفوع فعلياً</span><br/><span className="font-semibold text-success">{fmtNum(entry.paidAmount)} {t.currency}</span></div>
-                              <div><span className="text-muted-foreground">نسبة الدفع من الأوردر</span><br/><span className="font-semibold text-foreground">{(entry.paidRatio * 100).toFixed(1)}% <span className="font-normal text-muted-foreground">({fmtNum(entry.paidAmount)} ÷ {fmtNum(entry.orderTotal)})</span></span></div>
-                              <div><span className="text-muted-foreground">ربح الأوردر الكامل</span><br/><span className="font-semibold text-foreground">{fmtNum(entry.grossProfit)} {t.currency}</span></div>
-                              <div><span className="text-muted-foreground">الربح المحقق = {(entry.paidRatio * 100).toFixed(1)}% × {fmtNum(entry.grossProfit)}</span><br/><span className="font-semibold text-success">{fmtNum(entry.realizedProfit)} {t.currency}</span></div>
+                              <div><span className="text-muted-foreground">إجمالي الأوردر (O)</span><br/><span className="font-semibold text-foreground">{fmtNum(entry.orderTotal)} {t.currency}</span></div>
+                              <div><span className="text-muted-foreground">قيمة الاستهلاك (C)</span><br/><span className="font-semibold text-foreground">{fmtNum(entry.totalCollection)} {t.currency}</span></div>
+                              <div><span className="text-muted-foreground">المدفوع فعلياً (D)</span><br/><span className="font-semibold text-success">{fmtNum(entry.paidAmount)} {t.currency}</span></div>
+                              <div>
+                                <span className="text-muted-foreground">نسبة ربح الأوردر (r = P÷O)</span><br/>
+                                <span className="font-semibold text-foreground">
+                                  {entry.orderTotal > 0 ? ((entry.grossProfit / entry.orderTotal) * 100).toFixed(1) : "0"}%
+                                  <span className="font-normal text-muted-foreground"> ({fmtNum(entry.grossProfit)} ÷ {fmtNum(entry.orderTotal)})</span>
+                                </span>
+                              </div>
+                              <div><span className="text-muted-foreground">الربح الكلي للأوردر (P)</span><br/><span className="font-semibold text-foreground">{fmtNum(entry.grossProfit)} {t.currency}</span></div>
+                              <div>
+                                <span className="text-muted-foreground">الربح المحقق = D × r</span><br/>
+                                <span className="font-semibold text-success">{fmtNum(entry.realizedProfit)} {t.currency}
+                                  <span className="font-normal text-muted-foreground"> ({fmtNum(entry.paidAmount)} × {entry.orderTotal > 0 ? ((entry.grossProfit / entry.orderTotal) * 100).toFixed(1) : "0"}%)</span>
+                                </span>
+                              </div>
                               <div><span className="text-muted-foreground">رقم التحصيل</span><br/><span className="font-mono text-foreground">{entry.collectionId}</span></div>
                               <div><span className="text-muted-foreground">آخر دفعة</span><br/><span className="text-foreground">{entry.lastPaymentDate}</span></div>
                             </div>
