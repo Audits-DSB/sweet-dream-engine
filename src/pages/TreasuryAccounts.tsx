@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
-import { Building, Plus, Pencil, Trash2, ArrowRight, AlertTriangle, Users, ArrowUpRight, RefreshCw } from "lucide-react";
+import { Building, Plus, Pencil, Trash2, ArrowRight, AlertTriangle, Users, ArrowUpRight, ArrowDownLeft, RefreshCw, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -50,7 +50,17 @@ export default function TreasuryAccountsPage() {
   const [withdrawNotes, setWithdrawNotes] = useState("");
   const [withdrawSaving, setWithdrawSaving] = useState(false);
 
-  useEffect(() => { fetchAccounts(); fetchFounderData(); }, []);
+  // ── Deposit dialog ──
+  const [depositOpen, setDepositOpen] = useState(false);
+  const [depositAccount, setDepositAccount] = useState<Account | null>(null);
+  const [depositAmount, setDepositAmount] = useState("");
+  const [depositNotes, setDepositNotes] = useState("");
+  const [depositSaving, setDepositSaving] = useState(false);
+
+  // ── Company profit summary ──
+  const [companyProfit, setCompanyProfit] = useState<{ totalCompanyProfit: number; totalExpenses: number; netProfit: number } | null>(null);
+
+  useEffect(() => { fetchAccounts(); fetchFounderData(); fetchCompanyProfit(); }, []);
 
   const fetchAccounts = async () => {
     setLoading(true);
@@ -72,6 +82,36 @@ export default function TreasuryAccountsPage() {
     } catch { /* silent */ } finally {
       setFoundersLoading(false);
     }
+  };
+
+  const fetchCompanyProfit = async () => {
+    try {
+      const data = await api.get<{ totalCompanyProfit: number; totalExpenses: number; netProfit: number }>("/company-profit-summary");
+      setCompanyProfit(data);
+    } catch { /* silent */ }
+  };
+
+  const handleDeposit = async () => {
+    if (!depositAccount) return;
+    const amt = parseFloat(depositAmount);
+    if (!amt || amt <= 0) { toast.error("أدخل مبلغاً صحيحاً"); return; }
+    setDepositSaving(true);
+    try {
+      const newBalance = Number(depositAccount.balance) + amt;
+      await api.post("/treasury/transactions", {
+        txType: "deposit", amount: amt, description: depositNotes || "إيداع",
+        accountId: depositAccount.id, newBalance,
+        performedBy: null, date: new Date().toISOString().split("T")[0],
+      });
+      await logAudit({
+        entity: "treasury-account", entityId: depositAccount.id, entityName: depositAccount.name,
+        action: "deposit", snapshot: { amount: amt, notes: depositNotes, newBalance },
+        endpoint: "/treasury/transactions",
+      });
+      toast.success(`تم إيداع ${amt.toLocaleString("en-US")} ج.م في حساب ${depositAccount.name}`);
+      setDepositOpen(false); setDepositAmount(""); setDepositNotes("");
+      fetchAccounts();
+    } catch { toast.error("فشل تسجيل الإيداع"); } finally { setDepositSaving(false); }
   };
 
   // Lookup balance by founderId — same source as Founders page
@@ -209,6 +249,12 @@ export default function TreasuryAccountsPage() {
                   {canManage && (
                     <td className="py-3 px-3">
                       <div className="flex gap-1">
+                        <button
+                          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                          onClick={() => { setDepositAccount(a); setDepositAmount(""); setDepositNotes(""); setDepositOpen(true); }}
+                        >
+                          <ArrowDownLeft className="h-3 w-3" />إيداع
+                        </button>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(a)} data-testid={`button-edit-account-${a.id}`}><Pencil className="h-3.5 w-3.5" /></Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => confirmDelete(a)} data-testid={`button-delete-account-${a.id}`}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                       </div>
@@ -219,6 +265,39 @@ export default function TreasuryAccountsPage() {
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* ── Company Profit Account ── */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+            <TrendingUp className="h-4 w-4 text-emerald-600" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold">حساب الشركة</h2>
+            <p className="text-xs text-muted-foreground">صافي أرباح الشركة المحققة — بعد خصم المصروفات</p>
+          </div>
+        </div>
+        <div className="stat-card overflow-x-auto">
+          {companyProfit === null ? (
+            <div className="text-center py-6 text-muted-foreground text-sm">جارٍ التحميل...</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4">
+              <div className="rounded-lg border border-border p-4 text-center">
+                <p className="text-xs text-muted-foreground mb-1">إجمالي الأرباح</p>
+                <p className="text-lg font-bold text-emerald-600">{companyProfit.totalCompanyProfit.toLocaleString("en-US")} {t.egp}</p>
+              </div>
+              <div className="rounded-lg border border-border p-4 text-center">
+                <p className="text-xs text-muted-foreground mb-1">المصروفات</p>
+                <p className="text-lg font-bold text-destructive">{companyProfit.totalExpenses.toLocaleString("en-US")} {t.egp}</p>
+              </div>
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-center">
+                <p className="text-xs text-muted-foreground mb-1">صافي ربح الشركة</p>
+                <p className={`text-xl font-bold ${companyProfit.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{companyProfit.netProfit.toLocaleString("en-US")} {t.egp}</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Founder Capital Accounts ── */}
@@ -365,6 +444,43 @@ export default function TreasuryAccountsPage() {
             <div><Label>{t.description}</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
           </div>
           <DialogFooter><Button onClick={save} data-testid="button-save-account">{editing ? t.save : t.add}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Deposit Dialog ── */}
+      <Dialog open={depositOpen} onOpenChange={open => { if (!open) setDepositOpen(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowDownLeft className="h-5 w-5 text-primary" />
+              إيداع في حساب — {depositAccount?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {depositAccount && (
+              <div className="rounded-lg bg-muted/50 p-3 text-sm">
+                الرصيد الحالي: <span className="font-bold text-primary">{Number(depositAccount.balance).toLocaleString("en-US")} {t.egp}</span>
+              </div>
+            )}
+            <div>
+              <Label>المبلغ ({t.egp})</Label>
+              <Input
+                type="number" min="1" placeholder="0"
+                value={depositAmount}
+                onChange={e => setDepositAmount(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>ملاحظات (اختياري)</Label>
+              <Input value={depositNotes} onChange={e => setDepositNotes(e.target.value)} placeholder="سبب الإيداع..." />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDepositOpen(false)} disabled={depositSaving}>إلغاء</Button>
+            <Button onClick={handleDeposit} disabled={depositSaving}>
+              {depositSaving ? "جارٍ الحفظ..." : "تأكيد الإيداع"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

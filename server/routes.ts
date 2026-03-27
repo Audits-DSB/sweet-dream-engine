@@ -761,6 +761,101 @@ function encodeFounderDesc(orderId: string | null, notes: string | null, extra?:
   return `[orderId:${orderId}] ${notes || ""}`.trim();
 }
 
+// ── Company Profit Summary (total company profit from collections minus expenses) ──
+router.get("/company-profit-summary", async (_req, res) => {
+  try {
+    const [colsRes, ordsRes, rulesRes, contribRes, lineRes, txRes] = await Promise.all([
+      supabaseAdmin.from("collections").select("*"),
+      supabaseAdmin.from("orders").select("*"),
+      supabaseAdmin.from("business_rules").select("*").eq("id", "default").maybeSingle(),
+      supabaseAdmin.from("order_founder_contributions").select("order_id,contributions"),
+      supabaseAdmin.from("order_lines").select("order_id,line_cost"),
+      supabaseAdmin.from("treasury_transactions").select("*").in("tx_type", ["expense", "withdrawal"]),
+    ]);
+    if (colsRes.error || ordsRes.error) return res.status(500).json({ error: (colsRes.error || ordsRes.error)!.message });
+
+    const globalPct = Number(rulesRes.data?.company_profit_percentage ?? 40);
+    const contribMap: Record<string, any[]> = {};
+    for (const r of contribRes.data || []) contribMap[r.order_id] = r.contributions || [];
+    const costMap: Record<string, number> = {};
+    for (const l of lineRes.data || []) costMap[l.order_id] = (costMap[l.order_id] || 0) + (Number(l.line_cost) || 0);
+
+    const orderMap: Record<string, any> = {};
+    (ordsRes.data || []).forEach(o => {
+      orderMap[o.id] = {
+        ...o,
+        founder_contributions: contribMap[o.id] || [],
+        total_cost: costMap[o.id] || 0,
+      };
+    });
+
+    const getOrderPct = (oid: string): number => {
+      const o = orderMap[oid];
+      if (!o) return globalPct;
+      const ca = Array.isArray(o.founder_contributions) ? o.founder_contributions : [];
+      return ca[0]?.companyProfitPercentage ?? globalPct;
+    };
+
+    let totalCompanyProfit = 0;
+
+    (colsRes.data || []).forEach((col: any) => {
+      const paid = Number(col.paid_amount || 0);
+      if (paid <= 0) return;
+      const primaryOrderId = col.order_id || "";
+
+      let notesMeta: any = {};
+      try { notesMeta = typeof col.notes === "object" ? (col.notes || {}) : JSON.parse(col.notes || "{}"); } catch {}
+      const lineItems: any[] = notesMeta.lineItems || [];
+
+      if (lineItems.length > 0 && lineItems.some((li: any) => li.sourceOrderId)) {
+        let totalItemsSelling = 0;
+        lineItems.forEach((li: any) => {
+          totalItemsSelling += Number(li.sellingPrice ?? li.selling_price ?? 0) * Number(li.quantity ?? 1);
+        });
+        const payRatio = totalItemsSelling > 0 ? Math.min(paid / totalItemsSelling, 1) : 0;
+        lineItems.forEach((li: any) => {
+          const oid = li.sourceOrderId || primaryOrderId;
+          if (!orderMap[oid]) return;
+          const lineSelling = Number(li.sellingPrice ?? li.selling_price ?? 0) * Number(li.quantity ?? 1);
+          const lineCost = Number(li.costPrice ?? li.cost_price ?? li.cost ?? 0) * Number(li.quantity ?? 1);
+          const pct = getOrderPct(oid);
+          const normPct = pct >= 2 ? pct / 100 : pct;
+          totalCompanyProfit += (lineSelling - lineCost) * payRatio * normPct;
+        });
+      } else {
+        const srcOrders: string[] = (notesMeta.sourceOrders?.length > 0
+          ? notesMeta.sourceOrders.filter((oid: string) => orderMap[oid])
+          : (primaryOrderId && orderMap[primaryOrderId] ? [primaryOrderId] : []));
+        if (srcOrders.length === 0) return;
+
+        let allSelling = 0;
+        srcOrders.forEach((oid: string) => { allSelling += Number(orderMap[oid].total_selling || 0); });
+
+        srcOrders.forEach((oid: string) => {
+          const order = orderMap[oid];
+          const oSelling = Number(order.total_selling || 0);
+          const oCost = Number(order.total_cost || 0);
+          const share = allSelling > 0 ? oSelling / allSelling : 1 / srcOrders.length;
+          const oPaid = paid * share;
+          const pct = getOrderPct(oid);
+          const qp = quickProfit({ orderTotal: oSelling, totalCost: oCost, paidValue: oPaid, companyProfitPct: pct });
+          totalCompanyProfit += qp.companyProfit;
+        });
+      }
+    });
+
+    let totalExpenses = 0;
+    (txRes.data || []).forEach((tx: any) => {
+      totalExpenses += Math.abs(Number(tx.amount || 0));
+    });
+
+    const netProfit = Math.round(totalCompanyProfit) - totalExpenses;
+    res.json({ totalCompanyProfit: Math.round(totalCompanyProfit), totalExpenses, netProfit });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Founder capital balances (mirrors TreasuryAccounts logic) ──
 router.get("/founder-balances", async (_req, res) => {
   try {

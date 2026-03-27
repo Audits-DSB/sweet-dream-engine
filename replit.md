@@ -44,8 +44,10 @@ All business data in main Supabase project:
 - `/api/orders`, `/api/orders/next-id` — Orders CRUD + auto-increment ID
 - `/api/requests`, `/api/deliveries`, `/api/collections` — CRUD
 - `/api/inventory`, `/api/notifications` — CRUD
-- `/api/treasury/accounts`, `/api/treasury/transactions` — Treasury CRUD
+- `/api/treasury/accounts`, `/api/treasury/transactions` — Treasury CRUD (supports deposit via txType "deposit")
 - `/api/founder-transactions` — Founder financial transactions (GET/POST/DELETE, uses treasury_transactions table)
+- `/api/founder-balances` — Computed founder capital balances (joins orders + order_founder_contributions + order_lines + treasury_transactions)
+- `/api/company-profit-summary` — Total company profit from collections minus expenses (handles line-item, sourceOrders, and single-order paths)
 - `/api/external-materials` — Proxy to catalog Supabase project
 
 ## Key Files
