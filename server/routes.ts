@@ -574,7 +574,21 @@ router.get("/client-inventory", async (req, res) => {
   if (clientId) q = q.eq("client_id", clientId);
   const { data, error } = await q;
   if (error) return res.status(500).json({ error: error.message });
-  res.json(camelizeKeys(data));
+  // Enrich with image_url from order_lines
+  const items = data || [];
+  const orderIds = [...new Set(items.map((r: any) => r.source_order).filter(Boolean))] as string[];
+  const imgMap: Record<string, string> = {};
+  if (orderIds.length > 0) {
+    const { data: lines } = await supabaseAdmin
+      .from("order_lines")
+      .select("order_id, material_code, image_url")
+      .in("order_id", orderIds);
+    (lines || []).forEach((l: any) => {
+      if (l.material_code && l.image_url) imgMap[l.material_code] = l.image_url;
+    });
+  }
+  const enriched = items.map((r: any) => ({ ...r, image_url: imgMap[r.code] || "" }));
+  res.json(camelizeKeys(enriched));
 });
 router.get("/client-inventory/:id", async (req, res) => {
   const { data, error } = await supabaseAdmin.from("client_inventory").select("*").eq("id", req.params.id).single();

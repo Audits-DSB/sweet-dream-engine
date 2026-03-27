@@ -80,8 +80,9 @@ export default function ClientProfile() {
     Promise.all([
       api.get<any[]>("/clients"),
       api.get<any[]>("/orders"),
+      // Server-side enriched: includes imageUrl from order_lines automatically
       api.get<any[]>(`/client-inventory?clientId=${id}`).catch(() => []),
-    ]).then(async ([clientsData, ordersData, invData]) => {
+    ]).then(([clientsData, ordersData, invData]) => {
       const found = (clientsData || []).find((c: any) => c.id === id);
       if (found) {
         const c = mapClient(found);
@@ -93,33 +94,7 @@ export default function ClientProfile() {
         .map(mapOrder);
       setOrders(clientOrders);
 
-      // Build image map: materialCode → imageUrl
-      // Strategy: fetch order lines for each source_order (same approach as Collections page)
-      const imgMap: Record<string, string> = {};
-
-      // Collect unique source order IDs from inventory records
-      const rawInv: any[] = invData || [];
-      const sourceOrderIds = [...new Set(
-        rawInv.map((r: any) => r.sourceOrder || r.source_order || "").filter(Boolean)
-      )];
-
-      // Fetch order lines for all source orders in parallel
-      if (sourceOrderIds.length > 0) {
-        const lineResults = await Promise.all(
-          sourceOrderIds.map(ordId =>
-            api.get<any[]>(`/orders/${ordId}/lines`).catch(() => [])
-          )
-        );
-        lineResults.forEach(lines => {
-          (lines || []).forEach((l: any) => {
-            const code = l.materialCode || l.material_code || "";
-            const img = l.imageUrl || l.image_url || "";
-            if (code && img) imgMap[code] = img;
-          });
-        });
-      }
-
-      setInventory(rawInv.map((r: any) => {
+      setInventory((invData || []).map((r: any) => {
         const code = r.code || r.materialCode || "";
         return {
           id: r.id,
@@ -133,7 +108,7 @@ export default function ClientProfile() {
           expiry: r.expiry || "",
           sourceOrder: r.sourceOrder || r.source_order || "",
           status: r.status || "In Stock",
-          imageUrl: imgMap[code] || "",
+          imageUrl: r.imageUrl || r.image_url || "",
         };
       }));
     }).catch(() => toast.error(t.failedToLoadClientData))
