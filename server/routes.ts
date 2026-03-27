@@ -598,31 +598,66 @@ router.patch("/deliveries/:id", async (req, res) => {
     const del = result.data;
     const orderId = del.order_id;
     const clientId = del.client_id;
+    const deliveryId = del.id;
     const deliveryDate = del.date || new Date().toISOString().split("T")[0];
     try {
-      // Avoid duplicates: skip if already inserted for this order
-      const { data: existing } = await supabaseAdmin.from("client_inventory").select("id").eq("source_order", orderId).eq("client_id", clientId).limit(1);
-      if (!existing || existing.length === 0) {
-        // Fetch order lines from Supabase
+      const { data: existingForDelivery } = await supabaseAdmin.from("client_inventory").select("id").like("id", `CI-${deliveryId}-%`).limit(1);
+      if (!existingForDelivery || existingForDelivery.length === 0) {
         const { data: lines } = await supabaseAdmin.from("order_lines").select("*").eq("order_id", orderId);
-        // Fetch client name from Supabase
         const { data: clientData } = await supabaseAdmin.from("clients").select("name").eq("id", clientId).single();
         const clientName = clientData?.name || clientId;
-        if (lines && lines.length > 0) {
-          const ciRows = lines.map((line: any) => ({
-            id: `CI-${orderId}-${line.material_code || line.id}-${Date.now()}`,
-            client_id: clientId,
-            client_name: clientName,
-            material: line.material_name || "",
-            code: line.material_code || "",
-            unit: line.unit || "unit",
-            delivered: Number(line.quantity) || 0,
-            remaining: Number(line.quantity) || 0,
-            selling_price: Number(line.selling_price) || 0,
-            store_cost: Number(line.cost_price) || 0,
-            delivery_date: deliveryDate,
-            source_order: orderId,
-          }));
+
+        let parsedNotes: any = null;
+        try { parsedNotes = typeof del.notes === "string" ? JSON.parse(del.notes) : null; } catch {}
+        const isPartial = parsedNotes && Array.isArray(parsedNotes.items) && parsedNotes.items.length > 0;
+
+        const ciRows: any[] = [];
+        const ts = Date.now();
+
+        if (isPartial) {
+          const lineMap: Record<string, any> = {};
+          (lines || []).forEach((l: any) => { lineMap[String(l.id)] = l; });
+          for (const item of parsedNotes.items) {
+            const line = lineMap[String(item.lineId)];
+            const qty = Number(item.qty) || 0;
+            if (qty <= 0) continue;
+            ciRows.push({
+              id: `CI-${deliveryId}-${item.materialCode || item.lineId}-${ts}`,
+              client_id: clientId,
+              client_name: clientName,
+              material: item.materialName || line?.material_name || "",
+              code: item.materialCode || line?.material_code || "",
+              unit: item.unit || line?.unit || "unit",
+              delivered: qty,
+              remaining: qty,
+              selling_price: Number(line?.selling_price) || 0,
+              store_cost: Number(line?.cost_price) || 0,
+              delivery_date: deliveryDate,
+              source_order: orderId,
+            });
+          }
+        } else if (lines && lines.length > 0) {
+          for (const line of lines) {
+            const qty = Number(line.quantity) || 0;
+            if (qty <= 0) continue;
+            ciRows.push({
+              id: `CI-${deliveryId}-${line.material_code || line.id}-${ts}`,
+              client_id: clientId,
+              client_name: clientName,
+              material: line.material_name || "",
+              code: line.material_code || "",
+              unit: line.unit || "unit",
+              delivered: qty,
+              remaining: qty,
+              selling_price: Number(line.selling_price) || 0,
+              store_cost: Number(line.cost_price) || 0,
+              delivery_date: deliveryDate,
+              source_order: orderId,
+            });
+          }
+        }
+
+        if (ciRows.length > 0) {
           await supabaseAdmin.from("client_inventory").insert(ciRows);
         }
       }
