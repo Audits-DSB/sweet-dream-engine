@@ -13,7 +13,8 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, PieChart, Pie, Cell
+  XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, PieChart, Pie, Cell,
+  Legend, ReferenceLine
 } from "recharts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -67,6 +68,7 @@ export default function CompanyProfitPage() {
   const [deletingTx, setDeletingTx] = useState(false);
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
   const [selectedProfitEntry, setSelectedProfitEntry] = useState<ProfitEntry | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const { rules } = useBusinessRules();
 
   const parseAmount = (val: unknown): number => {
@@ -234,6 +236,12 @@ export default function CompanyProfitPage() {
       })
       .filter(Boolean) as ProfitEntry[];
   }, [collections, rawOrders, orderMap, founderMap, founders, monthsFilter, rules.companyProfitPercentage]);
+
+  // Filtered ledger — respects selectedMonth click from bar chart
+  const filteredLedger = useMemo(() => {
+    if (!selectedMonth) return profitLedger;
+    return profitLedger.filter(e => e.date.startsWith(selectedMonth));
+  }, [profitLedger, selectedMonth]);
 
   // Monthly chart data from profit ledger
   const { monthlyPnL, totals, expenseBreakdown, comparison } = useMemo(() => {
@@ -505,10 +513,25 @@ export default function CompanyProfitPage() {
           <h3 className="font-semibold text-sm flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-primary" />
             سجل الأرباح من التحصيلات
+            {selectedMonth && (
+              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                {selectedMonth}
+              </span>
+            )}
           </h3>
-          <span className="text-xs text-muted-foreground">{profitLedger.length} سجل · انقر لعرض التوزيع</span>
+          <div className="flex items-center gap-2">
+            {selectedMonth && (
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground underline"
+                onClick={() => setSelectedMonth(null)}
+              >
+                عرض الكل
+              </button>
+            )}
+            <span className="text-xs text-muted-foreground">{filteredLedger.length} سجل · انقر لعرض التوزيع</span>
+          </div>
         </div>
-        {profitLedger.length === 0 ? (
+        {filteredLedger.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground text-sm">
             <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-30" />
             <p>لا توجد أرباح مسجّلة من التحصيلات في هذه الفترة</p>
@@ -530,7 +553,7 @@ export default function CompanyProfitPage() {
               </tr>
             </thead>
             <tbody>
-              {profitLedger.map((entry) => (
+              {filteredLedger.map((entry) => (
                 <React.Fragment key={entry.collectionId}>
                   <tr
                     className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer"
@@ -705,58 +728,148 @@ export default function CompanyProfitPage() {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="stat-card lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm">اتجاه التحصيل والأرباح</h3>
-          </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={monthlyPnL}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-              <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-              <ReTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
-              <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} name="المُحصَّل" dot={{ r: 4 }} activeDot={{ r: 6 }} />
-              <Line type="monotone" dataKey="profit" stroke="hsl(var(--chart-2))" strokeWidth={2} name="الربح" dot={{ r: 4 }} activeDot={{ r: 6 }} />
-              <Line type="monotone" dataKey="cost" stroke="hsl(var(--muted-foreground))" strokeWidth={1} strokeDasharray="5 5" name={t.cost} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="stat-card">
-          <h3 className="font-semibold text-sm mb-4">{t.expenseBreakdown}</h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <PieChart>
-              <Pie data={expenseBreakdown} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={4} dataKey="value">
-                {expenseBreakdown.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-              </Pie>
-              <ReTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="flex flex-wrap justify-center gap-3 mt-2">
-            {expenseBreakdown.map((item) => (
-              <div key={item.name} className="flex items-center gap-1.5 text-xs">
-                <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                <span className="text-muted-foreground">{categoryLabel(item.name)} ({item.value}%)</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {(() => {
+        const tooltipStyle = {
+          backgroundColor: "hsl(var(--card))",
+          border: "1px solid hsl(var(--border))",
+          borderRadius: "8px",
+          fontSize: "12px",
+          direction: "rtl" as const,
+        };
+        const yAxisFmt = (v: number) =>
+          v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M`
+          : v >= 1_000 ? `${(v / 1_000).toFixed(0)}K`
+          : String(v);
+        const amountFmt = (v: number, name: string) => [`${fmtNum(v)} ${t.currency}`, name];
+        const avgProfit = monthlyPnL.length > 0
+          ? monthlyPnL.reduce((s, m) => s + m.profit, 0) / monthlyPnL.length
+          : 0;
 
-      {/* Profit Distribution Bar */}
-      <div className="stat-card">
-        <h3 className="font-semibold text-sm mb-4">{t.profitDistribution}</h3>
-        <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={monthlyPnL}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-            <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-            <ReTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
-            <Bar dataKey="companyShare" stackId="a" fill="hsl(var(--primary))" name="الشركة" />
-            <Bar dataKey="founderShare" stackId="a" fill="hsl(var(--chart-2))" name="المؤسسون" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+        return (
+          <>
+            {/* Line chart: collection & profit trend */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="stat-card lg:col-span-2">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="font-semibold text-sm">اتجاه التحصيل والأرباح</h3>
+                  <span className="text-xs text-muted-foreground">اضغط على شهر في الرسم لفلترة الجدول</span>
+                </div>
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={monthlyPnL} onClick={(e) => {
+                    if (e?.activePayload?.[0]?.payload?.monthKey) {
+                      const mk = e.activePayload[0].payload.monthKey;
+                      setSelectedMonth(prev => prev === mk ? null : mk);
+                    }
+                  }} style={{ cursor: "pointer" }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={yAxisFmt} width={52} />
+                    <ReTooltip contentStyle={tooltipStyle} formatter={amountFmt} />
+                    <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
+                    <ReferenceLine y={avgProfit} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4"
+                      label={{ value: `متوسط الربح`, position: "insideTopRight", fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                    <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} name="المُحصَّل" dot={{ r: 4 }} activeDot={{ r: 7, strokeWidth: 2 }} />
+                    <Line type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2} name="الربح الإجمالي" dot={{ r: 4 }} activeDot={{ r: 7, strokeWidth: 2 }} />
+                    <Line type="monotone" dataKey="companyShare" stroke="hsl(var(--chart-2))" strokeWidth={2} name="حصة الشركة" dot={{ r: 3 }} activeDot={{ r: 6 }} strokeDasharray="6 2" />
+                    <Line type="monotone" dataKey="cost" stroke="#ef4444" strokeWidth={1.5} strokeDasharray="5 5" name={t.cost} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Pie chart: expense breakdown */}
+              <div className="stat-card">
+                <h3 className="font-semibold text-sm mb-3">{t.expenseBreakdown}</h3>
+                {expenseBreakdown.length === 1 && expenseBreakdown[0].name === "other" && expenseBreakdown[0].value === 100 ? (
+                  <div className="flex flex-col items-center justify-center h-40 text-muted-foreground text-xs gap-2">
+                    <TrendingDown className="h-8 w-8 opacity-30" />
+                    <p>لا توجد مصروفات مسجّلة</p>
+                  </div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={180}>
+                      <PieChart>
+                        <Pie
+                          data={expenseBreakdown}
+                          cx="50%" cy="50%"
+                          innerRadius={45} outerRadius={72}
+                          paddingAngle={3} dataKey="value"
+                          label={({ name, value }: any) => `${value}%`}
+                          labelLine={false}
+                        >
+                          {expenseBreakdown.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                        </Pie>
+                        <ReTooltip
+                          contentStyle={tooltipStyle}
+                          formatter={(v: any, name: any) => [`${v}%`, categoryLabel(name)]}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="flex flex-wrap justify-center gap-2 mt-1">
+                      {expenseBreakdown.map((item) => (
+                        <div key={item.name} className="flex items-center gap-1.5 text-xs">
+                          <div className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                          <span className="text-muted-foreground">{categoryLabel(item.name)}</span>
+                          <span className="font-medium">{item.value}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Stacked bar: profit distribution per month — clickable to filter ledger */}
+            <div className="stat-card">
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="font-semibold text-sm">{t.profitDistribution}</h3>
+                {selectedMonth
+                  ? <button className="text-xs text-primary hover:underline" onClick={() => setSelectedMonth(null)}>← إلغاء الفلتر ({selectedMonth})</button>
+                  : <span className="text-xs text-muted-foreground">انقر على شهر لفلترة سجل الأرباح</span>}
+              </div>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart
+                  data={monthlyPnL}
+                  onClick={(e) => {
+                    if (e?.activePayload?.[0]?.payload?.monthKey) {
+                      const mk = e.activePayload[0].payload.monthKey;
+                      setSelectedMonth(prev => prev === mk ? null : mk);
+                    }
+                  }}
+                  style={{ cursor: "pointer" }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={yAxisFmt} width={52} />
+                  <ReTooltip contentStyle={tooltipStyle} formatter={amountFmt} />
+                  <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
+                  <Bar
+                    dataKey="companyShare" stackId="profit" fill="hsl(var(--primary))" name="حصة الشركة"
+                    radius={[0, 0, 0, 0]}
+                  >
+                    {monthlyPnL.map((m) => (
+                      <Cell
+                        key={m.monthKey}
+                        fill={selectedMonth === m.monthKey ? "hsl(var(--primary))" : selectedMonth ? "hsl(var(--primary) / 0.4)" : "hsl(var(--primary))"}
+                      />
+                    ))}
+                  </Bar>
+                  <Bar
+                    dataKey="founderShare" stackId="profit" fill="#22c55e" name="حصة المؤسسين"
+                    radius={[4, 4, 0, 0]}
+                  >
+                    {monthlyPnL.map((m) => (
+                      <Cell
+                        key={m.monthKey}
+                        fill={selectedMonth === m.monthKey ? "#22c55e" : selectedMonth ? "#22c55e66" : "#22c55e"}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </>
+        );
+      })()}
 
       {/* Expenses from Treasury */}
       <div className="stat-card overflow-x-auto">
