@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, CheckCircle2, Clock, Receipt, Eye, MoreHorizontal, DollarSign, Trash2, Package, TrendingUp, Users2, Building2, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Receipt, Eye, MoreHorizontal, DollarSign, Trash2, Package, TrendingUp, Users2, Building2, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { logAudit } from "@/lib/auditLog";
@@ -90,6 +90,10 @@ export default function CollectionsPage() {
   const [filters, setFilters] = useState<Record<string, string>>({ ...(urlStatus ? { status: urlStatus } : {}), ...(urlOrderId ? { orderId: urlOrderId } : {}) });
   const [selectedInvoice, setSelectedInvoice] = useState<Collection | null>(null);
   const [loadingCollections, setLoadingCollections] = useState(true);
+  const [selectedOrderData, setSelectedOrderData] = useState<{ totalSelling: number; totalCost: number; splitMode: string } | null>(null);
+  const [founders, setFounders] = useState<{ id: string; name: string }[]>([]);
+  const [companyProfitPct, setCompanyProfitPct] = useState(40);
+  const [loadingOrderData, setLoadingOrderData] = useState(false);
 
   // Payment dialog state
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
@@ -107,13 +111,34 @@ export default function CollectionsPage() {
       api.get<any[]>("/collections"),
       api.get<any[]>("/treasury/accounts"),
       api.get<any[]>("/clients"),
-    ]).then(([cols, accounts, clients]) => {
+      api.get<any[]>("/founders"),
+      api.get<any>("/business-rules"),
+    ]).then(([cols, accounts, clients, fndrs, rules]) => {
       const clientsMap: Record<string, string> = {};
       (clients || []).forEach((c: any) => { clientsMap[c.id] = c.name; });
       setCollections((cols || []).map(c => mapCollection(c, clientsMap)));
       setTreasuryAccounts((accounts || []).filter((a: any) => a.isActive).map((a: any) => ({ id: a.id, name: a.name, balance: Number(a.balance) })));
+      setFounders((fndrs || []).map((f: any) => ({ id: f.id, name: f.name })));
+      if (rules?.companyProfitPercentage) setCompanyProfitPct(Number(rules.companyProfitPercentage));
     }).finally(() => setLoadingCollections(false));
   }, []);
+
+  // Fetch linked order data when a collection is selected
+  useEffect(() => {
+    const orderId = selectedInvoice?.order || selectedInvoice?.sourceOrders?.[0];
+    if (!orderId) { setSelectedOrderData(null); return; }
+    setLoadingOrderData(true);
+    api.get<any>(`/orders/${orderId}`)
+      .then(o => {
+        if (o) setSelectedOrderData({
+          totalSelling: Number(o.totalSelling ?? o.total_selling ?? 0),
+          totalCost: Number(o.totalCost ?? o.total_cost ?? 0),
+          splitMode: o.splitMode || o.split_mode || "Equal",
+        });
+      })
+      .catch(() => setSelectedOrderData(null))
+      .finally(() => setLoadingOrderData(false));
+  }, [selectedInvoice?.id]);
 
   const filtered = collections.filter((c) => {
     const matchSearch = !search || c.client.toLowerCase().includes(search.toLowerCase()) || c.id.toLowerCase().includes(search.toLowerCase()) || c.order.toLowerCase().includes(search.toLowerCase());
@@ -372,6 +397,113 @@ export default function CollectionsPage() {
                   <p className="font-semibold text-primary">{selectedInvoice.client}</p>
                 </div>
               </div>
+
+              {/* ── Profit Breakdown ── */}
+              {(selectedOrderData || loadingOrderData) && (
+                <div className="rounded-lg border border-border p-3 space-y-2">
+                  <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                    <TrendingUp className="h-4 w-4 text-success" />
+                    توزيع الربح المحقق
+                    {loadingOrderData && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground ms-1" />}
+                  </h4>
+                  {selectedOrderData && (() => {
+                    const grossProfit = selectedOrderData.totalSelling - selectedOrderData.totalCost;
+                    const paidRatio = selectedInvoice.total > 0 ? selectedInvoice.paid / selectedInvoice.total : 0;
+                    const realizedProfit = Math.round(grossProfit * paidRatio);
+                    const companyShare = Math.round(realizedProfit * companyProfitPct / 100);
+                    const foundersShare = realizedProfit - companyShare;
+                    const perFounder = founders.length > 0 ? Math.round(foundersShare / founders.length) : 0;
+                    return (
+                      <div className="space-y-2 text-sm">
+                        <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground mb-1">
+                          <span>إجمالي الربح: <strong className="text-foreground">{grossProfit.toLocaleString()} ج.م</strong></span>
+                          <span>نسبة المحصّل: <strong className="text-foreground">{(paidRatio * 100).toFixed(0)}%</strong></span>
+                          <span>ربح محقق: <strong className="text-success">{realizedProfit.toLocaleString()} ج.م</strong></span>
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="flex-1 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-center">
+                            <Building2 className="h-4 w-4 mx-auto mb-1 text-blue-600 dark:text-blue-400" />
+                            <p className="text-xs text-muted-foreground">حصة الشركة ({companyProfitPct}%)</p>
+                            <p className="font-bold text-blue-700 dark:text-blue-300">{companyShare.toLocaleString()} ج.م</p>
+                          </div>
+                          <div className="flex-1 p-2.5 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-center">
+                            <Users2 className="h-4 w-4 mx-auto mb-1 text-green-600 dark:text-green-400" />
+                            <p className="text-xs text-muted-foreground">حصة المؤسسين ({100 - companyProfitPct}%)</p>
+                            <p className="font-bold text-green-700 dark:text-green-300">{foundersShare.toLocaleString()} ج.م</p>
+                          </div>
+                        </div>
+                        {founders.length > 0 && (
+                          <div className="space-y-1 pt-1">
+                            <p className="text-xs text-muted-foreground font-medium">توزيع المؤسسين ({selectedOrderData.splitMode === "Equal" || selectedOrderData.splitMode === "equal" ? "متساوٍ" : "حسب المساهمة"}):</p>
+                            {founders.map(f => (
+                              <div key={f.id} className="flex justify-between items-center text-xs px-2 py-1 rounded bg-muted/40">
+                                <span>{f.name}</span>
+                                <span className="font-semibold text-green-700 dark:text-green-300">{perFounder.toLocaleString()} ج.م</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* ── Material Coverage by Paid Amount ── */}
+              {selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0 && selectedInvoice.paid > 0 && (() => {
+                let remaining = selectedInvoice.paid;
+                const coverage = selectedInvoice.lineItems!.map(item => {
+                  if (remaining <= 0) return { ...item, coveredQty: 0, coveredTotal: 0, status: "pending" as const };
+                  if (remaining >= item.lineTotal) {
+                    remaining -= item.lineTotal;
+                    return { ...item, coveredQty: item.quantity, coveredTotal: item.lineTotal, status: "covered" as const };
+                  }
+                  const coveredQty = Math.floor(remaining / item.sellingPrice);
+                  const coveredTotal = coveredQty * item.sellingPrice;
+                  const partial = remaining - coveredTotal;
+                  remaining = 0;
+                  return { ...item, coveredQty: coveredQty || 0, coveredTotal: coveredTotal + partial, status: coveredQty > 0 ? "partial" as const : "pending" as const };
+                });
+                const hasCoverage = coverage.some(c => c.status !== "pending");
+                if (!hasCoverage) return null;
+                return (
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4 text-success" />
+                      المواد المغطّاة بالمبلغ المحصّل
+                      <span className="text-xs font-normal text-muted-foreground">({selectedInvoice.paid.toLocaleString()} ج.م)</span>
+                    </h4>
+                    <div className="overflow-x-auto rounded-lg border border-border">
+                      <table className="w-full text-xs">
+                        <thead className="bg-muted/60">
+                          <tr>
+                            <th className="text-start py-2 px-2 font-medium text-muted-foreground">المادة</th>
+                            <th className="text-end py-2 px-2 font-medium text-muted-foreground">الكمية الكلية</th>
+                            <th className="text-end py-2 px-2 font-medium text-muted-foreground">المغطّى</th>
+                            <th className="text-end py-2 px-2 font-medium text-muted-foreground">المبلغ</th>
+                            <th className="text-center py-2 px-2 font-medium text-muted-foreground">الحالة</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {coverage.map((item, i) => (
+                            <tr key={i} className={`border-t border-border/50 ${item.status === "pending" ? "opacity-40" : ""}`}>
+                              <td className="py-2 px-2 font-medium">{item.material}</td>
+                              <td className="py-2 px-2 text-end">{item.quantity} {item.unit}</td>
+                              <td className="py-2 px-2 text-end">{item.coveredQty} {item.unit}</td>
+                              <td className="py-2 px-2 text-end font-semibold">{item.coveredTotal.toLocaleString()} ج.م</td>
+                              <td className="py-2 px-2 text-center">
+                                {item.status === "covered" && <span className="inline-flex items-center gap-1 text-success text-xs font-medium"><CheckCircle2 className="h-3 w-3" />مغطّاة</span>}
+                                {item.status === "partial" && <span className="inline-flex items-center gap-1 text-amber-600 text-xs font-medium"><AlertTriangle className="h-3 w-3" />جزئية</span>}
+                                {item.status === "pending" && <span className="text-muted-foreground text-xs">معلقة</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Line items from audit */}
               {selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0 && (

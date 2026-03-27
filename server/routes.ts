@@ -250,6 +250,14 @@ router.get("/orders", async (_req, res) => {
   }));
   res.json(camelizeKeys(orders));
 });
+router.get("/orders/:id", async (req, res) => {
+  const [orderRes, contribRes] = await Promise.all([
+    supabaseAdmin.from("orders").select("*").eq("id", req.params.id).single(),
+    supabaseAdmin.from("order_founder_contributions").select("contributions").eq("order_id", req.params.id).maybeSingle(),
+  ]);
+  if (orderRes.error) return res.status(404).json({ error: orderRes.error.message });
+  res.json(camelizeKeys({ ...orderRes.data, founderContributions: contribRes.data?.contributions || [] }));
+});
 router.post("/orders", async (req, res) => {
   const { items, founderContributions, ...orderBody } = req.body;
   const data = snakifyKeys(orderBody);
