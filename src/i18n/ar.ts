@@ -315,6 +315,7 @@ export const ar = {
   // Collections page
   collectionsTitle: "التحصيلات",
   collectionsDesc: "إدارة الفواتير والمدفوعات والأقساط",
+  noOrderProfitData: "لا تتوفر بيانات نسبة ربح مسجّلة لهذا الأوردر",
   totalCollected: "إجمالي المحصّل",
   fullyPaid: "مدفوعة بالكامل",
   outstandingAmount: "المستحق",

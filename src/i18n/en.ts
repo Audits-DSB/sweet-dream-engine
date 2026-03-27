@@ -315,6 +315,7 @@ export const en = {
   // Collections page
   collectionsTitle: "Collections",
   collectionsDesc: "Manage invoices, payments and installments",
+  noOrderProfitData: "No recorded profit percentage found for this order",
   totalCollected: "Total Collected",
   fullyPaid: "fully paid",
   outstandingAmount: "Outstanding",

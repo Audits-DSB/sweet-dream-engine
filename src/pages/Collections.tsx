@@ -417,9 +417,7 @@ export default function CollectionsPage() {
                     const snappedCompanyPct: number | undefined = contribs[0]?.companyProfitPercentage;
                     if (snappedCompanyPct === undefined) {
                       return (
-                        <p className="text-xs text-muted-foreground py-2 text-center">
-                          لا تتوفر بيانات نسبة ربح مسجّلة لهذا الأوردر
-                        </p>
+                        <p className="text-xs text-muted-foreground py-2 text-center">{t.noOrderProfitData}</p>
                       );
                     }
                     const grossProfit = selectedOrderData.totalSelling - selectedOrderData.totalCost;
