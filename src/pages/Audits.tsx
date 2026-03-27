@@ -347,24 +347,52 @@ export default function AuditsPage() {
       (extData?.products || []).forEach((p: any) => { if (p.sku) imgMap[p.sku] = p.image_url || ""; });
 
       const clientInvData = await api.get<any[]>(`/client-inventory?clientId=${audit.clientId}`).catch(() => []);
-      const sourceOrders = [...new Set((clientInvData || []).map((i: any) => (i.sourceOrder || i.source_order || "")).filter(Boolean))];
-      const primarySourceOrder = sourceOrders[0] || "";
 
-      const lineItems = shortages.map(r => ({
-        code: r.code, material: r.material,
-        imageUrl: imgMap[r.code] || "",
-        unit: r.unit, quantity: Math.abs(r.diff),
-        sellingPrice: r.sellingPrice,
-        lineTotal: Math.abs(r.diff) * r.sellingPrice,
+      // Map materialCode → sourceOrder from actual client inventory (only relevant entries)
+      const codeToSourceOrder: Record<string, string> = {};
+      (clientInvData || []).forEach((i: any) => {
+        const code = i.materialCode || i.material_code || i.code || "";
+        const srcOrd = i.sourceOrder || i.source_order || "";
+        if (code && srcOrd && !codeToSourceOrder[code]) codeToSourceOrder[code] = srcOrd;
+      });
+
+      // Only include orders that actually have shortage items (not all client orders)
+      const relevantOrderIds = [...new Set(shortages.map(r => codeToSourceOrder[r.code]).filter(Boolean))];
+
+      // Fetch companyProfitPercentage snapshot per relevant order
+      const orderPctMap: Record<string, number> = {};
+      await Promise.all(relevantOrderIds.map(async ordId => {
+        try {
+          const o = await api.get<any>(`/orders/${ordId}`);
+          let contribs: any[] = [];
+          const raw = o?.founderContributions ?? o?.founder_contributions;
+          if (Array.isArray(raw)) contribs = raw;
+          else if (typeof raw === "string") { try { contribs = JSON.parse(raw); } catch { contribs = []; } }
+          const snapped = (contribs[0] as any)?.companyProfitPercentage;
+          orderPctMap[ordId] = snapped ?? o?.companyProfitPercentage ?? o?.company_profit_percentage ?? 40;
+        } catch { orderPctMap[ordId] = 40; }
       }));
+
+      const lineItems = shortages.map(r => {
+        const srcOrd = codeToSourceOrder[r.code] || "";
+        const companyProfitPct = orderPctMap[srcOrd] ?? 40;
+        return {
+          code: r.code, material: r.material,
+          imageUrl: imgMap[r.code] || "",
+          unit: r.unit, quantity: Math.abs(r.diff),
+          sellingPrice: r.sellingPrice,
+          costPrice: r.storeCost || 0,
+          lineTotal: Math.abs(r.diff) * r.sellingPrice,
+          sourceOrderId: srcOrd,
+          companyProfitPct,
+        };
+      });
+
+      // sourceOrders = only orders that appear in shortages
+      const sourceOrders = [...new Set(lineItems.map(l => l.sourceOrderId).filter(Boolean))];
+      const primarySourceOrder = sourceOrders[0] || "";
       const total = lineItems.reduce((s, l) => s + l.lineTotal, 0);
       const today = new Date().toISOString().split("T")[0];
-
-      // Store audit meta + line items inside the payments JSONB field (no extra columns needed)
-      const paymentsData = {
-        meta: { auditId: audit.id, auditDate: audit.date, sourceOrder: primarySourceOrder, lineItems },
-        history: [],
-      };
 
       const notesPayload = JSON.stringify({
         auditId: audit.id,

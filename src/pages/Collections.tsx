@@ -20,45 +20,39 @@ import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 type TreasuryAccount = { id: string; name: string; balance: number };
+type PayEntry = { date: string; amount: number; method: string };
 type LineItem = { code: string; material: string; imageUrl: string; unit: string; quantity: number; sellingPrice: number; costPrice: number; lineTotal: number; sourceOrderId?: string; companyProfitPct?: number };
+type NotesMeta = { auditId?: string; auditDate?: string; sourceOrders?: string[]; sourceOrder?: string; lineItems?: LineItem[]; paymentHistory?: PayEntry[]; [key: string]: any };
 type Collection = {
   id: string; order: string; client: string; clientId: string;
   issueDate: string; dueDate: string; total: number; paid: number;
-  remaining: number; payments: { date: string; amount: number; method: string }[];
+  remaining: number; payments: PayEntry[];
   status: string;
-  // Audit-sourced fields (stored in notes JSON)
   auditId?: string; auditDate?: string; sourceOrder?: string;
   sourceOrders?: string[]; lineItems?: LineItem[];
+  _notesObj: NotesMeta; // kept for re-serialization when saving payments
 };
 
-function parseNotes(notes: any): { auditId?: string; auditDate?: string; sourceOrders?: string[]; sourceOrder?: string; lineItems?: LineItem[] } {
+function parseNotes(notes: any): NotesMeta {
   if (!notes) return {};
   if (typeof notes === "string") {
     try {
       const parsed = JSON.parse(notes);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
     } catch { /* plain text */ }
-    // Legacy plain text like "جرد: AUD-001"
     if (notes.startsWith("جرد:")) return { auditId: notes.replace("جرد:", "").trim() };
     return {};
   }
   return {};
 }
 
-function parsePaymentsField(raw: any): { payments: { date: string; amount: number; method: string }[] } {
-  let parsed: any = raw;
-  if (typeof raw === "string") { try { parsed = JSON.parse(raw); } catch { parsed = []; } }
-  if (Array.isArray(parsed)) return { payments: parsed };
-  if (parsed && typeof parsed === "object" && Array.isArray(parsed.history)) return { payments: parsed.history };
-  return { payments: [] };
-}
-
 function mapCollection(raw: any, clientsMap: Record<string, string> = {}): Collection {
   const total = Number(raw.totalAmount ?? raw.total_amount ?? raw.total ?? 0);
   const paid = Number(raw.paidAmount ?? raw.paid_amount ?? raw.paid ?? 0);
   const clientId = raw.clientId || raw.client_id || "";
-  const { payments } = parsePaymentsField(raw.payments);
   const notesMeta = parseNotes(raw.notes);
+  // Payment history is stored in notes.paymentHistory — no separate DB column needed
+  const payments: PayEntry[] = notesMeta.paymentHistory || [];
   return {
     id: raw.id,
     order: raw.order || raw.orderId || raw.order_id || notesMeta.sourceOrders?.[0] || notesMeta.sourceOrder || "",
@@ -75,6 +69,7 @@ function mapCollection(raw: any, clientsMap: Record<string, string> = {}): Colle
     sourceOrder: notesMeta.sourceOrders?.[0] || notesMeta.sourceOrder || "",
     sourceOrders: notesMeta.sourceOrders || (notesMeta.sourceOrder ? [notesMeta.sourceOrder] : []),
     lineItems: notesMeta.lineItems || [],
+    _notesObj: notesMeta,
   };
 }
 
@@ -90,7 +85,8 @@ export default function CollectionsPage() {
   const [filters, setFilters] = useState<Record<string, string>>({ ...(urlStatus ? { status: urlStatus } : {}), ...(urlOrderId ? { orderId: urlOrderId } : {}) });
   const [selectedInvoice, setSelectedInvoice] = useState<Collection | null>(null);
   const [loadingCollections, setLoadingCollections] = useState(true);
-  const [selectedOrderData, setSelectedOrderData] = useState<{ totalSelling: number; totalCost: number; splitMode: string; founderContributions: any[]; companyProfitPct: number } | null>(null);
+  type OrderData = { orderId: string; totalSelling: number; totalCost: number; splitMode: string; founderContributions: any[]; companyProfitPct: number };
+  const [selectedOrdersData, setSelectedOrdersData] = useState<OrderData[]>([]);
   const [selectedOrderLines, setSelectedOrderLines] = useState<LineItem[]>([]);
   const [founders, setFounders] = useState<{ id: string; name: string }[]>([]);
   const [loadingOrderData, setLoadingOrderData] = useState(false);
@@ -121,33 +117,40 @@ export default function CollectionsPage() {
     }).finally(() => setLoadingCollections(false));
   }, []);
 
-  // Fetch linked order data + order lines when a collection is selected
+  // Fetch linked order data + order lines for ALL source orders when a collection is selected
   useEffect(() => {
-    const orderId = selectedInvoice?.order || selectedInvoice?.sourceOrders?.[0];
-    if (!orderId) { setSelectedOrderData(null); setSelectedOrderLines([]); return; }
+    const orderIds = (selectedInvoice?.sourceOrders?.length ?? 0) > 0
+      ? (selectedInvoice!.sourceOrders as string[])
+      : selectedInvoice?.order
+        ? [selectedInvoice.order]
+        : [];
+    if (orderIds.length === 0) { setSelectedOrdersData([]); setSelectedOrderLines([]); return; }
     setLoadingOrderData(true);
-    Promise.all([
-      api.get<any>(`/orders/${orderId}`),
-      api.get<any[]>(`/orders/${orderId}/lines`).catch(() => []),
-    ]).then(([o, rawLines]) => {
-        let companyProfitPct = 40; // default
-        if (o) {
-          let contribs: any[] = [];
-          const raw = o.founderContributions ?? o.founder_contributions;
-          if (Array.isArray(raw)) contribs = raw;
-          else if (typeof raw === "string") { try { contribs = JSON.parse(raw); } catch { contribs = []; } }
-          // Profit % snapshot: same logic as OrderDetails — prefer snapshotted value inside founderContributions
-          const snappedPct = (contribs[0] as any)?.companyProfitPercentage;
-          companyProfitPct = snappedPct ?? o.companyProfitPercentage ?? o.company_profit_percentage ?? 40;
-          setSelectedOrderData({
-            totalSelling: Number(o.totalSelling ?? o.total_selling ?? 0),
-            totalCost: Number(o.totalCost ?? o.total_cost ?? 0),
-            splitMode: o.splitMode || o.split_mode || "Equal",
-            founderContributions: Array.isArray(contribs) ? contribs : [],
-            companyProfitPct,
-          });
-        }
-        // Map order lines → LineItem format (with costPrice for profit calculation)
+    Promise.all(orderIds.map(orderId =>
+      Promise.all([
+        api.get<any>(`/orders/${orderId}`),
+        api.get<any[]>(`/orders/${orderId}/lines`).catch(() => []),
+      ]).then(([o, rawLines]) => ({ orderId, o, rawLines })).catch(() => null)
+    )).then(results => {
+      const allOrdersData: OrderData[] = [];
+      const allLines: LineItem[] = [];
+      for (const res of results) {
+        if (!res || !res.o) continue;
+        const { orderId, o, rawLines } = res;
+        let contribs: any[] = [];
+        const raw = o.founderContributions ?? o.founder_contributions;
+        if (Array.isArray(raw)) contribs = raw;
+        else if (typeof raw === "string") { try { contribs = JSON.parse(raw); } catch { contribs = []; } }
+        const snappedPct = (contribs[0] as any)?.companyProfitPercentage;
+        const companyProfitPct: number = snappedPct ?? o.companyProfitPercentage ?? o.company_profit_percentage ?? 40;
+        allOrdersData.push({
+          orderId,
+          totalSelling: Number(o.totalSelling ?? o.total_selling ?? 0),
+          totalCost: Number(o.totalCost ?? o.total_cost ?? 0),
+          splitMode: o.splitMode || o.split_mode || "Equal",
+          founderContributions: contribs,
+          companyProfitPct,
+        });
         const mappedLines: LineItem[] = (rawLines || []).map((l: any) => {
           const qty = Number(l.quantity ?? 0);
           const price = Number(l.sellingPrice ?? l.selling_price ?? 0);
@@ -157,17 +160,17 @@ export default function CollectionsPage() {
             material: l.materialName || l.material_name || l.materialCode || "",
             imageUrl: l.imageUrl || l.image_url || "",
             unit: l.unit || "",
-            quantity: qty,
-            sellingPrice: price,
-            costPrice: cost,
+            quantity: qty, sellingPrice: price, costPrice: cost,
             lineTotal: qty * price,
             sourceOrderId: orderId,
             companyProfitPct,
           };
         }).filter((l: LineItem) => l.lineTotal > 0);
-        setSelectedOrderLines(mappedLines);
-      })
-      .catch(() => { setSelectedOrderData(null); setSelectedOrderLines([]); })
+        allLines.push(...mappedLines);
+      }
+      setSelectedOrdersData(allOrdersData);
+      setSelectedOrderLines(allLines);
+    }).catch(() => { setSelectedOrdersData([]); setSelectedOrderLines([]); })
       .finally(() => setLoadingOrderData(false));
   }, [selectedInvoice?.id]);
 
@@ -220,10 +223,12 @@ export default function CollectionsPage() {
     const newPaymentHistory = [...paymentInvoice.payments, newPaymentEntry];
     const newStatus = newRemaining <= 0 ? "Paid" : "Partially Paid";
 
+    // Store payment history inside notes JSON (no separate payments column in DB)
+    const updatedNotesObj = { ...paymentInvoice._notesObj, paymentHistory: newPaymentHistory };
     try {
       await api.patch(`/collections/${paymentInvoice.id}`, {
         paidAmount: newPaid, outstanding: newRemaining, status: newStatus,
-        payments: newPaymentHistory,
+        notes: JSON.stringify(updatedNotesObj),
       });
     } catch (err: any) {
       toast.error(err?.message || "فشل حفظ الدفعة");
@@ -256,8 +261,8 @@ export default function CollectionsPage() {
 
     await logAudit({ entity: "collection", entityId: paymentInvoice.id, entityName: `${paymentInvoice.id} - ${paymentInvoice.client}`, action: "update", snapshot: { paid: newPaid, remaining: newRemaining, status: newStatus, newPayment: newPaymentEntry }, endpoint: `/collections/${paymentInvoice.id}` });
 
-    // Update local state
-    setCollections(prev => prev.map(c => c.id !== paymentInvoice.id ? c : { ...c, paid: newPaid, remaining: newRemaining, payments: newPaymentHistory, status: newStatus }));
+    // Update local state (including _notesObj so subsequent payments in same session work)
+    setCollections(prev => prev.map(c => c.id !== paymentInvoice.id ? c : { ...c, paid: newPaid, remaining: newRemaining, payments: newPaymentHistory, status: newStatus, _notesObj: updatedNotesObj }));
     toast.success(t.paymentRecorded);
     setPaymentDialogOpen(false);
     setPaymentInvoice(null);
@@ -424,51 +429,49 @@ export default function CollectionsPage() {
                 )}
               </div>
 
-              {/* ── Profit Breakdown ── */}
-              {(selectedOrderData || loadingOrderData) && (
-                <div className="rounded-lg border border-border p-3 space-y-2">
+              {/* ── Profit Breakdown per order ── */}
+              {(selectedOrdersData.length > 0 || loadingOrderData) && (
+                <div className="rounded-lg border border-border p-3 space-y-3">
                   <h4 className="text-sm font-semibold flex items-center gap-1.5">
                     <TrendingUp className="h-4 w-4 text-success" />
                     توزيع الربح المحقق
                     {loadingOrderData && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground ms-1" />}
                   </h4>
-                  {selectedOrderData && (() => {
-                    const contribs = selectedOrderData.founderContributions || [];
-                    // Use ONLY the snapshotted % from the order — never falls back to current settings
-                    const snappedCompanyPct: number | undefined = contribs[0]?.companyProfitPercentage;
-                    if (snappedCompanyPct === undefined) {
-                      return (
-                        <p className="text-xs text-muted-foreground py-2 text-center">{t.noOrderProfitData}</p>
-                      );
-                    }
-                    const grossProfit = selectedOrderData.totalSelling - selectedOrderData.totalCost;
-                    // paidRatio = paid ÷ FULL ORDER total (not just this invoice amount)
-                    const paidRatio = selectedOrderData.totalSelling > 0
-                      ? Math.min(selectedInvoice.paid / selectedOrderData.totalSelling, 1)
-                      : 0;
+                  {selectedOrdersData.map(od => {
+                    const contribs = od.founderContributions || [];
+                    const snappedCompanyPct: number | undefined = contribs[0]?.companyProfitPercentage ?? (contribs.length === 0 ? undefined : od.companyProfitPct);
+                    if (snappedCompanyPct === undefined) return (
+                      <p key={od.orderId} className="text-xs text-muted-foreground py-1">{t.noOrderProfitData}</p>
+                    );
+
+                    // Determine the portion of paid that belongs to this order (by line value proportion)
+                    const orderLineItems = selectedInvoice.lineItems?.filter(l => l.sourceOrderId === od.orderId) || [];
+                    const collectionTotal = selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0
+                      ? selectedInvoice.lineItems.reduce((s, l) => s + l.lineTotal, 0)
+                      : od.totalSelling;
+                    const orderShareOfCollection = collectionTotal > 0
+                      ? orderLineItems.reduce((s, l) => s + l.lineTotal, 0) / collectionTotal
+                      : 1 / selectedOrdersData.length;
+                    const orderPaid = selectedInvoice.paid * orderShareOfCollection;
+
+                    const grossProfit = od.totalSelling - od.totalCost;
+                    const paidRatio = od.totalSelling > 0 ? Math.min(orderPaid / od.totalSelling, 1) : 0;
                     const realizedProfit = Math.round(grossProfit * paidRatio);
                     const companyShare = Math.round(realizedProfit * snappedCompanyPct / 100);
                     const foundersShare = realizedProfit - companyShare;
 
-                    // Per-founder distribution using order's founderContributions
                     const totalFounderPct = contribs.length > 0
-                      ? contribs.reduce((s: number, fc: any) => s + (fc.percentage || 0), 0) || 100
-                      : 100;
+                      ? contribs.reduce((s: number, fc: any) => s + (fc.percentage || 0), 0) || 100 : 100;
                     const founderRows = contribs.length > 0
-                      ? contribs.map((fc: any) => ({
-                          id: fc.founderId || fc.founder,
-                          name: fc.founder || fc.founderId || "مؤسس",
-                          amount: Math.round(foundersShare * (fc.percentage || 0) / totalFounderPct),
-                        }))
-                      : founders.map(f => ({
-                          id: f.id, name: f.name,
-                          amount: founders.length > 0 ? Math.round(foundersShare / founders.length) : 0,
-                        }));
+                      ? contribs.map((fc: any) => ({ id: fc.founderId || fc.founder, name: fc.founder || fc.founderId || "مؤسس", amount: Math.round(foundersShare * (fc.percentage || 0) / totalFounderPct) }))
+                      : founders.map(f => ({ id: f.id, name: f.name, amount: founders.length > 0 ? Math.round(foundersShare / founders.length) : 0 }));
 
-                    const hasContribs = contribs.length > 0;
                     return (
-                      <div className="space-y-2 text-sm">
-                        <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground mb-1">
+                      <div key={od.orderId} className={`space-y-2 text-sm ${selectedOrdersData.length > 1 ? "pt-2 border-t border-border/50 first:border-t-0 first:pt-0" : ""}`}>
+                        {selectedOrdersData.length > 1 && (
+                          <p className="text-xs font-semibold text-muted-foreground">أوردر: <span className="font-mono text-foreground">{od.orderId}</span></p>
+                        )}
+                        <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
                           <span>إجمالي الربح: <strong className="text-foreground">{grossProfit.toLocaleString()} ج.م</strong></span>
                           <span>نسبة المحصّل: <strong className="text-foreground">{(paidRatio * 100).toFixed(1)}%</strong></span>
                           <span>ربح محقق: <strong className="text-success">{realizedProfit.toLocaleString()} ج.م</strong></span>
@@ -486,10 +489,7 @@ export default function CollectionsPage() {
                           </div>
                         </div>
                         {founderRows.length > 0 && (
-                          <div className="space-y-1 pt-1">
-                            <p className="text-xs text-muted-foreground font-medium">
-                              توزيع المؤسسين ({hasContribs ? (contribs.every((fc: any) => Math.abs((fc.percentage || 0) - (contribs[0]?.percentage || 0)) < 0.5) ? "متساوٍ" : "حسب المساهمة") : "متساوٍ"}):
-                            </p>
+                          <div className="space-y-1">
                             {founderRows.map(f => (
                               <div key={f.id} className="flex justify-between items-center text-xs px-2 py-1 rounded bg-muted/40">
                                 <span>{f.name}</span>
@@ -500,7 +500,7 @@ export default function CollectionsPage() {
                         )}
                       </div>
                     );
-                  })()}
+                  })}
                 </div>
               )}
 
@@ -520,7 +520,7 @@ export default function CollectionsPage() {
                 const coverage = sourceLines.map(item => {
                   const lineCost = (item.costPrice ?? 0) * item.quantity;
                   const lineProfit = item.lineTotal - lineCost;
-                  const pct = item.companyProfitPct ?? selectedOrderData?.companyProfitPct ?? 40;
+                  const pct = item.companyProfitPct ?? selectedOrdersData.find(od => od.orderId === item.sourceOrderId)?.companyProfitPct ?? selectedOrdersData[0]?.companyProfitPct ?? 40;
                   const companyProfitFull = lineProfit * pct / 100; // company profit if fully covered
 
                   if (remaining <= 0) return { ...item, coveredQty: 0, coveredTotal: 0, status: "pending" as const, lineCost, lineProfit, companyProfitFull, companyProfitCovered: 0, pct };
