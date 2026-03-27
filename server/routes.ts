@@ -850,6 +850,15 @@ router.get("/company-profit-summary", async (_req, res) => {
     });
 
     const netProfit = Math.round(totalCompanyProfit) - totalExpenses;
+
+    const { data: companyAcc } = await supabaseAdmin
+      .from("treasury_accounts").select("id,balance").eq("name", "حساب الشركة").maybeSingle();
+    if (companyAcc && Number(companyAcc.balance) !== netProfit) {
+      await supabaseAdmin.from("treasury_accounts")
+        .update({ balance: netProfit, updated_at: new Date().toISOString() })
+        .eq("id", companyAcc.id);
+    }
+
     res.json({ totalCompanyProfit: Math.round(totalCompanyProfit), totalExpenses, netProfit });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
