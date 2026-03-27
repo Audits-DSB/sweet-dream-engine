@@ -354,7 +354,14 @@ export default function InventoryPage() {
                                           <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center border border-border"><Package className="h-5 w-5 text-muted-foreground" /></div>
                                         )}
                                       </td>
-                                      <td className="py-2 px-3 font-medium">{lot.material}</td>
+                                      <td className="py-2 px-3">
+                                        <div className="font-medium">{lot.material}</div>
+                                        {lot.sourceOrder && (
+                                          <button className="font-mono text-[11px] text-primary/70 hover:text-primary hover:underline" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${lot.sourceOrder}`); }}>
+                                            {lot.sourceOrder}
+                                          </button>
+                                        )}
+                                      </td>
                                       <td className="py-2 px-3 font-mono text-xs text-muted-foreground">{lot.code}</td>
                                       <td className="py-2 px-3 text-end">{lot.delivered}</td>
                                       <td className="py-2 px-3 text-end font-medium">{lot.remaining}</td>
@@ -422,7 +429,14 @@ export default function InventoryPage() {
                     </td>
                     <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{lot.id}</td>
                     <td className="py-3 px-3 font-medium hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${lot.clientId}`); }}>{lot.clientName}</td>
-                    <td className="py-3 px-3 hover:text-primary">{lot.material}</td>
+                    <td className="py-3 px-3">
+                      <div className="hover:text-primary">{lot.material}</div>
+                      {lot.sourceOrder && (
+                        <button className="font-mono text-[11px] text-primary/70 hover:text-primary hover:underline" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${lot.sourceOrder}`); }}>
+                          {lot.sourceOrder}
+                        </button>
+                      )}
+                    </td>
                     <td className="py-3 px-3 text-end">{lot.delivered}</td>
                     <td className="py-3 px-3 text-end font-medium">{lot.remaining}</td>
                     <td className="py-3 px-3 text-muted-foreground">{lot.unit}</td>
@@ -468,7 +482,7 @@ export default function InventoryPage() {
                 <div><span className="text-muted-foreground">{t.storeCostColon}</span> {detailItem.storeCost} {t.currency}</div>
                 <div><span className="text-muted-foreground">{t.deliveryDateColon}</span> {detailItem.deliveryDate}</div>
                 <div><span className="text-muted-foreground">{t.expiryDateColon}</span> {detailItem.expiry}</div>
-                <div><span className="text-muted-foreground">{t.sourceOrderColon}</span> {detailItem.sourceOrder}</div>
+                <div><span className="text-muted-foreground">{t.sourceOrderColon}</span> {detailItem.sourceOrder ? <button className="font-mono text-primary hover:underline" onClick={() => { setDetailItem(null); navigate(`/orders/${detailItem.sourceOrder}`); }}>{detailItem.sourceOrder}</button> : "—"}</div>
                 <div><span className="text-muted-foreground">متوسط أسبوعي:</span> {detailItem.avgWeeklyUsage} {detailItem.unit}/أسبوع</div>
               </div>
               <div className="pt-2"><StatusBadge status={detailItem.status} /></div>
