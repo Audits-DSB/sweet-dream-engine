@@ -543,15 +543,23 @@ export default function OrdersPage() {
                   <Input className="h-9 ps-9 text-xs" placeholder={t.searchMaterials} value={materialSearch} onChange={(e) => setMaterialSearch(e.target.value)} />
                 </div>
                 {materialSearch && filteredMaterials.length > 0 && (
-                  <div className="border border-border rounded-md mt-1 max-h-40 overflow-y-auto bg-background shadow-md">
+                  <div className="border border-border rounded-md mt-1 max-h-60 overflow-y-auto bg-background shadow-md">
                     {filteredMaterials.slice(0, 8).map(mat => (
                       <div key={mat.code} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors" onClick={() => addMaterialDirectly(mat)}>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-muted-foreground">{mat.code}</span>
-                          <span className="font-medium">{mat.name}</span>
-                          <span className="text-muted-foreground">({mat.category})</span>
+                          {mat.imageUrl ? (
+                            <img src={mat.imageUrl} alt={mat.name} className="h-8 w-8 rounded object-cover shrink-0" />
+                          ) : (
+                            <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0">
+                              <Package className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <span className="font-medium block">{mat.name}</span>
+                            <span className="text-muted-foreground">{mat.code} · {mat.category}</span>
+                          </div>
                         </div>
-                        <span className="text-muted-foreground">{mat.sellingPrice} {t.currency}</span>
+                        <span className="text-muted-foreground shrink-0">{mat.sellingPrice} {t.currency}</span>
                       </div>
                     ))}
                   </div>
