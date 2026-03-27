@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, CheckCircle2, Clock, Receipt, Eye, MoreHorizontal, DollarSign, Trash2, Package, TrendingUp, Users2, Building2, X, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Receipt, Eye, MoreHorizontal, DollarSign, Trash2, Package, Users2, Building2, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { logAudit } from "@/lib/auditLog";
@@ -392,322 +392,214 @@ export default function CollectionsPage() {
           <DialogHeader><DialogTitle>{selectedInvoice?.id} — {selectedInvoice?.client}</DialogTitle></DialogHeader>
           {selectedInvoice && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.totalAmount}</p><p className="font-semibold">{selectedInvoice.total.toLocaleString()} {t.currency}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.remaining}</p><p className={`font-semibold ${selectedInvoice.remaining > 0 ? "text-destructive" : "text-success"}`}>{selectedInvoice.remaining > 0 ? `${selectedInvoice.remaining.toLocaleString()} ${t.currency}` : "مكتمل"}</p></div>
+              {/* Summary row */}
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                  <p className="text-xs text-muted-foreground mb-0.5">{t.totalAmount}</p>
+                  <p className="font-bold">{selectedInvoice.total.toLocaleString("en-US")} {t.currency}</p>
+                </div>
+                <div className="p-2.5 rounded-lg bg-success/10 text-center">
+                  <p className="text-xs text-muted-foreground mb-0.5">مدفوع</p>
+                  <p className="font-bold text-success">{selectedInvoice.paid.toLocaleString("en-US")} {t.currency}</p>
+                </div>
+                <div className={`p-2.5 rounded-lg text-center ${selectedInvoice.remaining > 0 ? "bg-destructive/10" : "bg-muted/50"}`}>
+                  <p className="text-xs text-muted-foreground mb-0.5">{t.remaining}</p>
+                  <p className={`font-bold ${selectedInvoice.remaining > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                    {selectedInvoice.remaining > 0 ? `${selectedInvoice.remaining.toLocaleString("en-US")} ${t.currency}` : "مكتمل ✓"}
+                  </p>
+                </div>
               </div>
 
-              {/* Orders + Client + Audit Source */}
-              <div className={`grid gap-3 text-sm ${selectedInvoice.auditId ? "grid-cols-3" : "grid-cols-2"}`}>
-                <div className="p-3 rounded-lg bg-muted/50">
-                  <p className="text-xs text-muted-foreground mb-1.5">{t.order}</p>
-                  {selectedInvoice.sourceOrders && selectedInvoice.sourceOrders.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {selectedInvoice.sourceOrders.map(ordId => (
-                        <span key={ordId} className="font-mono text-sm font-semibold text-primary underline-offset-2 hover:underline cursor-pointer" onClick={() => { setSelectedInvoice(null); navigate(`/orders/${ordId}`); }}>{ordId}</span>
-                      ))}
-                    </div>
-                  ) : selectedInvoice.order ? (
-                    <span className="font-semibold text-primary underline-offset-2 hover:underline cursor-pointer" onClick={() => { setSelectedInvoice(null); navigate(`/orders/${selectedInvoice.order}`); }}>{selectedInvoice.order}</span>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
+              {/* Progress bar */}
+              <div>
+                <div className="flex justify-between text-xs mb-1 text-muted-foreground">
+                  <span>{t.paymentProgress}</span>
+                  <span className="font-medium">{selectedInvoice.total > 0 ? ((selectedInvoice.paid / selectedInvoice.total) * 100).toFixed(0) : 0}%</span>
                 </div>
-                <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setSelectedInvoice(null); navigate(`/clients/${selectedInvoice.clientId}`); }}>
-                  <p className="text-xs text-muted-foreground">{t.client}</p>
-                  <p className="font-semibold text-primary">{selectedInvoice.client}</p>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full rounded-full bg-success transition-all" style={{ width: `${selectedInvoice.total > 0 ? Math.min((selectedInvoice.paid / selectedInvoice.total) * 100, 100) : 0}%` }} />
                 </div>
+              </div>
+
+              {/* Client + Audit links — compact row */}
+              <div className="flex flex-wrap gap-3 text-xs items-center">
+                <span className="text-muted-foreground">
+                  العميل: <span className="font-semibold text-primary cursor-pointer hover:underline" onClick={() => { setSelectedInvoice(null); navigate(`/clients/${selectedInvoice.clientId}`); }}>{selectedInvoice.client}</span>
+                </span>
                 {selectedInvoice.auditId && (
-                  <div
-                    className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors"
-                    onClick={() => { setSelectedInvoice(null); navigate(`/audits?search=${selectedInvoice.auditId}`); }}
-                  >
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mb-1">مصدر الجرد</p>
-                    <p className="font-mono font-semibold text-amber-700 dark:text-amber-300 text-sm">#{selectedInvoice.auditId}</p>
-                    {selectedInvoice.auditDate && <p className="text-xs text-muted-foreground mt-0.5">{selectedInvoice.auditDate}</p>}
-                  </div>
+                  <span className="text-muted-foreground">
+                    الجرد: <span className="font-mono font-semibold text-amber-600 cursor-pointer hover:underline" onClick={() => { setSelectedInvoice(null); navigate(`/audits?search=${selectedInvoice.auditId}`); }}>#{selectedInvoice.auditId}</span>
+                    {selectedInvoice.auditDate && <span> ({selectedInvoice.auditDate})</span>}
+                  </span>
                 )}
+                <StatusBadge status={selectedInvoice.status} />
               </div>
 
-              {/* ── Profit Breakdown per order ── */}
-              {(selectedOrdersData.length > 0 || loadingOrderData) && (
-                <div className="rounded-lg border border-border p-3 space-y-3">
-                  <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                    <TrendingUp className="h-4 w-4 text-success" />
-                    توزيع الربح المحقق
-                    {loadingOrderData && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground ms-1" />}
-                  </h4>
-                  {selectedOrdersData.map(od => {
-                    const contribs = od.founderContributions || [];
-                    const snappedCompanyPct: number | undefined = contribs[0]?.companyProfitPercentage ?? (contribs.length === 0 ? undefined : od.companyProfitPct);
-                    if (snappedCompanyPct === undefined) return (
-                      <p key={od.orderId} className="text-xs text-muted-foreground py-1">{t.noOrderProfitData}</p>
-                    );
-
-                    // Determine the portion of paid that belongs to this order (by line value proportion)
-                    const orderLineItems = selectedInvoice.lineItems?.filter(l => l.sourceOrderId === od.orderId) || [];
-                    const collectionTotal = selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0
-                      ? selectedInvoice.lineItems.reduce((s, l) => s + l.lineTotal, 0)
-                      : od.totalSelling;
-                    const orderShareOfCollection = collectionTotal > 0
-                      ? orderLineItems.reduce((s, l) => s + l.lineTotal, 0) / collectionTotal
-                      : 1 / selectedOrdersData.length;
-                    const orderPaid = selectedInvoice.paid * orderShareOfCollection;
-
-                    const grossProfit = od.totalSelling - od.totalCost;
-                    const paidRatio = od.totalSelling > 0 ? Math.min(orderPaid / od.totalSelling, 1) : 0;
-                    const realizedProfit = Math.round(grossProfit * paidRatio);
-                    const companyShare = Math.round(realizedProfit * snappedCompanyPct / 100);
-                    const foundersShare = realizedProfit - companyShare;
-
-                    const totalFounderPct = contribs.length > 0
-                      ? contribs.reduce((s: number, fc: any) => s + (fc.percentage || 0), 0) || 100 : 100;
-                    const founderRows = contribs.length > 0
-                      ? contribs.map((fc: any) => ({ id: fc.founderId || fc.founder, name: fc.founder || fc.founderId || "مؤسس", amount: Math.round(foundersShare * (fc.percentage || 0) / totalFounderPct) }))
-                      : founders.map(f => ({ id: f.id, name: f.name, amount: founders.length > 0 ? Math.round(foundersShare / founders.length) : 0 }));
-
-                    return (
-                      <div key={od.orderId} className={`space-y-2 text-sm ${selectedOrdersData.length > 1 ? "pt-2 border-t border-border/50 first:border-t-0 first:pt-0" : ""}`}>
-                        {selectedOrdersData.length > 1 && (
-                          <p className="text-xs font-semibold text-muted-foreground">أوردر: <span className="font-mono text-foreground">{od.orderId}</span></p>
-                        )}
-                        <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-                          <span>إجمالي الربح: <strong className="text-foreground">{grossProfit.toLocaleString()} ج.م</strong></span>
-                          <span>نسبة المحصّل: <strong className="text-foreground">{(paidRatio * 100).toFixed(1)}%</strong></span>
-                          <span>ربح محقق: <strong className="text-success">{realizedProfit.toLocaleString()} ج.م</strong></span>
-                        </div>
-                        <div className="flex gap-2">
-                          <div className="flex-1 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-center">
-                            <Building2 className="h-4 w-4 mx-auto mb-1 text-blue-600 dark:text-blue-400" />
-                            <p className="text-xs text-muted-foreground">حصة الشركة ({snappedCompanyPct}%)</p>
-                            <p className="font-bold text-blue-700 dark:text-blue-300">{companyShare.toLocaleString()} ج.م</p>
-                          </div>
-                          <div className="flex-1 p-2.5 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-center">
-                            <Users2 className="h-4 w-4 mx-auto mb-1 text-green-600 dark:text-green-400" />
-                            <p className="text-xs text-muted-foreground">حصة المؤسسين ({100 - snappedCompanyPct}%)</p>
-                            <p className="font-bold text-green-700 dark:text-green-300">{foundersShare.toLocaleString()} ج.م</p>
-                          </div>
-                        </div>
-                        {founderRows.length > 0 && (
-                          <div className="space-y-1">
-                            {founderRows.map(f => (
-                              <div key={f.id} className="flex justify-between items-center text-xs px-2 py-1 rounded bg-muted/40">
-                                <span>{f.name}</span>
-                                <span className="font-semibold text-green-700 dark:text-green-300">{f.amount.toLocaleString()} ج.م</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* ── Material Coverage by Paid Amount ── */}
-              {(() => {
-                // Priority: audited/consumed lineItems from notes (actual consumed materials)
-                // Fallback: original order lines from DB (if no audit data exists)
+              {/* ══ Per-order: materials table + profit calculation ══ */}
+              {loadingOrderData ? (
+                <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+              ) : (() => {
                 const sourceLines: LineItem[] =
                   (selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0)
                   ? selectedInvoice.lineItems
                   : selectedOrderLines;
-                if (sourceLines.length === 0 || selectedInvoice.paid <= 0) return null;
 
-                const hasCostData = sourceLines.some(l => (l.costPrice ?? 0) > 0);
+                if (sourceLines.length === 0 && selectedOrdersData.length === 0) return (
+                  <p className="text-sm text-muted-foreground text-center py-4">لا توجد تفاصيل مواد</p>
+                );
 
-                let remaining = selectedInvoice.paid;
-                const coverage = sourceLines.map(item => {
-                  const lineCost = (item.costPrice ?? 0) * item.quantity;
-                  const lineProfit = item.lineTotal - lineCost;
-                  const pct = item.companyProfitPct ?? selectedOrdersData.find(od => od.orderId === item.sourceOrderId)?.companyProfitPct ?? selectedOrdersData[0]?.companyProfitPct ?? 40;
-                  const companyProfitFull = lineProfit * pct / 100; // company profit if fully covered
-
-                  if (remaining <= 0) return { ...item, coveredQty: 0, coveredTotal: 0, status: "pending" as const, lineCost, lineProfit, companyProfitFull, companyProfitCovered: 0, pct };
-                  if (remaining >= item.lineTotal) {
-                    remaining -= item.lineTotal;
-                    return { ...item, coveredQty: item.quantity, coveredTotal: item.lineTotal, status: "covered" as const, lineCost, lineProfit, companyProfitFull, companyProfitCovered: companyProfitFull, pct };
-                  }
-                  const coveredQty = item.sellingPrice > 0 ? Math.floor(remaining / item.sellingPrice) : 0;
-                  const coveredTotal = coveredQty * item.sellingPrice;
-                  const leftoverValue = remaining - coveredTotal;
-                  remaining = 0;
-                  const coveredAmount = coveredTotal + leftoverValue;
-                  // Proportional company profit for covered amount
-                  const companyProfitCovered = item.lineTotal > 0 ? companyProfitFull * (coveredAmount / item.lineTotal) : 0;
-                  return {
-                    ...item,
-                    coveredQty,
-                    coveredTotal: coveredAmount,
-                    status: (coveredQty > 0 || leftoverValue > 0) ? "partial" as const : "pending" as const,
-                    lineCost, lineProfit, companyProfitFull, companyProfitCovered, pct,
-                  };
-                });
-
-                const totalOrderValue = sourceLines.reduce((s, l) => s + l.lineTotal, 0);
-                const coveredTotal = coverage.reduce((s, c) => s + c.coveredTotal, 0);
-                const uncoveredTotal = totalOrderValue - coveredTotal;
-                const coveredCount = coverage.filter(c => c.status === "covered").length;
-                const partialCount = coverage.filter(c => c.status === "partial").length;
-                const totalCompanyProfitCovered = coverage.reduce((s, c) => s + (c.companyProfitCovered ?? 0), 0);
-
-                // Group by (sourceOrderId, pct) — materials from the same order AND same profit % go together
-                type CoverageGroup = { orderId: string; pct: number; items: typeof coverage };
-                const groupMap: Record<string, CoverageGroup> = {};
-                coverage.forEach(item => {
-                  const key = `${item.sourceOrderId || ""}_${item.pct}`;
-                  if (!groupMap[key]) groupMap[key] = { orderId: item.sourceOrderId || "", pct: item.pct, items: [] };
-                  groupMap[key].items.push(item);
-                });
-                const groupList: CoverageGroup[] = Object.values(groupMap)
-                  .sort((a, b) => (a.orderId || "").localeCompare(b.orderId || "") || a.pct - b.pct);
-                const multiGroup = groupList.length > 1;
+                // Group lines by sourceOrderId
+                const linesByOrder: Record<string, LineItem[]> = {};
+                for (const line of sourceLines) {
+                  const key = line.sourceOrderId || selectedOrdersData[0]?.orderId || "—";
+                  if (!linesByOrder[key]) linesByOrder[key] = [];
+                  linesByOrder[key].push(line);
+                }
+                if (sourceLines.length === 0) {
+                  for (const od of selectedOrdersData) linesByOrder[od.orderId] = [];
+                }
 
                 return (
                   <div className="space-y-3">
-                    {/* Header */}
-                    <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                      <Package className="h-4 w-4 text-primary" />
-                      {selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0
-                        ? "المواد المستهلكة فعلياً — تغطية المبلغ المحصّل"
-                        : "مواد الطلب — تغطية المبلغ المحصّل"}
-                      <span className="text-xs font-normal text-muted-foreground">
-                        (مدفوع: {selectedInvoice.paid.toLocaleString()} ج.م
-                        {selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0
-                          ? ` من ${sourceLines.reduce((s, l) => s + l.lineTotal, 0).toLocaleString()} ج.م مستهلك`
-                          : ` من ${selectedInvoice.total.toLocaleString()} ج.م`})
-                      </span>
-                    </h4>
+                    {Object.entries(linesByOrder).map(([orderId, lines]) => {
+                      const od = selectedOrdersData.find(o => o.orderId === orderId) || selectedOrdersData[0];
 
-                    {/* Coverage progress bar */}
-                    <div className="rounded-lg bg-muted/30 border border-border p-3">
-                      <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-                        <span>مغطّى: <strong className="text-success">{coveredTotal.toLocaleString()} ج.م</strong></span>
-                        <span>غير مغطّى: <strong className="text-destructive">{Math.max(0, uncoveredTotal).toLocaleString()} ج.م</strong></span>
-                      </div>
-                      <div className="h-2.5 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full bg-success rounded-full transition-all" style={{ width: `${totalOrderValue > 0 ? Math.min((coveredTotal / totalOrderValue) * 100, 100) : 0}%` }} />
-                      </div>
-                      <div className="flex flex-wrap gap-3 mt-2 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-success" />{coveredCount} مادة مكتملة</span>
-                        {partialCount > 0 && <span className="flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-amber-500" />{partialCount} جزئية</span>}
-                        <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-muted-foreground" />{coverage.filter(c => c.status === "pending").length} معلّقة</span>
-                        {hasCostData && (
-                          <span className="flex items-center gap-1 ms-auto font-medium text-primary">
-                            <TrendingUp className="h-3 w-3" />
-                            ربح الشركة المحصّل: <strong>{Math.round(totalCompanyProfitCovered).toLocaleString()} ج.م</strong>
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                      // Coverage calc (sequential by paid amount)
+                      let rem = selectedInvoice.paid;
+                      const linesWithCov = lines.map(item => {
+                        if (rem <= 0) return { ...item, coveredTotal: 0, cov: "pending" as const };
+                        if (rem >= item.lineTotal) { rem -= item.lineTotal; return { ...item, coveredTotal: item.lineTotal, cov: "covered" as const }; }
+                        const amt = rem; rem = 0;
+                        return { ...item, coveredTotal: amt, cov: "partial" as const };
+                      });
 
-                    {/* Table — grouped by (sourceOrder, profit %) */}
-                    {groupList.map(({ orderId, pct: groupPct, items: groupItems }) => {
-                      const groupCoveredTotal = groupItems.reduce((s, c) => s + c.coveredTotal, 0);
-                      const groupLineTotal = groupItems.reduce((s, c) => s + c.lineTotal, 0);
-                      const groupCompanyProfit = groupItems.reduce((s, c) => s + (c.companyProfitCovered ?? 0), 0);
+                      // Profit calc for this order
+                      let profitBox: React.ReactNode = null;
+                      if (od) {
+                        const contribs = od.founderContributions || [];
+                        const snappedPct: number = contribs[0]?.companyProfitPercentage ?? od.companyProfitPct ?? 40;
+                        const allTotal = sourceLines.reduce((s, l) => s + l.lineTotal, 0);
+                        const orderTotal = lines.reduce((s, l) => s + l.lineTotal, 0);
+                        const orderShare = allTotal > 0 ? orderTotal / allTotal : 1;
+                        const orderPaid = selectedInvoice.paid * orderShare;
+                        const gross = od.totalSelling - od.totalCost;
+                        const paidRatio = od.totalSelling > 0 ? Math.min(orderPaid / od.totalSelling, 1) : 0;
+                        const realized = Math.round(gross * paidRatio);
+                        const companyAmt = Math.round(realized * snappedPct / 100);
+                        const foundersAmt = realized - companyAmt;
+                        const totalFPct = contribs.reduce((s: number, fc: any) => s + (fc.percentage || 0), 0) || 100;
+                        const founderRows = contribs.length > 0
+                          ? contribs.map((fc: any) => ({ name: fc.founder || fc.founderId || "مؤسس", amount: Math.round(foundersAmt * (fc.percentage || 0) / totalFPct) }))
+                          : founders.map(f => ({ name: f.name, amount: founders.length > 0 ? Math.round(foundersAmt / founders.length) : 0 }));
+
+                        profitBox = (
+                          <div className="bg-muted/30 border-t border-border p-3 space-y-2">
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                              <div className="flex justify-between"><span className="text-muted-foreground">إجمالي البيع:</span><span className="font-medium">{od.totalSelling.toLocaleString("en-US")} ج.م</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">التكلفة:</span><span className="font-medium">{od.totalCost.toLocaleString("en-US")} ج.م</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">الربح الكلي:</span><span className="font-semibold">{gross.toLocaleString("en-US")} ج.م</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">نسبة المحصّل:</span><span className="font-semibold text-success">{(paidRatio * 100).toFixed(1)}%</span></div>
+                              <div className="flex justify-between col-span-2 pt-1 border-t border-border/50">
+                                <span className="text-muted-foreground">الربح المحقق:</span>
+                                <span className="font-bold text-success">{realized.toLocaleString("en-US")} ج.م</span>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <div className="flex-1 flex justify-between items-center px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-xs">
+                                <span className="text-blue-700 dark:text-blue-300 font-medium flex items-center gap-1"><Building2 className="h-3 w-3" /> شركة ({snappedPct}%)</span>
+                                <span className="font-bold text-blue-700 dark:text-blue-300">{companyAmt.toLocaleString("en-US")} ج.م</span>
+                              </div>
+                              <div className="flex-1 flex justify-between items-center px-3 py-1.5 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-xs">
+                                <span className="text-green-700 dark:text-green-300 font-medium flex items-center gap-1"><Users2 className="h-3 w-3" /> مؤسسون ({100 - snappedPct}%)</span>
+                                <span className="font-bold text-green-700 dark:text-green-300">{foundersAmt.toLocaleString("en-US")} ج.م</span>
+                              </div>
+                            </div>
+                            {founderRows.length > 0 && (
+                              <div className="grid grid-cols-2 gap-1">
+                                {founderRows.map((f, i) => (
+                                  <div key={i} className="flex justify-between items-center px-2 py-1 rounded bg-muted/50 text-xs">
+                                    <span className="text-muted-foreground">{f.name}</span>
+                                    <span className="font-semibold text-green-700 dark:text-green-300">{f.amount.toLocaleString("en-US")} ج.م</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
 
                       return (
-                        <div key={`${orderId}_${groupPct}`} className="rounded-lg border border-border overflow-hidden">
-                          {/* Group header — shown if multiple groups exist */}
-                          {multiGroup && (
-                            <div className="bg-primary/5 border-b border-border px-3 py-2 flex items-center justify-between flex-wrap gap-2">
-                              <div className="flex items-center gap-3 flex-wrap">
-                                {orderId && (
-                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                    أوردر: <span className="font-mono text-foreground font-semibold">{orderId}</span>
-                                  </span>
-                                )}
-                                <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
-                                  <TrendingUp className="h-3.5 w-3.5" />
-                                  ربح الشركة: <strong>{groupPct}%</strong>
-                                </span>
-                              </div>
-                              <span className="text-xs text-muted-foreground">{groupItems.length} مادة</span>
+                        <div key={orderId} className="rounded-lg border border-border overflow-hidden">
+                          {/* Order header */}
+                          <div className="bg-muted/50 px-3 py-2 flex items-center justify-between text-xs">
+                            {orderId && orderId !== "—" ? (
+                              <span className="font-medium flex items-center gap-1.5">
+                                أوردر: <span className="font-mono text-primary font-bold cursor-pointer hover:underline" onClick={() => { setSelectedInvoice(null); navigate(`/orders/${orderId}`); }}>{orderId}</span>
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">مواد التحصيل</span>
+                            )}
+                            <span className="text-muted-foreground">{lines.length} مادة</span>
+                          </div>
+
+                          {/* Materials table */}
+                          {lines.length > 0 && (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs">
+                                <thead className="bg-muted/30">
+                                  <tr>
+                                    <th className="text-start py-2 px-2 font-medium text-muted-foreground">المادة</th>
+                                    <th className="text-end py-2 px-2 font-medium text-muted-foreground">الكمية</th>
+                                    <th className="text-end py-2 px-2 font-medium text-muted-foreground">سعر الوحدة</th>
+                                    <th className="text-end py-2 px-2 font-medium text-muted-foreground">الإجمالي</th>
+                                    {selectedInvoice.paid > 0 && <th className="text-center py-2 px-2 font-medium text-muted-foreground">التغطية</th>}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {linesWithCov.map((item, i) => (
+                                    <tr key={i} className={`border-t border-border/40 ${
+                                      item.cov === "covered" ? "bg-success/5" :
+                                      item.cov === "partial" ? "bg-amber-50/50 dark:bg-amber-950/10" : ""
+                                    }`}>
+                                      <td className="py-2 px-2">
+                                        <div className="flex items-center gap-1.5">
+                                          {item.imageUrl ? (
+                                            <img src={item.imageUrl} alt={item.material} className="h-7 w-7 rounded object-cover flex-shrink-0 border border-border" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                          ) : (
+                                            <div className="h-7 w-7 rounded bg-muted flex items-center justify-center flex-shrink-0"><Package className="h-3 w-3 text-muted-foreground" /></div>
+                                          )}
+                                          <div>
+                                            <p className="font-medium">{item.material}</p>
+                                            {item.code && <p className="text-[10px] text-muted-foreground font-mono">{item.code}</p>}
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="py-2 px-2 text-end">{item.quantity} {item.unit}</td>
+                                      <td className="py-2 px-2 text-end text-muted-foreground">{item.sellingPrice.toLocaleString("en-US")}</td>
+                                      <td className="py-2 px-2 text-end font-semibold">{item.lineTotal.toLocaleString("en-US")}</td>
+                                      {selectedInvoice.paid > 0 && (
+                                        <td className="py-2 px-2 text-center">
+                                          {item.cov === "covered" && <span className="text-success font-medium">✓ مكتملة</span>}
+                                          {item.cov === "partial" && <span className="text-amber-600 font-medium">~ {Math.round(item.coveredTotal).toLocaleString("en-US")}</span>}
+                                          {item.cov === "pending" && <span className="text-muted-foreground">—</span>}
+                                        </td>
+                                      )}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                                <tfoot className="bg-muted/30 border-t border-border">
+                                  <tr>
+                                    <td colSpan={3} className="py-1.5 px-2 text-end text-xs text-muted-foreground font-medium">الإجمالي</td>
+                                    <td className="py-1.5 px-2 text-end font-bold text-xs">{lines.reduce((s, l) => s + l.lineTotal, 0).toLocaleString("en-US")} ج.م</td>
+                                    {selectedInvoice.paid > 0 && <td />}
+                                  </tr>
+                                </tfoot>
+                              </table>
                             </div>
                           )}
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-xs">
-                              <thead className="bg-muted/60">
-                                <tr>
-                                  <th className="text-start py-2 px-2 font-medium text-muted-foreground">المادة</th>
-                                  <th className="text-end py-2 px-2 font-medium text-muted-foreground">الكمية</th>
-                                  <th className="text-end py-2 px-2 font-medium text-muted-foreground">سعر البيع</th>
-                                  {hasCostData && <th className="text-end py-2 px-2 font-medium text-muted-foreground">سعر التكلفة</th>}
-                                  <th className="text-end py-2 px-2 font-medium text-muted-foreground">قيمة السطر</th>
-                                  <th className="text-end py-2 px-2 font-medium text-muted-foreground">المغطّى</th>
-                                  {hasCostData && (
-                                    <>
-                                      <th className="text-end py-2 px-2 font-medium text-muted-foreground">ربح السطر</th>
-                                      <th className="text-end py-2 px-2 font-medium text-primary">ربح الشركة ({!multiGroup ? `${groupPct}%` : ""})</th>
-                                    </>
-                                  )}
-                                  <th className="text-center py-2 px-2 font-medium text-muted-foreground">الحالة</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {groupItems.map((item, i) => (
-                                  <tr key={i} className={`border-t border-border/50 transition-colors ${
-                                    item.status === "covered" ? "bg-success/5" :
-                                    item.status === "partial" ? "bg-amber-50/50 dark:bg-amber-950/10" :
-                                    "opacity-40"
-                                  }`}>
-                                    <td className="py-2 px-2">
-                                      <div className="flex items-center gap-2">
-                                        {item.imageUrl ? (
-                                          <img src={item.imageUrl} alt={item.material} className="h-7 w-7 rounded object-cover flex-shrink-0 border border-border" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                                        ) : (
-                                          <div className="h-7 w-7 rounded bg-muted flex items-center justify-center flex-shrink-0"><Package className="h-3 w-3 text-muted-foreground" /></div>
-                                        )}
-                                        <span className="font-medium">{item.material}</span>
-                                      </div>
-                                    </td>
-                                    <td className="py-2 px-2 text-end">{item.quantity} {item.unit}</td>
-                                    <td className="py-2 px-2 text-end text-muted-foreground">{item.sellingPrice.toLocaleString()}</td>
-                                    {hasCostData && <td className="py-2 px-2 text-end text-muted-foreground">{(item.costPrice ?? 0).toLocaleString()}</td>}
-                                    <td className="py-2 px-2 text-end">{item.lineTotal.toLocaleString()}</td>
-                                    <td className="py-2 px-2 text-end font-semibold">
-                                      {item.status !== "pending" ? `${Math.round(item.coveredTotal).toLocaleString()} ج.م` : "—"}
-                                    </td>
-                                    {hasCostData && (
-                                      <>
-                                        <td className="py-2 px-2 text-end text-muted-foreground">
-                                          {item.status !== "pending" ? `${Math.round(item.lineProfit ?? 0).toLocaleString()} ج.م` : "—"}
-                                        </td>
-                                        <td className="py-2 px-2 text-end font-bold text-primary">
-                                          {item.status !== "pending"
-                                            ? <span className="flex items-center justify-end gap-1">
-                                                {Math.round(item.companyProfitCovered ?? 0).toLocaleString()} ج.م
-                                                <span className="text-muted-foreground font-normal">({item.pct}%)</span>
-                                              </span>
-                                            : "—"}
-                                        </td>
-                                      </>
-                                    )}
-                                    <td className="py-2 px-2 text-center">
-                                      {item.status === "covered" && <span className="inline-flex items-center gap-1 text-success text-xs font-medium"><CheckCircle2 className="h-3 w-3" />مكتملة</span>}
-                                      {item.status === "partial" && <span className="inline-flex items-center gap-1 text-amber-600 text-xs font-medium"><AlertTriangle className="h-3 w-3" />جزئية</span>}
-                                      {item.status === "pending" && <span className="text-muted-foreground text-xs">غير مغطّاة</span>}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                              <tfoot className="bg-muted/40 border-t border-border">
-                                <tr>
-                                  <td colSpan={hasCostData ? 4 : 3} className="py-2 px-2 font-semibold text-end text-xs text-muted-foreground">إجمالي المجموعة</td>
-                                  <td className="py-2 px-2 text-end font-bold text-xs">{groupLineTotal.toLocaleString()} ج.م</td>
-                                  <td className="py-2 px-2 text-end font-bold text-xs text-success">{Math.round(groupCoveredTotal).toLocaleString()} ج.م</td>
-                                  {hasCostData && (
-                                    <>
-                                      <td />
-                                      <td className="py-2 px-2 text-end font-bold text-xs text-primary">{Math.round(groupCompanyProfit).toLocaleString()} ج.م</td>
-                                    </>
-                                  )}
-                                  <td />
-                                </tr>
-                              </tfoot>
-                            </table>
-                          </div>
+
+                          {/* Profit calculation box — integrated below the table */}
+                          {profitBox}
                         </div>
                       );
                     })}
@@ -715,79 +607,25 @@ export default function CollectionsPage() {
                 );
               })()}
 
-              {/* Line items from audit — shown only when no payment yet (coverage section handles them when paid > 0) */}
-              {selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0 && selectedInvoice.paid <= 0 && (
-                <div>
-                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5"><Package className="h-4 w-4 text-primary" />المواد المستهلكة</h4>
-                  <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full text-xs">
-                      <thead className="bg-muted/60">
-                        <tr>
-                          <th className="text-start py-2 px-2 font-medium text-muted-foreground">المادة</th>
-                          <th className="text-start py-2 px-2 font-medium text-muted-foreground">الكود</th>
-                          <th className="text-end py-2 px-2 font-medium text-muted-foreground">الكمية</th>
-                          <th className="text-end py-2 px-2 font-medium text-muted-foreground">سعر الوحدة</th>
-                          <th className="text-end py-2 px-2 font-medium text-muted-foreground">الإجمالي</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedInvoice.lineItems.map((item, i) => (
-                          <tr key={i} className="border-t border-border/50 hover:bg-muted/30">
-                            <td className="py-2 px-2">
-                              <div className="flex items-center gap-2">
-                                {item.imageUrl ? (
-                                  <img src={item.imageUrl} alt={item.material} className="h-8 w-8 rounded object-cover flex-shrink-0 border border-border" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                                ) : (
-                                  <div className="h-8 w-8 rounded bg-muted flex items-center justify-center flex-shrink-0"><Package className="h-3.5 w-3.5 text-muted-foreground" /></div>
-                                )}
-                                <span className="font-medium">{item.material}</span>
-                              </div>
-                            </td>
-                            <td className="py-2 px-2 font-mono text-muted-foreground">{item.code}</td>
-                            <td className="py-2 px-2 text-end">{item.quantity} {item.unit}</td>
-                            <td className="py-2 px-2 text-end">{item.sellingPrice.toLocaleString()}</td>
-                            <td className="py-2 px-2 text-end font-semibold">{item.lineTotal.toLocaleString()} {t.currency}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-muted/40 border-t border-border">
-                        <tr>
-                          <td colSpan={4} className="py-2 px-2 font-semibold text-end">الإجمالي</td>
-                          <td className="py-2 px-2 text-end font-bold text-primary">{selectedInvoice.total.toLocaleString()} {t.currency}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              )}
 
-              <div>
-                <h4 className="text-sm font-semibold mb-2">{t.paymentHistory}</h4>
-                {selectedInvoice.payments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">{t.noPayments}</p>
-                ) : (
-                  <div className="space-y-2">
+              {/* Payment history */}
+              {selectedInvoice.payments.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">{t.paymentHistory}</h4>
+                  <div className="space-y-1.5">
                     {selectedInvoice.payments.map((p, i) => (
-                      <div key={i} className="flex justify-between items-center p-2.5 rounded-lg bg-success/5 border border-success/20 text-sm">
+                      <div key={i} className="flex justify-between items-center p-2 rounded-lg bg-success/5 border border-success/20 text-sm">
                         <div>
-                          <span className="font-medium">{p.amount.toLocaleString()} {t.currency}</span>
-                          <span className="text-muted-foreground ltr:ml-2 rtl:mr-2">{t.via} {p.method}</span>
+                          <span className="font-medium">{p.amount.toLocaleString("en-US")} {t.currency}</span>
+                          <span className="text-muted-foreground text-xs ltr:ml-2 rtl:mr-2">{t.via} {p.method}</span>
                         </div>
                         <span className="text-xs text-muted-foreground">{p.date}</span>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-muted-foreground">{t.paymentProgress}</span>
-                  <span className="font-medium">{((selectedInvoice.paid / selectedInvoice.total) * 100).toFixed(0)}%</span>
                 </div>
-                <div className="h-2 rounded-full bg-muted overflow-hidden">
-                  <div className="h-full rounded-full bg-success transition-all" style={{ width: `${(selectedInvoice.paid / selectedInvoice.total) * 100}%` }} />
-                </div>
-              </div>
+              )}
+
               {selectedInvoice.remaining > 0 && (
                 <Button className="w-full" onClick={() => { setSelectedInvoice(null); openPaymentDialog(selectedInvoice); }}>
                   <DollarSign className="h-4 w-4 me-1" />{t.recordPayment}
