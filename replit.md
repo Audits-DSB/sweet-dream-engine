@@ -83,6 +83,15 @@ All business data in main Supabase project:
 npx tsx server/index.ts   # starts Express on 5000, spawns Vite on 5001
 ```
 
+## Order Lifecycle Pipeline
+- **Visual stepper** on OrderDetails page: Processing → Delivery → Inventory → Collection
+- Each step auto-highlights based on real data (deliveries, client_inventory, collections linked to order)
+- Below the stepper, expandable detail sections show all linked records with dates and clickable links
+- **Orders list page** shows 3 lifecycle columns: التوصيل (delivery count), الجرد (inventory count), التحصيل (collection progress)
+- All columns are clickable → navigate to filtered views
+- Inventory page supports `?sourceOrder=ORD-xxx` URL filter with order banner
+- Server auto-updates order status to "Processing" when delivery is first created
+
 ## Delivery-Order Sync System
 - **Per-line delivery tracking**: OrderDetails.tsx computes delivered/remaining quantities per order line from all linked deliveries
 - **Partial delivery items**: Stored as JSON in delivery `notes` field: `{ type: "جزئي", items: [{ lineId, materialCode, materialName, qty, unit }] }`

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2, Users } from "lucide-react";
+import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2, Users, Package, CreditCard } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -79,7 +79,9 @@ export default function OrdersPage() {
   const [founders, setFounders] = useState<{ id: string; name: string }[]>([]);
   const [selectedFounders, setSelectedFounders] = useState<string[]>([]);
   const [founderPcts, setFounderPcts] = useState<Record<string, number>>({});
-  const [collectionsMap, setCollectionsMap] = useState<Record<string, { paid: number; total: number; collectionId: string }>>({});
+  const [collectionsMap, setCollectionsMap] = useState<Record<string, { paid: number; total: number; collectionId: string; status: string; date: string }>>({});
+  const [deliveriesMap, setDeliveriesMap] = useState<Record<string, { total: number; confirmed: number }>>({});
+  const [inventoryMap, setInventoryMap] = useState<Record<string, { count: number; date: string }>>({});
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -105,7 +107,9 @@ export default function OrdersPage() {
       api.get<any[]>("/orders"),
       api.get<any[]>("/clients"),
       api.get<any[]>("/collections"),
-    ]).then(([ordersData, clientsData, collectionsData]) => {
+      api.get<any[]>("/deliveries"),
+      api.get<any[]>("/client-inventory"),
+    ]).then(([ordersData, clientsData, collectionsData, deliveriesData, inventoryData]) => {
       const clientMap: Record<string, string> = {};
       const clientArr = (clientsData || []).map((c: any) => {
         clientMap[c.id] = c.name || "";
@@ -117,18 +121,36 @@ export default function OrdersPage() {
         if (!o.client && o.clientId) o.client = clientMap[o.clientId] || o.clientId;
         return o;
       }));
-      // Build map orderId -> collection payment info
-      const cmap: Record<string, { paid: number; total: number; collectionId: string }> = {};
+      const cmap: Record<string, { paid: number; total: number; collectionId: string; status: string; date: string }> = {};
       (collectionsData || []).forEach((c: any) => {
         const orderId = c.order || c.orderId || c.order_id || "";
         if (!orderId) return;
         const paid = Number(c.paid ?? c.paidAmount ?? 0);
         const total = Number(c.total ?? c.totalAmount ?? 0);
         if (!cmap[orderId] || paid > cmap[orderId].paid) {
-          cmap[orderId] = { paid, total, collectionId: c.id };
+          cmap[orderId] = { paid, total, collectionId: c.id, status: c.status || "", date: c.invoiceDate || c.invoice_date || "" };
         }
       });
       setCollectionsMap(cmap);
+      const dmap: Record<string, { total: number; confirmed: number }> = {};
+      (deliveriesData || []).forEach((d: any) => {
+        const oid = d.orderId || d.order_id || "";
+        if (!oid) return;
+        if (!dmap[oid]) dmap[oid] = { total: 0, confirmed: 0 };
+        dmap[oid].total++;
+        if (d.status === "Delivered") dmap[oid].confirmed++;
+      });
+      setDeliveriesMap(dmap);
+      const imap: Record<string, { count: number; date: string }> = {};
+      (inventoryData || []).forEach((inv: any) => {
+        const oid = inv.sourceOrder || inv.source_order || "";
+        if (!oid) return;
+        if (!imap[oid]) imap[oid] = { count: 0, date: inv.deliveryDate || inv.delivery_date || "" };
+        imap[oid].count++;
+        const d = inv.deliveryDate || inv.delivery_date || "";
+        if (d && d > imap[oid].date) imap[oid].date = d;
+      });
+      setInventoryMap(imap);
     }).catch(() => toast.error(t.failedToLoadData))
       .finally(() => setLoading(false));
   }, []);
@@ -313,40 +335,53 @@ export default function OrdersPage() {
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.orderNumber}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.date}</th>
-                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.lines}</th>
                 <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.selling}</th>
-                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.costCol}</th>
-                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.splitMode}</th>
-                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.source}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
-                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">ما دفعه العميل</th>
+                <th className="text-center py-3 px-3 text-xs font-medium text-muted-foreground"><Truck className="h-3.5 w-3.5 inline-block ml-1" />التوصيل</th>
+                <th className="text-center py-3 px-3 text-xs font-medium text-muted-foreground"><Package className="h-3.5 w-3.5 inline-block ml-1" />الجرد</th>
+                <th className="text-center py-3 px-3 text-xs font-medium text-muted-foreground"><CreditCard className="h-3.5 w-3.5 inline-block ml-1" />التحصيل</th>
                 <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.actions}</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((order) => (
+              {filtered.map((order) => {
+                const delInfo = deliveriesMap[order.id];
+                const invInfo = inventoryMap[order.id];
+                const colInfo = collectionsMap[order.id];
+                const colPct = colInfo && colInfo.total > 0 ? Math.round((colInfo.paid / colInfo.total) * 100) : 0;
+                return (
                 <tr key={order.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/orders/${order.id}`)}>
                   <td className="py-3 px-3 font-mono text-xs font-medium">{order.id}</td>
                   <td className="py-3 px-3 font-medium hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${order.clientId}`); }}>{order.client}</td>
-                  <td className="py-3 px-3 text-muted-foreground">{order.date}</td>
-                  <td className="py-3 px-3 text-end">{order.lines}</td>
+                  <td className="py-3 px-3 text-muted-foreground text-xs">{order.date}</td>
                   <td className="py-3 px-3 text-end font-medium">{order.totalSelling}</td>
-                  <td className="py-3 px-3 text-end text-muted-foreground">{order.totalCost}</td>
-                  <td className="py-3 px-3"><span className="text-xs bg-muted px-2 py-0.5 rounded">{order.splitMode}</span></td>
-                  <td className="py-3 px-3 text-xs text-muted-foreground">{order.source}</td>
                   <td className="py-3 px-3"><StatusBadge status={order.status} /></td>
-                  <td className="py-3 px-3 text-end" onClick={(e) => e.stopPropagation()}>
-                    {collectionsMap[order.id] ? (
-                      <button
-                        className="text-xs font-medium text-primary hover:underline"
-                        onClick={() => navigate(`/collections?orderId=${order.id}`)}
-                        data-testid={`link-collection-paid-${order.id}`}
-                      >
-                        {collectionsMap[order.id].paid.toLocaleString()} / {collectionsMap[order.id].total.toLocaleString()}
+                  <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    {delInfo ? (
+                      <button className="inline-flex items-center gap-1 text-xs hover:underline" onClick={() => navigate(`/deliveries?orderId=${order.id}`)}>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${delInfo.confirmed === delInfo.total && delInfo.total > 0 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
+                          <Truck className="h-3 w-3" /> {delInfo.confirmed}/{delInfo.total}
+                        </span>
                       </button>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
+                    ) : <span className="text-xs text-muted-foreground">—</span>}
+                  </td>
+                  <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    {invInfo ? (
+                      <button className="inline-flex items-center gap-1 text-xs hover:underline" onClick={() => navigate(`/inventory?sourceOrder=${order.id}`)}>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium">
+                          <Package className="h-3 w-3" /> {invInfo.count}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">{invInfo.date}</span>
+                      </button>
+                    ) : <span className="text-xs text-muted-foreground">—</span>}
+                  </td>
+                  <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    {colInfo ? (
+                      <button className="inline-flex flex-col items-center gap-0.5 text-xs hover:underline" onClick={() => navigate(`/collections?orderId=${order.id}`)}>
+                        <span className={`font-medium ${colPct >= 100 ? "text-green-600" : "text-primary"}`}>{colInfo.paid.toLocaleString()} / {colInfo.total.toLocaleString()}</span>
+                        <div className="w-14 bg-muted rounded-full h-1 overflow-hidden"><div className={`h-full rounded-full ${colPct >= 100 ? "bg-green-500" : "bg-primary"}`} style={{ width: `${colPct}%` }} /></div>
+                      </button>
+                    ) : <span className="text-xs text-muted-foreground">—</span>}
                   </td>
                   <td className="py-3 px-3 text-end" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
@@ -366,7 +401,8 @@ export default function OrdersPage() {
                     </DropdownMenu>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}

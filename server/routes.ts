@@ -716,9 +716,10 @@ router.patch("/inventory/:code", async (req, res) => {
 
 // ─── CLIENT INVENTORY (Supabase) ─────────────────────────────────────────────
 router.get("/client-inventory", async (req, res) => {
-  const { clientId } = req.query as { clientId?: string };
+  const { clientId, sourceOrder } = req.query as { clientId?: string; sourceOrder?: string };
   let q = supabaseAdmin.from("client_inventory").select("*").order("created_at", { ascending: false });
   if (clientId) q = q.eq("client_id", clientId);
+  if (sourceOrder) q = q.eq("source_order", sourceOrder);
   const { data, error } = await q;
   if (error) return res.status(500).json({ error: error.message });
   // Enrich with image_url from order_lines

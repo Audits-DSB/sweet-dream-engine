@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useMemo, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useWorkflow } from "@/contexts/WorkflowContext";
@@ -41,8 +41,10 @@ type InventoryLot = {
 export default function InventoryPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { createOrderFromInventory } = useWorkflow();
   const qc = useQueryClient();
+  const urlSourceOrder = searchParams.get("sourceOrder") || "";
 
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -118,7 +120,8 @@ export default function InventoryPage() {
     const matchSearch = !search || l.material.toLowerCase().includes(search.toLowerCase()) || l.clientName.toLowerCase().includes(search.toLowerCase()) || l.id.toLowerCase().includes(search.toLowerCase());
     const matchStatus = !filters.status || filters.status === "all" || l.status === filters.status;
     const matchClient = !filters.client || filters.client === "all" || l.clientName === filters.client;
-    return matchSearch && matchStatus && matchClient;
+    const matchOrder = !urlSourceOrder || l.sourceOrder === urlSourceOrder;
+    return matchSearch && matchStatus && matchClient && matchOrder;
   });
 
   const clientGroups = useMemo(() => {
@@ -191,10 +194,17 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {urlSourceOrder && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-sm">
+          <Package className="h-4 w-4 text-primary shrink-0" />
+          <span className="text-primary font-medium">جرد الطلب: <button className="font-mono hover:underline" onClick={() => navigate(`/orders/${urlSourceOrder}`)}>{urlSourceOrder}</button></span>
+          <button className="mr-auto text-primary/70 hover:text-primary text-xs" onClick={() => navigate("/inventory")}>عرض الكل</button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-header">{t.inventoryTitle}</h1>
-          <p className="page-description">{lots.length} {t.batchCount} {t.acrossClients} {clientNames.length} {t.clientsLabel}</p>
+          <p className="page-description">{filtered.length} {t.batchCount} {t.acrossClients} {clientNames.length} {t.clientsLabel}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" className="h-8 gap-1.5" onClick={() => setAddDialogOpen(true)}>

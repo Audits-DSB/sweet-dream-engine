@@ -4,7 +4,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { quickProfit } from "@/lib/orderProfit";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, CreditCard, ChevronLeft } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -97,6 +97,8 @@ export default function OrderDetails() {
   const [payingFounder, setPayingFounder] = useState<string | null>(null);
   const [orderDeliveries, setOrderDeliveries] = useState<OrderDelivery[]>([]);
   const [founderBalances, setFounderBalances] = useState<Record<string, number>>({});
+  const [orderInventory, setOrderInventory] = useState<any[]>([]);
+  const [orderCollections, setOrderCollections] = useState<any[]>([]);
   const [balanceDialog, setBalanceDialog] = useState<{ open: boolean; fp: any | null; available: number }>({ open: false, fp: null, available: 0 });
   const [useBalance, setUseBalance] = useState(false);
 
@@ -113,7 +115,9 @@ export default function OrderDetails() {
       api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] })),
       api.get<OrderDelivery[]>(`/deliveries?orderId=${id}`).catch(() => []),
       api.get<{ founderId: string; founderName: string; balance: number }[]>("/founder-balances").catch(() => []),
-    ]).then(([all, fetchedLines, extData, deliveries, balances]) => {
+      api.get<any[]>(`/client-inventory?sourceOrder=${id}`).catch(() => []),
+      api.get<any[]>("/collections").catch(() => []),
+    ]).then(([all, fetchedLines, extData, deliveries, balances, inventory, collections]) => {
       const found = (all || []).find((o: any) => o.id === id);
       if (found) setOrder(mapOrder(found));
       const map: Record<string, ExtMaterial> = {};
@@ -128,7 +132,12 @@ export default function OrderDetails() {
       }));
       setLines(enriched);
       setOrderDeliveries(deliveries || []);
-      // Build balances keyed by founder name for dialog lookup
+      setOrderInventory(inventory || []);
+      const orderCollections = (collections || []).filter((c: any) => {
+        const cOrderId = c.order || c.orderId || c.order_id || "";
+        return cOrderId === id;
+      });
+      setOrderCollections(orderCollections);
       const balMap: Record<string, number> = {};
       (balances || []).forEach(b => {
         if (b.founderName) balMap[b.founderName] = b.balance;
@@ -629,6 +638,162 @@ export default function OrderDetails() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* ── ORDER LIFECYCLE PIPELINE ─────────────────────────────────── */}
+      {(() => {
+        const confirmedDeliveries = orderDeliveries.filter(d => d.status === "Delivered");
+        const pendingDeliveries = orderDeliveries.filter(d => d.status !== "Delivered");
+        const hasDeliveries = orderDeliveries.length > 0;
+        const allDelivered = confirmedDeliveries.length > 0 && pendingDeliveries.length === 0 && orderDeliveryStats.pct >= 100;
+        const hasInventory = orderInventory.length > 0;
+        const hasCollections = orderCollections.length > 0;
+        const totalCollected = orderCollections.reduce((s: number, c: any) => s + Number(c.paid ?? c.paidAmount ?? 0), 0);
+        const totalDue = orderCollections.reduce((s: number, c: any) => s + Number(c.total ?? c.totalAmount ?? 0), 0);
+        const fullyCollected = hasCollections && totalDue > 0 && totalCollected >= totalDue;
+
+        const steps = [
+          {
+            key: "processing", label: "معالجة الطلب", icon: ClipboardList,
+            done: true,
+            active: !hasDeliveries,
+            detail: order.date,
+          },
+          {
+            key: "delivery", label: "التوصيل", icon: Truck,
+            done: allDelivered,
+            active: hasDeliveries && !allDelivered,
+            detail: hasDeliveries
+              ? `${confirmedDeliveries.length} مؤكدة${pendingDeliveries.length > 0 ? ` · ${pendingDeliveries.length} معلقة` : ""}`
+              : "لم يبدأ",
+            items: orderDeliveries.slice(0, 3).map(d => ({
+              id: d.id, date: d.scheduledDate || d.date, status: d.status,
+              link: `/deliveries?orderId=${order.id}`,
+            })),
+          },
+          {
+            key: "inventory", label: "الجرد", icon: Package,
+            done: hasInventory,
+            active: allDelivered && !hasInventory,
+            detail: hasInventory
+              ? `${orderInventory.length} سجل · ${orderInventory[0]?.deliveryDate || ""}`
+              : "لم يتم بعد",
+            items: orderInventory.slice(0, 5).map((inv: any) => ({
+              id: inv.id, name: inv.material || inv.code, date: inv.deliveryDate, remaining: inv.remaining, delivered: inv.delivered,
+            })),
+          },
+          {
+            key: "collection", label: "التحصيل", icon: CreditCard,
+            done: fullyCollected,
+            active: hasCollections && !fullyCollected,
+            detail: hasCollections
+              ? `${totalCollected.toLocaleString()} / ${totalDue.toLocaleString()}`
+              : "لم يبدأ",
+            items: orderCollections.map((c: any) => ({
+              id: c.id, date: c.invoiceDate || c.invoice_date || "", paid: Number(c.paid ?? c.paidAmount ?? 0), total: Number(c.total ?? c.totalAmount ?? 0), status: c.status,
+            })),
+          },
+        ];
+
+        return (
+          <div className="stat-card p-4 overflow-hidden">
+            <div className="flex items-center gap-0">
+              {steps.map((step, idx) => {
+                const Icon = step.icon;
+                const isLast = idx === steps.length - 1;
+                const colorClass = step.done
+                  ? "bg-green-500 text-white border-green-500"
+                  : step.active
+                    ? "bg-primary text-white border-primary animate-pulse"
+                    : "bg-muted text-muted-foreground border-border";
+                const lineColor = step.done ? "bg-green-400" : "bg-border";
+                return (
+                  <div key={step.key} className="flex items-center flex-1 min-w-0">
+                    <div className="flex flex-col items-center gap-1.5 min-w-0 flex-shrink-0">
+                      <div className={`h-10 w-10 rounded-full border-2 flex items-center justify-center transition-all ${colorClass}`}>
+                        {step.done ? <CheckCircle2 className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
+                      </div>
+                      <span className={`text-[11px] font-medium text-center leading-tight ${step.done ? "text-green-600" : step.active ? "text-primary" : "text-muted-foreground"}`}>{step.label}</span>
+                      <span className="text-[10px] text-muted-foreground text-center leading-tight max-w-[100px] truncate">{step.detail}</span>
+                    </div>
+                    {!isLast && <div className={`h-0.5 flex-1 mx-2 mt-[-24px] rounded-full ${lineColor}`} />}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Expandable detail rows */}
+            <div className="mt-4 space-y-2">
+              {/* Delivery records */}
+              {orderDeliveries.length > 0 && (
+                <div className="rounded-lg border bg-muted/20 overflow-hidden">
+                  <div className="px-3 py-2 bg-muted/40 border-b flex items-center gap-2 text-xs font-medium">
+                    <Truck className="h-3.5 w-3.5 text-primary" /> التوصيلات ({orderDeliveries.length})
+                  </div>
+                  <div className="divide-y">
+                    {orderDeliveries.map(d => (
+                      <button key={d.id} className="flex items-center gap-3 px-3 py-2 text-xs w-full text-start hover:bg-muted/30 transition-colors" onClick={() => navigate(`/deliveries?orderId=${order.id}`)}>
+                        <span className="font-mono text-muted-foreground">{d.id}</span>
+                        <StatusBadge status={d.status} />
+                        <span className="text-muted-foreground">{d.scheduledDate || d.date}</span>
+                        <span className="text-muted-foreground mr-auto">{d.deliveredBy}</span>
+                        <ChevronLeft className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Inventory records */}
+              {orderInventory.length > 0 && (
+                <div className="rounded-lg border bg-muted/20 overflow-hidden">
+                  <div className="px-3 py-2 bg-muted/40 border-b flex items-center gap-2 text-xs font-medium">
+                    <Package className="h-3.5 w-3.5 text-green-600" /> سجلات الجرد ({orderInventory.length})
+                  </div>
+                  <div className="divide-y">
+                    {orderInventory.map((inv: any) => (
+                      <button key={inv.id} className="flex items-center gap-3 px-3 py-2 text-xs w-full text-start hover:bg-muted/30 transition-colors" onClick={() => navigate(`/inventory?sourceOrder=${order.id}`)}>
+                        <span className="font-medium">{inv.material || inv.code}</span>
+                        <span className="text-muted-foreground">{inv.deliveryDate}</span>
+                        <span className="text-primary font-medium">متبقي: {inv.remaining}/{inv.delivered}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${inv.status === "Depleted" ? "bg-red-100 text-red-700" : inv.status === "Low Stock" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>{inv.status === "Depleted" ? "نفد" : inv.status === "Low Stock" ? "منخفض" : "متوفر"}</span>
+                        <span className="mr-auto" />
+                        <ChevronLeft className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Collection records */}
+              {orderCollections.length > 0 && (
+                <div className="rounded-lg border bg-muted/20 overflow-hidden">
+                  <div className="px-3 py-2 bg-muted/40 border-b flex items-center gap-2 text-xs font-medium">
+                    <CreditCard className="h-3.5 w-3.5 text-blue-600" /> سجلات التحصيل ({orderCollections.length})
+                  </div>
+                  <div className="divide-y">
+                    {orderCollections.map((c: any) => {
+                      const paid = Number(c.paid ?? c.paidAmount ?? 0);
+                      const total = Number(c.total ?? c.totalAmount ?? 0);
+                      const pct = total > 0 ? Math.round((paid / total) * 100) : 0;
+                      return (
+                        <button key={c.id} className="flex items-center gap-3 px-3 py-2 text-xs w-full text-start hover:bg-muted/30 transition-colors" onClick={() => navigate(`/collections?orderId=${order.id}`)}>
+                          <span className="font-mono text-muted-foreground">{c.id}</span>
+                          <StatusBadge status={c.status} />
+                          <span className="text-muted-foreground">{c.invoiceDate || c.invoice_date || ""}</span>
+                          <span className="text-primary font-medium">{paid.toLocaleString()} / {total.toLocaleString()}</span>
+                          <div className="w-16 bg-muted rounded-full h-1.5 overflow-hidden"><div className={`h-full rounded-full ${pct >= 100 ? "bg-green-500" : "bg-primary"}`} style={{ width: `${pct}%` }} /></div>
+                          <span className="mr-auto" />
+                          <ChevronLeft className="h-3 w-3 text-muted-foreground" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       <Tabs defaultValue="invoice" className="space-y-4">
         <TabsList className="bg-muted">
