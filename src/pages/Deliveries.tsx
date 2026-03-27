@@ -247,6 +247,17 @@ export default function DeliveriesPage() {
     try {
       await api.patch(`/deliveries/${del.id}`, { status: "Delivered", date: today });
       setDeliveries(deliveries.map(d => d.id === del.id ? { ...d, status: "Delivered", actualDate: today } : d));
+
+      try {
+        const freshOrders = await api.get<any[]>("/orders");
+        const updatedOrder = (freshOrders || []).find((o: any) => o.id === del.orderId);
+        if (updatedOrder) {
+          setOrders(prev => prev.map(o =>
+            o.id === del.orderId ? { ...o, status: updatedOrder.status || o.status } : o
+          ));
+        }
+      } catch {}
+
       toast.success(`${t.deliveryConfirmedMsg || "تم تأكيد التسليم"}: ${del.id}`);
       sendNotification(t.deliveryConfirmed || "تم التسليم", `${del.id} - ${del.client}`, "success");
     } catch {

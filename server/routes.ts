@@ -616,6 +616,52 @@ router.patch("/deliveries/:id", async (req, res) => {
     } catch (e: any) {
       console.error("client_inventory auto-insert error:", e.message);
     }
+
+    // Auto-sync order status based on delivery progress
+    try {
+      const { data: allDeliveries } = await supabaseAdmin
+        .from("deliveries").select("*").eq("order_id", orderId);
+      const { data: orderLines } = await supabaseAdmin
+        .from("order_lines").select("*").eq("order_id", orderId);
+
+      if (orderLines && orderLines.length > 0 && allDeliveries) {
+        const deliveredQtyMap: Record<string, number> = {};
+        orderLines.forEach((l: any) => { deliveredQtyMap[String(l.id)] = 0; });
+
+        for (const d of allDeliveries.filter((d: any) => d.status === "Delivered")) {
+          let parsed: any = null;
+          try { parsed = typeof d.notes === "string" ? JSON.parse(d.notes) : null; } catch {}
+          if (parsed && Array.isArray(parsed.items)) {
+            for (const item of parsed.items) {
+              const key = String(item.lineId);
+              if (deliveredQtyMap[key] !== undefined) {
+                deliveredQtyMap[key] += Number(item.qty) || 0;
+              }
+            }
+          } else {
+            const noteStr = typeof d.notes === "string" ? d.notes.trim() : "";
+            const isFull = !noteStr || noteStr === "كامل" || noteStr.toLowerCase() === "full";
+            if (isFull) {
+              orderLines.forEach((l: any) => {
+                deliveredQtyMap[String(l.id)] = Number(l.quantity) || 0;
+              });
+            }
+          }
+        }
+
+        const allFullyDelivered = orderLines.every((l: any) =>
+          (deliveredQtyMap[String(l.id)] || 0) >= (Number(l.quantity) || 0)
+        );
+        const anyDelivered = Object.values(deliveredQtyMap).some(q => q > 0);
+
+        const newStatus = allFullyDelivered ? "Delivered" : anyDelivered ? "Partially Delivered" : null;
+        if (newStatus) {
+          await supabaseAdmin.from("orders").update({ status: newStatus }).eq("id", orderId);
+        }
+      }
+    } catch (e: any) {
+      console.error("order status sync error:", e.message);
+    }
   }
   sbOk(res, result);
 });

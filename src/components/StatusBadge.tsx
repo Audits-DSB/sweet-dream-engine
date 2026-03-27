@@ -62,6 +62,9 @@ const statusVariantMap: Record<string, string> = {
 
 const statusLabelMap: Record<string, string> = {
   "Processing": "قيد المعالجة",
+  "Partially Delivered": "تسليم جزئي",
+  "Delivered": "تم التسليم",
+  "Ready for Delivery": "جاهز للتسليم",
 };
 
 export function StatusBadge({ status, variant }: StatusBadgeProps) {

@@ -83,6 +83,16 @@ All business data in main Supabase project:
 npx tsx server/index.ts   # starts Express on 5000, spawns Vite on 5001
 ```
 
+## Delivery-Order Sync System
+- **Per-line delivery tracking**: OrderDetails.tsx computes delivered/remaining quantities per order line from all linked deliveries
+- **Partial delivery items**: Stored as JSON in delivery `notes` field: `{ type: "جزئي", items: [{ lineId, materialCode, materialName, qty, unit }] }`
+- **Full delivery**: `notes` is plain text "كامل" or empty — marks all lines as delivered
+- **Auto status sync**: When delivery is confirmed (PATCH /deliveries/:id → status "Delivered"), server auto-updates order status:
+  - All lines fully delivered → order status = "Delivered"
+  - Some lines delivered → order status = "Partially Delivered"
+- **Invoice tab**: Shows delivery progress banner + per-line delivery badges with progress bars
+- **Deliveries tab**: Shows parsed partial items in cards (not raw JSON), delivery status per item
+
 ## Notes
 - API returns camelCase; Supabase stores snake_case. Helpers `camelizeKeys`/`snakifyKeys` handle conversion in routes.ts
 - Seed runs only once when `clients` table is empty

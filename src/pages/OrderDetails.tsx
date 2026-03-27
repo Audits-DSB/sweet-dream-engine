@@ -1,10 +1,10 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { quickProfit } from "@/lib/orderProfit";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -335,6 +335,95 @@ export default function OrderDetails() {
     }
   };
 
+  type LineDeliveryInfo = {
+    lineId: number;
+    materialCode: string;
+    ordered: number;
+    delivered: number;
+    remaining: number;
+    pct: number;
+    deliveryDetails: { deliveryId: string; qty: number; date: string; status: string }[];
+  };
+
+  const lineDeliveryMap = useMemo<Record<number, LineDeliveryInfo>>(() => {
+    const map: Record<number, LineDeliveryInfo> = {};
+    if (lines.length === 0) return map;
+
+    lines.forEach(line => {
+      map[line.id] = {
+        lineId: line.id,
+        materialCode: line.materialCode,
+        ordered: line.quantity,
+        delivered: 0,
+        remaining: line.quantity,
+        pct: 0,
+        deliveryDetails: [],
+      };
+    });
+
+    const confirmedDeliveries = orderDeliveries.filter(d =>
+      d.status === "Delivered" || d.status === "In Transit" || d.status === "Pending"
+    );
+
+    for (const del of confirmedDeliveries) {
+      let parsedNotes: any = null;
+      try { parsedNotes = typeof del.notes === "string" ? JSON.parse(del.notes) : null; } catch {}
+
+      if (parsedNotes && parsedNotes.items && Array.isArray(parsedNotes.items)) {
+        for (const item of parsedNotes.items) {
+          const lineId = Number(item.lineId);
+          if (map[lineId]) {
+            const qty = Number(item.qty) || 0;
+            if (del.status === "Delivered") {
+              map[lineId].delivered += qty;
+            }
+            map[lineId].deliveryDetails.push({
+              deliveryId: del.id,
+              qty,
+              date: del.date || del.scheduledDate || "",
+              status: del.status,
+            });
+          }
+        }
+      } else {
+        const noteStr = typeof del.notes === "string" ? del.notes.trim() : "";
+        const isFull = !noteStr || noteStr === "كامل" || noteStr.toLowerCase() === "full";
+        if (isFull && del.status === "Delivered") {
+          lines.forEach(line => {
+            if (map[line.id]) {
+              map[line.id].delivered = line.quantity;
+              map[line.id].deliveryDetails.push({
+                deliveryId: del.id,
+                qty: line.quantity,
+                date: del.date || del.scheduledDate || "",
+                status: del.status,
+              });
+            }
+          });
+        }
+      }
+    }
+
+    Object.values(map).forEach(info => {
+      info.delivered = Math.min(info.delivered, info.ordered);
+      info.remaining = Math.max(0, info.ordered - info.delivered);
+      info.pct = info.ordered > 0 ? (info.delivered / info.ordered) * 100 : 0;
+    });
+
+    return map;
+  }, [lines, orderDeliveries]);
+
+  const orderDeliveryStats = useMemo(() => {
+    const infos = Object.values(lineDeliveryMap);
+    if (infos.length === 0) return { totalOrdered: 0, totalDelivered: 0, totalRemaining: 0, pct: 0, status: "none" as const };
+    const totalOrdered = infos.reduce((s, i) => s + i.ordered, 0);
+    const totalDelivered = infos.reduce((s, i) => s + i.delivered, 0);
+    const totalRemaining = infos.reduce((s, i) => s + i.remaining, 0);
+    const pct = totalOrdered > 0 ? (totalDelivered / totalOrdered) * 100 : 0;
+    const status = pct >= 100 ? "full" as const : pct > 0 ? "partial" as const : "none" as const;
+    return { totalOrdered, totalDelivered, totalRemaining, pct, status };
+  }, [lineDeliveryMap]);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -466,6 +555,8 @@ export default function OrderDetails() {
                       <SelectContent>
                         <SelectItem value="Draft">مسودة</SelectItem>
                         <SelectItem value="Processing">قيد المعالجة</SelectItem>
+                        <SelectItem value="Ready for Delivery">جاهز للتسليم</SelectItem>
+                        <SelectItem value="Partially Delivered">تسليم جزئي</SelectItem>
                         <SelectItem value="Delivered">تم التسليم</SelectItem>
                         <SelectItem value="Cancelled">ملغي</SelectItem>
                         <SelectItem value="Pending">معلق</SelectItem>
@@ -577,13 +668,61 @@ export default function OrderDetails() {
               )}
             </div>
 
+            {/* Delivery Progress Banner */}
+            {hasDetailedLines && orderDeliveries.length > 0 && (
+              <div className={`px-6 py-3 border-b border-border flex items-center justify-between gap-4 ${
+                orderDeliveryStats.status === "full" ? "bg-emerald-50 dark:bg-emerald-950/20" :
+                orderDeliveryStats.status === "partial" ? "bg-amber-50 dark:bg-amber-950/20" :
+                "bg-muted/30"
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <Truck className={`h-4 w-4 ${
+                    orderDeliveryStats.status === "full" ? "text-emerald-600" :
+                    orderDeliveryStats.status === "partial" ? "text-amber-600" : "text-muted-foreground"
+                  }`} />
+                  <div>
+                    <span className={`text-sm font-semibold ${
+                      orderDeliveryStats.status === "full" ? "text-emerald-700 dark:text-emerald-400" :
+                      orderDeliveryStats.status === "partial" ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"
+                    }`}>
+                      {orderDeliveryStats.status === "full" ? "تم تسليم الطلب بالكامل" :
+                       orderDeliveryStats.status === "partial" ? "تسليم جزئي — بعض المواد لم تُسلَّم بعد" :
+                       "لم يتم التسليم بعد"}
+                    </span>
+                    <span className="text-xs text-muted-foreground mr-2">
+                      ({orderDeliveryStats.totalDelivered} / {orderDeliveryStats.totalOrdered} وحدة)
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="w-24 h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        orderDeliveryStats.pct >= 100 ? "bg-emerald-500" :
+                        orderDeliveryStats.pct > 0 ? "bg-amber-500" : "bg-muted-foreground"
+                      }`}
+                      style={{ width: `${Math.min(orderDeliveryStats.pct, 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-bold min-w-[36px] text-end">{orderDeliveryStats.pct.toFixed(0)}%</span>
+                </div>
+              </div>
+            )}
+
             {/* Items */}
             {hasDetailedLines ? (
               <div className="divide-y divide-border/50">
-                {lines.map((line) => (
-                  <div key={line.id} className="flex items-center gap-4 px-6 py-4 hover:bg-muted/20 transition-colors">
+                {lines.map((line) => {
+                  const delInfo = lineDeliveryMap[line.id];
+                  const hasDelivery = delInfo && delInfo.deliveryDetails.length > 0;
+                  const isFullyDelivered = delInfo && delInfo.pct >= 100;
+                  const isPartial = delInfo && delInfo.pct > 0 && delInfo.pct < 100;
+
+                  return (
+                  <div key={line.id} className={`px-6 py-4 hover:bg-muted/20 transition-colors ${isFullyDelivered ? "bg-emerald-50/30 dark:bg-emerald-950/10" : ""}`}>
+                    <div className="flex items-center gap-4">
                     {/* Product image */}
-                    <div className="w-14 h-14 rounded-lg border border-border overflow-hidden bg-muted/50 flex-shrink-0 flex items-center justify-center">
+                    <div className="w-14 h-14 rounded-lg border border-border overflow-hidden bg-muted/50 flex-shrink-0 flex items-center justify-center relative">
                       {line.imageUrl ? (
                         <img
                           src={line.imageUrl}
@@ -593,6 +732,11 @@ export default function OrderDetails() {
                         />
                       ) : null}
                       <Package className={`h-6 w-6 text-muted-foreground ${line.imageUrl ? "hidden" : ""}`} />
+                      {isFullyDelivered && (
+                        <div className="absolute -top-1 -end-1 h-5 w-5 rounded-full bg-emerald-500 flex items-center justify-center shadow-sm">
+                          <CheckCircle2 className="h-3 w-3 text-white" />
+                        </div>
+                      )}
                     </div>
 
                     {/* Name + code */}
@@ -637,8 +781,57 @@ export default function OrderDetails() {
                       <div className="font-bold">{toNum(line.lineTotal).toLocaleString()}</div>
                       <div className="text-xs text-muted-foreground">{t.currency}</div>
                     </div>
+                    </div>
+
+                    {/* Delivery status per line */}
+                    {hasDelivery && (
+                      <div className="mt-2.5 mr-[4.5rem]">
+                        <div className="flex items-center gap-3 text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <Truck className={`h-3 w-3 ${isFullyDelivered ? "text-emerald-600" : isPartial ? "text-amber-600" : "text-muted-foreground"}`} />
+                            <span className={`font-semibold ${isFullyDelivered ? "text-emerald-600 dark:text-emerald-400" : isPartial ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
+                              {isFullyDelivered ? "تم التسليم بالكامل" : isPartial ? `تسليم جزئي: ${delInfo.delivered} / ${delInfo.ordered}` : "في الانتظار"}
+                            </span>
+                          </div>
+                          {isPartial && (
+                            <span className="text-muted-foreground flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3 text-amber-500" />
+                              باقي {delInfo.remaining} {line.unit}
+                            </span>
+                          )}
+                          <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${isFullyDelivered ? "bg-emerald-500" : "bg-amber-500"}`}
+                              style={{ width: `${Math.min(delInfo.pct, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                        {delInfo.deliveryDetails.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-1.5">
+                            {delInfo.deliveryDetails.map((dd, idx) => (
+                              <button
+                                key={idx}
+                                className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border transition-colors cursor-pointer ${
+                                  dd.status === "Delivered"
+                                    ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-400"
+                                    : dd.status === "In Transit"
+                                    ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-400"
+                                    : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400"
+                                }`}
+                                onClick={() => navigate(`/deliveries?orderId=${id}`)}
+                              >
+                                <Truck className="h-2.5 w-2.5" />
+                                {dd.deliveryId} · {dd.qty} {line.unit}
+                                {dd.status === "Delivered" && <CheckCircle2 className="h-2.5 w-2.5" />}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : hasLegacyLines ? (
               <div className="divide-y divide-border/50">
@@ -894,16 +1087,45 @@ export default function OrderDetails() {
                       </div>
                     </div>
 
-                    {/* Notes row (if any) */}
-                    {del.notes && (
-                      <div className="flex items-start gap-2.5 px-5 py-3 border-t border-border/50 bg-muted/10">
-                        <StickyNote className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                        <div>
-                          <div className="text-xs text-muted-foreground mb-0.5">ملاحظات</div>
-                          <div className="text-sm text-foreground" data-testid={`text-notes-${del.id}`}>{del.notes}</div>
-                        </div>
-                      </div>
-                    )}
+                    {/* Partial delivery items or notes */}
+                    {del.notes && (() => {
+                      let parsed: any = null;
+                      try { parsed = typeof del.notes === "string" ? JSON.parse(del.notes) : null; } catch {}
+                      if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
+                        return (
+                          <div className="px-5 py-3 border-t border-border/50 bg-muted/10">
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                              <Package className="h-3.5 w-3.5" />
+                              <span className="font-medium">المواد المسلّمة ({parsed.type || "جزئي"})</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {parsed.items.map((item: any, idx: number) => (
+                                <div key={idx} className="flex items-center gap-2 bg-background rounded-lg border border-border/50 px-3 py-2">
+                                  <PackageCheck className={`h-3.5 w-3.5 flex-shrink-0 ${del.status === "Delivered" ? "text-emerald-600" : "text-amber-500"}`} />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium truncate">{item.materialName}</p>
+                                    <p className="text-[10px] text-muted-foreground">{item.materialCode}</p>
+                                  </div>
+                                  <span className="text-xs font-bold text-primary">{item.qty} {item.unit}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+                      if (del.notes && !parsed) {
+                        return (
+                          <div className="flex items-start gap-2.5 px-5 py-3 border-t border-border/50 bg-muted/10">
+                            <StickyNote className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                            <div>
+                              <div className="text-xs text-muted-foreground mb-0.5">نوع التسليم</div>
+                              <div className="text-sm text-foreground" data-testid={`text-notes-${del.id}`}>{del.notes}</div>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 ))}
               </div>
