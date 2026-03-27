@@ -422,7 +422,8 @@ export default function OrdersPage() {
                   </td>
                   <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                     {colInfo ? (
-                      <button className="inline-flex flex-col items-center gap-0.5 text-xs hover:underline" onClick={() => navigate(`/collections?orderId=${order.id}`)}>
+                      <button className="inline-flex flex-col items-center gap-0.5 text-xs hover:underline" onClick={() => navigate(`/collections?collectionId=${colInfo.collectionId}`)}>
+                        <span className="font-mono text-[10px] text-primary hover:underline">{colInfo.collectionId}</span>
                         <span className={`font-medium ${colPct >= 100 ? "text-green-600" : "text-primary"}`}>{colInfo.paid.toLocaleString()} / {colInfo.total.toLocaleString()}</span>
                         <div className="w-14 bg-muted rounded-full h-1 overflow-hidden"><div className={`h-full rounded-full ${colPct >= 100 ? "bg-green-500" : "bg-primary"}`} style={{ width: `${colPct}%` }} /></div>
                       </button>

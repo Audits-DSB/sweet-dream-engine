@@ -87,6 +87,7 @@ export default function CollectionsPage() {
   const urlStatus = searchParams.get("status") || "";
   const urlOrderId = searchParams.get("orderId") || "";
   const urlSearch = searchParams.get("search") || "";
+  const urlCollectionId = searchParams.get("collectionId") || "";
   const [collections, setCollections] = useState<Collection[]>([]);
   const [search, setSearch] = useState(urlSearch);
   const [filters, setFilters] = useState<Record<string, string>>({ ...(urlStatus ? { status: urlStatus } : {}), ...(urlOrderId ? { orderId: urlOrderId } : {}) });
@@ -122,9 +123,14 @@ export default function CollectionsPage() {
     ]).then(([cols, accounts, clients, fndrs]) => {
       const clientsMap: Record<string, string> = {};
       (clients || []).forEach((c: any) => { clientsMap[c.id] = c.name; });
-      setCollections((cols || []).map(c => mapCollection(c, clientsMap)));
+      const mapped = (cols || []).map(c => mapCollection(c, clientsMap));
+      setCollections(mapped);
       setTreasuryAccounts((accounts || []).filter((a: any) => a.isActive).map((a: any) => ({ id: a.id, name: a.name, balance: Number(a.balance) })));
       setFounders((fndrs || []).map((f: any) => ({ id: f.id, name: f.name })));
+      if (urlCollectionId) {
+        const target = mapped.find(c => c.id === urlCollectionId);
+        if (target) setSelectedInvoice(target);
+      }
     }).finally(() => setLoadingCollections(false));
   }, []);
 
