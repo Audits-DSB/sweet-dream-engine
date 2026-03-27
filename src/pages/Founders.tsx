@@ -33,7 +33,7 @@ type Collection = {
   status: string; totalAmount: number; paidAmount: number; outstanding: number;
   sourceOrders: string[];
 };
-type Order = { id: string; totalSelling: any; totalCost: any; splitMode: string; founderContributions?: any[] };
+type Order = { id: string; totalSelling: any; totalCost: any; splitMode: string; founderContributions?: any[]; deliveryFee?: any; deliveryFeeBearer?: string };
 
 function toNum(v: any): number {
   if (!v) return 0;
@@ -189,7 +189,8 @@ export default function FoundersPage() {
         const splitMode = ((order as any).splitMode || (order as any).split_mode || "equal");
         const isWeighted = splitMode.includes("مساهمة") || splitMode.toLowerCase().includes("contribution");
 
-        const qp = quickProfit({ orderTotal: oSelling, totalCost: oCost, paidValue: oPaid, companyProfitPct: companyPct });
+        const delFeeDeduction = (order.deliveryFeeBearer || (order as any).delivery_fee_bearer) === "company" ? toNum(order.deliveryFee ?? (order as any).delivery_fee) : 0;
+        const qp = quickProfit({ orderTotal: oSelling, totalCost: oCost, paidValue: oPaid, companyProfitPct: companyPct, deliveryFeeDeduction: delFeeDeduction });
         const capitalReturn = Math.round(qp.recoveredCapital);
         totalFoundersProfit += qp.foundersProfit;
         totalCapitalReturn += capitalReturn;

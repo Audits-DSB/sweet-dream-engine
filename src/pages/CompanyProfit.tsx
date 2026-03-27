@@ -272,7 +272,8 @@ export default function CompanyProfitPage() {
           const pct = getOrderPct(oid);
           const normPct = pct >= 2 ? pct / 100 : pct;
 
-          const qp = quickProfit({ orderTotal: oSelling, totalCost: oCost, paidValue: oPaid, companyProfitPct: pct });
+          const delFeeDeduction = (order.deliveryFeeBearer || (order as any).delivery_fee_bearer) === "company" ? parseAmount(order.deliveryFee ?? (order as any).delivery_fee) : 0;
+          const qp = quickProfit({ orderTotal: oSelling, totalCost: oCost, paidValue: oPaid, companyProfitPct: pct, deliveryFeeDeduction: delFeeDeduction });
           totalGrossProfit += qp.expectedProfit;
           totalRealizedProfit += qp.realizedProfit;
           totalCompanyProfit += qp.companyProfit;

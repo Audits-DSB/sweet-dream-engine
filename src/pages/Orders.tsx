@@ -25,7 +25,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 type Order = {
   id: string; client: string; clientId: string; date: string; lines: number;
   totalSelling: string; totalCost: string; splitMode: string;
-  deliveryFee: number; status: string; source: string;
+  deliveryFee: number; deliveryFeeBearer: string; status: string; source: string;
 };
 
 type Client = { id: string; name: string; city: string; status: string; };
@@ -51,6 +51,7 @@ function mapOrder(raw: any): Order {
     totalCost: raw.totalCost ?? raw.total_cost ?? "0",
     splitMode: raw.splitMode ?? raw.split_mode ?? "",
     deliveryFee: Number(raw.deliveryFee ?? raw.delivery_fee ?? 0),
+    deliveryFeeBearer: raw.deliveryFeeBearer ?? raw.delivery_fee_bearer ?? "client",
     status: raw.status || "Draft",
     source: raw.source || "",
   };
@@ -69,7 +70,7 @@ export default function OrdersPage() {
   const [filters, setFilters] = useState<Record<string, string>>(urlStatus ? { status: urlStatus } : {});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState("");
-  const [form, setForm] = useState({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee) });
+  const [form, setForm] = useState({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client" as "client" | "company" });
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [materialSearch, setMaterialSearch] = useState("");
   const [realMaterials, setRealMaterials] = useState<MaterialItem[]>([]);
@@ -88,7 +89,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (dialogOpen) {
-      setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee) });
+      setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client" });
       setSelectedFounders([]);
       setFounderPcts({});
       api.get<any[]>("/founders").then((data) => {
@@ -340,6 +341,7 @@ export default function OrdersPage() {
         totalSelling: String(totalSelling),
         totalCost: String(totalCost),
         splitMode: splitLabel, deliveryFee: String(parseInt(form.deliveryFee) || 0),
+        deliveryFeeBearer: form.deliveryFeeBearer,
         status: "Processing", source: t.manual,
         founderContributions,
         items: orderItems,
@@ -350,7 +352,7 @@ export default function OrdersPage() {
       await logAudit({ entity: "order", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${client.name}`, action: "create", snapshot: saved, endpoint: "/orders" });
 
       setOrders(prev => [mapOrder(saved), ...prev]);
-      setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee) });
+      setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client" });
       setSelectedClient(""); setOrderItems([]); setDialogOpen(false);
       if (!saved._linesError) toast.success(t.orderCreated);
     } catch (err: any) {
@@ -602,6 +604,22 @@ export default function OrdersPage() {
                   </Select>
                 </div>
               </div>
+
+              {(parseInt(form.deliveryFee) || 0) > 0 && (
+                <div className="flex items-center gap-3 p-3 rounded-md border border-border bg-muted/20">
+                  <Label className="text-xs font-medium flex-shrink-0">{t.deliveryFeeBearerLabel}</Label>
+                  <div className="flex items-center gap-4 mr-auto">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <Checkbox checked={form.deliveryFeeBearer === "client"} onCheckedChange={() => setForm({ ...form, deliveryFeeBearer: "client" })} />
+                      <span className="text-xs">{t.deliveryFeeBearerClient}</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <Checkbox checked={form.deliveryFeeBearer === "company"} onCheckedChange={() => setForm({ ...form, deliveryFeeBearer: "company" })} />
+                      <span className="text-xs">{t.deliveryFeeBearerCompany}</span>
+                    </label>
+                  </div>
+                </div>
+              )}
 
               {founders.length > 0 && (
                 <div className="space-y-2 border border-border rounded-lg p-3 bg-muted/10">

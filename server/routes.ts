@@ -1,29 +1,22 @@
 import { Router } from "express";
 import { createClient } from "@supabase/supabase-js";
-import { Pool } from "pg";
 import { quickProfit, founderSplit } from "../src/lib/orderProfit";
 
 const router = Router();
 
-let _pgPool: InstanceType<typeof Pool> | null = null;
-function getPgPool(): InstanceType<typeof Pool> {
-  if (!_pgPool) {
-    if (!process.env.DATABASE_URL) {
-      throw new Error("DATABASE_URL not set.");
-    }
-    _pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
-  }
-  return _pgPool;
-}
-
 async function softDelete(entityType: string, entityId: string, entityName: string, snapshot: any, relatedData: any = {}) {
   const id = `DEL-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   try {
-    await getPgPool().query(
-      `INSERT INTO deleted_items (id, entity_type, entity_id, entity_name, snapshot, related_data, deleted_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [id, entityType, entityId, entityName, JSON.stringify(snapshot), JSON.stringify(relatedData), ""]
-    );
+    await supabaseAdmin.from("deleted_items").insert({
+      id,
+      entity_type: entityType,
+      entity_id: entityId,
+      entity_name: entityName,
+      snapshot: snapshot,
+      related_data: relatedData,
+      deleted_by: "",
+      deleted_at: new Date().toISOString(),
+    });
   } catch (e: any) {
     console.warn("[softDelete] Could not save to trash:", e.message);
   }
@@ -1128,11 +1121,20 @@ router.get("/company-profit-summary", async (_req, res) => {
         lineItems.forEach((li: any) => {
           const oid = li.sourceOrderId || primaryOrderId;
           if (!orderMap[oid]) return;
+          const order = orderMap[oid];
           const lineSelling = Number(li.sellingPrice ?? li.selling_price ?? 0) * Number(li.quantity ?? 1);
           const lineCost = Number(li.costPrice ?? li.cost_price ?? li.cost ?? 0) * Number(li.quantity ?? 1);
           const pct = getOrderPct(oid);
           const normPct = pct >= 2 ? pct / 100 : pct;
-          totalCompanyProfit += (lineSelling - lineCost) * payRatio * normPct;
+          let lineProfit = lineSelling - lineCost;
+          if (order.delivery_fee_bearer === "company") {
+            const orderTotal = Number(order.total_selling || 0);
+            const delFee = Number(order.delivery_fee || 0);
+            if (orderTotal > 0 && delFee > 0) {
+              lineProfit -= delFee * (lineSelling / orderTotal);
+            }
+          }
+          totalCompanyProfit += lineProfit * payRatio * normPct;
         });
       } else {
         const srcOrders: string[] = (notesMeta.sourceOrders?.length > 0
@@ -1150,7 +1152,8 @@ router.get("/company-profit-summary", async (_req, res) => {
           const share = allSelling > 0 ? oSelling / allSelling : 1 / srcOrders.length;
           const oPaid = paid * share;
           const pct = getOrderPct(oid);
-          const qp = quickProfit({ orderTotal: oSelling, totalCost: oCost, paidValue: oPaid, companyProfitPct: pct });
+          const delFeeDeduction = order.delivery_fee_bearer === "company" ? Number(order.delivery_fee || 0) : 0;
+          const qp = quickProfit({ orderTotal: oSelling, totalCost: oCost, paidValue: oPaid, companyProfitPct: pct, deliveryFeeDeduction: delFeeDeduction });
           totalCompanyProfit += qp.companyProfit;
         });
       }
@@ -1224,7 +1227,8 @@ router.get("/founder-balances", async (_req, res) => {
       if (Array.isArray(rawC)) contribs = rawC;
       else if (typeof rawC === "string") { try { contribs = JSON.parse(rawC); } catch { contribs = []; } }
       const companyPct = globalPct;
-      const qp = quickProfit({ orderTotal: totalSelling, totalCost, paidValue: paid, companyProfitPct: companyPct });
+      const delFeeDeduction = order.delivery_fee_bearer === "company" ? Number(order.delivery_fee || 0) : 0;
+      const qp = quickProfit({ orderTotal: totalSelling, totalCost, paidValue: paid, companyProfitPct: companyPct, deliveryFeeDeduction: delFeeDeduction });
       const capitalReturn = Math.round(qp.recoveredCapital);
       const foundersProfit = qp.foundersProfit;
       const sm = order.split_mode || "equal";
@@ -1387,66 +1391,6 @@ router.put("/business-rules", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("business_rules").upsert(body, { onConflict: "id" }).select().single());
 });
 
-// ─── DATA MIGRATION: copy all local pgPool tables → Supabase ─────────────────
-// Run once after creating tables in Supabase SQL editor
-router.post("/migrate-to-supabase", async (req, res) => {
-  const results: Record<string, any> = {};
-  try {
-    // 1. order_lines
-    const { rows: lines } = await getPgPool().query("SELECT * FROM order_lines").catch(() => ({ rows: [] }));
-    if (lines.length > 0) {
-      const { error } = await supabaseAdmin.from("order_lines").upsert(lines, { onConflict: "id" });
-      results.order_lines = error ? `error: ${error.message}` : `migrated ${lines.length}`;
-    } else results.order_lines = "empty or table missing";
-
-    // 2. order_founder_contributions
-    const { rows: contribs } = await getPgPool().query("SELECT * FROM order_founder_contributions").catch(() => ({ rows: [] }));
-    if (contribs.length > 0) {
-      const { error } = await supabaseAdmin.from("order_founder_contributions").upsert(contribs, { onConflict: "order_id" });
-      results.order_founder_contributions = error ? `error: ${error.message}` : `migrated ${contribs.length}`;
-    } else results.order_founder_contributions = "empty or table missing";
-
-    // 3. client_inventory
-    const { rows: ci } = await getPgPool().query("SELECT * FROM client_inventory").catch(() => ({ rows: [] }));
-    if (ci.length > 0) {
-      const { error } = await supabaseAdmin.from("client_inventory").upsert(ci, { onConflict: "id" });
-      results.client_inventory = error ? `error: ${error.message}` : `migrated ${ci.length}`;
-    } else results.client_inventory = "empty or table missing";
-
-    // 4. delivery_actors
-    const { rows: da } = await getPgPool().query("SELECT * FROM delivery_actors").catch(() => ({ rows: [] }));
-    if (da.length > 0) {
-      const { error } = await supabaseAdmin.from("delivery_actors").upsert(da, { onConflict: "id" });
-      results.delivery_actors = error ? `error: ${error.message}` : `migrated ${da.length}`;
-    } else results.delivery_actors = "empty or table missing";
-
-    // 5. supplier_materials
-    const { rows: sm } = await getPgPool().query("SELECT * FROM supplier_materials").catch(() => ({ rows: [] }));
-    if (sm.length > 0) {
-      const { error } = await supabaseAdmin.from("supplier_materials").upsert(sm, { onConflict: "supplier_id,material_code" });
-      results.supplier_materials = error ? `error: ${error.message}` : `migrated ${sm.length}`;
-    } else results.supplier_materials = "empty or table missing";
-
-    // 6. audits
-    const { rows: au } = await getPgPool().query("SELECT * FROM audits").catch(() => ({ rows: [] }));
-    if (au.length > 0) {
-      const { error } = await supabaseAdmin.from("audits").upsert(au, { onConflict: "id" });
-      results.audits = error ? `error: ${error.message}` : `migrated ${au.length}`;
-    } else results.audits = "empty or table missing";
-
-    // 7. business_rules
-    const { rows: br } = await getPgPool().query("SELECT * FROM business_rules").catch(() => ({ rows: [] }));
-    if (br.length > 0) {
-      const { error } = await supabaseAdmin.from("business_rules").upsert(br, { onConflict: "id" });
-      results.business_rules = error ? `error: ${error.message}` : `migrated ${br.length}`;
-    } else results.business_rules = "empty or table missing";
-
-    res.json({ ok: true, results });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message, results });
-  }
-});
-
 // ─── TRASH / DELETED ITEMS ────────────────────────────────────────────────────
 const ENTITY_TABLE_MAP: Record<string, { table: string; idField: string }> = {
   client: { table: "clients", idField: "id" },
@@ -1467,8 +1411,9 @@ const ENTITY_TABLE_MAP: Record<string, { table: string; idField: string }> = {
 
 router.get("/trash", async (_req, res) => {
   try {
-    const { rows } = await getPgPool().query("SELECT * FROM deleted_items ORDER BY deleted_at DESC");
-    res.json(rows);
+    const { data, error } = await supabaseAdmin.from("deleted_items").select("*").order("deleted_at", { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
   } catch (e: any) {
     res.json([]);
   }
@@ -1476,8 +1421,9 @@ router.get("/trash", async (_req, res) => {
 
 router.get("/trash/count", async (_req, res) => {
   try {
-    const { rows } = await getPgPool().query("SELECT count(*) as count FROM deleted_items");
-    res.json({ count: Number(rows[0]?.count || 0) });
+    const { count, error } = await supabaseAdmin.from("deleted_items").select("*", { count: "exact", head: true });
+    if (error) return res.json({ count: 0 });
+    res.json({ count: count || 0 });
   } catch {
     res.json({ count: 0 });
   }
@@ -1485,10 +1431,10 @@ router.get("/trash/count", async (_req, res) => {
 
 router.post("/trash/:id/restore", async (req, res) => {
   try {
-    const { rows } = await getPgPool().query("SELECT * FROM deleted_items WHERE id = $1", [req.params.id]);
-    if (rows.length === 0) return res.status(404).json({ error: "Item not found in trash" });
+    const { data: items, error: fetchErr } = await supabaseAdmin.from("deleted_items").select("*").eq("id", req.params.id);
+    if (fetchErr || !items || items.length === 0) return res.status(404).json({ error: "Item not found in trash" });
 
-    const item = rows[0];
+    const item = items[0];
     const entityType = item.entity_type;
     const snapshot = typeof item.snapshot === "string" ? JSON.parse(item.snapshot) : item.snapshot;
     const relatedData = typeof item.related_data === "string" ? JSON.parse(item.related_data) : item.related_data;
@@ -1533,7 +1479,7 @@ router.post("/trash/:id/restore", async (req, res) => {
       if (restoreErr) return res.status(500).json({ error: `Restore failed: ${restoreErr.message}` });
     }
 
-    await getPgPool().query("DELETE FROM deleted_items WHERE id = $1", [req.params.id]);
+    await supabaseAdmin.from("deleted_items").delete().eq("id", req.params.id);
     res.json({ ok: true, entityType, entityId: item.entity_id });
   } catch (e: any) {
     console.error("[trash/restore]", e.message);
@@ -1543,7 +1489,7 @@ router.post("/trash/:id/restore", async (req, res) => {
 
 router.delete("/trash/:id", async (req, res) => {
   try {
-    await getPgPool().query("DELETE FROM deleted_items WHERE id = $1", [req.params.id]);
+    await supabaseAdmin.from("deleted_items").delete().eq("id", req.params.id);
     res.json({ ok: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -1552,8 +1498,12 @@ router.delete("/trash/:id", async (req, res) => {
 
 router.delete("/trash", async (_req, res) => {
   try {
-    const { rowCount } = await getPgPool().query("DELETE FROM deleted_items");
-    res.json({ ok: true, deleted: rowCount });
+    const { data } = await supabaseAdmin.from("deleted_items").select("id");
+    if (data && data.length > 0) {
+      const ids = data.map((r: any) => r.id);
+      await supabaseAdmin.from("deleted_items").delete().in("id", ids);
+    }
+    res.json({ ok: true, deleted: data?.length || 0 });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

@@ -93,7 +93,7 @@ export default function CollectionsPage() {
   const [filters, setFilters] = useState<Record<string, string>>({ ...(urlStatus ? { status: urlStatus } : {}), ...(urlOrderId ? { orderId: urlOrderId } : {}) });
   const [selectedInvoice, setSelectedInvoice] = useState<Collection | null>(null);
   const [loadingCollections, setLoadingCollections] = useState(true);
-  type OrderData = { orderId: string; totalSelling: number; totalCost: number; splitMode: string; founderContributions: any[]; companyProfitPct: number };
+  type OrderData = { orderId: string; totalSelling: number; totalCost: number; splitMode: string; founderContributions: any[]; companyProfitPct: number; deliveryFee?: number; deliveryFeeBearer?: string };
   const [selectedOrdersData, setSelectedOrdersData] = useState<OrderData[]>([]);
   const [selectedOrderLines, setSelectedOrderLines] = useState<LineItem[]>([]);
   const [founders, setFounders] = useState<{ id: string; name: string }[]>([]);
@@ -167,6 +167,8 @@ export default function CollectionsPage() {
           splitMode: o.splitMode || o.split_mode || "Equal",
           founderContributions: contribs,
           companyProfitPct,
+          deliveryFee: Number(o.deliveryFee ?? o.delivery_fee ?? 0),
+          deliveryFeeBearer: o.deliveryFeeBearer || o.delivery_fee_bearer || "client",
         });
         const mappedLines: LineItem[] = (rawLines || []).map((l: any) => {
           const qty = Number(l.quantity ?? 0);
@@ -521,7 +523,8 @@ export default function CollectionsPage() {
                         const orderTotal = lines.reduce((s, l) => s + l.lineTotal, 0);
                         const orderShare = allTotal > 0 ? orderTotal / allTotal : 1;
                         const orderPaid = selectedInvoice.paid * orderShare;
-                        const qp = quickProfit({ orderTotal: od.totalSelling, totalCost: od.totalCost, paidValue: orderPaid, companyProfitPct: snappedPct });
+                        const delFeeDeduction = (od.deliveryFeeBearer || (od as any).delivery_fee_bearer) === "company" ? (od.deliveryFee || (od as any).delivery_fee || 0) : 0;
+                        const qp = quickProfit({ orderTotal: od.totalSelling, totalCost: od.totalCost, paidValue: orderPaid, companyProfitPct: snappedPct, deliveryFeeDeduction: delFeeDeduction });
                         const gross = qp.expectedProfit;
                         const paidRatio = od.totalSelling > 0 ? Math.min(orderPaid / od.totalSelling, 1) : 0;
                         const realized = Math.round(qp.realizedProfit);

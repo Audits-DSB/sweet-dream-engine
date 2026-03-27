@@ -21,7 +21,7 @@ All business data in main Supabase project:
 - `suppliers` — Supplier records
 - `materials` — Product/material catalog
 - `founders` — Company founders (fields: id, name, alias, email, phone, totalContributed, totalWithdrawn, active)
-- `orders` — Customer orders
+- `orders` — Customer orders (includes `delivery_fee_bearer` column: "client" or "company" — when "company", delivery fee is deducted from profit before company/founders split)
 - `requests` — Client requests
 - `deliveries` — Delivery records (columns: id, orderId, clientId, date, scheduledDate, status, deliveredBy, deliveryFee, items, notes)
 - `collections` — Invoice/collection records
@@ -33,7 +33,7 @@ All business data in main Supabase project:
   - Founder transactions: founder_contribution, founder_withdrawal, order_funding (stored with performedBy=founderId, referenceId=founderName, linkedAccountId=orderId, category=method)
 
 ## Soft-Delete & Trash System
-- **Soft-Delete**: All DELETE routes snapshot the entity BEFORE physical deletion and save to `deleted_items` table (local Postgres via `DATABASE_URL`, not Supabase)
+- **Soft-Delete**: All DELETE routes snapshot the entity BEFORE physical deletion and save to `deleted_items` table in **Supabase** (via `supabaseAdmin`)
 - **`deleted_items` table**: Columns — id, entity_type, entity_id, entity_name, snapshot (jsonb), related_data (jsonb), deleted_at, deleted_by
 - **Trash Page** (`src/pages/Trash.tsx`) — Full trash management: type-filter badges, search, expand/collapse snapshot details, restore, permanent delete, clear-all
 - **Trash API Endpoints**: `GET /api/trash`, `GET /api/trash/count`, `POST /api/trash/:id/restore`, `DELETE /api/trash/:id`, `DELETE /api/trash`

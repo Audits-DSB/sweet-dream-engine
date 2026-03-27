@@ -108,6 +108,7 @@ export type QuickProfitInput = {
   totalCost: number;
   paidValue: number;
   companyProfitPct: number;
+  deliveryFeeDeduction?: number;
 };
 
 export type QuickProfitResult = {
@@ -122,7 +123,7 @@ export type QuickProfitResult = {
 };
 
 export function quickProfit(input: QuickProfitInput): QuickProfitResult {
-  const { orderTotal, totalCost, paidValue, companyProfitPct } = input;
+  const { orderTotal, totalCost, paidValue, companyProfitPct, deliveryFeeDeduction = 0 } = input;
   const expectedProfit = orderTotal - totalCost;
   const profitRatio = orderTotal > 0 ? expectedProfit / orderTotal : 0;
   const capitalRatio = orderTotal > 0 ? totalCost / orderTotal : 0;
@@ -130,16 +131,20 @@ export function quickProfit(input: QuickProfitInput): QuickProfitResult {
   const realizedProfit = paidValue * profitRatio;
   const recoveredCapital = paidValue * capitalRatio;
 
+  const paymentRatio = orderTotal > 0 ? Math.min(paidValue / orderTotal, 1) : 0;
+  const proportionalDeduction = deliveryFeeDeduction * paymentRatio;
+  const profitAfterDeduction = realizedProfit - proportionalDeduction;
+
   const pct = Math.min(Math.max(companyProfitPct >= 2 ? companyProfitPct / 100 : companyProfitPct, 0), 1);
-  const companyProfit = realizedProfit * pct;
-  const foundersProfit = realizedProfit - companyProfit;
+  const companyProfit = profitAfterDeduction * pct;
+  const foundersProfit = profitAfterDeduction - companyProfit;
 
   return {
     capital: totalCost,
     expectedProfit,
     profitRatio,
     capitalRatio,
-    realizedProfit,
+    realizedProfit: profitAfterDeduction,
     recoveredCapital,
     companyProfit,
     foundersProfit,

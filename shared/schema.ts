@@ -60,6 +60,7 @@ export const orders = pgTable("orders", {
   deliveryFee: numeric("delivery_fee", { precision: 14, scale: 2 }).notNull().default("0"),
   status: text("status").notNull().default("Draft"),
   source: text("source").notNull().default("يدوي"),
+  deliveryFeeBearer: text("delivery_fee_bearer").notNull().default("client"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

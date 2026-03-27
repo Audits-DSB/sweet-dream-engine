@@ -36,7 +36,7 @@ type FounderContrib = {
 
 type Order = {
   id: string; client: string; clientId: string; date: string; status: string;
-  source: string; splitMode: string; deliveryFee: number;
+  source: string; splitMode: string; deliveryFee: number; deliveryFeeBearer: string;
   subscription: { type: string; value: number };
   cashback: { type: string; value: number };
   legacyLines: any[];
@@ -71,6 +71,7 @@ function mapOrder(raw: any): Order {
     source: raw.source || "—",
     splitMode: raw.splitMode || raw.split_mode || "—",
     deliveryFee: toNum(raw.deliveryFee ?? raw.delivery_fee),
+    deliveryFeeBearer: raw.deliveryFeeBearer ?? raw.delivery_fee_bearer ?? "client",
     subscription: raw.subscription || { type: "none", value: 0 },
     cashback: raw.cashback || { type: "none", value: 0 },
     legacyLines: parseJsonField(raw.lines),
@@ -111,7 +112,7 @@ export default function OrderDetails() {
 
   // Edit state
   const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ status: "", date: "", source: "", deliveryFee: "" });
+  const [editForm, setEditForm] = useState({ status: "", date: "", source: "", deliveryFee: "", deliveryFeeBearer: "client" });
   const [editLines, setEditLines] = useState<Array<OrderLine & { _qty: string; _sell: string; _cost: string }>>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [editNewItems, setEditNewItems] = useState<NewOrderItem[]>([]);
@@ -273,6 +274,7 @@ export default function OrderDetails() {
       date: order.date || "",
       source: order.source || "",
       deliveryFee: String(order.deliveryFee ?? ""),
+      deliveryFeeBearer: order.deliveryFeeBearer || "client",
     });
     setEditLines(lines.map(l => ({ ...l, _qty: String(l.quantity), _sell: String(l.sellingPrice), _cost: String(l.costPrice) })));
     setEditNewItems([]);
@@ -297,7 +299,7 @@ export default function OrderDetails() {
     if (!order) return;
     setEditSaving(true);
     try {
-      const beforeOrder = { status: order.status, date: order.date, source: order.source, deliveryFee: order.deliveryFee };
+      const beforeOrder = { status: order.status, date: order.date, source: order.source, deliveryFee: order.deliveryFee, deliveryFeeBearer: order.deliveryFeeBearer };
       const beforeLines = lines.map(l => ({ id: l.id, quantity: l.quantity, sellingPrice: l.sellingPrice, costPrice: l.costPrice, lineTotal: l.lineTotal, lineCost: l.lineCost }));
 
       const orderPatch: Record<string, any> = {};
@@ -306,6 +308,7 @@ export default function OrderDetails() {
       if (editForm.source !== (order.source || "")) orderPatch.source = editForm.source;
       const newFee = Number(editForm.deliveryFee) || 0;
       if (newFee !== (order.deliveryFee || 0)) orderPatch.deliveryFee = newFee;
+      if (editForm.deliveryFeeBearer !== (order.deliveryFeeBearer || "client")) orderPatch.deliveryFeeBearer = editForm.deliveryFeeBearer;
 
       let newTotalSelling = 0;
       let newTotalCost = 0;
@@ -524,7 +527,8 @@ export default function OrderDetails() {
 
   const snappedPct = (order.founderContributions[0] as any)?.companyProfitPercentage;
   const companyPct = snappedPct ?? order.companyProfitPercentage ?? rules.companyProfitPercentage ?? 15;
-  const qpFull = quickProfit({ orderTotal: operatingRevenue, totalCost: costTotal, paidValue: operatingRevenue, companyProfitPct: companyPct });
+  const delFeeDeduction = order.deliveryFeeBearer === "company" ? order.deliveryFee : 0;
+  const qpFull = quickProfit({ orderTotal: operatingRevenue, totalCost: costTotal, paidValue: operatingRevenue, companyProfitPct: companyPct, deliveryFeeDeduction: delFeeDeduction });
   const grossProfit = qpFull.expectedProfit;
   const companyProfit = Math.round(qpFull.companyProfit);
   const foundersProfit = Math.round(qpFull.foundersProfit);
@@ -633,6 +637,21 @@ export default function OrderDetails() {
                     <Label htmlFor="edit-fee">رسوم التوصيل</Label>
                     <Input id="edit-fee" type="number" min="0" value={editForm.deliveryFee} onChange={(e) => setEditForm(f => ({ ...f, deliveryFee: e.target.value }))} data-testid="input-edit-deliveryfee" />
                   </div>
+                  {(Number(editForm.deliveryFee) || 0) > 0 && (
+                    <div className="space-y-1.5">
+                      <Label>{t.deliveryFeeBearerLabel}</Label>
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <Checkbox checked={editForm.deliveryFeeBearer === "client"} onCheckedChange={() => setEditForm(f => ({ ...f, deliveryFeeBearer: "client" }))} />
+                          <span className="text-sm">{t.deliveryFeeBearerClient}</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <Checkbox checked={editForm.deliveryFeeBearer === "company"} onCheckedChange={() => setEditForm(f => ({ ...f, deliveryFeeBearer: "company" }))} />
+                          <span className="text-sm">{t.deliveryFeeBearerCompany}</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1200,7 +1219,7 @@ export default function OrderDetails() {
                     <div className="text-xs text-muted-foreground mb-1">الإجمالي المسجّل</div>
                     <div className="text-xl font-bold text-primary">{toNum(order.totalSelling).toLocaleString()} {t.currency}</div>
                     {order.deliveryFee > 0 && (
-                      <div className="text-xs text-muted-foreground mt-1">+ {order.deliveryFee.toLocaleString()} {t.currency} رسوم توصيل</div>
+                      <div className="text-xs text-muted-foreground mt-1">+ {order.deliveryFee.toLocaleString()} {t.currency} رسوم توصيل ({order.deliveryFeeBearer === "company" ? t.deliveryFeeBearerCompany : t.deliveryFeeBearerClient})</div>
                     )}
                   </div>
                 )}
@@ -1216,7 +1235,7 @@ export default function OrderDetails() {
                 </div>
                 {order.deliveryFee > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{t.deliveryFeeDisplay}</span>
+                    <span className="text-muted-foreground">{t.deliveryFeeDisplay} ({order.deliveryFeeBearer === "company" ? t.deliveryFeeBearerCompany : t.deliveryFeeBearerClient})</span>
                     <span className="font-medium">{order.deliveryFee.toLocaleString()} {t.currency}</span>
                   </div>
                 )}
