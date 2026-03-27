@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Users, TrendingUp, Wallet, Pencil, Plus, Loader2, Trash2, ChevronDown, ChevronUp,
   ExternalLink, ShoppingBag, Clock, AlertTriangle, Building2, ArrowDownLeft,
@@ -32,6 +31,7 @@ type FounderTx = {
 type Collection = {
   id: string; orderId: string; clientId: string; client: string; invoiceDate: string;
   status: string; totalAmount: number; paidAmount: number; outstanding: number;
+  sourceOrders: string[];
 };
 type Order = { id: string; totalSelling: any; totalCost: any; splitMode: string; founderContributions?: any[] };
 
@@ -40,8 +40,17 @@ function toNum(v: any): number {
   return typeof v === "number" ? v : Number(String(v).replace(/,/g, "")) || 0;
 }
 function mapCol(raw: any): Collection {
+  let notesMeta: any = {};
+  try {
+    const n = raw.notes || raw._notesObj;
+    notesMeta = typeof n === "object" ? (n || {}) : JSON.parse(n || "{}");
+  } catch {}
+  const primaryOrder = raw.orderId || raw.order_id || "";
+  const srcOrders: string[] = notesMeta.sourceOrders?.length > 0
+    ? notesMeta.sourceOrders
+    : (primaryOrder ? [primaryOrder] : []);
   return {
-    id: raw.id, orderId: raw.orderId || raw.order_id || "",
+    id: raw.id, orderId: primaryOrder,
     clientId: raw.clientId || raw.client_id || "",
     client: raw.client || raw.clientName || raw.client_name || "",
     invoiceDate: raw.invoiceDate || raw.invoice_date || raw.createdAt || "",
@@ -49,6 +58,7 @@ function mapCol(raw: any): Collection {
     totalAmount: toNum(raw.totalAmount ?? raw.total_amount),
     paidAmount: toNum(raw.paidAmount ?? raw.paid_amount),
     outstanding: toNum(raw.outstanding),
+    sourceOrders: srcOrders,
   };
 }
 
@@ -130,51 +140,70 @@ export default function FoundersPage() {
   // ── Calculate profit AND capital distributions per founder from collections ──
   const { profitsByFounder, capitalByFounder } = useMemo(() => {
     const profitMap: Record<string, Array<{
-      collectionId: string; orderId: string; clientName: string; date: string;
+      collectionId: string; orderIds: string[]; clientName: string; date: string;
       paidAmount: number; founderShare: number; paidRatio: number; alreadyRegistered: boolean;
     }>> = {};
     const capitalMap: Record<string, Array<{
-      collectionId: string; orderId: string; clientName: string; date: string;
+      collectionId: string; orderIds: string[]; clientName: string; date: string;
       paidAmount: number; capitalShare: number;
     }>> = {};
 
     collections.forEach(col => {
-      const order = col.orderId ? orders[col.orderId] : null;
-      if (!col.orderId || !order || col.paidAmount <= 0) return;
-
-      const totalSelling = toNum(order.totalSelling ?? (order as any).total_selling);
-      const totalCost = toNum(order.totalCost ?? (order as any).total_cost);
-      if (totalSelling <= 0) return;
+      if (col.paidAmount <= 0) return;
+      const srcOrders = col.sourceOrders.filter(oid => orders[oid]);
+      if (srcOrders.length === 0) return;
 
       const companyPct = rules.companyProfitPercentage ?? 40;
-      const contribs = Array.isArray(order.founderContributions) ? order.founderContributions : [];
-      const splitMode = ((order as any).splitMode || (order as any).split_mode || "equal");
-      const isWeighted = splitMode.includes("مساهمة") || splitMode.toLowerCase().includes("contribution");
 
-      const qp = quickProfit({ orderTotal: totalSelling, totalCost, paidValue: col.paidAmount, companyProfitPct: companyPct });
-      const paidRatio = Math.min(col.paidAmount / totalSelling, 1);
-      const capitalReturn = Math.round(qp.recoveredCapital);
-      const foundersProfit = qp.foundersProfit;
-      const splits = founderSplit(foundersProfit, capitalReturn, contribs, isWeighted ? "weighted" : "equal");
+      let allSelling = 0;
+      srcOrders.forEach(oid => { allSelling += toNum(orders[oid].totalSelling ?? (orders[oid] as any).total_selling); });
+      if (allSelling <= 0) return;
+
+      let totalFoundersProfit = 0;
+      let totalCapitalReturn = 0;
+      const allSplits: Array<{ id: string; name: string; profit: number; capitalShare: number }> = [];
+
+      srcOrders.forEach(oid => {
+        const order = orders[oid];
+        const oSelling = toNum(order.totalSelling ?? (order as any).total_selling);
+        const oCost = toNum(order.totalCost ?? (order as any).total_cost);
+        const share = allSelling > 0 ? oSelling / allSelling : 1 / srcOrders.length;
+        const oPaid = col.paidAmount * share;
+
+        const contribs = Array.isArray(order.founderContributions) ? order.founderContributions : [];
+        const splitMode = ((order as any).splitMode || (order as any).split_mode || "equal");
+        const isWeighted = splitMode.includes("مساهمة") || splitMode.toLowerCase().includes("contribution");
+
+        const qp = quickProfit({ orderTotal: oSelling, totalCost: oCost, paidValue: oPaid, companyProfitPct: companyPct });
+        const capitalReturn = Math.round(qp.recoveredCapital);
+        totalFoundersProfit += qp.foundersProfit;
+        totalCapitalReturn += capitalReturn;
+
+        const splits = founderSplit(qp.foundersProfit, capitalReturn, contribs, isWeighted ? "weighted" : "equal");
+        splits.forEach(s => {
+          const existing = allSplits.find(e => e.id === s.id);
+          if (existing) { existing.profit += s.profit; existing.capitalShare += s.capitalShare; }
+          else allSplits.push({ ...s });
+        });
+      });
+
+      const paidRatio = Math.min(col.paidAmount / allSelling, 1);
 
       founders.forEach(f => {
         if (!profitMap[f.id]) profitMap[f.id] = [];
         if (!capitalMap[f.id]) capitalMap[f.id] = [];
 
-        if (qp.expectedProfit > 0) {
+        if (totalFoundersProfit > 0) {
           let founderShare = 0;
-          if (contribs.length > 0) {
-            const match = splits.find(s => s.id === f.id || s.name === f.name);
-            if (match) founderShare = match.profit;
-          } else {
-            founderShare = foundersProfit / (founders.length || 1);
-          }
+          const match = allSplits.find(s => s.id === f.id || s.name === f.name);
+          if (match) founderShare = match.profit;
+          else if (allSplits.length === 0) founderShare = totalFoundersProfit / (founders.length || 1);
           if (founderShare > 0) {
             const alreadyRegistered = founderTxs.some(
               tx => tx.type === "capital_return" && tx.founderId === f.id && tx.collectionId === col.id
             );
             profitMap[f.id].push({
-              collectionId: col.id, orderId: col.orderId, clientName: col.client,
+              collectionId: col.id, orderIds: srcOrders, clientName: col.client,
               date: col.invoiceDate.split("T")[0],
               paidAmount: col.paidAmount, founderShare: Math.round(founderShare),
               paidRatio, alreadyRegistered,
@@ -182,17 +211,14 @@ export default function FoundersPage() {
           }
         }
 
-        if (capitalReturn > 0) {
+        if (totalCapitalReturn > 0) {
           let founderCapShare = 0;
-          if (contribs.length > 0) {
-            const match = splits.find(s => s.id === f.id || s.name === f.name);
-            if (match) founderCapShare = match.capitalShare;
-          } else {
-            founderCapShare = capitalReturn / (founders.length || 1);
-          }
+          const match = allSplits.find(s => s.id === f.id || s.name === f.name);
+          if (match) founderCapShare = match.capitalShare;
+          else if (allSplits.length === 0) founderCapShare = totalCapitalReturn / (founders.length || 1);
           if (founderCapShare > 0) {
             capitalMap[f.id].push({
-              collectionId: col.id, orderId: col.orderId, clientName: col.client,
+              collectionId: col.id, orderIds: srcOrders, clientName: col.client,
               date: col.invoiceDate.split("T")[0],
               paidAmount: col.paidAmount, capitalShare: Math.round(founderCapShare),
             });
@@ -482,7 +508,7 @@ export default function FoundersPage() {
                         {[...contributions, ...fundings, ...withdrawals].length === 0 ? (
                           <div className="py-10 text-center text-sm text-muted-foreground">لا توجد معاملات بعد</div>
                         ) : (
-                          <ScrollArea className="max-h-72">
+                          <div className="max-h-[500px] overflow-y-auto">
                             <div className="divide-y divide-border/50">
                               {[...contributions, ...fundings, ...withdrawals]
                                 .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime())
@@ -521,7 +547,7 @@ export default function FoundersPage() {
                                   </div>
                                 ))}
                             </div>
-                          </ScrollArea>
+                          </div>
                         )}
                         <div className="flex items-center justify-between px-5 py-2.5 bg-muted/20 border-t border-border text-xs text-muted-foreground">
                           <span>إجمالي المساهمات والتمويل</span>
@@ -540,7 +566,7 @@ export default function FoundersPage() {
                             <p className="text-xs mt-1">تظهر الأرباح تلقائياً من بيانات التحصيلات</p>
                           </div>
                         ) : (
-                          <ScrollArea className="max-h-80">
+                          <div className="max-h-[500px] overflow-y-auto">
                             <div className="divide-y divide-border/50">
                               {myProfits.map((p, idx) => (
                                 <div key={idx} className="px-5 py-3 hover:bg-muted/20 transition-colors">
@@ -555,12 +581,12 @@ export default function FoundersPage() {
                                           onClick={() => navigate(`/collections?search=${p.collectionId}`)}>
                                           {p.collectionId} <ExternalLink className="h-2.5 w-2.5" />
                                         </button>
-                                        {p.orderId && (
-                                          <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                            onClick={() => navigate(`/orders/${p.orderId}`)}>
-                                            {p.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                        {p.orderIds.map(oid => (
+                                          <button key={oid} className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                            onClick={() => navigate(`/orders/${oid}`)}>
+                                            {oid} <ExternalLink className="h-2.5 w-2.5" />
                                           </button>
-                                        )}
+                                        ))}
                                       </div>
                                       <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
                                         <span><Clock className="h-3 w-3 inline ml-0.5" />{p.date}</span>
@@ -578,7 +604,7 @@ export default function FoundersPage() {
                                 </div>
                               ))}
                             </div>
-                          </ScrollArea>
+                          </div>
                         )}
                         <div className="flex items-center justify-between px-5 py-2.5 bg-muted/20 border-t border-border text-xs text-muted-foreground">
                           <span>إجمالي الأرباح المحصّلة</span>
@@ -626,9 +652,8 @@ export default function FoundersPage() {
                             <p className="text-xs mt-1">سيظهر رأس المال تلقائياً عند تسجيل تحصيلات على الأوردرات</p>
                           </div>
                         ) : (
-                          <ScrollArea className="max-h-72">
+                          <div className="max-h-[500px] overflow-y-auto">
                             <div className="divide-y divide-border/50">
-                              {/* Auto capital entries from collections */}
                               {myCapital
                                 .sort((a, b) => b.date.localeCompare(a.date))
                                 .map(entry => (
@@ -643,12 +668,12 @@ export default function FoundersPage() {
                                           onClick={() => navigate(`/collections?search=${entry.collectionId}`)}>
                                           {entry.collectionId} <ExternalLink className="h-2.5 w-2.5" />
                                         </button>
-                                        {entry.orderId && (
-                                          <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                            onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                            {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                        {entry.orderIds.map(oid => (
+                                          <button key={oid} className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                            onClick={() => navigate(`/orders/${oid}`)}>
+                                            {oid} <ExternalLink className="h-2.5 w-2.5" />
                                           </button>
-                                        )}
+                                        ))}
                                         {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
                                       </div>
                                       <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
@@ -709,7 +734,7 @@ export default function FoundersPage() {
                                   </div>
                                 ))}
                             </div>
-                          </ScrollArea>
+                          </div>
                         )}
                       </>
                     )}
