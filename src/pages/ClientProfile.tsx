@@ -28,6 +28,7 @@ type InventoryLot = {
   id: string; material: string; code: string; unit: string;
   delivered: number; remaining: number; sellingPrice: number;
   deliveryDate: string; expiry: string; sourceOrder: string; status: string;
+  imageUrl: string;
 };
 
 function mapClient(raw: any): Client {
@@ -80,7 +81,8 @@ export default function ClientProfile() {
       api.get<any[]>("/clients"),
       api.get<any[]>("/orders"),
       api.get<any[]>(`/client-inventory?clientId=${id}`).catch(() => []),
-    ]).then(([clientsData, ordersData, invData]) => {
+      api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] })),
+    ]).then(([clientsData, ordersData, invData, extData]) => {
       const found = (clientsData || []).find((c: any) => c.id === id);
       if (found) {
         const c = mapClient(found);
@@ -91,6 +93,12 @@ export default function ClientProfile() {
         .filter((o: any) => (o.clientId || o.client_id) === id)
         .map(mapOrder);
       setOrders(clientOrders);
+      // Build image map: code → imageUrl
+      const imgMap: Record<string, string> = {};
+      (extData?.products || []).forEach((p: any) => {
+        const key = p.sku || "";
+        if (key) imgMap[key] = p.image_url || "";
+      });
       setInventory((invData || []).map((r: any) => ({
         id: r.id,
         material: r.material || "",
@@ -103,6 +111,7 @@ export default function ClientProfile() {
         expiry: r.expiry || "",
         sourceOrder: r.sourceOrder || r.source_order || "",
         status: r.status || "In Stock",
+        imageUrl: imgMap[r.code || ""] || "",
       })));
     }).catch(() => toast.error(t.failedToLoadClientData))
       .finally(() => setLoading(false));
@@ -258,7 +267,16 @@ export default function ClientProfile() {
                   <tbody>
                     {inventory.map((lot) => (
                       <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                        <td className="py-2.5 px-3 font-medium">{lot.material}</td>
+                        <td className="py-2.5 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-md border border-border overflow-hidden bg-muted/50 flex-shrink-0 flex items-center justify-center">
+                              {lot.imageUrl
+                                ? <img src={lot.imageUrl} alt={lot.material} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                : <Package className="h-4 w-4 text-muted-foreground" />}
+                            </div>
+                            <span className="font-medium">{lot.material}</span>
+                          </div>
+                        </td>
                         <td className="py-2.5 px-3 font-mono text-xs text-muted-foreground">{lot.code}</td>
                         <td className="py-2.5 px-3">
                           <span
