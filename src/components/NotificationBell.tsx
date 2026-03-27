@@ -47,6 +47,10 @@ export function NotificationBell() {
 
   useEffect(() => {
     api.get<Alert[]>("/alerts").then(data => setAlerts(data || [])).catch(() => {});
+    const interval = setInterval(() => {
+      api.get<Alert[]>("/alerts").then(data => setAlerts(data || [])).catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {

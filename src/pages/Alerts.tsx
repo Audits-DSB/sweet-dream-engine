@@ -77,7 +77,13 @@ export default function AlertsPage() {
     }
   };
 
-  useEffect(() => { loadAlerts(); }, []);
+  useEffect(() => {
+    loadAlerts();
+    const interval = setInterval(() => {
+      api.get<Alert[]>("/alerts").then(data => setRawAlerts(data || [])).catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const alerts = useMemo(() =>
     rawAlerts.map(a => ({ ...a, dismissed: dismissed.has(a.id) })),
