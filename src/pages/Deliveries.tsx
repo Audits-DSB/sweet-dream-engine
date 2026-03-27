@@ -5,7 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Eye, MoreHorizontal, Truck, Plus, Loader2, Trash2, X } from "lucide-react";
+import { Eye, MoreHorizontal, Truck, Plus, Loader2, Trash2, X, Package } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
@@ -13,6 +13,7 @@ import { logAudit } from "@/lib/auditLog";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -75,6 +76,33 @@ export default function DeliveriesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Delivery | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  type OrderLine = { id: string; materialCode: string; materialName: string; quantity: number; unit: string; imageUrl?: string };
+  const [orderLines, setOrderLines] = useState<OrderLine[]>([]);
+  const [loadingLines, setLoadingLines] = useState(false);
+  const [partialItems, setPartialItems] = useState<Record<string, { selected: boolean; qty: number }>>({});
+
+  useEffect(() => {
+    if (!selectedOrder || deliveryType !== "partial") { setOrderLines([]); setPartialItems({}); return; }
+    let cancelled = false;
+    setLoadingLines(true);
+    setOrderLines([]);
+    setPartialItems({});
+    api.get<any[]>(`/orders/${selectedOrder}/lines`).then(lines => {
+      if (cancelled) return;
+      const mapped = (lines || []).filter((l: any) => (Number(l.quantity) || 0) > 0).map((l: any) => ({
+        id: l.id, materialCode: l.materialCode || l.material_code || "",
+        materialName: l.materialName || l.material_name || l.name || "",
+        quantity: Number(l.quantity) || 0, unit: l.unit || "",
+        imageUrl: l.imageUrl || l.image_url || "",
+      }));
+      setOrderLines(mapped);
+      const init: Record<string, { selected: boolean; qty: number }> = {};
+      mapped.forEach(l => { init[l.id] = { selected: false, qty: l.quantity }; });
+      setPartialItems(init);
+    }).catch(() => { if (!cancelled) { setOrderLines([]); setPartialItems({}); } }).finally(() => { if (!cancelled) setLoadingLines(false); });
+    return () => { cancelled = true; };
+  }, [selectedOrder, deliveryType]);
+
   useEffect(() => {
     Promise.all([
       api.get<any[]>("/deliveries"),
@@ -127,18 +155,38 @@ export default function DeliveriesPage() {
     if (!selectedOrder) { toast.error(t.pleaseSelectOrder); return; }
     const order = orders.find(o => o.id === selectedOrder);
     if (!order) return;
+
+    if (deliveryType === "partial") {
+      const selectedLines = Object.entries(partialItems).filter(([, v]) => v.selected && v.qty > 0);
+      if (selectedLines.length === 0) { toast.error("اختر مادة واحدة على الأقل للتسليم الجزئي"); return; }
+    }
+
     setSaving(true);
     const today = requestedDate || new Date().toISOString().split("T")[0];
     const typeLabel = deliveryType === "full" ? (t.full || "كامل") : (t.partialType || "جزئي");
     const newId = `DEL-${Date.now().toString().slice(-6)}`;
     const actorName = selectedActor === "__other__" ? (customActor.trim() || "") : (selectedActor || "");
 
-    // Fetch order lines count to populate items field
     let itemsCount = 0;
-    try {
-      const lines = await api.get<any[]>(`/orders/${order.id}/lines`);
-      itemsCount = (lines || []).length;
-    } catch { /* fallback to 0 */ }
+    let notesPayload = typeLabel;
+
+    if (deliveryType === "partial") {
+      const lineIds = new Set(orderLines.map(l => l.id));
+      const selectedLines = Object.entries(partialItems)
+        .filter(([lineId, v]) => v.selected && v.qty > 0 && lineIds.has(lineId))
+        .map(([lineId, v]) => {
+          const line = orderLines.find(l => l.id === lineId)!;
+          const qty = Math.min(v.qty, line.quantity);
+          return { lineId, materialCode: line.materialCode, materialName: line.materialName, qty, unit: line.unit };
+        });
+      itemsCount = selectedLines.length;
+      notesPayload = JSON.stringify({ type: "جزئي", items: selectedLines });
+    } else {
+      try {
+        const lines = await api.get<any[]>(`/orders/${order.id}/lines`);
+        itemsCount = (lines || []).length;
+      } catch {}
+    }
 
     const payload = {
       id: newId,
@@ -147,7 +195,7 @@ export default function DeliveriesPage() {
       scheduledDate: today,
       deliveredBy: actorName,
       items: itemsCount,
-      notes: typeLabel,
+      notes: notesPayload,
       deliveryFee: order.deliveryFee || 0,
       status: "Pending",
     };
@@ -156,7 +204,7 @@ export default function DeliveriesPage() {
       await logAudit({ entity: "delivery", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${order.client || order.id}`, action: "create", snapshot: saved, endpoint: "/deliveries" });
       setDeliveries([mapDelivery(saved), ...deliveries]);
       sendNotification(t.newDelivery || "تسليم جديد", `${newId} - ${order.client}`, "info");
-      setSelectedOrder(""); setSelectedActor(""); setCustomActor(""); setDeliveryType("full"); setRequestedDate("");
+      setSelectedOrder(""); setSelectedActor(""); setCustomActor(""); setDeliveryType("full"); setRequestedDate(""); setOrderLines([]); setPartialItems({});
       setDialogOpen(false);
       toast.success(t.deliveryCreated || "تم إنشاء التسليم");
     } catch {
@@ -251,7 +299,7 @@ export default function DeliveriesPage() {
                 <td className="py-3 px-3 text-muted-foreground text-xs">{del.requestedDate}</td>
                 <td className="py-3 px-3 text-xs">{del.actualDate}</td>
                 <td className="py-3 px-3 text-muted-foreground">{del.actor}</td>
-                <td className="py-3 px-3"><span className="text-xs bg-muted px-2 py-0.5 rounded">{del.type}</span></td>
+                <td className="py-3 px-3"><span className="text-xs bg-muted px-2 py-0.5 rounded">{(() => { try { const p = JSON.parse(del.type); return p.type || del.type; } catch { return del.type; } })()}</span></td>
                 <td className="py-3 px-3"><StatusBadge status={del.status} variant={statusVariant[del.status] as any} /></td>
                 <td className="py-3 px-3 text-end" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
@@ -290,25 +338,49 @@ export default function DeliveriesPage() {
       <Dialog open={!!detailItem} onOpenChange={() => setDetailItem(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{detailItem?.id} — {detailItem?.client}</DialogTitle></DialogHeader>
-          {detailItem && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setDetailItem(null); navigate(`/orders/${detailItem.orderId}`); }}>
-                  <p className="text-xs text-muted-foreground">{t.order}</p><p className="font-semibold text-primary">{detailItem.orderId}</p>
+          {detailItem && (() => {
+            let parsedItems: any[] = [];
+            let typeLabel = detailItem.type;
+            try {
+              const parsed = JSON.parse(detailItem.type);
+              if (parsed.type && Array.isArray(parsed.items)) { parsedItems = parsed.items; typeLabel = parsed.type; }
+            } catch {}
+            return (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setDetailItem(null); navigate(`/orders/${detailItem.orderId}`); }}>
+                    <p className="text-xs text-muted-foreground">{t.order}</p><p className="font-semibold text-primary">{detailItem.orderId}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.executor}</p><p className="font-semibold">{detailItem.actor}</p></div>
+                  <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.requestedDate}</p><p className="font-semibold">{detailItem.requestedDate}</p></div>
+                  <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.actualDate}</p><p className="font-semibold">{detailItem.actualDate}</p></div>
+                  <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.type}</p><p className="font-semibold">{typeLabel}</p></div>
+                  <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.status}</p><StatusBadge status={detailItem.status} variant={statusVariant[detailItem.status] as any} /></div>
                 </div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.executor}</p><p className="font-semibold">{detailItem.actor}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.requestedDate}</p><p className="font-semibold">{detailItem.requestedDate}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.actualDate}</p><p className="font-semibold">{detailItem.actualDate}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.type}</p><p className="font-semibold">{detailItem.type}</p></div>
-                <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.status}</p><StatusBadge status={detailItem.status} variant={statusVariant[detailItem.status] as any} /></div>
+                {parsedItems.length > 0 && (
+                  <div>
+                    <Label className="text-xs flex items-center gap-1.5 mb-2"><Package className="h-3.5 w-3.5" /> المواد المشمولة في التسليم</Label>
+                    <div className="border rounded-lg divide-y">
+                      {parsedItems.map((item: any, idx: number) => (
+                        <div key={idx} className="flex items-center gap-3 px-3 py-2 text-sm">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{item.materialName}</p>
+                            <p className="text-xs text-muted-foreground">{item.materialCode} · {item.unit}</p>
+                          </div>
+                          <span className="text-sm font-bold text-primary">{item.qty}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {detailItem.status !== "Delivered" && (
+                  <Button className="w-full" onClick={() => { confirmDelivery(detailItem); setDetailItem(null); }}>
+                    <Truck className="h-4 w-4 ltr:mr-2 rtl:ml-2" />{t.confirmDelivery}
+                  </Button>
+                )}
               </div>
-              {detailItem.status !== "Delivered" && (
-                <Button className="w-full" onClick={() => { confirmDelivery(detailItem); setDetailItem(null); }}>
-                  <Truck className="h-4 w-4 ltr:mr-2 rtl:ml-2" />{t.confirmDelivery}
-                </Button>
-              )}
-            </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
@@ -355,7 +427,56 @@ export default function DeliveriesPage() {
               </div>
               <div><Label className="text-xs">{t.dateLabel}</Label><Input className="h-9 mt-1" type="date" value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} /></div>
             </div>
-            <Button className="w-full" onClick={handleAdd} disabled={saving}>
+
+            {deliveryType === "partial" && selectedOrder && (
+              <div className="space-y-2">
+                <Label className="text-xs flex items-center gap-1.5"><Package className="h-3.5 w-3.5" /> اختر المواد للتسليم</Label>
+                {loadingLines ? (
+                  <div className="flex items-center justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                ) : orderLines.length === 0 ? (
+                  <div className="text-center py-3 text-xs text-muted-foreground">لا توجد مواد في هذا الطلب</div>
+                ) : (
+                  <div className="border rounded-lg divide-y max-h-48 overflow-y-auto">
+                    {orderLines.map(line => {
+                      const item = partialItems[line.id] || { selected: false, qty: line.quantity };
+                      return (
+                        <div key={line.id} className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${item.selected ? "bg-primary/5" : "hover:bg-muted/30"}`}>
+                          <Checkbox
+                            checked={item.selected}
+                            onCheckedChange={(checked) => setPartialItems(prev => ({ ...prev, [line.id]: { ...prev[line.id], selected: !!checked } }))}
+                          />
+                          {line.imageUrl && <img src={line.imageUrl} alt="" className="h-8 w-8 rounded object-cover flex-shrink-0" />}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{line.materialName}</p>
+                            <p className="text-xs text-muted-foreground">{line.materialCode} · {line.unit}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <Input
+                              type="number" min={1} max={line.quantity}
+                              className="h-7 w-16 text-center text-xs"
+                              value={item.qty}
+                              disabled={!item.selected}
+                              onChange={(e) => {
+                                const v = Math.min(Math.max(1, Number(e.target.value) || 1), line.quantity);
+                                setPartialItems(prev => ({ ...prev, [line.id]: { ...prev[line.id], qty: v } }));
+                              }}
+                            />
+                            <span className="text-xs text-muted-foreground">/ {line.quantity}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {orderLines.length > 0 && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    {Object.values(partialItems).filter(v => v.selected).length} من {orderLines.length} مادة مختارة
+                  </p>
+                )}
+              </div>
+            )}
+
+            <Button className="w-full" onClick={handleAdd} disabled={saving || (deliveryType === "partial" && loadingLines)}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (t.createDelivery || "إنشاء التسليم")}
             </Button>
           </div>
