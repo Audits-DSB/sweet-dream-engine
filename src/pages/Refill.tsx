@@ -7,8 +7,9 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Package, ShoppingCart, AlertTriangle, TrendingDown, Users, Package2, CheckCircle2, Loader2 } from "lucide-react";
+import { Package, ShoppingCart, AlertTriangle, TrendingDown, Users, Package2, CheckCircle2, Loader2, ClipboardCheck } from "lucide-react";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 
 type InventoryLot = {
   id: string;
@@ -23,6 +24,20 @@ type InventoryLot = {
   safetyStock: number;
   status: string;
   shortageQty: number;
+  imageUrl?: string;
+  sourceOrder?: string;
+};
+
+type AuditRecord = {
+  id: string;
+  clientId?: string;
+  client_id?: string;
+  orderId?: string;
+  order_id?: string;
+  status: string;
+  date?: string;
+  createdAt?: string;
+  created_at?: string;
 };
 
 type RefillItem = {
@@ -41,6 +56,10 @@ type RefillItem = {
   suggestedQty: number;
   priority: "Critical" | "Urgent" | "Normal" | "OK";
   fromAudit: boolean;
+  imageUrl?: string;
+  sourceOrder?: string;
+  auditStatus?: string;
+  auditId?: string;
 };
 
 function computePriority(coverageWeeks: number, leadTimeWeeks: number): "Critical" | "Urgent" | "Normal" | "OK" {
@@ -78,6 +97,12 @@ export default function RefillPage() {
 
   const { data: rawLots = [], isLoading } = useQuery<InventoryLot[]>({
     queryKey: ["/api/client-inventory"],
+    queryFn: () => api.get<InventoryLot[]>("/client-inventory"),
+  });
+
+  const { data: rawAudits = [] } = useQuery<AuditRecord[]>({
+    queryKey: ["/api/audits"],
+    queryFn: () => api.get<AuditRecord[]>("/audits").catch(() => []),
   });
 
   const lots: InventoryLot[] = rawLots.map(l => ({
@@ -88,6 +113,15 @@ export default function RefillPage() {
     safetyStock: Number(l.safetyStock),
     shortageQty: Number((l as any).shortageQty || 0),
   }));
+
+  const auditsByOrder = useMemo(() => {
+    const map: Record<string, AuditRecord> = {};
+    for (const a of rawAudits) {
+      const oid = a.orderId || a.order_id || "";
+      if (oid && (!map[oid] || a.status === "Completed")) map[oid] = a;
+    }
+    return map;
+  }, [rawAudits]);
 
   // Compute refill items from client inventory
   const refillItems: RefillItem[] = useMemo(() => {
@@ -116,6 +150,8 @@ export default function RefillPage() {
           suggestedQty = Math.ceil(l.avgWeeklyUsage * (l.leadTimeWeeks * 3) - l.remaining + l.safetyStock);
         }
 
+        const audit = l.sourceOrder ? auditsByOrder[l.sourceOrder] : undefined;
+
         return {
           id: l.id,
           client: l.clientName,
@@ -132,9 +168,13 @@ export default function RefillPage() {
           suggestedQty: Math.max(0, suggestedQty),
           priority,
           fromAudit,
+          imageUrl: l.imageUrl,
+          sourceOrder: l.sourceOrder,
+          auditStatus: audit?.status,
+          auditId: audit?.id,
         };
       });
-  }, [lots]);
+  }, [lots, auditsByOrder]);
 
   useEffect(() => {
     const f = searchParams.get("filter");
@@ -336,20 +376,30 @@ export default function RefillPage() {
                 <thead>
                   <tr className="border-b border-border">
                     <th className="py-3 px-3 w-10"><input type="checkbox" className="rounded" onChange={(e) => e.target.checked ? selectAllNeedRefill() : setSelected(new Set())} /></th>
+                    <th className="py-3 px-3 w-14"></th>
                     {groupBy === "material" && <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>}
                     {groupBy === "client" && <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>}
+                    <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">الطلب</th>
                     <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.currentStock}</th>
                     <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.avgPerWeek}</th>
                     <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.coverage}</th>
                     <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.reorderPoint}</th>
                     <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.suggestedQty}</th>
                     <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.priority}</th>
+                    <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">الجرد</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((r) => (
                     <tr key={r.id} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${selected.has(r.id) ? "bg-primary/5" : ""} ${r.fromAudit ? "bg-amber-50/40 dark:bg-amber-950/10" : ""}`}>
                       <td className="py-3 px-3">{r.suggestedQty > 0 && <input type="checkbox" className="rounded" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} />}</td>
+                      <td className="py-2 px-3">
+                        {r.imageUrl ? (
+                          <img src={r.imageUrl} alt={r.material} className="h-10 w-10 rounded-lg object-contain bg-white border border-border shadow-sm p-0.5" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        ) : (
+                          <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center border border-border"><Package className="h-4 w-4 text-muted-foreground" /></div>
+                        )}
+                      </td>
                       {groupBy === "material" && (
                         <td className="py-3 px-3 font-medium hover:text-primary cursor-pointer" onClick={() => navigate(`/clients/${r.clientId}`)}>
                           {r.client}
@@ -362,6 +412,11 @@ export default function RefillPage() {
                           {r.fromAudit && <span className="ms-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">جرد</span>}
                         </td>
                       )}
+                      <td className="py-3 px-3">
+                        {r.sourceOrder ? (
+                          <button className="font-mono text-[11px] text-primary hover:text-primary/80 hover:underline bg-primary/5 px-1.5 py-0.5 rounded" onClick={() => navigate(`/orders/${r.sourceOrder}`)}>{r.sourceOrder}</button>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </td>
                       <td className="py-3 px-3 text-end font-medium">{r.currentStock}</td>
                       <td className="py-3 px-3 text-end text-muted-foreground">{r.avgWeeklyUsage > 0 ? r.avgWeeklyUsage : "—"}</td>
                       <td className="py-3 px-3 text-end">
@@ -381,6 +436,17 @@ export default function RefillPage() {
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${priorityStyles[r.priority]}`}>
                           {priorityLabel(r.priority)}
                         </span>
+                      </td>
+                      <td className="py-3 px-3">
+                        {r.auditId ? (
+                          <button
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium cursor-pointer hover:opacity-80 transition-opacity ${r.auditStatus === "Completed" ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" : r.auditStatus === "Discrepancy" ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"}`}
+                            onClick={() => navigate("/audits")}
+                          >
+                            <ClipboardCheck className="h-3 w-3" />
+                            {r.auditStatus === "Completed" ? "مكتمل" : r.auditStatus === "Discrepancy" ? "تباين" : r.auditStatus === "In Progress" ? "جاري" : "مجدول"}
+                          </button>
+                        ) : <span className="text-muted-foreground text-xs">—</span>}
                       </td>
                     </tr>
                   ))}
