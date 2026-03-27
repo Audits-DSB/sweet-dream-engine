@@ -4,7 +4,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { quickProfit } from "@/lib/orderProfit";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, CreditCard, ChevronLeft, Plus, Trash2, Search } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, ClipboardCheck, CreditCard, ChevronLeft, Plus, Trash2, Search } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -868,7 +868,7 @@ export default function OrderDetails() {
               {orderInventory.length > 0 && (
                 <div className="rounded-lg border bg-muted/20 overflow-hidden">
                   <div className="px-3 py-2 bg-muted/40 border-b flex items-center gap-2 text-xs font-medium">
-                    <Package className="h-3.5 w-3.5 text-green-600" /> سجلات الجرد ({orderInventory.length})
+                    <Package className="h-3.5 w-3.5 text-emerald-600" /> مخزون العميل ({orderInventory.length})
                   </div>
                   <div className="divide-y">
                     {orderInventory.map((inv: any) => (
@@ -884,6 +884,50 @@ export default function OrderDetails() {
                   </div>
                 </div>
               )}
+
+              {/* Audit records */}
+              {(() => {
+                const completedAudits = orderAudits.filter((a: any) => a.status === "Completed");
+                const pendingAudits = orderAudits.filter((a: any) => a.status !== "Completed");
+                const hasAnyAudit = orderAudits.length > 0;
+
+                return (
+                  <div className="rounded-lg border overflow-hidden" style={{ borderColor: hasAnyAudit ? (completedAudits.length > 0 ? 'var(--color-green-200)' : 'var(--color-blue-200)') : 'var(--color-border)' }}>
+                    <div className={`px-3 py-2 border-b flex items-center gap-2 text-xs font-medium ${completedAudits.length > 0 ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800' : hasAnyAudit ? 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800' : 'bg-muted/40 border-border'}`}>
+                      <ClipboardCheck className={`h-3.5 w-3.5 ${completedAudits.length > 0 ? 'text-green-600' : hasAnyAudit ? 'text-blue-600' : 'text-muted-foreground'}`} />
+                      سجلات الجرد
+                      {hasAnyAudit && (
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${completedAudits.length > 0 ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400' : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400'}`}>
+                          {completedAudits.length > 0 ? `${completedAudits.length} مكتمل` : `${pendingAudits.length} قيد التنفيذ`}
+                        </span>
+                      )}
+                    </div>
+                    {hasAnyAudit ? (
+                      <div className="divide-y">
+                        {orderAudits.map((a: any) => (
+                          <button key={a.id} className="flex items-center gap-3 px-3 py-2.5 text-xs w-full text-start hover:bg-muted/30 transition-colors" onClick={() => navigate("/audits")}>
+                            <span className="font-mono text-muted-foreground">{a.id}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${a.status === "Completed" ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" : a.status === "Discrepancy" ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" : a.status === "In Progress" ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400" : "bg-muted text-muted-foreground"}`}>
+                              {a.status === "Completed" ? "مكتمل" : a.status === "Discrepancy" ? "تباين" : a.status === "In Progress" ? "جاري" : "مجدول"}
+                            </span>
+                            <span className="text-muted-foreground">{a.date || a.createdAt || a.created_at || ""}</span>
+                            <span className="text-muted-foreground">{a.auditor || ""}</span>
+                            <span className="mr-auto" />
+                            <ChevronLeft className="h-3 w-3 text-muted-foreground" />
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="px-3 py-3 flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">لم يتم إجراء جرد لهذا الطلب بعد</span>
+                        <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={() => navigate("/audits")}>
+                          <ClipboardCheck className="h-3 w-3" /> جدولة جرد
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Collection records */}
               {orderCollections.length > 0 && (
