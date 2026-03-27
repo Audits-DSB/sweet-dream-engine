@@ -768,7 +768,7 @@ router.get("/founder-balances", async (_req, res) => {
       supabaseAdmin.from("founders").select("id,name"),
       supabaseAdmin.from("treasury_transactions").select("*").in("tx_type", FOUNDER_TX_TYPES),
       supabaseAdmin.from("collections").select("id,order_id,paid_amount,total_amount,notes"),
-      supabaseAdmin.from("orders").select("id,total_selling,total_cost,founder_contributions,company_profit_percentage"),
+      supabaseAdmin.from("orders").select("*"),
     ]);
     const fList = (founders || []) as { id: string; name: string }[];
     const txList = (txData || []) as any[];
@@ -789,15 +789,15 @@ router.get("/founder-balances", async (_req, res) => {
       const totalSelling = Number(order.total_selling ?? 0);
       const totalCost = Number(order.total_cost ?? 0);
       if (totalSelling <= 0 || paid <= 0) return;
-      const rawPct = order.company_profit_percentage;
-      const companyPct = rawPct != null ? (Number(rawPct) >= 2 ? Number(rawPct) : Number(rawPct) * 100) : 40;
-      const qp = quickProfit({ orderTotal: totalSelling, totalCost, paidValue: paid, companyProfitPct: companyPct });
-      const capitalReturn = Math.round(qp.recoveredCapital);
-      const foundersProfit = qp.foundersProfit;
       let contribs: any[] = [];
       const rawC = order.founder_contributions;
       if (Array.isArray(rawC)) contribs = rawC;
       else if (typeof rawC === "string") { try { contribs = JSON.parse(rawC); } catch { contribs = []; } }
+      const rawPct = contribs[0]?.companyProfitPercentage ?? order.company_profit_percentage;
+      const companyPct = rawPct != null ? (Number(rawPct) >= 2 ? Number(rawPct) : Number(rawPct) * 100) : 40;
+      const qp = quickProfit({ orderTotal: totalSelling, totalCost, paidValue: paid, companyProfitPct: companyPct });
+      const capitalReturn = Math.round(qp.recoveredCapital);
+      const foundersProfit = qp.foundersProfit;
       const sm = order.split_mode || "equal";
       const isWeighted = sm.includes("مساهمة") || sm.toLowerCase().includes("contribution") || sm === "weighted";
       const splits = founderSplit(foundersProfit, capitalReturn, contribs, isWeighted ? "weighted" : "equal");
