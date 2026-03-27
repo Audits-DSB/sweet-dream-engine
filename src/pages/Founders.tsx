@@ -497,9 +497,9 @@ export default function FoundersPage() {
                                 .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime())
                                 .map(tx => (
                                   <div key={tx.id} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${tx.type === "withdrawal" ? "bg-destructive/10" : tx.type === "funding" ? "bg-primary/10" : "bg-success/10"}`}>
-                                      {tx.type === "withdrawal" ? <ArrowUpRight className="h-3.5 w-3.5 text-destructive" />
-                                        : tx.type === "funding" ? <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                                    <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${(tx.type === "withdrawal" || tx.type === "funding") ? "bg-destructive/10" : "bg-success/10"}`}>
+                                      {(tx.type === "withdrawal" || tx.type === "funding")
+                                        ? <ArrowUpRight className="h-3.5 w-3.5 text-destructive" />
                                         : <Wallet className="h-3.5 w-3.5 text-success" />}
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -519,8 +519,8 @@ export default function FoundersPage() {
                                         {tx.notes && <span className="text-xs text-muted-foreground truncate">· {tx.notes}</span>}
                                       </div>
                                     </div>
-                                    <div className={`text-sm font-bold flex-shrink-0 ${tx.type === "withdrawal" ? "text-destructive" : "text-foreground"}`}>
-                                      {tx.type === "withdrawal" ? "-" : "+"}{tx.amount.toLocaleString()}
+                                    <div className={`text-sm font-bold flex-shrink-0 ${(tx.type === "withdrawal" || tx.type === "funding") ? "text-destructive" : "text-success"}`}>
+                                      {(tx.type === "withdrawal" || tx.type === "funding") ? "-" : "+"}{tx.amount.toLocaleString()}
                                       <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
                                     </div>
                                     <button className="flex-shrink-0 h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
