@@ -7,6 +7,7 @@ import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Landmark, Plus, TrendingUp, Wallet, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -53,6 +54,7 @@ export default function FounderFundingPage() {
   const [txnMethod, setTxnMethod] = useState("bank");
   const [txnOrder, setTxnOrder] = useState("");
   const [txnNotes, setTxnNotes] = useState("");
+  const [useBalance, setUseBalance] = useState(false);
 
   const { data: transactions = [], isLoading: loadingTx } = useQuery<FounderTx[]>({
     queryKey: ["founder_transactions"],
@@ -69,10 +71,20 @@ export default function FounderFundingPage() {
     queryFn: () => api.get<Order[]>("/orders"),
   });
 
+  type BalanceEntry = { founderId: string; founderName: string; balance: number };
+  const { data: founderBalances = [] } = useQuery<BalanceEntry[]>({
+    queryKey: ["founder_balances"],
+    queryFn: () => api.get<BalanceEntry[]>("/founder-balances"),
+  });
+  // map by founderId for quick lookup
+  const balanceByFounderId: Record<string, number> = {};
+  for (const b of founderBalances) { balanceByFounderId[b.founderId] = b.balance; }
+
   const addMutation = useMutation({
     mutationFn: (body: object) => api.post("/founder-transactions", body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["founder_transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["founder_balances"] });
       toast({ title: t.success, description: t.transactionRegistered });
       setDialogOpen(false);
       setSelectedFounder("");
@@ -81,6 +93,7 @@ export default function FounderFundingPage() {
       setTxnMethod("bank");
       setTxnOrder("");
       setTxnNotes("");
+      setUseBalance(false);
     },
     onError: (err: any) => {
       toast({ title: t.error, description: String(err), variant: "destructive" });
@@ -130,14 +143,26 @@ export default function FounderFundingPage() {
     }
     const founder = founders.find((f) => f.id === selectedFounder);
     if (!founder) return;
+
+    const availBal = balanceByFounderId[founder.id] || 0;
+    const isFunding = txnType === "funding";
+    const walletUsed = isFunding && useBalance ? Math.min(availBal, amount) : 0;
+    const cashPortion = amount - walletUsed;
+    const method = walletUsed > 0 && cashPortion > 0 ? "mixed" : walletUsed > 0 ? "balance" : txnMethod;
+    const notes = walletUsed > 0
+      ? (cashPortion > 0
+          ? `${txnNotes ? txnNotes + " — " : ""}من الرصيد: ${walletUsed.toLocaleString("en-US")} + تمويل مالي: ${cashPortion.toLocaleString("en-US")}`
+          : `${txnNotes ? txnNotes + " — " : ""}تمويل من الرصيد`)
+      : txnNotes;
+
     addMutation.mutate({
       founderId: founder.id,
       founderName: founder.name,
       type: txnType,
       amount,
-      method: txnMethod,
+      method,
       orderId: txnType === "funding" ? txnOrder : "",
-      notes: txnNotes,
+      notes,
       date: new Date().toISOString().split("T")[0],
     });
   };
@@ -167,6 +192,27 @@ export default function FounderFundingPage() {
           <Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.registerTransaction}
         </Button>
       </div>
+
+      {/* Founder Balances */}
+      {founderBalances.length > 0 && (
+        <div className="stat-card">
+          <h2 className="text-sm font-semibold mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" />أرصدة المؤسسين</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {founderBalances.map((b) => (
+              <div key={b.founderId} className="flex items-center justify-between p-3 rounded-lg bg-muted/40">
+                <span className="font-medium text-sm">{b.founderName}</span>
+                {b.balance > 0 ? (
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                    <Wallet className="h-3 w-3" />{b.balance.toLocaleString("en-US")} {t.currency}
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground px-2.5 py-1 rounded-full bg-muted">لا يوجد رصيد</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
@@ -333,13 +379,13 @@ export default function FounderFundingPage() {
       </Dialog>
 
       {/* New Transaction Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setUseBalance(false); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{t.newTransaction}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
               <Label className="text-xs">{t.selectFounder}</Label>
-              <Select value={selectedFounder} onValueChange={setSelectedFounder}>
+              <Select value={selectedFounder} onValueChange={(v) => { setSelectedFounder(v); setUseBalance(false); }}>
                 <SelectTrigger className="h-9 mt-1" data-testid="select-founder">
                   <SelectValue placeholder={t.selectFounderPlaceholder} />
                 </SelectTrigger>
@@ -349,6 +395,17 @@ export default function FounderFundingPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {/* Show balance badge under founder select */}
+              {selectedFounder && (() => {
+                const bal = balanceByFounderId[selectedFounder] || 0;
+                return bal > 0 ? (
+                  <p className="text-xs mt-1.5 flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                    <Wallet className="h-3 w-3" />رصيد متاح: {bal.toLocaleString("en-US")} {t.currency}
+                  </p>
+                ) : (
+                  <p className="text-xs mt-1.5 text-muted-foreground">لا يوجد رصيد متاح</p>
+                );
+              })()}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -406,6 +463,42 @@ export default function FounderFundingPage() {
                 </Select>
               </div>
             )}
+
+            {/* Balance checkbox — only for funding + founder with a balance */}
+            {txnType === "funding" && selectedFounder && (balanceByFounderId[selectedFounder] || 0) > 0 && (() => {
+              const bal = balanceByFounderId[selectedFounder];
+              const amount = Number(txnAmount) || 0;
+              const walletUsed = useBalance ? Math.min(bal, amount) : 0;
+              const cashPortion = amount - walletUsed;
+              return (
+                <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="use-balance"
+                      checked={useBalance}
+                      onCheckedChange={(c) => setUseBalance(!!c)}
+                    />
+                    <label htmlFor="use-balance" className="text-sm font-medium cursor-pointer">
+                      السحب من الرصيد
+                    </label>
+                  </div>
+                  {useBalance && amount > 0 && (
+                    <div className="text-xs text-amber-700 dark:text-amber-400 space-y-1 pt-1 border-t border-amber-200 dark:border-amber-800">
+                      <div className="flex justify-between">
+                        <span>من الرصيد</span>
+                        <span className="font-semibold">{walletUsed.toLocaleString("en-US")} {t.currency}</span>
+                      </div>
+                      {cashPortion > 0 && (
+                        <div className="flex justify-between">
+                          <span>تمويل مالي</span>
+                          <span className="font-semibold">{cashPortion.toLocaleString("en-US")} {t.currency}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             <div>
               <Label className="text-xs">{t.notes}</Label>
               <Input className="h-9 mt-1" value={txnNotes} onChange={(e) => setTxnNotes(e.target.value)} data-testid="input-notes" />
