@@ -74,7 +74,7 @@ export default function DeliveriesPage() {
   const [selectedActor, setSelectedActor] = useState("");
   const [customActor, setCustomActor] = useState("");
   const [deliveryType, setDeliveryType] = useState("full");
-  const [requestedDate, setRequestedDate] = useState("");
+  const [requestedDate, setRequestedDate] = useState(new Date().toISOString().split("T")[0]);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Delivery | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -317,7 +317,7 @@ export default function DeliveriesPage() {
       await logAudit({ entity: "delivery", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${order.client || order.id}`, action: "create", snapshot: saved, endpoint: "/deliveries" });
       setDeliveries([mapDelivery(saved), ...deliveries]);
       sendNotification(t.newDelivery || "تسليم جديد", `${newId} - ${order.client}`, "info");
-      setSelectedOrder(""); setSelectedActor(""); setCustomActor(""); setDeliveryType("full"); setRequestedDate(""); setOrderLines([]); setPartialItems({});
+      setSelectedOrder(""); setSelectedActor(""); setCustomActor(""); setDeliveryType("full"); setRequestedDate(new Date().toISOString().split("T")[0]); setOrderLines([]); setPartialItems({});
       setDialogOpen(false);
       toast.success(t.deliveryCreated || "تم إنشاء التسليم");
     } catch {
