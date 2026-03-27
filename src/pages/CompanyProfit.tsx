@@ -307,10 +307,17 @@ export default function CompanyProfitPage() {
     const tCost = pnl.reduce((s, m) => s + m.cost, 0);
     const tProfit = pnl.reduce((s, m) => s + m.profit, 0);
     const tCompany = pnl.reduce((s, m) => s + m.companyShare, 0);
+    const tFounders = pnl.reduce((s, m) => s + m.founderShare, 0);
+
+    // Weighted-average company profit percentage across all entries in period
+    const avgCompanyPct = profitLedger.length > 0
+      ? Math.round(profitLedger.reduce((s, e) => s + e.companyProfitPct, 0) / profitLedger.length * 10) / 10
+      : (rules.companyProfitPercentage ?? 40);
+    const companyMargin = tRev > 0 ? ((tCompany / tRev) * 100).toFixed(1) : "0";
 
     return {
       monthlyPnL: pnl,
-      totals: { revenue: tRev, cost: tCost, profit: tProfit, companyShare: tCompany, margin: tRev > 0 ? ((tProfit / tRev) * 100).toFixed(1) : "0" },
+      totals: { revenue: tRev, cost: tCost, profit: tProfit, companyShare: tCompany, foundersShare: tFounders, avgCompanyPct, companyMargin, margin: tRev > 0 ? ((tProfit / tRev) * 100).toFixed(1) : "0" },
       expenseBreakdown: breakdown.length > 0 ? breakdown : [{ name: "other", value: 100, color: colors[0] }],
       comparison: comparisonData,
     };
@@ -484,8 +491,8 @@ export default function CompanyProfitPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard title={t.totalBalance} value={`${fmtNum(totalBalance)} ${t.currency}`} change={`${accounts?.length || 0} ${t.accountsCount}`} changeType="neutral" icon={Wallet} />
         <StatCard title="إجمالي المُحصَّل" value={`${fmtNum(totals.revenue)} ${t.currency}`} change={`${monthsFilter} ${t.monthsLabel}`} changeType="neutral" icon={DollarSign} />
-        <StatCard title="إجمالي الأرباح المحققة" value={`${fmtNum(totals.profit)} ${t.currency}`} change={`هامش ${totals.margin}%`} changeType="positive" icon={TrendingUp} />
-        <StatCard title={t.companyShare} value={`${fmtNum(totals.companyShare)} ${t.currency}`} change={`${profitLedger.length} تحصيل`} changeType="positive" icon={Percent} />
+        <StatCard title="أرباح الشركة المحققة" value={`${fmtNum(totals.companyShare)} ${t.currency}`} change={`هامش ${totals.companyMargin}%`} changeType="positive" icon={TrendingUp} />
+        <StatCard title="حصة الشركة من الأرباح" value={`${totals.avgCompanyPct}%`} change={`متوسط · ${profitLedger.length} تحصيل`} changeType="positive" icon={Percent} />
         <StatCard title={t.totalCostCompany} value={`${fmtNum(totals.cost)} ${t.currency}`} change={`${totals.revenue > 0 ? ((totals.cost / totals.revenue) * 100).toFixed(0) : 0}% من المُحصَّل`} changeType="negative" icon={TrendingDown} />
       </div>
 
