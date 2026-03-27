@@ -81,9 +81,7 @@ export default function ClientProfile() {
       api.get<any[]>("/clients"),
       api.get<any[]>("/orders"),
       api.get<any[]>(`/client-inventory?clientId=${id}`).catch(() => []),
-      api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] })),
-      api.get<any[]>("/materials").catch(() => []),
-    ]).then(([clientsData, ordersData, invData, extData, internalMats]) => {
+    ]).then(async ([clientsData, ordersData, invData]) => {
       const found = (clientsData || []).find((c: any) => c.id === id);
       if (found) {
         const c = mapClient(found);
@@ -94,22 +92,34 @@ export default function ClientProfile() {
         .filter((o: any) => (o.clientId || o.client_id) === id)
         .map(mapOrder);
       setOrders(clientOrders);
-      // Build image map: code/sku → imageUrl
-      // Priority: internal materials (code field) → external catalog (sku field)
+
+      // Build image map: materialCode → imageUrl
+      // Strategy: fetch order lines for each source_order (same approach as Collections page)
       const imgMap: Record<string, string> = {};
-      // External catalog: sku → image_url or image
-      (extData?.products || []).forEach((p: any) => {
-        const key = p.sku || p.id || "";
-        const img = p.image_url || p.image || "";
-        if (key && img) imgMap[key] = img;
-      });
-      // Internal materials override (more reliable for code matching)
-      (internalMats || []).forEach((m: any) => {
-        const key = m.code || "";
-        const img = m.imageUrl || m.image_url || "";
-        if (key && img) imgMap[key] = img;
-      });
-      setInventory((invData || []).map((r: any) => {
+
+      // Collect unique source order IDs from inventory records
+      const rawInv: any[] = invData || [];
+      const sourceOrderIds = [...new Set(
+        rawInv.map((r: any) => r.sourceOrder || r.source_order || "").filter(Boolean)
+      )];
+
+      // Fetch order lines for all source orders in parallel
+      if (sourceOrderIds.length > 0) {
+        const lineResults = await Promise.all(
+          sourceOrderIds.map(ordId =>
+            api.get<any[]>(`/orders/${ordId}/lines`).catch(() => [])
+          )
+        );
+        lineResults.forEach(lines => {
+          (lines || []).forEach((l: any) => {
+            const code = l.materialCode || l.material_code || "";
+            const img = l.imageUrl || l.image_url || "";
+            if (code && img) imgMap[code] = img;
+          });
+        });
+      }
+
+      setInventory(rawInv.map((r: any) => {
         const code = r.code || r.materialCode || "";
         return {
           id: r.id,
