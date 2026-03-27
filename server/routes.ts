@@ -348,18 +348,38 @@ router.patch("/orders/:id", async (req, res) => {
 router.delete("/orders/:id", async (req, res) => {
   const orderId = req.params.id;
 
-  // ── Step 1: delete all child records that FK-reference orders (must be before deleting the order) ──
+  // ── Step 0: fetch all related data for the snapshot (before deleting) ──
+  const [orderRes, linesRes, contribRes, deliveriesRes, collectionsRes, inventoryRes, auditsRes] = await Promise.all([
+    supabaseAdmin.from("orders").select("*").eq("id", orderId).single(),
+    supabaseAdmin.from("order_lines").select("*").eq("order_id", orderId),
+    supabaseAdmin.from("order_founder_contributions").select("*").eq("order_id", orderId),
+    supabaseAdmin.from("deliveries").select("*").eq("order_id", orderId),
+    supabaseAdmin.from("collections").select("*").eq("order_id", orderId),
+    supabaseAdmin.from("client_inventory").select("*").eq("source_order", orderId),
+    supabaseAdmin.from("audits").select("*").eq("order_id", orderId),
+  ]);
+
+  const relatedSnapshot = {
+    orderLines: linesRes.data || [],
+    founderContributions: contribRes.data || [],
+    deliveries: deliveriesRes.data || [],
+    collections: collectionsRes.data || [],
+    clientInventory: inventoryRes.data || [],
+    audits: auditsRes.data || [],
+  };
+
+  // ── Step 1: delete all child records that FK-reference orders ──
   const childDeletes = await Promise.allSettled([
     supabaseAdmin.from("order_lines").delete().eq("order_id", orderId),
     supabaseAdmin.from("order_founder_contributions").delete().eq("order_id", orderId),
     supabaseAdmin.from("deliveries").delete().eq("order_id", orderId),
     supabaseAdmin.from("collections").delete().eq("order_id", orderId),
     supabaseAdmin.from("client_inventory").delete().eq("source_order", orderId),
+    supabaseAdmin.from("audits").delete().eq("order_id", orderId),
   ]);
 
-  // Log any child delete errors (non-fatal — table may not exist yet)
   childDeletes.forEach((r, i) => {
-    const names = ["order_lines", "order_founder_contributions", "deliveries", "collections", "client_inventory"];
+    const names = ["order_lines", "order_founder_contributions", "deliveries", "collections", "client_inventory", "audits"];
     if (r.status === "fulfilled" && (r.value as any).error) {
       console.warn(`[delete-order] ${names[i]} error:`, (r.value as any).error.message);
     }
@@ -369,7 +389,67 @@ router.delete("/orders/:id", async (req, res) => {
   const { error } = await supabaseAdmin.from("orders").delete().eq("id", orderId);
   if (error) return res.status(500).json({ error: error.message });
 
-  res.json({ ok: true });
+  res.json({ ok: true, relatedSnapshot });
+});
+
+router.post("/orders/:id/cascade-restore", async (req, res) => {
+  const orderId = req.params.id;
+  const { order, orderLines, founderContributions, deliveries, collections, clientInventory, audits } = req.body;
+
+  if (!order) return res.status(400).json({ error: "No order data provided" });
+
+  const safeOrder = { ...order, id: orderId };
+
+  try {
+    const { error: orderErr } = await supabaseAdmin.from("orders").upsert(safeOrder, { onConflict: "id" });
+    if (orderErr) return res.status(500).json({ error: `Order restore failed: ${orderErr.message}` });
+
+    const restoreOps: Array<{ name: string; op: Promise<any> }> = [];
+
+    if (Array.isArray(orderLines) && orderLines.length > 0) {
+      const safe = orderLines.map((r: any) => ({ ...r, order_id: orderId }));
+      restoreOps.push({ name: "order_lines", op: supabaseAdmin.from("order_lines").upsert(safe, { onConflict: "id" }) });
+    }
+    if (Array.isArray(founderContributions) && founderContributions.length > 0) {
+      const safe = founderContributions.map((r: any) => ({ ...r, order_id: orderId }));
+      restoreOps.push({ name: "founder_contributions", op: supabaseAdmin.from("order_founder_contributions").upsert(safe, { onConflict: "order_id" }) });
+    }
+    if (Array.isArray(deliveries) && deliveries.length > 0) {
+      const safe = deliveries.map((r: any) => ({ ...r, order_id: orderId }));
+      restoreOps.push({ name: "deliveries", op: supabaseAdmin.from("deliveries").upsert(safe, { onConflict: "id" }) });
+    }
+    if (Array.isArray(collections) && collections.length > 0) {
+      const safe = collections.map((r: any) => ({ ...r, order_id: orderId }));
+      restoreOps.push({ name: "collections", op: supabaseAdmin.from("collections").upsert(safe, { onConflict: "id" }) });
+    }
+    if (Array.isArray(clientInventory) && clientInventory.length > 0) {
+      const safe = clientInventory.map((r: any) => ({ ...r, source_order: orderId }));
+      restoreOps.push({ name: "client_inventory", op: supabaseAdmin.from("client_inventory").upsert(safe, { onConflict: "id" }) });
+    }
+    if (Array.isArray(audits) && audits.length > 0) {
+      const safe = audits.map((r: any) => ({ ...r, order_id: orderId }));
+      restoreOps.push({ name: "audits", op: supabaseAdmin.from("audits").upsert(safe, { onConflict: "id" }) });
+    }
+
+    const results = await Promise.allSettled(restoreOps.map(r => r.op));
+    const errors: string[] = [];
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled" && (r as any).value?.error) {
+        errors.push(`${restoreOps[i].name}: ${(r as any).value.error.message}`);
+      } else if (r.status === "rejected") {
+        errors.push(`${restoreOps[i].name}: ${String((r as PromiseRejectedResult).reason)}`);
+      }
+    });
+
+    if (errors.length > 0) {
+      console.warn("[cascade-restore] partial errors:", errors);
+      return res.status(207).json({ ok: false, errors });
+    }
+
+    res.json({ ok: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── ALERTS (generated from real data) ───────────────────────────────────────

@@ -38,6 +38,8 @@ All business data in main Supabase project:
 - **Activity Page** (`src/pages/Activity.tsx`) — Displays audit history grouped by date; allows restoring deleted items by re-inserting the snapshot via API
 - **Delete enabled on**: Clients, Orders, Deliveries, Suppliers, Collections, Materials, Founders (all with confirmation dialog + audit log)
 - **Restore**: Activity page reads `notifications` where type starts with `audit_`, shows "استعادة" button for deleted items
+- **Order Cascade Delete**: Deleting an order also deletes all related records (order_lines, order_founder_contributions, deliveries, collections, client_inventory, audits). Full related data is saved in the audit snapshot under `_related` key.
+- **Order Cascade Restore**: `POST /orders/:id/cascade-restore` re-creates the order and all related records from the saved snapshot. All foreign keys are enforced to match the target order ID server-side.
 
 ## Key API Endpoints (server/routes.ts)
 - `/api/clients`, `/api/suppliers`, `/api/materials`, `/api/founders` — CRUD

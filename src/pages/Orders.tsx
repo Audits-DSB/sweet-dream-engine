@@ -257,11 +257,17 @@ export default function OrdersPage() {
     setDeleting(true);
     try {
       const snapshot = { ...deleteTarget, collectionPaid: collectionsMap[deleteTarget.id]?.paid ?? 0, collectionTotal: collectionsMap[deleteTarget.id]?.total ?? 0 };
-      await api.delete(`/orders/${deleteTarget.id}`);
-      await logAudit({ entity: "order", entityId: deleteTarget.id, entityName: `${deleteTarget.id} - ${deleteTarget.client}`, action: "delete", snapshot: snapshot as any, endpoint: "/orders" });
+      const deleteResult = await api.delete<{ ok: boolean; relatedSnapshot?: any }>(`/orders/${deleteTarget.id}`);
+      const related = (deleteResult as any)?.relatedSnapshot || {};
+      await logAudit({
+        entity: "order", entityId: deleteTarget.id,
+        entityName: `${deleteTarget.id} - ${deleteTarget.client}`,
+        action: "delete",
+        snapshot: { ...snapshot, _related: related } as any,
+        endpoint: "/orders",
+      });
       setOrders(prev => prev.filter(o => o.id !== deleteTarget.id));
       setCollectionsMap(prev => { const next = { ...prev }; delete next[deleteTarget.id]; return next; });
-      // Invalidate profit page cache so it reflects the deletion immediately
       queryClient.invalidateQueries({ queryKey: ["orders_full"] });
       setDeleteTarget(null);
       toast.success(`تم حذف الطلب: ${deleteTarget.id}`);

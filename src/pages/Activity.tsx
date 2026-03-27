@@ -146,9 +146,36 @@ export default function ActivityPage() {
 
     setRestoring(entry.id);
     try {
-      const payload = cleanSnapshot(data.entity, data.snapshot);
-      await api.post(data.endpoint, payload);
-      toast.success(`✅ تمت استعادة ${entityLabels[data.entity] || data.entity}: ${data.entityName}`);
+      if (data.entity === "order" && data.snapshot._related) {
+        const related = data.snapshot._related;
+        const { _related, collectionPaid, collectionTotal, client, founderContributions, ...orderFields } = data.snapshot;
+        const cleanedOrder = cleanSnapshot("order", orderFields);
+        const snakify = (obj: Record<string, any>) => {
+          const out: Record<string, any> = {};
+          for (const [k, v] of Object.entries(obj)) {
+            out[k.replace(/[A-Z]/g, l => `_${l.toLowerCase()}`)] = v;
+          }
+          return out;
+        };
+        const restoreResult: any = await api.post(`/orders/${data.snapshot.id}/cascade-restore`, {
+          order: snakify(cleanedOrder),
+          orderLines: related.orderLines || [],
+          founderContributions: related.founderContributions || [],
+          deliveries: related.deliveries || [],
+          collections: related.collections || [],
+          clientInventory: related.clientInventory || [],
+          audits: related.audits || [],
+        });
+        if (restoreResult?.errors?.length > 0) {
+          toast.error(`⚠️ استعادة جزئية — بعض البيانات لم تُستعاد: ${restoreResult.errors.join(", ")}`);
+        } else {
+          toast.success(`✅ تمت استعادة الطلب وجميع البيانات المرتبطة: ${data.entityName}`);
+        }
+      } else {
+        const payload = cleanSnapshot(data.entity, data.snapshot);
+        await api.post(data.endpoint, payload);
+        toast.success(`✅ تمت استعادة ${entityLabels[data.entity] || data.entity}: ${data.entityName}`);
+      }
       await api.patch(`/notifications/${entry.id}`, { title: `[مُستعاد] ${entry.title}`, read: true }).catch(() => {});
       setEntries(prev => prev.map(e => e.id === entry.id ? { ...e, title: `[مُستعاد] ${e.title}`, read: true } : e));
     } catch (err: any) {
