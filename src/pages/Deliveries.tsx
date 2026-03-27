@@ -5,7 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Eye, MoreHorizontal, Truck, Plus, Loader2, Trash2, X, Package } from "lucide-react";
+import { Eye, MoreHorizontal, Truck, Plus, Loader2, Trash2, X, Package, Calendar, User, Hash, DollarSign, MapPin, Clock, CheckCircle2, AlertCircle, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
@@ -25,6 +25,7 @@ type Delivery = {
   id: string; orderId: string; client: string; clientId: string;
   requestedDate: string; actualDate: string; actor: string;
   items: number | string; type: string; status: string;
+  deliveryFee: number;
 };
 type Order = { id: string; client: string; clientId: string; status: string; deliveryFee: number; itemsCount: number };
 type Actor = { id: string; name: string; label: string };
@@ -46,6 +47,7 @@ function mapDelivery(raw: any, clientMap: Record<string, string> = {}): Delivery
     items: raw.items ?? 0,
     type: raw.notes || raw.type || "",
     status: raw.status === "Scheduled" ? "Pending" : (raw.status || "Pending"),
+    deliveryFee: Number(raw.deliveryFee ?? raw.delivery_fee ?? 0),
   };
 }
 
@@ -77,10 +79,15 @@ export default function DeliveriesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Delivery | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  type OrderLine = { id: string; materialCode: string; materialName: string; quantity: number; unit: string; imageUrl?: string };
+  type OrderLine = { id: string; materialCode: string; materialName: string; quantity: number; unit: string; imageUrl?: string; sellingPrice?: number };
   const [orderLines, setOrderLines] = useState<OrderLine[]>([]);
   const [loadingLines, setLoadingLines] = useState(false);
   const [partialItems, setPartialItems] = useState<Record<string, { selected: boolean; qty: number }>>({});
+  const [detailOrderLines, setDetailOrderLines] = useState<OrderLine[]>([]);
+  const [detailOrderInfo, setDetailOrderInfo] = useState<any>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailOtherDeliveries, setDetailOtherDeliveries] = useState<Delivery[]>([]);
+  const [confirmingDelivery, setConfirmingDelivery] = useState(false);
 
   useEffect(() => {
     if (!selectedOrder || deliveryType !== "partial") { setOrderLines([]); setPartialItems({}); return; }
@@ -145,6 +152,31 @@ export default function DeliveriesPage() {
       setAutoOpenDone(true);
     }
   }, [searchParams, orders, loading, autoOpenDone]);
+
+  useEffect(() => {
+    if (!detailItem) { setDetailOrderLines([]); setDetailOrderInfo(null); setDetailOtherDeliveries([]); return; }
+    let cancelled = false;
+    setLoadingDetail(true);
+    Promise.all([
+      api.get<any[]>(`/orders/${detailItem.orderId}/lines`).catch(() => []),
+      api.get<any>(`/orders/${detailItem.orderId}`).catch(() => null),
+      api.get<any[]>(`/deliveries?orderId=${detailItem.orderId}`).catch(() => []),
+    ]).then(([lines, orderInfo, relatedDels]) => {
+      if (cancelled) return;
+      setDetailOrderLines((lines || []).map((l: any) => ({
+        id: l.id, materialCode: l.materialCode || l.material_code || "",
+        materialName: l.materialName || l.material_name || "",
+        quantity: Number(l.quantity) || 0, unit: l.unit || "",
+        imageUrl: l.imageUrl || l.image_url || "",
+        sellingPrice: Number(l.sellingPrice || l.selling_price || 0),
+      })));
+      setDetailOrderInfo(orderInfo);
+      const clientMap2: Record<string, string> = {};
+      orders.forEach(o => { clientMap2[o.clientId] = o.client; });
+      setDetailOtherDeliveries((relatedDels || []).filter((d: any) => d.id !== detailItem.id).map((d: any) => mapDelivery(d, clientMap2)));
+    }).finally(() => { if (!cancelled) setLoadingDetail(false); });
+    return () => { cancelled = true; };
+  }, [detailItem?.id]);
 
   const filtered = deliveries.filter((d) => {
     const s = search.toLowerCase();
@@ -359,49 +391,181 @@ export default function DeliveriesPage() {
 
       {/* Detail Dialog */}
       <Dialog open={!!detailItem} onOpenChange={() => setDetailItem(null)}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{detailItem?.id} — {detailItem?.client}</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
           {detailItem && (() => {
             let parsedItems: any[] = [];
             let typeLabel = detailItem.type;
+            let isPartial = false;
             try {
               const parsed = JSON.parse(detailItem.type);
-              if (parsed.type && Array.isArray(parsed.items)) { parsedItems = parsed.items; typeLabel = parsed.type; }
+              if (parsed.type && Array.isArray(parsed.items)) { parsedItems = parsed.items; typeLabel = parsed.type; isPartial = true; }
             } catch {}
+
+            const totalOrderQty = detailOrderLines.reduce((s, l) => s + l.quantity, 0);
+            const thisDeliveryQty = isPartial ? parsedItems.reduce((s: number, i: any) => s + (Number(i.qty) || 0), 0) : totalOrderQty;
+
+            const allOrderDeliveries = [detailItem, ...detailOtherDeliveries];
+            const totalDeliveredQty = allOrderDeliveries.filter(d => d.status === "Delivered").reduce((sum, d) => {
+              let dItems: any[] = [];
+              try { const p = JSON.parse(d.type); if (p.items) dItems = p.items; } catch {}
+              if (dItems.length > 0) return sum + dItems.reduce((s: number, i: any) => s + (Number(i.qty) || 0), 0);
+              return sum + totalOrderQty;
+            }, 0);
+            const deliveryProgress = totalOrderQty > 0 ? Math.min(100, Math.round((totalDeliveredQty / totalOrderQty) * 100)) : 0;
+
+            const orderStatus = detailOrderInfo?.status || "";
+
             return (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setDetailItem(null); navigate(`/orders/${detailItem.orderId}`); }}>
-                    <p className="text-xs text-muted-foreground">{t.order}</p><p className="font-semibold text-primary">{detailItem.orderId}</p>
+              <>
+                <div className={`px-6 pt-6 pb-4 border-b ${detailItem.status === "Delivered" ? "bg-green-50 dark:bg-green-950/20" : "bg-orange-50 dark:bg-orange-950/20"}`}>
+                  <DialogHeader>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <DialogTitle className="text-lg mb-1">{detailItem.id}</DialogTitle>
+                        <p className="text-sm text-muted-foreground">{detailItem.client}</p>
+                      </div>
+                      <StatusBadge status={detailItem.status} variant={statusVariant[detailItem.status] as any} />
+                    </div>
+                  </DialogHeader>
+                  <div className="flex items-center gap-3 mt-3 text-xs">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-medium ${isPartial ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"}`}>
+                      <Package className="h-3 w-3" /> {typeLabel}
+                    </span>
+                    {detailItem.deliveryFee > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted font-medium">
+                        <DollarSign className="h-3 w-3" /> رسوم: {detailItem.deliveryFee.toLocaleString()}
+                      </span>
+                    )}
+                    {isPartial && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted font-medium">
+                        {parsedItems.length} مادة · {thisDeliveryQty} وحدة
+                      </span>
+                    )}
                   </div>
-                  <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.executor}</p><p className="font-semibold">{detailItem.actor}</p></div>
-                  <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.requestedDate}</p><p className="font-semibold">{detailItem.requestedDate}</p></div>
-                  <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.actualDate}</p><p className="font-semibold">{detailItem.actualDate}</p></div>
-                  <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.type}</p><p className="font-semibold">{typeLabel}</p></div>
-                  <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.status}</p><StatusBadge status={detailItem.status} variant={statusVariant[detailItem.status] as any} /></div>
                 </div>
-                {parsedItems.length > 0 && (
-                  <div>
-                    <Label className="text-xs flex items-center gap-1.5 mb-2"><Package className="h-3.5 w-3.5" /> المواد المشمولة في التسليم</Label>
-                    <div className="border rounded-lg divide-y">
-                      {parsedItems.map((item: any, idx: number) => (
-                        <div key={idx} className="flex items-center gap-3 px-3 py-2 text-sm">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{item.materialName}</p>
-                            <p className="text-xs text-muted-foreground">{item.materialCode} · {item.unit}</p>
-                          </div>
-                          <span className="text-sm font-bold text-primary">{item.qty}</span>
-                        </div>
-                      ))}
+
+                <div className="px-6 py-4 space-y-5">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3 rounded-xl bg-muted/40 border border-border/50">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1"><Hash className="h-3 w-3" /> الطلب</div>
+                      <button className="font-semibold text-primary text-sm hover:underline" onClick={() => { setDetailItem(null); navigate(`/orders/${detailItem.orderId}`); }}>{detailItem.orderId}</button>
+                      {orderStatus && <p className="text-[10px] text-muted-foreground mt-0.5">{orderStatus}</p>}
+                    </div>
+                    <div className="p-3 rounded-xl bg-muted/40 border border-border/50">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1"><User className="h-3 w-3" /> المندوب</div>
+                      <p className="font-semibold text-sm">{detailItem.actor || "—"}</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-muted/40 border border-border/50">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1"><Calendar className="h-3 w-3" /> تاريخ الطلب</div>
+                      <p className="font-semibold text-sm">{detailItem.requestedDate || "—"}</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-muted/40 border border-border/50">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1"><Clock className="h-3 w-3" /> تاريخ التسليم</div>
+                      <p className={`font-semibold text-sm ${detailItem.status === "Delivered" ? "text-green-600" : ""}`}>{detailItem.status === "Delivered" ? detailItem.actualDate : "لم يسلّم بعد"}</p>
                     </div>
                   </div>
-                )}
-                {detailItem.status !== "Delivered" && (
-                  <Button className="w-full" onClick={() => { confirmDelivery(detailItem); setDetailItem(null); }}>
-                    <Truck className="h-4 w-4 ltr:mr-2 rtl:ml-2" />{t.confirmDelivery}
-                  </Button>
-                )}
-              </div>
+
+                  {detailOrderLines.length > 0 && (
+                    <div className="rounded-xl border bg-muted/20 overflow-hidden">
+                      <div className="px-4 py-2.5 border-b bg-muted/40 flex items-center justify-between">
+                        <span className="text-xs font-medium flex items-center gap-1.5"><Package className="h-3.5 w-3.5" /> تقدم التسليم للطلب</span>
+                        <span className="text-xs font-bold">{deliveryProgress}%</span>
+                      </div>
+                      <div className="px-4 py-2">
+                        <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${deliveryProgress >= 100 ? "bg-green-500" : deliveryProgress > 0 ? "bg-amber-500" : "bg-gray-300"}`} style={{ width: `${deliveryProgress}%` }} />
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-1 text-center">{totalDeliveredQty} من {totalOrderQty} وحدة تم تسليمها ({allOrderDeliveries.filter(d => d.status === "Delivered").length} توصيلة مؤكدة)</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {loadingDetail ? (
+                    <div className="flex items-center justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                  ) : (
+                    <>
+                      {isPartial && parsedItems.length > 0 && (
+                        <div>
+                          <Label className="text-xs flex items-center gap-1.5 mb-2 font-semibold"><Package className="h-3.5 w-3.5 text-amber-500" /> المواد في هذا التسليم</Label>
+                          <div className="border rounded-xl divide-y overflow-hidden">
+                            {parsedItems.map((item: any, idx: number) => {
+                              const orderLine = detailOrderLines.find(l => String(l.id) === String(item.lineId));
+                              const totalQty = orderLine?.quantity || 0;
+                              const pct = totalQty > 0 ? Math.round((Number(item.qty) / totalQty) * 100) : 0;
+                              return (
+                                <div key={idx} className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted/30">
+                                  <div className="h-9 w-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 font-bold text-xs flex-shrink-0">{idx + 1}</div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium truncate">{item.materialName}</p>
+                                    <p className="text-xs text-muted-foreground">{item.materialCode} · {item.unit}</p>
+                                  </div>
+                                  <div className="text-left flex-shrink-0">
+                                    <p className="text-sm font-bold text-primary">{item.qty} <span className="text-xs text-muted-foreground font-normal">/ {totalQty}</span></p>
+                                    <p className="text-[10px] text-muted-foreground">{pct}% من الطلب</p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {!isPartial && detailOrderLines.length > 0 && (
+                        <div>
+                          <Label className="text-xs flex items-center gap-1.5 mb-2 font-semibold"><Package className="h-3.5 w-3.5 text-blue-500" /> جميع مواد الطلب (تسليم كامل)</Label>
+                          <div className="border rounded-xl divide-y overflow-hidden">
+                            {detailOrderLines.map((line, idx) => (
+                              <div key={line.id} className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted/30">
+                                <div className="h-9 w-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 font-bold text-xs flex-shrink-0">{idx + 1}</div>
+                                {line.imageUrl && <img src={line.imageUrl} alt="" className="h-9 w-9 rounded-lg object-cover flex-shrink-0" />}
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium truncate">{line.materialName}</p>
+                                  <p className="text-xs text-muted-foreground">{line.materialCode} · {line.unit}</p>
+                                </div>
+                                <p className="text-sm font-bold text-primary flex-shrink-0">{line.quantity}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {detailOtherDeliveries.length > 0 && (
+                        <div>
+                          <Label className="text-xs flex items-center gap-1.5 mb-2 font-semibold"><Truck className="h-3.5 w-3.5 text-muted-foreground" /> توصيلات أخرى لنفس الطلب ({detailOtherDeliveries.length})</Label>
+                          <div className="border rounded-xl divide-y overflow-hidden">
+                            {detailOtherDeliveries.map(d => (
+                              <button key={d.id} className="flex items-center gap-3 px-4 py-2.5 text-sm w-full text-start hover:bg-muted/30" onClick={() => setDetailItem(d)}>
+                                <span className="font-mono text-xs text-muted-foreground">{d.id}</span>
+                                <StatusBadge status={d.status} variant={statusVariant[d.status] as any} />
+                                <span className="text-xs text-muted-foreground mr-auto">{d.requestedDate}</span>
+                                <span className="text-xs">{(() => { try { const p = JSON.parse(d.type); return p.type || d.type; } catch { return d.type; } })()}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  <div className="flex gap-2 pt-2">
+                    {detailItem.status !== "Delivered" && (
+                      <Button className="flex-1" disabled={confirmingDelivery} onClick={async () => {
+                        setConfirmingDelivery(true);
+                        await confirmDelivery(detailItem);
+                        setDeliveries(prev => prev.map(d => d.id === detailItem.id ? { ...d, status: "Delivered", actualDate: new Date().toISOString().split("T")[0] } : d));
+                        setDetailItem({ ...detailItem, status: "Delivered", actualDate: new Date().toISOString().split("T")[0] });
+                        setConfirmingDelivery(false);
+                      }}>
+                        {confirmingDelivery ? <Loader2 className="h-4 w-4 animate-spin ltr:mr-2 rtl:ml-2" /> : <CheckCircle2 className="h-4 w-4 ltr:mr-2 rtl:ml-2" />}
+                        {t.confirmDelivery}
+                      </Button>
+                    )}
+                    <Button variant="outline" className="flex-1" onClick={() => { setDetailItem(null); navigate(`/orders/${detailItem.orderId}`); }}>
+                      <ArrowLeft className="h-4 w-4 ltr:mr-2 rtl:ml-2" /> فتح الطلب
+                    </Button>
+                  </div>
+                </div>
+              </>
             );
           })()}
         </DialogContent>

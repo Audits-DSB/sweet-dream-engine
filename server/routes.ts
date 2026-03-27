@@ -577,7 +577,20 @@ router.get("/deliveries", async (req, res) => {
   sbOk(res, result);
 });
 router.post("/deliveries", async (req, res) => {
-  sbOk(res, await supabaseAdmin.from("deliveries").insert(snakifyKeys(req.body)).select().single());
+  const result = await supabaseAdmin.from("deliveries").insert(snakifyKeys(req.body)).select().single();
+  if (!result.error && result.data) {
+    const del = result.data;
+    const orderId = del.order_id;
+    if (orderId) {
+      try {
+        const { data: order } = await supabaseAdmin.from("orders").select("status").eq("id", orderId).single();
+        if (order && ["Draft", "Confirmed", "Awaiting Purchase"].includes(order.status)) {
+          await supabaseAdmin.from("orders").update({ status: "Processing" }).eq("id", orderId);
+        }
+      } catch (e: any) { console.error("delivery-create order-status sync error:", e.message); }
+    }
+  }
+  sbOk(res, result);
 });
 router.patch("/deliveries/:id", async (req, res) => {
   const result = await supabaseAdmin.from("deliveries").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single();
