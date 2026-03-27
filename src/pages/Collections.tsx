@@ -67,8 +67,13 @@ function mapCollection(raw: any, clientsMap: Record<string, string> = {}): Colle
     status: raw.status || "Awaiting Confirmation",
     auditId: notesMeta.auditId || "",
     auditDate: notesMeta.auditDate || "",
-    sourceOrder: notesMeta.sourceOrders?.[0] || notesMeta.sourceOrder || "",
-    sourceOrders: notesMeta.sourceOrders || (notesMeta.sourceOrder ? [notesMeta.sourceOrder] : []),
+    sourceOrders: (() => {
+      // Derive from lineItems.sourceOrderId (same source the detail view uses) — more accurate than stored sourceOrders
+      const fromLines = [...new Set((notesMeta.lineItems || []).map((l: any) => l.sourceOrderId).filter(Boolean))] as string[];
+      if (fromLines.length > 0) return fromLines;
+      return notesMeta.sourceOrders || (notesMeta.sourceOrder ? [notesMeta.sourceOrder] : []);
+    })(),
+    get sourceOrder() { return this.sourceOrders[0] || ""; },
     lineItems: notesMeta.lineItems || [],
     _notesObj: notesMeta,
   };
