@@ -369,22 +369,13 @@ export default function CollectionsPage() {
           <DialogHeader><DialogTitle>{selectedInvoice?.id} — {selectedInvoice?.client}</DialogTitle></DialogHeader>
           {selectedInvoice && (
             <div className="space-y-4">
-              {/* Audit source badge */}
-              {selectedInvoice.auditId && (
-                <div className="flex flex-wrap items-center gap-2 text-xs p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-                  <span className="text-amber-700 dark:text-amber-300 font-medium">مصدر: جرد</span>
-                  <span className="text-muted-foreground font-mono">#{selectedInvoice.auditId}</span>
-                  {selectedInvoice.auditDate && <span className="text-muted-foreground">— {selectedInvoice.auditDate}</span>}
-                </div>
-              )}
-
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.totalAmount}</p><p className="font-semibold">{selectedInvoice.total.toLocaleString()} {t.currency}</p></div>
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.remaining}</p><p className={`font-semibold ${selectedInvoice.remaining > 0 ? "text-destructive" : "text-success"}`}>{selectedInvoice.remaining > 0 ? `${selectedInvoice.remaining.toLocaleString()} ${t.currency}` : "مكتمل"}</p></div>
               </div>
 
-              {/* Orders linked to this collection */}
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              {/* Orders + Client + Audit Source */}
+              <div className={`grid gap-3 text-sm ${selectedInvoice.auditId ? "grid-cols-3" : "grid-cols-2"}`}>
                 <div className="p-3 rounded-lg bg-muted/50">
                   <p className="text-xs text-muted-foreground mb-1.5">{t.order}</p>
                   {selectedInvoice.sourceOrders && selectedInvoice.sourceOrders.length > 0 ? (
@@ -403,6 +394,16 @@ export default function CollectionsPage() {
                   <p className="text-xs text-muted-foreground">{t.client}</p>
                   <p className="font-semibold text-primary">{selectedInvoice.client}</p>
                 </div>
+                {selectedInvoice.auditId && (
+                  <div
+                    className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors"
+                    onClick={() => { setSelectedInvoice(null); navigate(`/audits?search=${selectedInvoice.auditId}`); }}
+                  >
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mb-1">مصدر الجرد</p>
+                    <p className="font-mono font-semibold text-amber-700 dark:text-amber-300 text-sm">#{selectedInvoice.auditId}</p>
+                    {selectedInvoice.auditDate && <p className="text-xs text-muted-foreground mt-0.5">{selectedInvoice.auditDate}</p>}
+                  </div>
+                )}
               </div>
 
               {/* ── Profit Breakdown ── */}
