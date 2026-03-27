@@ -583,7 +583,7 @@ export default function OrderDetails() {
           <Button variant="outline" size="sm" onClick={handleOpenEdit} data-testid="button-edit-order">
             <Pencil className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />تعديل
           </Button>
-          <Button size="sm" onClick={() => navigate(`/deliveries?new=${id}`)}><Truck className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.registerDelivery}</Button>
+          <Button size="sm" disabled={["Delivered", "Completed", "مُسلَّم", "مكتمل", "تم التسليم"].includes(order.status)} onClick={() => navigate(`/deliveries?new=${id}`)}><Truck className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.registerDelivery}</Button>
         </div>
       </div>
 
