@@ -349,9 +349,9 @@ export default function InventoryPage() {
                                     <tr key={lot.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors cursor-pointer group" onClick={() => setDetailItem(lot)}>
                                       <td className="py-2 px-3">
                                         {lot.imageUrl ? (
-                                          <img src={lot.imageUrl} alt={lot.material} className="h-12 w-12 rounded-lg object-cover border border-border shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                          <img src={lot.imageUrl} alt={lot.material} className="h-14 w-14 rounded-xl object-contain bg-white border border-border shadow-sm p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                                         ) : (
-                                          <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center border border-border"><Package className="h-5 w-5 text-muted-foreground" /></div>
+                                          <div className="h-14 w-14 rounded-xl bg-muted flex items-center justify-center border border-border"><Package className="h-6 w-6 text-muted-foreground" /></div>
                                         )}
                                       </td>
                                       <td className="py-2 px-3">
@@ -422,9 +422,9 @@ export default function InventoryPage() {
                   <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer group" onClick={() => setDetailItem(lot)}>
                     <td className="py-3 px-3">
                       {lot.imageUrl ? (
-                        <img src={lot.imageUrl} alt={lot.material} className="h-12 w-12 rounded-lg object-cover border border-border shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        <img src={lot.imageUrl} alt={lot.material} className="h-14 w-14 rounded-xl object-contain bg-white border border-border shadow-sm p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       ) : (
-                        <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center border border-border"><Package className="h-5 w-5 text-muted-foreground" /></div>
+                        <div className="h-14 w-14 rounded-xl bg-muted flex items-center justify-center border border-border"><Package className="h-6 w-6 text-muted-foreground" /></div>
                       )}
                     </td>
                     <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{lot.id}</td>
@@ -472,6 +472,11 @@ export default function InventoryPage() {
           </DialogHeader>
           {detailItem && (
             <div className="space-y-3 text-sm">
+              {detailItem.imageUrl && (
+                <div className="flex justify-center">
+                  <img src={detailItem.imageUrl} alt={detailItem.material} className="h-28 w-28 rounded-2xl object-contain bg-white border border-border shadow-sm p-2" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <div><span className="text-muted-foreground">{t.clientColon}</span> {detailItem.clientName}</div>
                 <div><span className="text-muted-foreground">{t.codeColon}</span> {detailItem.code}</div>
