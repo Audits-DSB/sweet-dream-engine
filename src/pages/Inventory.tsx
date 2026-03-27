@@ -62,6 +62,24 @@ export default function InventoryPage() {
   // Add lot dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [newLot, setNewLot] = useState<Partial<InventoryLot>>({});
+  const [clientOrders, setClientOrders] = useState<any[]>([]);
+  const [clientOrderLines, setClientOrderLines] = useState<any[]>([]);
+
+  const fetchClientOrderMaterials = async (clientId: string) => {
+    try {
+      const orders = await api.get<any[]>("/orders");
+      const clientOrd = orders.filter((o: any) => o.clientId === clientId || o.client_id === clientId);
+      setClientOrders(clientOrd);
+      const allLines: any[] = [];
+      for (const ord of clientOrd) {
+        try {
+          const lines = await api.get<any[]>(`/orders/${ord.id}/lines`);
+          lines.forEach((ln: any) => allLines.push({ ...ln, orderId: ord.id, orderDate: ord.date || ord.created_at }));
+        } catch {}
+      }
+      setClientOrderLines(allLines);
+    } catch { setClientOrders([]); setClientOrderLines([]); }
+  };
 
   const { data: rawLots = [], isLoading } = useQuery<InventoryLot[]>({
     queryKey: ["/api/client-inventory"],
@@ -506,30 +524,81 @@ export default function InventoryPage() {
       </Dialog>
 
       {/* Add New Lot Dialog */}
-      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="max-w-lg">
+      <Dialog open={addDialogOpen} onOpenChange={(open) => { setAddDialogOpen(open); if (!open) { setNewLot({}); setClientOrders([]); setClientOrderLines([]); } }}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>إضافة دفعة جديدة</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-4">
             <div>
               <Label className="text-xs">العميل</Label>
               <Select value={newLot.clientId || ""} onValueChange={v => {
                 const cl = clients.find(c => c.id === v);
                 setNewLot({ ...newLot, clientId: v, clientName: cl?.name || "" });
+                fetchClientOrderMaterials(v);
               }}>
                 <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="اختر عميل" /></SelectTrigger>
                 <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label className="text-xs">المادة</Label><Input className="h-9 mt-1" value={newLot.material || ""} onChange={e => setNewLot({ ...newLot, material: e.target.value })} /></div>
-            <div><Label className="text-xs">الكود</Label><Input className="h-9 mt-1" placeholder="MAT-001" value={newLot.code || ""} onChange={e => setNewLot({ ...newLot, code: e.target.value })} /></div>
-            <div><Label className="text-xs">الوحدة</Label><Input className="h-9 mt-1" value={newLot.unit || ""} onChange={e => setNewLot({ ...newLot, unit: e.target.value })} /></div>
-            <div><Label className="text-xs">الكمية المسلمة</Label><Input className="h-9 mt-1" type="number" value={newLot.delivered || ""} onChange={e => setNewLot({ ...newLot, delivered: Number(e.target.value), remaining: Number(e.target.value) })} /></div>
-            <div><Label className="text-xs">سعر البيع</Label><Input className="h-9 mt-1" type="number" value={newLot.sellingPrice || ""} onChange={e => setNewLot({ ...newLot, sellingPrice: Number(e.target.value) })} /></div>
-            <div><Label className="text-xs">التكلفة</Label><Input className="h-9 mt-1" type="number" value={newLot.storeCost || ""} onChange={e => setNewLot({ ...newLot, storeCost: Number(e.target.value) })} /></div>
-            <div><Label className="text-xs">تاريخ التسليم</Label><Input className="h-9 mt-1" type="date" value={newLot.deliveryDate || ""} onChange={e => setNewLot({ ...newLot, deliveryDate: e.target.value })} /></div>
-            <div><Label className="text-xs">تاريخ الانتهاء</Label><Input className="h-9 mt-1" type="date" value={newLot.expiry || ""} onChange={e => setNewLot({ ...newLot, expiry: e.target.value })} /></div>
-            <div><Label className="text-xs">رقم الطلب</Label><Input className="h-9 mt-1" placeholder="ORD-001" value={newLot.sourceOrder || ""} onChange={e => setNewLot({ ...newLot, sourceOrder: e.target.value })} /></div>
-            <div><Label className="text-xs">متوسط أسبوعي</Label><Input className="h-9 mt-1" type="number" value={newLot.avgWeeklyUsage || ""} onChange={e => setNewLot({ ...newLot, avgWeeklyUsage: Number(e.target.value) })} /></div>
+
+            {newLot.clientId && clientOrderLines.length > 0 && (
+              <div>
+                <Label className="text-xs mb-2 block">اختر مادة من الطلبات</Label>
+                <div className="max-h-48 overflow-y-auto border rounded-lg divide-y">
+                  {clientOrderLines.map((ln: any, idx: number) => (
+                    <button
+                      key={`${ln.orderId}-${ln.id}-${idx}`}
+                      type="button"
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-start hover:bg-primary/5 transition-colors text-sm ${newLot.material === (ln.materialName || ln.material_name) && newLot.sourceOrder === ln.orderId ? "bg-primary/10 border-r-2 border-primary" : ""}`}
+                      onClick={() => setNewLot({
+                        ...newLot,
+                        material: ln.materialName || ln.material_name || "",
+                        code: ln.materialCode || ln.material_code || "",
+                        unit: ln.unit || "unit",
+                        sellingPrice: Number(ln.sellingPrice || ln.selling_price) || 0,
+                        storeCost: Number(ln.costPrice || ln.cost_price) || 0,
+                        sourceOrder: ln.orderId,
+                        delivered: Number(ln.quantity) || 0,
+                        remaining: Number(ln.quantity) || 0,
+                      })}
+                    >
+                      <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0">
+                        <Package className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{ln.materialName || ln.material_name}</div>
+                        <div className="text-xs text-muted-foreground">{ln.materialCode || ln.material_code} · {ln.unit} · الكمية: {ln.quantity}</div>
+                      </div>
+                      <div className="text-left shrink-0">
+                        <div className="font-mono text-xs font-bold text-primary">{ln.orderId}</div>
+                        {ln.orderDate && <div className="text-[10px] text-muted-foreground">{ln.orderDate.split("T")[0]}</div>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {newLot.clientId && clientOrderLines.length === 0 && clientOrders.length === 0 && (
+              <div className="text-xs text-muted-foreground text-center py-2">لا توجد طلبات لهذا العميل — يمكنك الإدخال يدوياً</div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">المادة</Label><Input className="h-9 mt-1" value={newLot.material || ""} onChange={e => setNewLot({ ...newLot, material: e.target.value })} /></div>
+              <div className="flex items-end gap-2">
+                <div className="flex-1"><Label className="text-xs">رقم الطلب</Label><Input className="h-9 mt-1" placeholder="ORD-001" value={newLot.sourceOrder || ""} onChange={e => setNewLot({ ...newLot, sourceOrder: e.target.value })} /></div>
+                {newLot.sourceOrder && (
+                  <button className="h-9 px-2 text-xs text-primary hover:underline shrink-0" onClick={() => navigate(`/orders/${newLot.sourceOrder}`)}>عرض الطلب</button>
+                )}
+              </div>
+              <div><Label className="text-xs">الكود</Label><Input className="h-9 mt-1" placeholder="MAT-001" value={newLot.code || ""} onChange={e => setNewLot({ ...newLot, code: e.target.value })} /></div>
+              <div><Label className="text-xs">الوحدة</Label><Input className="h-9 mt-1" value={newLot.unit || ""} onChange={e => setNewLot({ ...newLot, unit: e.target.value })} /></div>
+              <div><Label className="text-xs">الكمية المسلمة</Label><Input className="h-9 mt-1" type="number" value={newLot.delivered || ""} onChange={e => setNewLot({ ...newLot, delivered: Number(e.target.value), remaining: Number(e.target.value) })} /></div>
+              <div><Label className="text-xs">سعر البيع</Label><Input className="h-9 mt-1" type="number" value={newLot.sellingPrice || ""} onChange={e => setNewLot({ ...newLot, sellingPrice: Number(e.target.value) })} /></div>
+              <div><Label className="text-xs">التكلفة</Label><Input className="h-9 mt-1" type="number" value={newLot.storeCost || ""} onChange={e => setNewLot({ ...newLot, storeCost: Number(e.target.value) })} /></div>
+              <div><Label className="text-xs">تاريخ التسليم</Label><Input className="h-9 mt-1" type="date" value={newLot.deliveryDate || ""} onChange={e => setNewLot({ ...newLot, deliveryDate: e.target.value })} /></div>
+              <div><Label className="text-xs">تاريخ الانتهاء</Label><Input className="h-9 mt-1" type="date" value={newLot.expiry || ""} onChange={e => setNewLot({ ...newLot, expiry: e.target.value })} /></div>
+              <div><Label className="text-xs">متوسط أسبوعي</Label><Input className="h-9 mt-1" type="number" value={newLot.avgWeeklyUsage || ""} onChange={e => setNewLot({ ...newLot, avgWeeklyUsage: Number(e.target.value) })} /></div>
+            </div>
           </div>
           <DialogFooter className="mt-2">
             <Button variant="outline" size="sm" onClick={() => setAddDialogOpen(false)}>إلغاء</Button>
