@@ -33,6 +33,7 @@ type ComparisonRow = {
   result: "matched" | "shortage" | "surplus";
   sellingPrice: number;
   storeCost: number;
+  imageUrl?: string;
 };
 
 type AuditRecord = {
@@ -61,6 +62,7 @@ type InventoryLot = {
   remaining: number;
   sellingPrice: number;
   storeCost: number;
+  imageUrl?: string;
 };
 
 function parseCsvText(text: string): { code: string; name: string; actual: number }[] {
@@ -209,7 +211,7 @@ export default function AuditsPage() {
       const diff = actual - inv.expected;
       const result: ComparisonRow["result"] = diff === 0 ? "matched" : diff < 0 ? "shortage" : "surplus";
       // Use original code (not normalized) from first lot
-      rows.push({ material: inv.material, code: inv.lots[0].code, unit: inv.unit, expected: inv.expected, actual, diff, result, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost });
+      rows.push({ material: inv.material, code: inv.lots[0].code, unit: inv.unit, expected: inv.expected, actual, diff, result, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost, imageUrl: inv.lots[0].imageUrl || "" });
     }
 
     setComparisonRows(rows);
@@ -593,6 +595,7 @@ export default function AuditsPage() {
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="border-b border-border">
+                                <th className="py-2 px-3 w-14"></th>
                                 <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>
                                 <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.codeCol}</th>
                                 <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.expected}</th>
@@ -604,6 +607,13 @@ export default function AuditsPage() {
                             <tbody>
                               {details.map((d, i) => (
                                 <tr key={i} className={`border-b border-border/50 ${d.result === "shortage" ? "bg-destructive/5" : d.result === "surplus" ? "bg-warning/5" : ""}`}>
+                                  <td className="py-2 px-3">
+                                    {d.imageUrl ? (
+                                      <img src={d.imageUrl} alt={d.material} className="h-12 w-12 rounded-lg object-cover border border-border shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                    ) : (
+                                      <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center border border-border"><Package className="h-5 w-5 text-muted-foreground" /></div>
+                                    )}
+                                  </td>
                                   <td className="py-2 px-3 font-medium">{d.material}</td>
                                   <td className="py-2 px-3 font-mono text-xs text-muted-foreground">{d.code}</td>
                                   <td className="py-2 px-3 text-end">{d.expected}</td>
@@ -707,6 +717,7 @@ export default function AuditsPage() {
                           <table className="w-full text-xs">
                             <thead>
                               <tr className="border-b border-border bg-muted/30">
+                                <th className="py-2 px-2.5 w-14"></th>
                                 <th className="text-start py-2 px-2.5 font-medium">{t.material}</th>
                                 <th className="text-start py-2 px-2.5 font-medium">{t.codeCol}</th>
                                 <th className="text-end py-2 px-2.5 font-medium">{t.remaining}</th>
@@ -716,6 +727,13 @@ export default function AuditsPage() {
                             <tbody>
                               {clientInventory.map(inv => (
                                 <tr key={inv.id} className="border-b border-border/50">
+                                  <td className="py-1.5 px-2.5">
+                                    {inv.imageUrl ? (
+                                      <img src={inv.imageUrl} alt={inv.material} className="h-12 w-12 rounded-lg object-cover border border-border shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                    ) : (
+                                      <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center border border-border"><Package className="h-5 w-5 text-muted-foreground" /></div>
+                                    )}
+                                  </td>
                                   <td className="py-1.5 px-2.5 font-medium">{inv.material}</td>
                                   <td className="py-1.5 px-2.5 font-mono text-muted-foreground">{inv.code}</td>
                                   <td className="py-1.5 px-2.5 text-end font-medium">{inv.remaining}</td>
@@ -754,6 +772,7 @@ export default function AuditsPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border bg-muted/30">
+                          <th className="py-2 px-3 w-14"></th>
                           <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>
                           <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.expected}</th>
                           <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.actual}</th>
@@ -764,6 +783,13 @@ export default function AuditsPage() {
                       <tbody>
                         {comparisonRows.map((r, i) => (
                           <tr key={i} className={`border-b border-border/50 ${r.result === "shortage" ? "bg-destructive/5" : r.result === "surplus" ? "bg-warning/5" : ""}`}>
+                            <td className="py-2 px-3">
+                              {r.imageUrl ? (
+                                <img src={r.imageUrl} alt={r.material} className="h-12 w-12 rounded-lg object-cover border border-border shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                              ) : (
+                                <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center border border-border"><Package className="h-5 w-5 text-muted-foreground" /></div>
+                              )}
+                            </td>
                             <td className="py-2 px-3 font-medium">{r.material} <span className="text-xs text-muted-foreground">({r.unit})</span></td>
                             <td className="py-2 px-3 text-end text-muted-foreground">{r.expected}</td>
                             <td className="py-2 px-3 text-end">
