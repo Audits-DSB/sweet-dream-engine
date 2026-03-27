@@ -36,6 +36,7 @@ const EXPENSE_CATEGORIES = ["marketing", "operations", "salaries", "supplies", "
 type ProfitEntry = {
   collectionId: string;
   orderId: string;
+  clientId: string;
   client: string;
   date: string;
   totalCollection: number;  // قيمة الفاتورة / ما تم استهلاكه
@@ -214,6 +215,7 @@ export default function CompanyProfitPage() {
         return {
           collectionId: col.id,
           orderId,
+          clientId: order.clientId || order.client_id || col.clientId || col.client_id || "",
           client: col.client || col.clientName || col.client_name || order.client || "",
           date: issueDate.split("T")[0],
           totalCollection,
@@ -336,7 +338,7 @@ export default function CompanyProfitPage() {
     return map[key] || key;
   };
 
-  const fmtNum = (n: number) => n.toLocaleString(lang === "ar" ? "ar-EG" : "en-US");
+  const fmtNum = (n: number) => n.toLocaleString("en-US");
 
   const statusColor = (s: string) => {
     if (s === "Paid") return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
@@ -544,7 +546,18 @@ export default function CompanyProfitPage() {
                         {entry.orderId}
                       </button>
                     </td>
-                    <td className="py-2.5 px-3 font-medium text-sm">{entry.client}</td>
+                    <td className="py-2.5 px-3">
+                      {entry.clientId ? (
+                        <button
+                          className="font-medium text-sm hover:text-primary hover:underline transition-colors text-start"
+                          onClick={(e) => { e.stopPropagation(); navigate(`/clients/${entry.clientId}`); }}
+                        >
+                          {entry.client}
+                        </button>
+                      ) : (
+                        <span className="font-medium text-sm">{entry.client}</span>
+                      )}
+                    </td>
                     <td className="py-2.5 px-3 text-end">
                       <span className="font-medium">{fmtNum(entry.paidAmount)}</span>
                       <span className="text-muted-foreground text-xs"> / {fmtNum(entry.totalCollection)}</span>
