@@ -30,6 +30,7 @@ const statusVariantMap: Record<string, string> = {
   
   // Orders
   "Draft": "muted",
+  "Processing": "warning",
   "Confirmed": "info",
   "Awaiting Purchase": "warning",
   "Ready for Delivery": "primary",
@@ -59,13 +60,18 @@ const statusVariantMap: Record<string, string> = {
   "In Progress": "primary",
 };
 
+const statusLabelMap: Record<string, string> = {
+  "Processing": "قيد المعالجة",
+};
+
 export function StatusBadge({ status, variant }: StatusBadgeProps) {
   const resolvedVariant = variant || statusVariantMap[status] || "default";
   const styles = variantStyles[resolvedVariant] || variantStyles.default;
+  const label = statusLabelMap[status] || status;
 
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles}`}>
-      {status}
+      {label}
     </span>
   );
 }

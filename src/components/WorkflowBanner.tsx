@@ -25,7 +25,7 @@ export function WorkflowBanner() {
       title: "الأوردرات",
       icon: ShoppingCart,
       route: "/orders",
-      count: orders.filter(o => ["Draft", "Confirmed", "Ready for Delivery"].includes(o.status)).length,
+      count: orders.filter(o => ["Processing", "Draft", "Confirmed", "Ready for Delivery"].includes(o.status)).length,
       color: "text-orange-600",
       bgColor: "bg-orange-50",
     },

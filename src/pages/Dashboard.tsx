@@ -142,7 +142,7 @@ export default function Dashboard() {
   }, []);
 
   const activeClients = clients.filter(c => c.status === "Active").length;
-  const activeOrders = orders.filter(o => ["Draft", "Confirmed", "Ready for Delivery", "Awaiting Purchase"].includes(o.status)).length;
+  const activeOrders = orders.filter(o => ["Processing", "Draft", "Confirmed", "Ready for Delivery", "Awaiting Purchase"].includes(o.status)).length;
 
   // Collection stats from actual collections table
   const totalCollected = collections.reduce((s, c) => s + c.paidAmount, 0);

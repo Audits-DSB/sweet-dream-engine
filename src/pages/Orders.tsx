@@ -198,7 +198,7 @@ export default function OrdersPage() {
   const filtered = orders.filter((o) => {
     const q = search.toLowerCase().trim();
     const matchSearch = !q || o.client.toLowerCase().includes(q) || o.id.toLowerCase().includes(q) || o.date.includes(q) || o.source.toLowerCase().includes(q) || o.status.toLowerCase().includes(q);
-    const activeStatuses = ["Draft", "Confirmed", "Ready for Delivery"];
+    const activeStatuses = ["Processing", "Draft", "Confirmed", "Ready for Delivery"];
     const matchStatus = !filters.status || filters.status === "all" || (filters.status === "active" ? activeStatuses.includes(o.status) : o.status === filters.status);
     return matchSearch && matchStatus;
   });
@@ -250,7 +250,7 @@ export default function OrdersPage() {
         totalSelling: String(totalSelling),
         totalCost: String(totalCost),
         splitMode: splitLabel, deliveryFee: String(parseInt(form.deliveryFee) || 0),
-        status: "Draft", source: t.manual,
+        status: "Processing", source: t.manual,
         founderContributions,
         items: orderItems,
       });
@@ -308,7 +308,7 @@ export default function OrdersPage() {
   };
 
   const statusOptions = [
-    { label: t.draft, value: "Draft" }, { label: t.confirmed, value: "Confirmed" },
+    { label: "قيد المعالجة", value: "Processing" }, { label: t.draft, value: "Draft" }, { label: t.confirmed, value: "Confirmed" },
     { label: t.awaitingPurchase, value: "Awaiting Purchase" }, { label: t.readyForDelivery, value: "Ready for Delivery" },
     { label: t.partiallyDelivered, value: "Partially Delivered" }, { label: t.delivered, value: "Delivered" },
     { label: t.invoiced, value: "Invoiced" }, { label: t.closed, value: "Closed" }, { label: t.cancelled, value: "Cancelled" },
@@ -318,7 +318,7 @@ export default function OrdersPage() {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="page-header">{t.ordersTitle}</h1>
-        <p className="page-description">{orders.length} {t.orderCount} · {orders.filter(o => ["Draft", "Confirmed", "Ready for Delivery"].includes(o.status)).length} {t.activeOrdersCount}</p>
+        <p className="page-description">{orders.length} {t.orderCount} · {orders.filter(o => ["Processing", "Draft", "Confirmed", "Ready for Delivery"].includes(o.status)).length} {t.activeOrdersCount}</p>
       </div>
 
       <DataToolbar
