@@ -778,7 +778,7 @@ export default function AuditsPage() {
                                   <td className="py-1.5 px-2.5 font-mono text-muted-foreground">{inv.code}</td>
                                   <td className="py-1.5 px-2.5">
                                     {inv.sourceOrder ? (
-                                      <span className="font-mono text-[11px] text-primary bg-primary/5 px-1.5 py-0.5 rounded">{inv.sourceOrder}</span>
+                                      <button className="font-mono text-[11px] text-primary hover:text-primary/80 hover:underline bg-primary/5 px-1.5 py-0.5 rounded" onClick={() => navigate(`/orders/${inv.sourceOrder}`)}>{inv.sourceOrder}</button>
                                     ) : <span className="text-muted-foreground">—</span>}
                                   </td>
                                   <td className="py-1.5 px-2.5 text-end font-medium">{inv.remaining}</td>
