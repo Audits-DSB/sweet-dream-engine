@@ -182,20 +182,21 @@ export default function CompanyProfitPage() {
         // NOTE: fc.percentage is the founder's % of the FOUNDERS' PORTION (not total profit)
         let founderShares: Array<{ id: string; name: string; amount: number; pct: number }>;
 
-        if (contribArray.length > 0 && splitMode !== "equal") {
-          // Contribution-based split: normalize percentages to sum to 100 of founders' portion
+        if (contribArray.length > 0) {
+          // Use stored percentages from order — correct for both equal & custom splits.
+          // Equal-split orders save equal % per participating founder at creation time,
+          // so new founders added later do NOT retroactively get a share of old orders.
           const totalFounderPct = contribArray.reduce((s: number, fc: any) => s + (fc.percentage || 0), 0) || 100;
           founderShares = contribArray.map((fc: any) => {
             const founderName = fc.founder || founderMap[fc.founderId] || fc.founderId || "مؤسس";
             const founderPct = fc.percentage || 0;
-            // Apply to foundersProfit (not realizedProfit), normalized by totalFounderPct
             const founderAmount = Math.round(foundersProfit * founderPct / totalFounderPct);
             return { id: fc.founderId || founderName, name: founderName, amount: founderAmount, pct: Math.round((founderPct / totalFounderPct) * 100 * 10) / 10 };
           });
         } else {
-          // Equal split among all founders — each gets equal % of foundersProfit
+          // Fallback for legacy orders with no explicit contributions
           const numFounders = foundersList.length || 1;
-          const equalPct = Math.round((100 / numFounders) * 10) / 10; // % of founders' portion
+          const equalPct = Math.round((100 / numFounders) * 10) / 10;
           const equalAmount = Math.round(foundersProfit / numFounders);
           founderShares = foundersList.map((f: any) => ({
             id: f.id,

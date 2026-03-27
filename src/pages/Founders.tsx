@@ -166,10 +166,14 @@ export default function FoundersPage() {
         // ── Profit share ──────────────────────────────────────────────────────
         if (grossProfit > 0) {
           let founderShare = 0;
-          if (contribs.length > 0 && splitMode !== "equal") {
+          if (contribs.length > 0) {
+            // Use stored percentages — already set correctly at order creation
+            // (equal-split orders save equal %, custom orders save custom %)
+            // Founders not in contribs get 0 (they weren't part of this order)
             const fc = contribs.find((c: any) => c.founderId === f.id || c.founder === f.name);
             if (fc) founderShare = foundersProfit * (fc.percentage || 0) / totalFounderPct;
           } else {
+            // Fallback for legacy orders with no explicit contributions
             founderShare = foundersProfit / (founders.length || 1);
           }
           if (founderShare > 0) {
@@ -188,10 +192,12 @@ export default function FoundersPage() {
         // ── Capital return share ──────────────────────────────────────────────
         if (capitalReturn > 0) {
           let founderCapShare = 0;
-          if (contribs.length > 0 && splitMode !== "equal") {
+          if (contribs.length > 0) {
+            // Same logic: use stored percentages from the order
             const fc = contribs.find((c: any) => c.founderId === f.id || c.founder === f.name);
             if (fc) founderCapShare = capitalReturn * (fc.percentage || 0) / totalFounderPct;
           } else {
+            // Fallback for legacy orders with no explicit contributions
             founderCapShare = capitalReturn / (founders.length || 1);
           }
           if (founderCapShare > 0) {
