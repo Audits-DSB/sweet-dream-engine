@@ -123,12 +123,57 @@ export default function OrdersPage() {
       }));
       const cmap: Record<string, { paid: number; total: number; collectionId: string; status: string; date: string }> = {};
       (collectionsData || []).forEach((c: any) => {
-        const orderId = c.order || c.orderId || c.order_id || "";
-        if (!orderId) return;
+        const primaryOrderId = c.order || c.orderId || c.order_id || "";
         const paid = Number(c.paid ?? c.paidAmount ?? 0);
         const total = Number(c.total ?? c.totalAmount ?? 0);
-        if (!cmap[orderId] || paid > cmap[orderId].paid) {
-          cmap[orderId] = { paid, total, collectionId: c.id, status: c.status || "", date: c.invoiceDate || c.invoice_date || "" };
+        const colEntry = { paid, total, collectionId: c.id, status: c.status || "", date: c.invoiceDate || c.invoice_date || "" };
+
+        let mapped = false;
+        try {
+          const notes = typeof c.notes === "string" ? JSON.parse(c.notes) : c.notes;
+          if (notes?.sourceOrders && Array.isArray(notes.sourceOrders)) {
+            const relatedOrders: string[] = notes.sourceOrders.filter(Boolean);
+            if (relatedOrders.length > 0 && notes.lineItems && Array.isArray(notes.lineItems) && notes.lineItems.length > 0) {
+              const orderLineTotals: Record<string, number> = {};
+              notes.lineItems.forEach((li: any) => {
+                const oid = li.sourceOrderId || "";
+                if (!oid) return;
+                orderLineTotals[oid] = (orderLineTotals[oid] || 0) + (Number(li.lineTotal) || 0);
+              });
+              const lineSum = Object.values(orderLineTotals).reduce((s, v) => s + v, 0);
+              relatedOrders.forEach(oid => {
+                const ratio = lineSum > 0 ? (orderLineTotals[oid] || 0) / lineSum : 1 / relatedOrders.length;
+                const entry = {
+                  paid: Math.round(paid * ratio),
+                  total: Math.round(total * ratio),
+                  collectionId: c.id,
+                  status: c.status || "",
+                  date: c.invoiceDate || c.invoice_date || "",
+                };
+                if (!cmap[oid] || entry.paid > cmap[oid].paid) cmap[oid] = entry;
+              });
+              mapped = true;
+            } else if (relatedOrders.length > 0) {
+              const share = 1 / relatedOrders.length;
+              relatedOrders.forEach(oid => {
+                const entry = {
+                  paid: Math.round(paid * share),
+                  total: Math.round(total * share),
+                  collectionId: c.id,
+                  status: c.status || "",
+                  date: c.invoiceDate || c.invoice_date || "",
+                };
+                if (!cmap[oid] || entry.paid > cmap[oid].paid) cmap[oid] = entry;
+              });
+              mapped = true;
+            }
+          }
+        } catch {}
+
+        if (!mapped && primaryOrderId) {
+          if (!cmap[primaryOrderId] || paid > cmap[primaryOrderId].paid) {
+            cmap[primaryOrderId] = colEntry;
+          }
         }
       });
       setCollectionsMap(cmap);
