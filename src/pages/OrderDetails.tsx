@@ -97,12 +97,14 @@ export default function OrderDetails() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
+  const [activeTab, setActiveTab] = useState("invoice");
   const [lines, setLines] = useState<OrderLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [payingFounder, setPayingFounder] = useState<string | null>(null);
   const [orderDeliveries, setOrderDeliveries] = useState<OrderDelivery[]>([]);
   const [founderBalances, setFounderBalances] = useState<Record<string, number>>({});
   const [orderInventory, setOrderInventory] = useState<any[]>([]);
+  const [orderAudits, setOrderAudits] = useState<any[]>([]);
   const [orderCollections, setOrderCollections] = useState<any[]>([]);
   const [balanceDialog, setBalanceDialog] = useState<{ open: boolean; fp: any | null; available: number }>({ open: false, fp: null, available: 0 });
   const [useBalance, setUseBalance] = useState(false);
@@ -126,7 +128,8 @@ export default function OrderDetails() {
       api.get<{ founderId: string; founderName: string; balance: number }[]>("/founder-balances").catch(() => []),
       api.get<any[]>(`/client-inventory?sourceOrder=${id}`).catch(() => []),
       api.get<any[]>("/collections").catch(() => []),
-    ]).then(([all, fetchedLines, extData, deliveries, balances, inventory, collections]) => {
+      api.get<any[]>("/audits").catch(() => []),
+    ]).then(([all, fetchedLines, extData, deliveries, balances, inventory, collections, audits]) => {
       const found = (all || []).find((o: any) => o.id === id);
       if (found) setOrder(mapOrder(found));
       const map: Record<string, ExtMaterial> = {};
@@ -146,6 +149,11 @@ export default function OrderDetails() {
       setLines(enriched);
       setOrderDeliveries(deliveries || []);
       setOrderInventory(inventory || []);
+      const matchedAudits = (audits || []).filter((a: any) => {
+        const aOrderId = a.orderId || a.order_id || "";
+        return aOrderId === id;
+      });
+      setOrderAudits(matchedAudits);
       const orderCollections = (collections || []).filter((c: any) => {
         const cOrderId = c.order || c.orderId || c.order_id || "";
         return cOrderId === id;
@@ -758,6 +766,7 @@ export default function OrderDetails() {
         const hasDeliveries = orderDeliveries.length > 0;
         const allDelivered = confirmedDeliveries.length > 0 && pendingDeliveries.length === 0 && orderDeliveryStats.pct >= 100;
         const hasInventory = orderInventory.length > 0;
+        const hasCompletedAudit = orderAudits.some((a: any) => a.status === "Completed");
         const hasCollections = orderCollections.length > 0;
         const totalCollected = orderCollections.reduce((s: number, c: any) => s + Number(c.paid ?? c.paidAmount ?? 0), 0);
         const totalDue = orderCollections.reduce((s: number, c: any) => s + Number(c.total ?? c.totalAmount ?? 0), 0);
@@ -779,16 +788,16 @@ export default function OrderDetails() {
               : "لم يبدأ",
             items: orderDeliveries.slice(0, 3).map(d => ({
               id: d.id, date: d.scheduledDate || d.date, status: d.status,
-              link: `/deliveries?orderId=${order.id}`,
+              onClick: () => setActiveTab("deliveries"),
             })),
           },
           {
             key: "inventory", label: "الجرد", icon: Package,
-            done: hasInventory,
-            active: allDelivered && !hasInventory,
-            detail: hasInventory
-              ? `${orderInventory.length} سجل · ${orderInventory[0]?.deliveryDate || ""}`
-              : "لم يتم بعد",
+            done: hasCompletedAudit,
+            active: hasInventory && !hasCompletedAudit,
+            detail: hasCompletedAudit
+              ? `${orderAudits.filter((a: any) => a.status === "Completed").length} جرد مكتمل`
+              : hasInventory ? "في انتظار الجرد" : "لم يتم بعد",
             items: orderInventory.slice(0, 5).map((inv: any) => ({
               id: inv.id, name: inv.material || inv.code, date: inv.deliveryDate, remaining: inv.remaining, delivered: inv.delivered,
             })),
@@ -843,7 +852,7 @@ export default function OrderDetails() {
                   </div>
                   <div className="divide-y">
                     {orderDeliveries.map(d => (
-                      <button key={d.id} className="flex items-center gap-3 px-3 py-2 text-xs w-full text-start hover:bg-muted/30 transition-colors" onClick={() => navigate(`/deliveries?orderId=${order.id}`)}>
+                      <button key={d.id} className="flex items-center gap-3 px-3 py-2 text-xs w-full text-start hover:bg-muted/30 transition-colors" onClick={() => setActiveTab("deliveries")}>
                         <span className="font-mono text-muted-foreground">{d.id}</span>
                         <StatusBadge status={d.status} />
                         <span className="text-muted-foreground">{d.scheduledDate || d.date}</span>
@@ -907,7 +916,7 @@ export default function OrderDetails() {
         );
       })()}
 
-      <Tabs defaultValue="invoice" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="bg-muted">
           <TabsTrigger value="invoice">الفاتورة</TabsTrigger>
           <TabsTrigger value="financials">{t.financials}</TabsTrigger>
