@@ -90,7 +90,7 @@ export default function CollectionsPage() {
   const [filters, setFilters] = useState<Record<string, string>>({ ...(urlStatus ? { status: urlStatus } : {}), ...(urlOrderId ? { orderId: urlOrderId } : {}) });
   const [selectedInvoice, setSelectedInvoice] = useState<Collection | null>(null);
   const [loadingCollections, setLoadingCollections] = useState(true);
-  const [selectedOrderData, setSelectedOrderData] = useState<{ totalSelling: number; totalCost: number; splitMode: string } | null>(null);
+  const [selectedOrderData, setSelectedOrderData] = useState<{ totalSelling: number; totalCost: number; splitMode: string; founderContributions: any[] } | null>(null);
   const [founders, setFounders] = useState<{ id: string; name: string }[]>([]);
   const [companyProfitPct, setCompanyProfitPct] = useState(40);
   const [loadingOrderData, setLoadingOrderData] = useState(false);
@@ -130,11 +130,18 @@ export default function CollectionsPage() {
     setLoadingOrderData(true);
     api.get<any>(`/orders/${orderId}`)
       .then(o => {
-        if (o) setSelectedOrderData({
-          totalSelling: Number(o.totalSelling ?? o.total_selling ?? 0),
-          totalCost: Number(o.totalCost ?? o.total_cost ?? 0),
-          splitMode: o.splitMode || o.split_mode || "Equal",
-        });
+        if (o) {
+          let contribs: any[] = [];
+          const raw = o.founderContributions ?? o.founder_contributions;
+          if (Array.isArray(raw)) contribs = raw;
+          else if (typeof raw === "string") { try { contribs = JSON.parse(raw); } catch { contribs = []; } }
+          setSelectedOrderData({
+            totalSelling: Number(o.totalSelling ?? o.total_selling ?? 0),
+            totalCost: Number(o.totalCost ?? o.total_cost ?? 0),
+            splitMode: o.splitMode || o.split_mode || "Equal",
+            founderContributions: Array.isArray(contribs) ? contribs : [],
+          });
+        }
       })
       .catch(() => setSelectedOrderData(null))
       .finally(() => setLoadingOrderData(false));
@@ -407,38 +414,62 @@ export default function CollectionsPage() {
                     {loadingOrderData && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground ms-1" />}
                   </h4>
                   {selectedOrderData && (() => {
+                    const contribs = selectedOrderData.founderContributions || [];
+                    // Use snapshotted company % from order, fallback to global
+                    const snappedCompanyPct = contribs[0]?.companyProfitPercentage ?? companyProfitPct;
                     const grossProfit = selectedOrderData.totalSelling - selectedOrderData.totalCost;
-                    const paidRatio = selectedInvoice.total > 0 ? selectedInvoice.paid / selectedInvoice.total : 0;
+                    // paidRatio = paid ÷ FULL ORDER total (not just this invoice amount)
+                    const paidRatio = selectedOrderData.totalSelling > 0
+                      ? Math.min(selectedInvoice.paid / selectedOrderData.totalSelling, 1)
+                      : 0;
                     const realizedProfit = Math.round(grossProfit * paidRatio);
-                    const companyShare = Math.round(realizedProfit * companyProfitPct / 100);
+                    const companyShare = Math.round(realizedProfit * snappedCompanyPct / 100);
                     const foundersShare = realizedProfit - companyShare;
-                    const perFounder = founders.length > 0 ? Math.round(foundersShare / founders.length) : 0;
+
+                    // Per-founder distribution using order's founderContributions
+                    const totalFounderPct = contribs.length > 0
+                      ? contribs.reduce((s: number, fc: any) => s + (fc.percentage || 0), 0) || 100
+                      : 100;
+                    const founderRows = contribs.length > 0
+                      ? contribs.map((fc: any) => ({
+                          id: fc.founderId || fc.founder,
+                          name: fc.founder || fc.founderId || "مؤسس",
+                          amount: Math.round(foundersShare * (fc.percentage || 0) / totalFounderPct),
+                        }))
+                      : founders.map(f => ({
+                          id: f.id, name: f.name,
+                          amount: founders.length > 0 ? Math.round(foundersShare / founders.length) : 0,
+                        }));
+
+                    const hasContribs = contribs.length > 0;
                     return (
                       <div className="space-y-2 text-sm">
                         <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground mb-1">
                           <span>إجمالي الربح: <strong className="text-foreground">{grossProfit.toLocaleString()} ج.م</strong></span>
-                          <span>نسبة المحصّل: <strong className="text-foreground">{(paidRatio * 100).toFixed(0)}%</strong></span>
+                          <span>نسبة المحصّل: <strong className="text-foreground">{(paidRatio * 100).toFixed(1)}%</strong></span>
                           <span>ربح محقق: <strong className="text-success">{realizedProfit.toLocaleString()} ج.م</strong></span>
                         </div>
                         <div className="flex gap-2">
                           <div className="flex-1 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-center">
                             <Building2 className="h-4 w-4 mx-auto mb-1 text-blue-600 dark:text-blue-400" />
-                            <p className="text-xs text-muted-foreground">حصة الشركة ({companyProfitPct}%)</p>
+                            <p className="text-xs text-muted-foreground">حصة الشركة ({snappedCompanyPct}%)</p>
                             <p className="font-bold text-blue-700 dark:text-blue-300">{companyShare.toLocaleString()} ج.م</p>
                           </div>
                           <div className="flex-1 p-2.5 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-center">
                             <Users2 className="h-4 w-4 mx-auto mb-1 text-green-600 dark:text-green-400" />
-                            <p className="text-xs text-muted-foreground">حصة المؤسسين ({100 - companyProfitPct}%)</p>
+                            <p className="text-xs text-muted-foreground">حصة المؤسسين ({100 - snappedCompanyPct}%)</p>
                             <p className="font-bold text-green-700 dark:text-green-300">{foundersShare.toLocaleString()} ج.م</p>
                           </div>
                         </div>
-                        {founders.length > 0 && (
+                        {founderRows.length > 0 && (
                           <div className="space-y-1 pt-1">
-                            <p className="text-xs text-muted-foreground font-medium">توزيع المؤسسين ({selectedOrderData.splitMode === "Equal" || selectedOrderData.splitMode === "equal" ? "متساوٍ" : "حسب المساهمة"}):</p>
-                            {founders.map(f => (
+                            <p className="text-xs text-muted-foreground font-medium">
+                              توزيع المؤسسين ({hasContribs ? (contribs.every((fc: any) => Math.abs((fc.percentage || 0) - (contribs[0]?.percentage || 0)) < 0.5) ? "متساوٍ" : "حسب المساهمة") : "متساوٍ"}):
+                            </p>
+                            {founderRows.map(f => (
                               <div key={f.id} className="flex justify-between items-center text-xs px-2 py-1 rounded bg-muted/40">
                                 <span>{f.name}</span>
-                                <span className="font-semibold text-green-700 dark:text-green-300">{perFounder.toLocaleString()} ج.م</span>
+                                <span className="font-semibold text-green-700 dark:text-green-300">{f.amount.toLocaleString()} ج.م</span>
                               </div>
                             ))}
                           </div>
