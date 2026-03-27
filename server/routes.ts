@@ -740,8 +740,26 @@ router.patch("/deliveries/:id", async (req, res) => {
             });
           }
         } else if (lines && lines.length > 0) {
+          const { data: priorDeliveries } = await supabaseAdmin
+            .from("deliveries").select("notes, status").eq("order_id", orderId).neq("id", deliveryId);
+          const alreadyDelivered: Record<string, number> = {};
+          for (const pd of (priorDeliveries || [])) {
+            if (pd.status === "Failed") continue;
+            try {
+              const pn = typeof pd.notes === "string" ? JSON.parse(pd.notes) : null;
+              if (pn && Array.isArray(pn.items)) {
+                for (const pi of pn.items) {
+                  const key = String(pi.lineId || pi.materialCode || "");
+                  if (key) alreadyDelivered[key] = (alreadyDelivered[key] || 0) + (Number(pi.qty) || 0);
+                }
+              }
+            } catch {}
+          }
+
           for (const line of lines) {
-            const qty = Number(line.quantity) || 0;
+            const totalQty = Number(line.quantity) || 0;
+            const prevDelivered = alreadyDelivered[String(line.id)] || alreadyDelivered[line.material_code] || 0;
+            const qty = Math.max(0, totalQty - prevDelivered);
             if (qty <= 0) continue;
             ciRows.push({
               id: `CI-${deliveryId}-${line.material_code || line.id}-${ts}`,
