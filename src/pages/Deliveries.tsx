@@ -348,7 +348,7 @@ export default function DeliveriesPage() {
 
       {/* Detail Dialog */}
       <Dialog open={!!detailItem} onOpenChange={() => setDetailItem(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{detailItem?.id} — {detailItem?.client}</DialogTitle></DialogHeader>
           {detailItem && (() => {
             let parsedItems: any[] = [];
@@ -398,7 +398,7 @@ export default function DeliveriesPage() {
 
       {/* New Delivery Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{t.newDelivery}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
