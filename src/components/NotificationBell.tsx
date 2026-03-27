@@ -194,7 +194,7 @@ export function NotificationBell() {
           </button>
         </div>
 
-        <ScrollArea className="max-h-[420px]">
+        <ScrollArea className="h-[420px]">
           {tab === "alerts" ? (
             activeAlerts.length === 0 ? (
               <div className="p-6 text-center text-sm text-muted-foreground">
@@ -257,7 +257,7 @@ export function NotificationBell() {
                     </button>
                   </div>
                 )}
-                {notifications.slice(0, 20).map((n) => {
+                {notifications.map((n) => {
                   const friendlyMsg = formatNotifMessage(n.message);
                   return (
                   <div
