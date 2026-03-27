@@ -89,27 +89,89 @@ export default function DeliveriesPage() {
   const [detailOtherDeliveries, setDetailOtherDeliveries] = useState<Delivery[]>([]);
   const [confirmingDelivery, setConfirmingDelivery] = useState(false);
 
+  const getDeliveredQtyMap = (orderDeliveries: any[]): Record<string, number> => {
+    const map: Record<string, number> = {};
+    for (const d of orderDeliveries) {
+      if (d.status === "Failed") continue;
+      const notes = d.notes || d.type || "";
+      try {
+        const parsed = JSON.parse(notes);
+        if (parsed && Array.isArray(parsed.items)) {
+          for (const item of parsed.items) {
+            const key = item.lineId || item.materialCode || "";
+            if (key) map[key] = (map[key] || 0) + (Number(item.qty) || 0);
+          }
+          continue;
+        }
+      } catch {}
+      if (notes === "كامل" || notes === "full") {
+        return { __full__: 1 };
+      }
+    }
+    return map;
+  };
+
+  const [deliveredQtyMap, setDeliveredQtyMap] = useState<Record<string, number>>({});
+  const [isFullyDelivered, setIsFullyDelivered] = useState(false);
+
   useEffect(() => {
-    if (!selectedOrder || deliveryType !== "partial") { setOrderLines([]); setPartialItems({}); return; }
+    if (!selectedOrder) { setOrderLines([]); setPartialItems({}); setDeliveredQtyMap({}); setIsFullyDelivered(false); return; }
     let cancelled = false;
     setLoadingLines(true);
     setOrderLines([]);
     setPartialItems({});
-    api.get<any[]>(`/orders/${selectedOrder}/lines`).then(lines => {
+    setDeliveredQtyMap({});
+    setIsFullyDelivered(false);
+
+    Promise.all([
+      api.get<any[]>(`/orders/${selectedOrder}/lines`),
+      api.get<any[]>(`/deliveries?orderId=${selectedOrder}`),
+    ]).then(([lines, existingDeliveries]) => {
       if (cancelled) return;
-      const mapped = (lines || []).filter((l: any) => (Number(l.quantity) || 0) > 0).map((l: any) => ({
-        id: l.id, materialCode: l.materialCode || l.material_code || "",
-        materialName: l.materialName || l.material_name || l.name || "",
-        quantity: Number(l.quantity) || 0, unit: l.unit || "",
-        imageUrl: l.imageUrl || l.image_url || "",
-      }));
-      setOrderLines(mapped);
+
+      const activeDeliveries = (existingDeliveries || []).filter((d: any) => {
+        const s = d.status || d.Status || "";
+        return s !== "Failed";
+      });
+
+      const qtyMap = getDeliveredQtyMap(activeDeliveries);
+
+      if (qtyMap.__full__) {
+        setIsFullyDelivered(true);
+        setDeliveredQtyMap(qtyMap);
+        setOrderLines([]);
+        setPartialItems({});
+        return;
+      }
+
+      setDeliveredQtyMap(qtyMap);
+
+      const mapped = (lines || []).filter((l: any) => (Number(l.quantity) || 0) > 0).map((l: any) => {
+        const lineId = l.id;
+        const totalQty = Number(l.quantity) || 0;
+        const alreadyDelivered = qtyMap[lineId] || qtyMap[l.materialCode || l.material_code || ""] || 0;
+        const remaining = Math.max(0, totalQty - alreadyDelivered);
+        return {
+          id: lineId, materialCode: l.materialCode || l.material_code || "",
+          materialName: l.materialName || l.material_name || l.name || "",
+          quantity: totalQty, unit: l.unit || "",
+          imageUrl: l.imageUrl || l.image_url || "",
+          remaining,
+          alreadyDelivered,
+        };
+      });
+
+      const allDelivered = mapped.length > 0 && mapped.every(m => m.remaining <= 0);
+      setIsFullyDelivered(allDelivered);
+
+      const available = mapped.filter(m => m.remaining > 0);
+      setOrderLines(available.map(m => ({ id: m.id, materialCode: m.materialCode, materialName: m.materialName, quantity: m.remaining, unit: m.unit, imageUrl: m.imageUrl })));
       const init: Record<string, { selected: boolean; qty: number }> = {};
-      mapped.forEach(l => { init[l.id] = { selected: false, qty: l.quantity }; });
+      available.forEach(l => { init[l.id] = { selected: false, qty: l.remaining }; });
       setPartialItems(init);
-    }).catch(() => { if (!cancelled) { setOrderLines([]); setPartialItems({}); } }).finally(() => { if (!cancelled) setLoadingLines(false); });
+    }).catch(() => { if (!cancelled) { setOrderLines([]); setPartialItems({}); setDeliveredQtyMap({}); } }).finally(() => { if (!cancelled) setLoadingLines(false); });
     return () => { cancelled = true; };
-  }, [selectedOrder, deliveryType]);
+  }, [selectedOrder]);
 
   useEffect(() => {
     Promise.all([
@@ -197,6 +259,7 @@ export default function DeliveriesPage() {
 
   const handleAdd = async () => {
     if (!selectedOrder) { toast.error(t.pleaseSelectOrder); return; }
+    if (isFullyDelivered) { toast.error("تم توصيل جميع مواد هذا الطلب بالكامل"); return; }
     const order = orders.find(o => o.id === selectedOrder);
     if (!order) return;
 
@@ -207,12 +270,11 @@ export default function DeliveriesPage() {
 
     setSaving(true);
     const today = requestedDate || new Date().toISOString().split("T")[0];
-    const typeLabel = deliveryType === "full" ? (t.full || "كامل") : (t.partialType || "جزئي");
     const newId = `DEL-${Date.now().toString().slice(-6)}`;
     const actorName = selectedActor === "__other__" ? (customActor.trim() || "") : (selectedActor || "");
 
     let itemsCount = 0;
-    let notesPayload = typeLabel;
+    let notesPayload: string;
 
     if (deliveryType === "partial") {
       const lineIds = new Set(orderLines.map(l => l.id));
@@ -226,10 +288,17 @@ export default function DeliveriesPage() {
       itemsCount = selectedLines.length;
       notesPayload = JSON.stringify({ type: "جزئي", items: selectedLines });
     } else {
-      try {
-        const lines = await api.get<any[]>(`/orders/${order.id}/lines`);
-        itemsCount = (lines || []).length;
-      } catch {}
+      const hasPriorDeliveries = Object.keys(deliveredQtyMap).length > 0;
+      if (hasPriorDeliveries && orderLines.length > 0) {
+        const remainingItems = orderLines.map(l => ({
+          lineId: l.id, materialCode: l.materialCode, materialName: l.materialName, qty: l.quantity, unit: l.unit,
+        }));
+        itemsCount = remainingItems.length;
+        notesPayload = JSON.stringify({ type: "جزئي", items: remainingItems });
+      } else {
+        itemsCount = orderLines.length || order.itemsCount || 0;
+        notesPayload = t.full || "كامل";
+      }
     }
 
     const payload = {
@@ -581,7 +650,7 @@ export default function DeliveriesPage() {
               <Select value={selectedOrder} onValueChange={setSelectedOrder}>
                 <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t.selectOrderPlaceholder} /></SelectTrigger>
                 <SelectContent>
-                  {orders.filter(o => !["Cancelled", "Closed"].includes(o.status)).map(o => (
+                  {orders.filter(o => !["Cancelled", "Closed", "Completed"].includes(o.status)).map(o => (
                     <SelectItem key={o.id} value={o.id}>{o.id} — {o.client} ({o.status})</SelectItem>
                   ))}
                 </SelectContent>
@@ -615,7 +684,39 @@ export default function DeliveriesPage() {
               <div><Label className="text-xs">{t.dateLabel}</Label><Input className="h-9 mt-1" type="date" value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} /></div>
             </div>
 
-            {deliveryType === "partial" && selectedOrder && (
+            {selectedOrder && isFullyDelivered && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
+                <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
+                <span className="text-xs text-green-700 dark:text-green-400 font-medium">تم توصيل جميع مواد هذا الطلب بالكامل — لا يمكن إنشاء توصيلة أخرى</span>
+              </div>
+            )}
+
+            {selectedOrder && !isFullyDelivered && Object.keys(deliveredQtyMap).length > 0 && !deliveredQtyMap.__full__ && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                <span className="text-xs text-amber-700 dark:text-amber-400 font-medium">تم توصيل بعض المواد مسبقاً — المواد المتبقية فقط متاحة للتوصيل</span>
+              </div>
+            )}
+
+            {deliveryType === "full" && selectedOrder && !isFullyDelivered && Object.keys(deliveredQtyMap).length > 0 && orderLines.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs flex items-center gap-1.5"><Package className="h-3.5 w-3.5" /> المواد المتبقية التي سيتم توصيلها</Label>
+                <div className="border rounded-lg divide-y max-h-48 overflow-y-auto">
+                  {orderLines.map(line => (
+                    <div key={line.id} className="flex items-center gap-3 px-3 py-2 text-xs">
+                      {line.imageUrl && <img src={line.imageUrl} alt="" className="h-8 w-8 rounded object-cover flex-shrink-0" />}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{line.materialName}</p>
+                        <p className="text-xs text-muted-foreground">{line.materialCode} · {line.unit}</p>
+                      </div>
+                      <span className="text-sm font-semibold text-primary">{line.quantity}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {deliveryType === "partial" && selectedOrder && !isFullyDelivered && (
               <div className="space-y-2">
                 <Label className="text-xs flex items-center gap-1.5"><Package className="h-3.5 w-3.5" /> اختر المواد للتسليم</Label>
                 {loadingLines ? (
@@ -663,7 +764,7 @@ export default function DeliveriesPage() {
               </div>
             )}
 
-            <Button className="w-full" onClick={handleAdd} disabled={saving || (deliveryType === "partial" && loadingLines)}>
+            <Button className="w-full" onClick={handleAdd} disabled={saving || isFullyDelivered || (deliveryType === "partial" && loadingLines) || (deliveryType === "full" && selectedOrder && orderLines.length === 0 && !loadingLines)}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (t.createDelivery || "إنشاء التسليم")}
             </Button>
           </div>
