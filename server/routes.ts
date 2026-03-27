@@ -778,9 +778,10 @@ router.get("/founder-balances", async (_req, res) => {
     const orderMap: Record<string, any> = {};
     ordList.forEach(o => { orderMap[o.id] = o; });
 
-    // Auto capital from paid collections
+    // Auto capital (recovered) + auto profits — both from paid collections
     const autoCapital: Record<string, number> = {};
-    fList.forEach(f => { autoCapital[f.id] = 0; });
+    const autoProfit: Record<string, number> = {};
+    fList.forEach(f => { autoCapital[f.id] = 0; autoProfit[f.id] = 0; });
     colList.forEach(col => {
       const order = orderMap[col.order_id];
       if (!order) return;
@@ -788,37 +789,43 @@ router.get("/founder-balances", async (_req, res) => {
       const totalSelling = Number(order.total_selling ?? 0);
       const totalCost = Number(order.total_cost ?? 0);
       if (totalSelling <= 0 || paid <= 0) return;
-      const qp = quickProfit({ orderTotal: totalSelling, totalCost, paidValue: paid, companyProfitPct: 40 });
+      const rawPct = order.company_profit_percentage;
+      const companyPct = rawPct != null ? (Number(rawPct) >= 2 ? Number(rawPct) : Number(rawPct) * 100) : 40;
+      const qp = quickProfit({ orderTotal: totalSelling, totalCost, paidValue: paid, companyProfitPct: companyPct });
       const capitalReturn = Math.round(qp.recoveredCapital);
-      if (capitalReturn <= 0) return;
+      const foundersProfit = qp.foundersProfit;
       let contribs: any[] = [];
       const rawC = order.founder_contributions;
       if (Array.isArray(rawC)) contribs = rawC;
       else if (typeof rawC === "string") { try { contribs = JSON.parse(rawC); } catch { contribs = []; } }
       const sm = order.split_mode || "equal";
       const isWeighted = sm.includes("مساهمة") || sm.toLowerCase().includes("contribution") || sm === "weighted";
-      const splits = founderSplit(0, capitalReturn, contribs, isWeighted ? "weighted" : "equal");
+      const splits = founderSplit(foundersProfit, capitalReturn, contribs, isWeighted ? "weighted" : "equal");
       fList.forEach(f => {
-        let share = 0;
+        let capShare = 0;
+        let profShare = 0;
         if (contribs.length > 0) {
-          const match = splits.find(s => s.id === f.id || s.name === f.name);
-          if (match) share = match.capitalShare;
+          const match = splits.find((s: any) => s.id === f.id || s.name === f.name);
+          if (match) { capShare = match.capitalShare; profShare = match.profit; }
         } else {
-          share = capitalReturn / (fList.length || 1);
+          capShare = capitalReturn / (fList.length || 1);
+          profShare = foundersProfit / (fList.length || 1);
         }
-        if (share > 0) autoCapital[f.id] = (autoCapital[f.id] || 0) + Math.round(share);
+        if (capShare > 0) autoCapital[f.id] = (autoCapital[f.id] || 0) + Math.round(capShare);
+        if (profShare > 0) autoProfit[f.id] = (autoProfit[f.id] || 0) + Math.round(profShare);
       });
     });
 
     // Manual capital_return additions & capital_withdrawal deductions per founder
+    // Profits are now auto-included — no manual registration needed
     const balances = fList.map(f => {
-      const myTxs = txList.filter(tx => tx.performed_by === f.id || tx.reference_id === f.name);
-      const manualReturn = myTxs.filter(tx => tx.tx_type === "capital_return").reduce((s: number, tx: any) => s + Math.abs(Number(tx.amount)), 0);
-      const withdrawn = myTxs.filter(tx => tx.tx_type === "capital_withdrawal").reduce((s: number, tx: any) => s + Math.abs(Number(tx.amount)), 0);
+      const myTxs = txList.filter((tx: any) => tx.performed_by === f.id || tx.reference_id === f.name);
+      const manualReturn = myTxs.filter((tx: any) => tx.tx_type === "capital_return").reduce((s: number, tx: any) => s + Math.abs(Number(tx.amount)), 0);
+      const withdrawn = myTxs.filter((tx: any) => tx.tx_type === "capital_withdrawal").reduce((s: number, tx: any) => s + Math.abs(Number(tx.amount)), 0);
       return {
         founderId: f.id,
         founderName: f.name,
-        balance: Math.round((autoCapital[f.id] || 0) + manualReturn - withdrawn),
+        balance: Math.round((autoCapital[f.id] || 0) + (autoProfit[f.id] || 0) + manualReturn - withdrawn),
       };
     });
     res.json(balances);

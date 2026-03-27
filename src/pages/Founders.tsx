@@ -205,13 +205,15 @@ export default function FoundersPage() {
 
   const totalContributed = founders.reduce((s, f) => s + f.totalContributed, 0);
 
-  // Available capital per founder = auto capital from collections + manual capital_returns - withdrawals
+  // Available capital per founder = auto capital (recovered) + auto profits + manual capital_returns - withdrawals
+  // Profits are ALWAYS included automatically — no manual "تسجيل كرأس مال" step needed
   function founderCapitalBalance(founderId: string): number {
     const myTxs = founderTxs.filter(tx => tx.founderId === founderId);
     const autoCapital = (capitalByFounder[founderId] || []).reduce((s, e) => s + e.capitalShare, 0);
+    const autoProfit = (profitsByFounder[founderId] || []).reduce((s, e) => s + e.founderShare, 0);
     const manualReturn = myTxs.filter(tx => tx.type === "capital_return").reduce((s, tx) => s + tx.amount, 0);
     const withdrawn = myTxs.filter(tx => tx.type === "capital_withdrawal").reduce((s, tx) => s + tx.amount, 0);
-    return autoCapital + manualReturn - withdrawn;
+    return autoCapital + autoProfit + manualReturn - withdrawn;
   }
 
   const totalAvailableCapital = founders.reduce((s, f) => s + Math.max(0, founderCapitalBalance(f.id)), 0);
@@ -389,6 +391,7 @@ export default function FoundersPage() {
 
             const capitalBalance = founderCapitalBalance(f.id);
             const autoCapitalTotal = myCapital.reduce((s, e) => s + e.capitalShare, 0);
+            const autoProfitTotal = (profitsByFounder[f.id] || []).reduce((s, e) => s + e.founderShare, 0);
             const manualCapitalTotal = capitalReturns.reduce((s, tx) => s + tx.amount, 0);
             const capitalWithdrawnTotal = capitalWithdrawals.reduce((s, tx) => s + tx.amount, 0);
 
@@ -567,21 +570,9 @@ export default function FoundersPage() {
                                     </div>
                                     <div className="flex flex-col items-end gap-1">
                                       <span className="text-sm font-bold text-success">+{p.founderShare.toLocaleString()} {t.currency}</span>
-                                      {p.alreadyRegistered ? (
-                                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                                          <CheckCircle2 className="h-3 w-3 text-success" /> مسجّل كرأس مال
-                                        </span>
-                                      ) : (
-                                        <button
-                                          className="inline-flex items-center gap-1 text-xs text-primary bg-primary/10 hover:bg-primary/20 px-2 py-0.5 rounded transition-colors"
-                                          onClick={() => {
-                                            setCapitalRegForm({ founderId: f.id, founderName: f.name, amount: String(p.founderShare), collectionId: p.collectionId, orderId: p.orderId, clientName: p.clientName, notes: "" });
-                                            setRegisterCapitalOpen(true);
-                                          }}
-                                        >
-                                          <Coins className="h-3 w-3" /> تسجيل كرأس مال
-                                        </button>
-                                      )}
+                                      <span className="inline-flex items-center gap-1 text-xs text-success bg-success/10 px-1.5 py-0.5 rounded">
+                                        <CheckCircle2 className="h-3 w-3" /> مضاف تلقائياً لرأس المال
+                                      </span>
                                     </div>
                                   </div>
                                 </div>
@@ -606,9 +597,10 @@ export default function FoundersPage() {
                             {capitalBalance.toLocaleString()} <span className="text-base font-normal">{t.currency}</span>
                           </p>
                           <div className="flex items-center justify-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
-                            <span>من تحصيلات: <span className="text-foreground font-medium">{autoCapitalTotal.toLocaleString()}</span></span>
-                            {manualCapitalTotal > 0 && <span>أرباح مسجّلة: <span className="text-foreground font-medium">{manualCapitalTotal.toLocaleString()}</span></span>}
-                            <span>مسحوب: <span className="text-destructive font-medium">{capitalWithdrawnTotal.toLocaleString()}</span></span>
+                            <span>رأس مال عائد: <span className="text-foreground font-medium">{autoCapitalTotal.toLocaleString()}</span></span>
+                            {autoProfitTotal > 0 && <span>أرباح تلقائية: <span className="text-success font-medium">+{autoProfitTotal.toLocaleString()}</span></span>}
+                            {manualCapitalTotal > 0 && <span>يدوي: <span className="text-foreground font-medium">{manualCapitalTotal.toLocaleString()}</span></span>}
+                            <span>مسحوب: <span className="text-destructive font-medium">−{capitalWithdrawnTotal.toLocaleString()}</span></span>
                           </div>
                           {capitalBalance > 0 && (
                             <div className="mt-3 flex gap-2 justify-center">
