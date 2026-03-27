@@ -65,6 +65,7 @@ export default function DeliveriesPage() {
     const orderId = searchParams.get("orderId");
     return { ...(status ? { status } : {}), ...(orderId ? { orderId } : {}) };
   });
+  const urlNewOrderId = searchParams.get("new") || "";
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailItem, setDetailItem] = useState<Delivery | null>(null);
   const [selectedOrder, setSelectedOrder] = useState("");
@@ -133,6 +134,16 @@ export default function DeliveriesPage() {
     const orderId = searchParams.get("orderId");
     setFilters({ ...(status ? { status } : {}), ...(orderId ? { orderId } : {}) });
   }, [searchParams]);
+
+  useEffect(() => {
+    if (urlNewOrderId && orders.length > 0 && !loading) {
+      const match = orders.find(o => o.id === urlNewOrderId);
+      if (match) {
+        setSelectedOrder(match.id);
+        setDialogOpen(true);
+      }
+    }
+  }, [urlNewOrderId, orders, loading]);
 
   const filtered = deliveries.filter((d) => {
     const s = search.toLowerCase();
