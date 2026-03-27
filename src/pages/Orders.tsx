@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2, Users, Package, CreditCard } from "lucide-react";
+import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2, Users, Package, CreditCard, CheckCircle2 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -82,6 +82,7 @@ export default function OrdersPage() {
   const [collectionsMap, setCollectionsMap] = useState<Record<string, { paid: number; total: number; collectionId: string; status: string; date: string }>>({});
   const [deliveriesMap, setDeliveriesMap] = useState<Record<string, { total: number; confirmed: number }>>({});
   const [inventoryMap, setInventoryMap] = useState<Record<string, { count: number; date: string }>>({});
+  const [auditsMap, setAuditsMap] = useState<Record<string, { auditId: string; status: string; date: string }>>({});
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -109,7 +110,8 @@ export default function OrdersPage() {
       api.get<any[]>("/collections"),
       api.get<any[]>("/deliveries"),
       api.get<any[]>("/client-inventory"),
-    ]).then(([ordersData, clientsData, collectionsData, deliveriesData, inventoryData]) => {
+      api.get<any[]>("/audits"),
+    ]).then(([ordersData, clientsData, collectionsData, deliveriesData, inventoryData, auditsData]) => {
       const clientMap: Record<string, string> = {};
       const clientArr = (clientsData || []).map((c: any) => {
         clientMap[c.id] = c.name || "";
@@ -196,6 +198,45 @@ export default function OrdersPage() {
         if (d && d > imap[oid].date) imap[oid].date = d;
       });
       setInventoryMap(imap);
+
+      const amap: Record<string, { auditId: string; status: string; date: string }> = {};
+      const invSourceOrders: Record<string, Set<string>> = {};
+      (inventoryData || []).forEach((inv: any) => {
+        const cid = inv.clientId || inv.client_id || "";
+        const oid = inv.sourceOrder || inv.source_order || "";
+        if (cid && oid) {
+          if (!invSourceOrders[cid]) invSourceOrders[cid] = new Set();
+          invSourceOrders[cid].add(oid);
+        }
+      });
+      (auditsData || []).forEach((a: any) => {
+        const clientId = a.clientId || a.client_id || "";
+        const auditId = a.id || "";
+        const auditDate = a.date || a.createdAt || a.created_at || "";
+        const auditStatus = a.status || "";
+        const orderIds = invSourceOrders[clientId] || new Set();
+        orderIds.forEach(oid => {
+          if (!amap[oid] || auditDate > amap[oid].date) {
+            amap[oid] = { auditId, status: auditStatus, date: auditDate };
+          }
+        });
+      });
+      (collectionsData || []).forEach((c: any) => {
+        try {
+          const notes = typeof c.notes === "string" ? JSON.parse(c.notes) : c.notes;
+          if (notes?.auditId && notes?.sourceOrders) {
+            const auditRec = (auditsData || []).find((a: any) => a.id === notes.auditId);
+            if (auditRec) {
+              (notes.sourceOrders as string[]).filter(Boolean).forEach(oid => {
+                if (!amap[oid] || (auditRec.date || "") > (amap[oid].date || "")) {
+                  amap[oid] = { auditId: auditRec.id, status: auditRec.status || "", date: auditRec.date || "" };
+                }
+              });
+            }
+          }
+        } catch {}
+      });
+      setAuditsMap(amap);
     }).catch(() => toast.error(t.failedToLoadData))
       .finally(() => setLoading(false));
   }, []);
@@ -392,6 +433,7 @@ export default function OrdersPage() {
               {filtered.map((order) => {
                 const delInfo = deliveriesMap[order.id];
                 const invInfo = inventoryMap[order.id];
+                const auditInfo = auditsMap[order.id];
                 const colInfo = collectionsMap[order.id];
                 const colPct = colInfo && colInfo.total > 0 ? Math.round((colInfo.paid / colInfo.total) * 100) : 0;
                 return (
@@ -411,12 +453,23 @@ export default function OrdersPage() {
                     ) : <span className="text-xs text-muted-foreground">—</span>}
                   </td>
                   <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
-                    {invInfo ? (
+                    {auditInfo ? (
+                      <button className="inline-flex flex-col items-center gap-0.5 text-xs hover:underline" onClick={() => navigate(`/audits?auditId=${auditInfo.auditId}`)}>
+                        <span className="font-mono text-[10px] text-primary hover:underline">{auditInfo.auditId}</span>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${
+                          auditInfo.status === "تم التحصيل" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : auditInfo.status === "Completed" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                        }`}>
+                          {auditInfo.status === "تم التحصيل" || auditInfo.status === "Completed" ? <CheckCircle2 className="h-3 w-3" /> : <Package className="h-3 w-3" />}
+                          {auditInfo.status === "تم التحصيل" ? "تم ✓" : auditInfo.status === "Completed" ? "تم ✓" : auditInfo.status === "Discrepancy" ? "نواقص" : "تم"}
+                        </span>
+                      </button>
+                    ) : invInfo ? (
                       <button className="inline-flex items-center gap-1 text-xs hover:underline" onClick={() => navigate(`/inventory?sourceOrder=${order.id}`)}>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium">
                           <Package className="h-3 w-3" /> {invInfo.count}
                         </span>
-                        <span className="text-[10px] text-muted-foreground">{invInfo.date}</span>
                       </button>
                     ) : <span className="text-xs text-muted-foreground">—</span>}
                   </td>

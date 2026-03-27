@@ -1,5 +1,5 @@
-import { useState, useRef, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { DataToolbar } from "@/components/DataToolbar";
@@ -93,10 +93,13 @@ function parseCsvText(text: string): { code: string; name: string; actual: numbe
 export default function AuditsPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const urlAuditId = searchParams.get("auditId") || "";
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [selectedAudit, setSelectedAudit] = useState<AuditRecord | null>(null);
+  const [autoOpened, setAutoOpened] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AuditRecord | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -138,6 +141,13 @@ export default function AuditsPage() {
     sellingPrice: Number(l.sellingPrice),
     storeCost: Number(l.storeCost),
   }));
+
+  useEffect(() => {
+    if (urlAuditId && !autoOpened && audits.length > 0) {
+      const target = audits.find(a => a.id === urlAuditId);
+      if (target) { setSelectedAudit(target); setAutoOpened(true); }
+    }
+  }, [urlAuditId, audits, autoOpened]);
 
   // Build code→imageUrl lookup from all inventory lots (already enriched by server)
   const imageByCode = useMemo<Record<string, string>>(() => {
