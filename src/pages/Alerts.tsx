@@ -10,7 +10,7 @@ import { toast } from "sonner";
 
 type Alert = {
   id: string;
-  type: "low_stock" | "expiry" | "overdue" | "audit" | "delivery";
+  type: "low_stock" | "expiry" | "overdue" | "audit" | "delivery" | "refill";
   severity: "critical" | "warning" | "info";
   title: string;
   description: string;
@@ -44,6 +44,7 @@ const typeColors: Record<string, string> = {
   overdue:   "bg-red-500/10 text-red-600",
   delivery:  "bg-yellow-500/10 text-yellow-600",
   audit:     "bg-primary/10 text-primary",
+  refill:    "bg-violet-500/10 text-violet-600",
 };
 
 export default function AlertsPage() {
@@ -86,6 +87,7 @@ export default function AlertsPage() {
   const typeLabels: Record<string, string> = {
     low_stock: t.stockAlert, expiry: t.expiryAlert,
     overdue: t.overdueAlert, audit: t.auditAlert, delivery: t.deliveryAlert,
+    refill: "إعادة طلب",
   };
 
   const active = alerts.filter(a => !a.dismissed);

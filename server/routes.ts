@@ -458,11 +458,12 @@ router.get("/alerts", async (_req, res) => {
     const today = new Date();
     const alerts: any[] = [];
 
-    const [ordersResult, collectionsResult, clientsResult, inventoryResult] = await Promise.all([
+    const [ordersResult, collectionsResult, clientsResult, inventoryResult, clientInventoryResult] = await Promise.all([
       supabaseAdmin.from("orders").select("id,status,date,client_id,total_selling,created_at"),
       supabaseAdmin.from("collections").select("id,status,due_date,client_id,client_name,amount,total,created_at"),
       supabaseAdmin.from("clients").select("id,name"),
       supabaseAdmin.from("inventory").select("material_code,material_name,quantity,min_quantity,expiry_date"),
+      supabaseAdmin.from("client_inventory").select("id,client_id,client_name,material,code,unit,remaining,avg_weekly_usage,lead_time_weeks,safety_stock,status"),
     ]);
 
     const clientMap: Record<string, string> = {};
@@ -545,6 +546,55 @@ router.get("/alerts", async (_req, res) => {
         }
       }
     }
+
+    for (const ci of clientInventoryResult.data || []) {
+      const remaining = Number(ci.remaining || 0);
+      const avgWeekly = Number(ci.avg_weekly_usage || 0);
+      const leadTime = Number(ci.lead_time_weeks || 2);
+      const safetyStock = Number(ci.safety_stock || 0);
+      if (avgWeekly <= 0) continue;
+      const coverageWeeks = remaining / avgWeekly;
+      const reorderPoint = (avgWeekly * leadTime) + safetyStock;
+      if (remaining > reorderPoint) continue;
+      const isCritical = coverageWeeks <= leadTime * 0.5;
+      const isUrgent = coverageWeeks <= leadTime;
+      if (!isCritical && !isUrgent) continue;
+      const clientName = ci.client_name || clientMap[ci.client_id] || ci.client_id || "";
+      const suggestedQty = Math.max(0, Math.ceil((avgWeekly * leadTime * 2) + safetyStock - remaining));
+      alerts.push({
+        id: `refill-${ci.id}`,
+        type: "refill",
+        severity: isCritical ? "critical" : "warning",
+        title: `${isCritical ? "⚠ إعادة طلب عاجل" : "إعادة طلب"} — ${ci.material || ci.code}`,
+        description: `${clientName} — متبقي ${remaining} ${ci.unit || "وحدة"} (يكفي ${coverageWeeks.toFixed(1)} أسبوع) — الكمية المقترحة: ${suggestedQty}`,
+        date: today.toISOString().split("T")[0],
+        link: "/refill",
+        clientId: ci.client_id,
+      });
+    }
+
+    const depleted = (clientInventoryResult.data || []).filter((ci: any) => {
+      const remaining = Number(ci.remaining || 0);
+      return remaining === 0 && (ci.status === "Depleted" || ci.status === "نفد");
+    });
+    for (const ci of depleted) {
+      const clientName = ci.client_name || clientMap[ci.client_id] || ci.client_id || "";
+      alerts.push({
+        id: `depleted-${ci.id}`,
+        type: "refill",
+        severity: "critical",
+        title: `نفد المخزون — ${ci.material || ci.code}`,
+        description: `${clientName} — المخزون صفر — يحتاج إعادة طلب فوراً`,
+        date: today.toISOString().split("T")[0],
+        link: "/refill",
+        clientId: ci.client_id,
+      });
+    }
+
+    alerts.sort((a, b) => {
+      const sevOrder: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+      return (sevOrder[a.severity] ?? 2) - (sevOrder[b.severity] ?? 2);
+    });
 
     res.json(alerts);
   } catch (e: any) {
