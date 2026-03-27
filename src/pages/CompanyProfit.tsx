@@ -136,6 +136,7 @@ export default function CompanyProfitPage() {
   const profitLedger = useMemo((): ProfitEntry[] => {
     if (!collections || !rawOrders) return [];
     const cutoff = subMonths(new Date(), parseInt(monthsFilter));
+    const foundersList = founders || [];
 
     return (collections as any[])
       .filter((col: any) => {
@@ -147,13 +148,14 @@ export default function CompanyProfitPage() {
         const order = orderMap[orderId];
         if (!order) return null;
 
-        const issueDate = col.issueDate || col.issue_date || col.createdAt || col.created_at || "";
+        // Support both issueDate and invoiceDate field names
+        const issueDate = col.invoiceDate || col.invoice_date || col.issueDate || col.issue_date || col.createdAt || col.created_at || "";
         let d: Date;
         try { d = parseISO(issueDate); } catch { return null; }
         if (d < cutoff) return null;
 
-        const totalCollection = parseAmount(col.total ?? col.totalAmount);
-        const paidAmount = parseAmount(col.paid ?? col.paidAmount);
+        const totalCollection = parseAmount(col.totalAmount ?? col.total_amount ?? col.total);
+        const paidAmount = parseAmount(col.paidAmount ?? col.paid_amount ?? col.paid);
         const paidRatio = totalCollection > 0 ? paidAmount / totalCollection : 0;
 
         const totalSelling = parseAmount(order.totalSelling ?? order.total_selling);
@@ -161,20 +163,39 @@ export default function CompanyProfitPage() {
         const grossProfit = totalSelling - totalCost;
         const realizedProfit = grossProfit * paidRatio;
 
-        // Get company profit percentage from order (snapshotted at creation)
+        // Company profit % — from order snapshot or business rules
         const contribs = parseJsonField(order.founderContributions ?? order.founder_contributions);
         const contribArray = Array.isArray(contribs) ? contribs : [];
-        const snappedPct = contribArray[0]?.companyProfitPercentage ?? rules.companyProfitPercentage ?? 15;
+        const snappedPct = contribArray[0]?.companyProfitPercentage ?? rules.companyProfitPercentage ?? 40;
         const companyProfit = Math.round(realizedProfit * snappedPct / 100);
         const foundersProfit = Math.round(realizedProfit * (1 - snappedPct / 100));
 
-        // Founder shares
-        const founderShares = contribArray.map((fc: any) => {
-          const founderName = fc.founder || founderMap[fc.founderId] || fc.founderId || "مؤسس";
-          const founderPct = fc.percentage || 0;
-          const founderAmount = Math.round(fc.amount * paidRatio);
-          return { id: fc.founderId || founderName, name: founderName, amount: founderAmount, pct: founderPct };
-        });
+        // Split mode from order
+        const splitMode = order.splitMode || order.split_mode || "equal";
+
+        // Founder shares — use order contributions if available, otherwise equal split
+        let founderShares: Array<{ id: string; name: string; amount: number; pct: number }>;
+
+        if (contribArray.length > 0 && splitMode !== "equal") {
+          // Contribution-based split from order snapshot
+          founderShares = contribArray.map((fc: any) => {
+            const founderName = fc.founder || founderMap[fc.founderId] || fc.founderId || "مؤسس";
+            const founderPct = fc.percentage || 0;
+            const founderAmount = Math.round(realizedProfit * founderPct / 100);
+            return { id: fc.founderId || founderName, name: founderName, amount: founderAmount, pct: founderPct };
+          });
+        } else {
+          // Equal split among all founders
+          const numFounders = foundersList.length || 1;
+          const equalPct = Math.round(((100 - snappedPct) / numFounders) * 10) / 10;
+          const equalAmount = Math.round(foundersProfit / numFounders);
+          founderShares = foundersList.map((f: any) => ({
+            id: f.id,
+            name: f.name || f.alias || f.id,
+            amount: equalAmount,
+            pct: equalPct,
+          }));
+        }
 
         // Last payment date from history
         const paymentHistory = parsePaymentsHistory(col.payments);
@@ -184,7 +205,7 @@ export default function CompanyProfitPage() {
         return {
           collectionId: col.id,
           orderId,
-          client: col.client || order.client || "",
+          client: col.client || col.clientName || col.client_name || order.client || "",
           date: issueDate.split("T")[0],
           totalCollection,
           paidAmount,
@@ -200,7 +221,7 @@ export default function CompanyProfitPage() {
         };
       })
       .filter(Boolean) as ProfitEntry[];
-  }, [collections, rawOrders, orderMap, founderMap, monthsFilter, rules.companyProfitPercentage]);
+  }, [collections, rawOrders, orderMap, founderMap, founders, monthsFilter, rules.companyProfitPercentage]);
 
   // Monthly chart data from profit ledger
   const { monthlyPnL, totals, expenseBreakdown, comparison } = useMemo(() => {
@@ -546,20 +567,36 @@ export default function CompanyProfitPage() {
                           </div>
                           {/* Founders shares */}
                           <div className="rounded-lg border border-border bg-muted/30 p-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Users className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-xs font-semibold">توزيع المؤسسين</span>
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-xs font-semibold">توزيع المؤسسين</span>
+                              </div>
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                                {(() => {
+                                  const order = orderMap[entry.orderId];
+                                  const sm = order?.splitMode || order?.split_mode || "equal";
+                                  return sm === "equal" ? "تقسيم متساوي" : "حسب المساهمة";
+                                })()}
+                              </span>
+                            </div>
+                            <div className="mb-2 text-xs text-muted-foreground">
+                              إجمالي حصة المؤسسين: <span className="font-semibold text-foreground">{fmtNum(entry.foundersProfit)} {t.currency}</span>
+                              <span className="mr-1">({(100 - entry.companyProfitPct)}%)</span>
                             </div>
                             {entry.founderShares.length === 0 ? (
-                              <p className="text-xs text-muted-foreground">لا يوجد توزيع للمؤسسين</p>
+                              <p className="text-xs text-muted-foreground">لا يوجد مؤسسون مسجّلون</p>
                             ) : (
-                              <div className="space-y-1.5">
+                              <div className="space-y-2">
                                 {entry.founderShares.map((fs) => (
                                   <div key={fs.id} className="flex items-center justify-between text-xs">
                                     <span className="font-medium">{fs.name}</span>
-                                    <div className="text-end">
-                                      <span className="font-semibold">{fmtNum(fs.amount)} {t.currency}</span>
-                                      <span className="text-muted-foreground mr-1">({fs.pct}%)</span>
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-1.5 rounded-full bg-muted overflow-hidden w-16">
+                                        <div className="h-full bg-primary rounded-full" style={{ width: `${fs.pct}%` }} />
+                                      </div>
+                                      <span className="text-muted-foreground">{fs.pct}%</span>
+                                      <span className="font-semibold text-foreground w-20 text-end">{fmtNum(fs.amount)} {t.currency}</span>
                                     </div>
                                   </div>
                                 ))}
