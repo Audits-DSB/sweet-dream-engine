@@ -16,7 +16,6 @@ import { AlertTriangle, CheckCircle2, Clock, Receipt, Eye, MoreHorizontal, Dolla
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { logAudit } from "@/lib/auditLog";
-import { useBusinessRules } from "@/lib/useBusinessRules";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
@@ -93,8 +92,6 @@ export default function CollectionsPage() {
   const [loadingCollections, setLoadingCollections] = useState(true);
   const [selectedOrderData, setSelectedOrderData] = useState<{ totalSelling: number; totalCost: number; splitMode: string; founderContributions: any[] } | null>(null);
   const [founders, setFounders] = useState<{ id: string; name: string }[]>([]);
-  const { rules } = useBusinessRules();
-  const companyProfitPct = rules.companyProfitPercentage;
   const [loadingOrderData, setLoadingOrderData] = useState(false);
 
   // Payment dialog state
@@ -114,14 +111,12 @@ export default function CollectionsPage() {
       api.get<any[]>("/treasury/accounts"),
       api.get<any[]>("/clients"),
       api.get<any[]>("/founders"),
-      api.get<any>("/business-rules"),
-    ]).then(([cols, accounts, clients, fndrs, rules]) => {
+    ]).then(([cols, accounts, clients, fndrs]) => {
       const clientsMap: Record<string, string> = {};
       (clients || []).forEach((c: any) => { clientsMap[c.id] = c.name; });
       setCollections((cols || []).map(c => mapCollection(c, clientsMap)));
       setTreasuryAccounts((accounts || []).filter((a: any) => a.isActive).map((a: any) => ({ id: a.id, name: a.name, balance: Number(a.balance) })));
       setFounders((fndrs || []).map((f: any) => ({ id: f.id, name: f.name })));
-      if (rules?.companyProfitPercentage) setCompanyProfitPct(Number(rules.companyProfitPercentage));
     }).finally(() => setLoadingCollections(false));
   }, []);
 
@@ -418,8 +413,15 @@ export default function CollectionsPage() {
                   </h4>
                   {selectedOrderData && (() => {
                     const contribs = selectedOrderData.founderContributions || [];
-                    // Use snapshotted company % from order, fallback to global
-                    const snappedCompanyPct = contribs[0]?.companyProfitPercentage ?? companyProfitPct;
+                    // Use ONLY the snapshotted % from the order — never falls back to current settings
+                    const snappedCompanyPct: number | undefined = contribs[0]?.companyProfitPercentage;
+                    if (snappedCompanyPct === undefined) {
+                      return (
+                        <p className="text-xs text-muted-foreground py-2 text-center">
+                          لا تتوفر بيانات نسبة ربح مسجّلة لهذا الأوردر
+                        </p>
+                      );
+                    }
                     const grossProfit = selectedOrderData.totalSelling - selectedOrderData.totalCost;
                     // paidRatio = paid ÷ FULL ORDER total (not just this invoice amount)
                     const paidRatio = selectedOrderData.totalSelling > 0
