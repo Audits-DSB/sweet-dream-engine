@@ -220,16 +220,10 @@ export default function CollectionsPage() {
     const newPaymentHistory = [...paymentInvoice.payments, newPaymentEntry];
     const newStatus = newRemaining <= 0 ? "Paid" : "Partially Paid";
 
-    // Persist to Supabase — preserve meta structure if present (audit-sourced)
-    const hasMeta = !!(paymentInvoice.auditId || (paymentInvoice.lineItems && paymentInvoice.lineItems.length > 0));
-    const updatedPaymentsField = hasMeta
-      ? { meta: { auditId: paymentInvoice.auditId, auditDate: paymentInvoice.auditDate, sourceOrder: paymentInvoice.sourceOrder, lineItems: paymentInvoice.lineItems }, history: newPaymentHistory }
-      : newPaymentHistory;
-
     try {
       await api.patch(`/collections/${paymentInvoice.id}`, {
         paidAmount: newPaid, outstanding: newRemaining, status: newStatus,
-        notes: paymentInvoice.auditId ? `جرد: ${paymentInvoice.auditId}` : undefined,
+        payments: newPaymentHistory,
       });
     } catch (err: any) {
       toast.error(err?.message || "فشل حفظ الدفعة");
