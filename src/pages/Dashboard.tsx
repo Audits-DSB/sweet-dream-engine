@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { Users, ShoppingCart, FileText, Receipt, TrendingUp, AlertTriangle, Clock, Package } from "lucide-react";
+import { Users, ShoppingCart, FileText, Receipt, TrendingUp, AlertTriangle, Clock, Package, CheckCircle2, Banknote } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, Sector,
+  PieChart, Pie, Cell, Sector, Legend,
 } from "recharts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
@@ -16,6 +16,11 @@ type Order = {
   status: string; totalSelling: string | number; totalCost: string | number;
 };
 type Client = { id: string; name: string; status: string; outstanding: number };
+type Collection = {
+  id: string; clientId: string; client: string;
+  invoiceDate: string; status: string;
+  totalAmount: number; paidAmount: number; outstanding: number;
+};
 
 const ARABIC_MONTHS: Record<string, string> = {
   "01": "يناير", "02": "فبراير", "03": "مارس", "04": "أبريل",
@@ -26,6 +31,20 @@ const ARABIC_MONTHS: Record<string, string> = {
 function toNum(v: string | number | undefined): number {
   if (!v) return 0;
   return typeof v === "number" ? v : Number(String(v).replace(/,/g, "")) || 0;
+}
+
+function mapCollection(raw: any): Collection {
+  const clientId = raw.clientId || raw.client_id || "";
+  return {
+    id: raw.id,
+    clientId,
+    client: raw.client || raw.clientName || raw.client_name || clientId,
+    invoiceDate: raw.invoiceDate || raw.invoice_date || raw.createdAt || "",
+    status: raw.status || "Awaiting Confirmation",
+    totalAmount: toNum(raw.totalAmount ?? raw.total_amount),
+    paidAmount: toNum(raw.paidAmount ?? raw.paid_amount),
+    outstanding: toNum(raw.outstanding),
+  };
 }
 
 function buildRevenueData(orders: Order[]) {
@@ -42,37 +61,63 @@ function buildRevenueData(orders: Order[]) {
     .slice(-6)
     .map(([ym, vals]) => ({
       month: ARABIC_MONTHS[ym.slice(5, 7)] || ym,
+      monthKey: ym,
       revenue: vals.revenue,
       cost: vals.cost,
     }));
 }
 
-function buildCollectionData(orders: Order[], t: any) {
-  let paid = 0, partial = 0, overdue = 0;
-  let paidAmt = 0, partialAmt = 0, overdueAmt = 0;
-  const paidDetails: any[] = [], partialDetails: any[] = [], overdueDetails: any[] = [];
+function buildCollectionTrend(collections: Collection[]) {
+  const map: Record<string, { paid: number; outstanding: number }> = {};
+  collections.forEach(c => {
+    const m = (c.invoiceDate || "").slice(0, 7);
+    if (!m) return;
+    if (!map[m]) map[m] = { paid: 0, outstanding: 0 };
+    map[m].paid += c.paidAmount;
+    map[m].outstanding += c.outstanding;
+  });
+  return Object.entries(map)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-6)
+    .map(([ym, vals]) => ({
+      month: ARABIC_MONTHS[ym.slice(5, 7)] || ym,
+      monthKey: ym,
+      paid: vals.paid,
+      outstanding: vals.outstanding,
+    }));
+}
 
-  orders.forEach(o => {
-    const s = o.status;
-    const amt = toNum(o.totalSelling);
-    if (["Delivered", "Closed", "Paid"].includes(s)) {
-      paid++; paidAmt += amt;
-      if (paidDetails.length < 3) paidDetails.push({ client: o.client, clientId: o.clientId, order: o.id, amount: `${amt.toLocaleString()} ${t.currency}` });
-    } else if (["Partially Delivered", "Partially Paid"].includes(s)) {
-      partial++; partialAmt += amt;
-      if (partialDetails.length < 3) partialDetails.push({ client: o.client, clientId: o.clientId, order: o.id, amount: `${amt.toLocaleString()} ${t.currency} متبقي` });
-    } else if (["Overdue", "Cancelled"].includes(s)) {
-      overdue++; overdueAmt += amt;
-      if (overdueDetails.length < 3) overdueDetails.push({ client: o.client, clientId: o.clientId, order: o.id, amount: `${amt.toLocaleString()} ${t.currency}` });
+function buildCollectionPieData(collections: Collection[], t: any) {
+  let paidCount = 0, partialCount = 0, overdueCount = 0, pendingCount = 0;
+  let paidAmt = 0, partialAmt = 0, overdueAmt = 0, pendingAmt = 0;
+  const paidDetails: any[] = [], partialDetails: any[] = [], overdueDetails: any[] = [], pendingDetails: any[] = [];
+
+  collections.forEach(c => {
+    const s = c.status;
+    const total = c.totalAmount;
+    if (s === "Paid") {
+      paidCount++; paidAmt += c.paidAmount;
+      if (paidDetails.length < 3) paidDetails.push({ client: c.client, clientId: c.clientId, collection: c.id, amount: `${c.paidAmount.toLocaleString()} ج.م` });
+    } else if (["Partially Paid", "Installment Active"].includes(s)) {
+      partialCount++; partialAmt += c.paidAmount; 
+      if (partialDetails.length < 3) partialDetails.push({ client: c.client, clientId: c.clientId, collection: c.id, amount: `${c.outstanding.toLocaleString()} ج.م متبقي` });
+    } else if (s === "Overdue") {
+      overdueCount++; overdueAmt += c.outstanding;
+      if (overdueDetails.length < 3) overdueDetails.push({ client: c.client, clientId: c.clientId, collection: c.id, amount: `${c.outstanding.toLocaleString()} ج.م` });
+    } else {
+      pendingCount++; pendingAmt += total;
+      if (pendingDetails.length < 3) pendingDetails.push({ client: c.client, clientId: c.clientId, collection: c.id, amount: `${total.toLocaleString()} ج.م` });
     }
   });
 
-  const total = paid + partial + overdue || 1;
-  return [
-    { name: t.paid, value: Math.round((paid / total) * 100), color: "hsl(152, 60%, 40%)", amount: `${paidAmt.toLocaleString()} ${t.currency}`, clients: paid, statusFilter: "Paid", details: paidDetails },
-    { name: t.partial, value: Math.round((partial / total) * 100), color: "hsl(38, 92%, 50%)", amount: `${partialAmt.toLocaleString()} ${t.currency}`, clients: partial, statusFilter: "Partially Paid", details: partialDetails },
-    { name: t.overdue, value: Math.round((overdue / total) * 100), color: "hsl(0, 72%, 51%)", amount: `${overdueAmt.toLocaleString()} ${t.currency}`, clients: overdue, statusFilter: "Overdue", details: overdueDetails },
-  ];
+  const total = paidCount + partialCount + overdueCount + pendingCount || 1;
+  const result = [
+    { name: t.paid || "مكتمل", value: Math.round((paidCount / total) * 100), color: "hsl(152, 60%, 40%)", amount: `${paidAmt.toLocaleString()} ج.م`, count: paidCount, statusFilter: "Paid", details: paidDetails },
+    { name: t.partial || "جزئي", value: Math.round((partialCount / total) * 100), color: "hsl(38, 92%, 50%)", amount: `${partialAmt.toLocaleString()} ج.م`, count: partialCount, statusFilter: "Partially Paid", details: partialDetails },
+    { name: t.overdue || "متأخر", value: Math.round((overdueCount / total) * 100), color: "hsl(0, 72%, 51%)", amount: `${overdueAmt.toLocaleString()} ج.م`, count: overdueCount, statusFilter: "Overdue", details: overdueDetails },
+    { name: "بانتظار التأكيد", value: Math.round((pendingCount / total) * 100), color: "hsl(220, 70%, 60%)", amount: `${pendingAmt.toLocaleString()} ج.م`, count: pendingCount, statusFilter: "Awaiting Confirmation", details: pendingDetails },
+  ].filter(d => d.value > 0);
+  return result;
 }
 
 export default function Dashboard() {
@@ -81,27 +126,38 @@ export default function Dashboard() {
   const [activeSlice, setActiveSlice] = useState<number | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       api.get<Client[]>("/clients"),
       api.get<Order[]>("/orders"),
-    ]).then(([c, o]) => {
+      api.get<any[]>("/collections"),
+    ]).then(([c, o, cols]) => {
       setClients(c || []);
       setOrders(o || []);
+      setCollections((cols || []).map(mapCollection));
     }).finally(() => setLoading(false));
   }, []);
 
   const activeClients = clients.filter(c => c.status === "Active").length;
   const activeOrders = orders.filter(o => ["Draft", "Confirmed", "Ready for Delivery", "Awaiting Purchase"].includes(o.status)).length;
-  const overdueOrders = orders.filter(o => o.status === "Overdue").length;
+
+  // Collection stats from actual collections table
+  const totalCollected = collections.reduce((s, c) => s + c.paidAmount, 0);
+  const totalOutstanding = collections.reduce((s, c) => s + c.outstanding, 0);
+  const overdueCollections = collections.filter(c => c.status === "Overdue").length;
+  const collectionCount = collections.length;
+
+  // Profit from orders (delivered)
   const totalRevenue = orders.filter(o => ["Delivered", "Closed"].includes(o.status)).reduce((s, o) => s + toNum(o.totalSelling), 0);
   const totalCostDelivered = orders.filter(o => ["Delivered", "Closed"].includes(o.status)).reduce((s, o) => s + toNum(o.totalCost), 0);
   const profit = totalRevenue - totalCostDelivered;
 
   const revenueData = buildRevenueData(orders);
-  const collectionData = buildCollectionData(orders, t);
+  const collectionTrend = buildCollectionTrend(collections);
+  const collectionPieData = buildCollectionPieData(collections, t);
   const recentOrders = [...orders].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 5);
 
   const statusColors: Record<string, string> = {
@@ -143,25 +199,32 @@ export default function Dashboard() {
         <p className="page-description">{t.dashboardDesc}</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+      {/* ── Stat Cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <div className="cursor-pointer" onClick={() => navigate("/clients?status=Active")}>
           <StatCard title={t.activeClients} value={activeClients} change={`${clients.length} ${t.total || "إجمالي"}`} changeType="positive" icon={Users} />
-        </div>
-        <div className="cursor-pointer" onClick={() => navigate("/requests?status=Pending")}>
-          <StatCard title={t.pendingRequests} value="—" change={t.goToRequests || "انتقل للطلبات"} changeType="neutral" icon={FileText} />
         </div>
         <div className="cursor-pointer" onClick={() => navigate("/orders?status=active")}>
           <StatCard title={t.activeOrders} value={activeOrders} change={`${orders.length} ${t.total || "إجمالي"}`} changeType="positive" icon={ShoppingCart} />
         </div>
+        <div className="cursor-pointer" onClick={() => navigate("/collections?status=Paid")}>
+          <StatCard title="إجمالي المحصّل" value={`${Math.round(totalCollected / 1000)}ك`} change={`${collectionCount} تحصيل`} changeType="positive" icon={CheckCircle2} />
+        </div>
+        <div className="cursor-pointer" onClick={() => navigate("/collections")}>
+          <StatCard title="المتبقي للتحصيل" value={`${Math.round(totalOutstanding / 1000)}ك`} change={`ج.م ${totalOutstanding.toLocaleString()}`} changeType={totalOutstanding > 0 ? "negative" : "positive"} icon={Banknote} />
+        </div>
         <div className="cursor-pointer" onClick={() => navigate("/collections?status=Overdue")}>
-          <StatCard title={t.overdueCollections} value={overdueOrders} change={overdueOrders > 0 ? `${t.needsAttention || "يحتاج متابعة"}` : `${t.allGood || "كل شيء منتظم"}`} changeType={overdueOrders > 0 ? "negative" : "positive"} icon={Receipt} />
+          <StatCard title={t.overdueCollections} value={overdueCollections} change={overdueCollections > 0 ? "يحتاج متابعة" : "كل شيء منتظم"} changeType={overdueCollections > 0 ? "negative" : "positive"} icon={AlertTriangle} />
         </div>
         <div className="cursor-pointer" onClick={() => navigate("/company-profit")}>
-          <StatCard title={t.profitRealized} value={profit > 0 ? `${Math.round(profit / 1000)}${t.thousand || "ك"}` : "—"} change={`${totalRevenue > 0 ? Math.round((profit / totalRevenue) * 100) : 0}% ${t.margin || "هامش"}`} changeType={profit > 0 ? "positive" : "neutral"} icon={TrendingUp} />
+          <StatCard title={t.profitRealized} value={profit > 0 ? `${Math.round(profit / 1000)}ك` : "—"} change={`${totalRevenue > 0 ? Math.round((profit / totalRevenue) * 100) : 0}% هامش`} changeType={profit > 0 ? "positive" : "neutral"} icon={TrendingUp} />
         </div>
       </div>
 
+      {/* ── Charts Row ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        {/* Bar: Revenue vs Cost from orders */}
         <div className="stat-card lg:col-span-2">
           <h3 className="font-semibold text-sm mb-4">{t.revenueVsCost}</h3>
           {revenueData.length === 0 ? (
@@ -180,16 +243,17 @@ export default function Dashboard() {
           )}
         </div>
 
+        {/* Pie: Collection status from actual collections */}
         <div className="stat-card">
           <h3 className="font-semibold text-sm mb-4">{t.collectionStatus}</h3>
-          {orders.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">لا توجد طلبات بعد</div>
+          {collections.length === 0 ? (
+            <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">لا توجد تحصيلات بعد</div>
           ) : (
             <>
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
                   <Pie
-                    data={collectionData} cx="50%" cy="50%" innerRadius={50} outerRadius={75}
+                    data={collectionPieData} cx="50%" cy="50%" innerRadius={50} outerRadius={75}
                     paddingAngle={4} dataKey="value"
                     activeIndex={activeSlice !== null ? activeSlice : undefined}
                     activeShape={renderActiveShape}
@@ -197,24 +261,24 @@ export default function Dashboard() {
                     onClick={(_, index) => setActiveSlice(prev => prev === index ? null : index)}
                     className="cursor-pointer outline-none"
                   >
-                    {collectionData.map((entry, index) => (
+                    {collectionPieData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} opacity={activeSlice !== null && activeSlice !== index ? 0.4 : 1} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} formatter={(val: any) => [`${val}%`]} />
                 </PieChart>
               </ResponsiveContainer>
 
-              {activeSlice !== null && (
-                <div className="mx-auto max-w-[280px] rounded-lg border border-border p-3 mb-2 transition-all animate-fade-in" style={{ borderColor: collectionData[activeSlice].color }}>
+              {activeSlice !== null && collectionPieData[activeSlice] && (
+                <div className="mx-auto max-w-[280px] rounded-lg border border-border p-3 mb-2 transition-all animate-fade-in" style={{ borderColor: collectionPieData[activeSlice].color }}>
                   <div className="text-center">
-                    <div className="text-sm font-bold" style={{ color: collectionData[activeSlice].color }}>{collectionData[activeSlice].name}</div>
-                    <div className="text-lg font-extrabold mt-0.5">{collectionData[activeSlice].value}%</div>
-                    <div className="text-xs text-muted-foreground">{collectionData[activeSlice].amount} · {collectionData[activeSlice].clients} {t.order || "طلب"}</div>
+                    <div className="text-sm font-bold" style={{ color: collectionPieData[activeSlice].color }}>{collectionPieData[activeSlice].name}</div>
+                    <div className="text-lg font-extrabold mt-0.5">{collectionPieData[activeSlice].value}%</div>
+                    <div className="text-xs text-muted-foreground">{collectionPieData[activeSlice].amount} · {collectionPieData[activeSlice].count} تحصيل</div>
                   </div>
-                  {collectionData[activeSlice].details.length > 0 && (
+                  {collectionPieData[activeSlice].details.length > 0 && (
                     <div className="mt-2 pt-2 border-t border-border space-y-1.5">
-                      {collectionData[activeSlice].details.map((d: any, i: number) => (
+                      {collectionPieData[activeSlice].details.map((d: any, i: number) => (
                         <div key={i} className="flex items-center justify-between text-xs gap-2">
                           <span className="font-medium text-primary cursor-pointer hover:underline truncate" onClick={() => navigate(`/clients/${d.clientId}`)}>{d.client}</span>
                           <span className="text-muted-foreground whitespace-nowrap">{d.amount}</span>
@@ -222,14 +286,18 @@ export default function Dashboard() {
                       ))}
                     </div>
                   )}
-                  <button className="w-full mt-2 text-xs font-semibold py-1.5 rounded-md transition-colors hover:opacity-80 text-white" style={{ backgroundColor: collectionData[activeSlice].color }} onClick={() => navigate(`/collections?status=${collectionData[activeSlice].statusFilter}`)}>
+                  <button
+                    className="w-full mt-2 text-xs font-semibold py-1.5 rounded-md transition-colors hover:opacity-80 text-white"
+                    style={{ backgroundColor: collectionPieData[activeSlice].color }}
+                    onClick={() => navigate(`/collections?status=${collectionPieData[activeSlice].statusFilter}`)}
+                  >
                     عرض الكل ←
                   </button>
                 </div>
               )}
 
-              <div className="flex justify-center gap-4 mt-2">
-                {collectionData.map((item, idx) => (
+              <div className="flex flex-wrap justify-center gap-3 mt-2">
+                {collectionPieData.map((item, idx) => (
                   <div key={item.name} className="flex items-center gap-1.5 text-xs cursor-pointer transition-opacity" style={{ opacity: activeSlice !== null && activeSlice !== idx ? 0.4 : 1 }} onClick={() => setActiveSlice(prev => prev === idx ? null : idx)}>
                     <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
                     <span className="text-muted-foreground">{item.name} ({item.value}%)</span>
@@ -241,6 +309,32 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ── Collections Trend Chart: Paid vs Outstanding per month ── */}
+      {collectionTrend.length > 0 && (
+        <div className="stat-card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-sm">التحصيل الشهري — المحصّل مقابل المتبقي</h3>
+            <button className="text-xs text-primary hover:underline" onClick={() => navigate("/collections")}>عرض كل التحصيلات ←</button>
+          </div>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={collectionTrend} onClick={(data) => { if (data?.activePayload) navigate("/collections"); }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+              <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+              <Tooltip
+                contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
+                cursor={{ fill: "hsl(var(--muted) / 0.1)" }}
+                formatter={(val: number, name: string) => [`${val.toLocaleString()} ج.م`, name === "paid" ? "المحصّل" : "المتبقي"]}
+              />
+              <Legend formatter={(val) => val === "paid" ? "المحصّل" : "المتبقي"} />
+              <Bar dataKey="paid" fill="hsl(152, 60%, 40%)" radius={[4, 4, 0, 0]} name="paid" className="cursor-pointer" onClick={() => navigate("/collections?status=Paid")} />
+              <Bar dataKey="outstanding" fill="hsl(0, 72%, 51%)" radius={[4, 4, 0, 0]} name="outstanding" className="cursor-pointer" onClick={() => navigate("/collections")} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* ── Recent Orders ── */}
       <div className="stat-card">
         <h3 className="font-semibold text-sm mb-4">{t.recentOrders}</h3>
         <div className="overflow-x-auto">
@@ -275,11 +369,12 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ── Quick Action Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { icon: Clock, iconClass: "text-warning", bgClass: "bg-warning/10", title: `${orders.filter(o => ["Ready for Delivery", "Confirmed"].includes(o.status)).length} ${t.pendingDeliveries}`, sub: t.awaitingDelivery || "بانتظار التسليم", href: "/deliveries?status=Pending" },
-          { icon: AlertTriangle, iconClass: "text-destructive", bgClass: "bg-destructive/10", title: `${overdueOrders} ${t.overdueCollections}`, sub: t.needsAttention || "يحتاج متابعة عاجلة", href: "/collections?status=Overdue" },
-          { icon: Package, iconClass: "text-primary", bgClass: "bg-primary/10", title: `${activeOrders} ${t.activeOrders}`, sub: `${t.inProgress || "قيد التنفيذ"}`, href: "/orders?status=active" },
+          { icon: AlertTriangle, iconClass: "text-destructive", bgClass: "bg-destructive/10", title: `${overdueCollections} ${t.overdueCollections}`, sub: "يحتاج متابعة عاجلة", href: "/collections?status=Overdue" },
+          { icon: Package, iconClass: "text-primary", bgClass: "bg-primary/10", title: `${activeOrders} ${t.activeOrders}`, sub: "قيد التنفيذ", href: "/orders?status=active" },
         ].map((card) => (
           <div key={card.href} className="stat-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 transition-colors group" onClick={() => navigate(card.href)}>
             <div className={`h-10 w-10 rounded-lg ${card.bgClass} flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
