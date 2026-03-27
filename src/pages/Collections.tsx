@@ -555,9 +555,17 @@ export default function CollectionsPage() {
                 const partialCount = coverage.filter(c => c.status === "partial").length;
                 const totalCompanyProfitCovered = coverage.reduce((s, c) => s + (c.companyProfitCovered ?? 0), 0);
 
-                // Group by profit percentage
-                const pctGroups = [...new Set(coverage.map(c => c.pct))].sort((a, b) => a - b);
-                const multiGroup = pctGroups.length > 1;
+                // Group by (sourceOrderId, pct) — materials from the same order AND same profit % go together
+                type CoverageGroup = { orderId: string; pct: number; items: typeof coverage };
+                const groupMap: Record<string, CoverageGroup> = {};
+                coverage.forEach(item => {
+                  const key = `${item.sourceOrderId || ""}_${item.pct}`;
+                  if (!groupMap[key]) groupMap[key] = { orderId: item.sourceOrderId || "", pct: item.pct, items: [] };
+                  groupMap[key].items.push(item);
+                });
+                const groupList: CoverageGroup[] = Object.values(groupMap)
+                  .sort((a, b) => (a.orderId || "").localeCompare(b.orderId || "") || a.pct - b.pct);
+                const multiGroup = groupList.length > 1;
 
                 return (
                   <div className="space-y-3">
@@ -592,22 +600,28 @@ export default function CollectionsPage() {
                       </div>
                     </div>
 
-                    {/* Table — grouped by profit % */}
-                    {pctGroups.map(groupPct => {
-                      const groupItems = coverage.filter(c => c.pct === groupPct);
+                    {/* Table — grouped by (sourceOrder, profit %) */}
+                    {groupList.map(({ orderId, pct: groupPct, items: groupItems }) => {
                       const groupCoveredTotal = groupItems.reduce((s, c) => s + c.coveredTotal, 0);
                       const groupLineTotal = groupItems.reduce((s, c) => s + c.lineTotal, 0);
                       const groupCompanyProfit = groupItems.reduce((s, c) => s + (c.companyProfitCovered ?? 0), 0);
 
                       return (
-                        <div key={groupPct} className="rounded-lg border border-border overflow-hidden">
+                        <div key={`${orderId}_${groupPct}`} className="rounded-lg border border-border overflow-hidden">
                           {/* Group header — shown if multiple groups exist */}
                           {multiGroup && (
-                            <div className="bg-primary/8 border-b border-border px-3 py-1.5 flex items-center justify-between">
-                              <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
-                                <TrendingUp className="h-3.5 w-3.5" />
-                                نسبة ربح الشركة: <strong>{groupPct}%</strong>
-                              </span>
+                            <div className="bg-primary/5 border-b border-border px-3 py-2 flex items-center justify-between flex-wrap gap-2">
+                              <div className="flex items-center gap-3 flex-wrap">
+                                {orderId && (
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                    أوردر: <span className="font-mono text-foreground font-semibold">{orderId}</span>
+                                  </span>
+                                )}
+                                <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                                  <TrendingUp className="h-3.5 w-3.5" />
+                                  ربح الشركة: <strong>{groupPct}%</strong>
+                                </span>
+                              </div>
                               <span className="text-xs text-muted-foreground">{groupItems.length} مادة</span>
                             </div>
                           )}
