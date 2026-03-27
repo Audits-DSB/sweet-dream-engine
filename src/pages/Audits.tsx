@@ -114,6 +114,18 @@ export default function AuditsPage() {
   const { data: clients = [] } = useQuery<{ id: string; name: string; city: string }[]>({ queryKey: ["/api/clients"], queryFn: () => api.get("/clients") });
   const { data: founders = [] } = useQuery<{ id: string; name: string; alias: string }[]>({ queryKey: ["/api/founders"], queryFn: () => api.get("/founders") });
   const { data: rawLots = [] } = useQuery<InventoryLot[]>({ queryKey: ["/api/client-inventory"], queryFn: () => api.get<InventoryLot[]>("/client-inventory") });
+  const { data: collections = [] } = useQuery<any[]>({ queryKey: ["/api/collections"], queryFn: () => api.get<any[]>("/collections") });
+
+  const auditIdsWithCollection = useMemo(() => {
+    const ids = new Set<string>();
+    (collections || []).forEach((c: any) => {
+      try {
+        const notes = typeof c.notes === "string" ? JSON.parse(c.notes) : c.notes;
+        if (notes?.auditId) ids.add(notes.auditId);
+      } catch {}
+    });
+    return ids;
+  }, [collections]);
 
   const audits: AuditRecord[] = rawAudits.map(a => ({
     ...a,
@@ -339,6 +351,7 @@ export default function AuditsPage() {
   };
 
   const handleCreateCollection = async (audit: AuditRecord) => {
+    if (auditIdsWithCollection.has(audit.id)) { toast.error("تم إنشاء تحصيل لهذا الجرد بالفعل"); return; }
     const shortages = audit.comparison.filter(r => r.result === "shortage");
     if (shortages.length === 0) { toast.info("لا توجد نواقص في هذا الجرد لإنشاء تحصيل"); return; }
     setCreatingCollection(audit.id);
@@ -413,6 +426,7 @@ export default function AuditsPage() {
         notes: notesPayload,
       });
       await logAudit({ entity: "collection", entityId: saved.id, entityName: `${saved.id} - ${audit.clientName}`, action: "create", snapshot: { ...saved, auditId: audit.id }, endpoint: "/collections" });
+      qc.invalidateQueries({ queryKey: ["/api/collections"] });
       toast.success(`تم إنشاء التحصيل ${saved.id} — ${audit.clientName} (${total.toLocaleString()} ج.م)`);
       navigate("/collections");
     } catch (err: any) {
@@ -580,9 +594,12 @@ export default function AuditsPage() {
                       <DropdownMenuItem onClick={() => printClientInvoice(audit)}><Printer className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.clientInvoice}</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => exportPurchaseSheet(audit)}><FileSpreadsheet className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.purchaseListLabel}</DropdownMenuItem>
                       {audit.shortage > 0 && (
-                        <DropdownMenuItem onClick={() => handleCreateCollection(audit)} disabled={creatingCollection === audit.id}>
+                        <DropdownMenuItem
+                          onClick={() => handleCreateCollection(audit)}
+                          disabled={creatingCollection === audit.id || auditIdsWithCollection.has(audit.id)}
+                        >
                           <Receipt className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2 text-primary" />
-                          {creatingCollection === audit.id ? "جارٍ الإنشاء..." : "إنشاء تحصيل"}
+                          {auditIdsWithCollection.has(audit.id) ? "تم إنشاء التحصيل ✓" : creatingCollection === audit.id ? "جارٍ الإنشاء..." : "إنشاء تحصيل"}
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(audit)}><Trash2 className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />حذف</DropdownMenuItem>
@@ -697,11 +714,13 @@ export default function AuditsPage() {
                         {shortages.length > 0 && (
                           <Button
                             size="sm"
-                            className="bg-primary text-primary-foreground hover:bg-primary/90"
-                            disabled={creatingCollection === selectedAudit.id}
+                            className={auditIdsWithCollection.has(selectedAudit.id) ? "bg-green-600 text-white hover:bg-green-700" : "bg-primary text-primary-foreground hover:bg-primary/90"}
+                            disabled={creatingCollection === selectedAudit.id || auditIdsWithCollection.has(selectedAudit.id)}
                             onClick={() => handleCreateCollection(selectedAudit)}
                           >
-                            {creatingCollection === selectedAudit.id
+                            {auditIdsWithCollection.has(selectedAudit.id)
+                              ? <><CheckCircle2 className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />تم إنشاء التحصيل ✓</>
+                              : creatingCollection === selectedAudit.id
                               ? <><Loader2 className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5 animate-spin" />جارٍ الإنشاء...</>
                               : <><Receipt className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />إنشاء تحصيل ({shortageTotal.toLocaleString()} ج.م)</>}
                           </Button>
