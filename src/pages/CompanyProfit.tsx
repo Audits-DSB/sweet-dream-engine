@@ -179,20 +179,23 @@ export default function CompanyProfitPage() {
         const splitMode = order.splitMode || order.split_mode || "equal";
 
         // Founder shares — use order contributions if available, otherwise equal split
+        // NOTE: fc.percentage is the founder's % of the FOUNDERS' PORTION (not total profit)
         let founderShares: Array<{ id: string; name: string; amount: number; pct: number }>;
 
         if (contribArray.length > 0 && splitMode !== "equal") {
-          // Contribution-based split from order snapshot
+          // Contribution-based split: normalize percentages to sum to 100 of founders' portion
+          const totalFounderPct = contribArray.reduce((s: number, fc: any) => s + (fc.percentage || 0), 0) || 100;
           founderShares = contribArray.map((fc: any) => {
             const founderName = fc.founder || founderMap[fc.founderId] || fc.founderId || "مؤسس";
             const founderPct = fc.percentage || 0;
-            const founderAmount = Math.round(realizedProfit * founderPct / 100);
-            return { id: fc.founderId || founderName, name: founderName, amount: founderAmount, pct: founderPct };
+            // Apply to foundersProfit (not realizedProfit), normalized by totalFounderPct
+            const founderAmount = Math.round(foundersProfit * founderPct / totalFounderPct);
+            return { id: fc.founderId || founderName, name: founderName, amount: founderAmount, pct: Math.round((founderPct / totalFounderPct) * 100 * 10) / 10 };
           });
         } else {
-          // Equal split among all founders
+          // Equal split among all founders — each gets equal % of foundersProfit
           const numFounders = foundersList.length || 1;
-          const equalPct = Math.round(((100 - snappedPct) / numFounders) * 10) / 10;
+          const equalPct = Math.round((100 / numFounders) * 10) / 10; // % of founders' portion
           const equalAmount = Math.round(foundersProfit / numFounders);
           founderShares = foundersList.map((f: any) => ({
             id: f.id,

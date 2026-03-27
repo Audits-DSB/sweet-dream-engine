@@ -153,9 +153,11 @@ export default function FoundersPage() {
         if (!map[f.id]) map[f.id] = [];
         let founderShare = 0;
         if (contribs.length > 0 && splitMode !== "equal") {
+          // fc.percentage is the founder's % of the FOUNDERS' PORTION, not total profit
+          const totalFounderPct = contribs.reduce((s: number, c: any) => s + (c.percentage || 0), 0) || 100;
           const fc = contribs.find((c: any) => c.founderId === f.id || c.founder === f.name);
           if (!fc) return;
-          founderShare = realizedProfit * (fc.percentage || 0) / 100;
+          founderShare = foundersProfit * (fc.percentage || 0) / totalFounderPct;
         } else {
           founderShare = foundersProfit / (founders.length || 1);
         }
