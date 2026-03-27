@@ -96,12 +96,15 @@ export default function DeliveriesPage() {
       const notes = d.notes || d.type || "";
       try {
         const parsed = JSON.parse(notes);
-        if (parsed && Array.isArray(parsed.items)) {
+        if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
           for (const item of parsed.items) {
-            const key = item.lineId || item.materialCode || "";
+            const key = String(item.lineId || item.materialCode || "");
             if (key) map[key] = (map[key] || 0) + (Number(item.qty) || 0);
           }
           continue;
+        }
+        if (parsed && Array.isArray(parsed.items) && parsed.items.length === 0) {
+          return { __full__: 1 };
         }
       } catch {}
       if (notes === "كامل" || notes === "full") {
@@ -147,7 +150,7 @@ export default function DeliveriesPage() {
       setDeliveredQtyMap(qtyMap);
 
       const mapped = (lines || []).filter((l: any) => (Number(l.quantity) || 0) > 0).map((l: any) => {
-        const lineId = l.id;
+        const lineId = String(l.id);
         const totalQty = Number(l.quantity) || 0;
         const alreadyDelivered = qtyMap[lineId] || qtyMap[l.materialCode || l.material_code || ""] || 0;
         const remaining = Math.max(0, totalQty - alreadyDelivered);
@@ -277,11 +280,11 @@ export default function DeliveriesPage() {
     let notesPayload: string;
 
     if (deliveryType === "partial") {
-      const lineIds = new Set(orderLines.map(l => l.id));
+      const lineIds = new Set(orderLines.map(l => String(l.id)));
       const selectedLines = Object.entries(partialItems)
-        .filter(([lineId, v]) => v.selected && v.qty > 0 && lineIds.has(lineId))
+        .filter(([lineId, v]) => v.selected && v.qty > 0 && lineIds.has(String(lineId)))
         .map(([lineId, v]) => {
-          const line = orderLines.find(l => l.id === lineId)!;
+          const line = orderLines.find(l => String(l.id) === String(lineId))!;
           const qty = Math.min(v.qty, line.quantity);
           return { lineId, materialCode: line.materialCode, materialName: line.materialName, qty, unit: line.unit };
         });

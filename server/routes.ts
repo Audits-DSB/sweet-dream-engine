@@ -742,9 +742,10 @@ router.patch("/deliveries/:id", async (req, res) => {
         } else if (lines && lines.length > 0) {
           const { data: priorDeliveries } = await supabaseAdmin
             .from("deliveries").select("notes, status").eq("order_id", orderId).neq("id", deliveryId);
+          const deliveredStatuses = ["Delivered", "تم التسليم", "مُسلَّم"];
           const alreadyDelivered: Record<string, number> = {};
           for (const pd of (priorDeliveries || [])) {
-            if (pd.status === "Failed") continue;
+            if (!deliveredStatuses.includes(pd.status)) continue;
             try {
               const pn = typeof pd.notes === "string" ? JSON.parse(pd.notes) : null;
               if (pn && Array.isArray(pn.items)) {
@@ -800,7 +801,7 @@ router.patch("/deliveries/:id", async (req, res) => {
         for (const d of allDeliveries.filter((d: any) => d.status === "Delivered")) {
           let parsed: any = null;
           try { parsed = typeof d.notes === "string" ? JSON.parse(d.notes) : null; } catch {}
-          if (parsed && Array.isArray(parsed.items)) {
+          if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
             for (const item of parsed.items) {
               const key = String(item.lineId);
               if (deliveredQtyMap[key] !== undefined) {
@@ -809,7 +810,10 @@ router.patch("/deliveries/:id", async (req, res) => {
             }
           } else {
             const noteStr = typeof d.notes === "string" ? d.notes.trim() : "";
-            const isFull = !noteStr || noteStr === "كامل" || noteStr.toLowerCase() === "full";
+            let isFull = !noteStr || noteStr === "كامل" || noteStr.toLowerCase() === "full";
+            if (!isFull && parsed && Array.isArray(parsed.items) && parsed.items.length === 0) {
+              isFull = true;
+            }
             if (isFull) {
               orderLines.forEach((l: any) => {
                 deliveredQtyMap[String(l.id)] = Number(l.quantity) || 0;

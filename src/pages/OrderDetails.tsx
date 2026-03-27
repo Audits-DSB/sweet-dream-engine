@@ -415,19 +415,20 @@ export default function OrderDetails() {
     });
 
     const confirmedDeliveries = orderDeliveries.filter(d =>
-      d.status === "Delivered" || d.status === "In Transit" || d.status === "Pending"
+      ["Delivered", "In Transit", "Pending", "تم التسليم", "مُسلَّم", "في الطريق", "قيد الانتظار"].includes(d.status)
     );
 
     for (const del of confirmedDeliveries) {
       let parsedNotes: any = null;
       try { parsedNotes = typeof del.notes === "string" ? JSON.parse(del.notes) : null; } catch {}
 
-      if (parsedNotes && parsedNotes.items && Array.isArray(parsedNotes.items)) {
+      if (parsedNotes && Array.isArray(parsedNotes.items) && parsedNotes.items.length > 0) {
         for (const item of parsedNotes.items) {
           const lineId = Number(item.lineId);
           if (map[lineId]) {
             const qty = Number(item.qty) || 0;
-            if (del.status === "Delivered") {
+            const isDelivered = ["Delivered", "تم التسليم", "مُسلَّم"].includes(del.status);
+            if (isDelivered) {
               map[lineId].delivered += qty;
             }
             map[lineId].deliveryDetails.push({
@@ -440,8 +441,12 @@ export default function OrderDetails() {
         }
       } else {
         const noteStr = typeof del.notes === "string" ? del.notes.trim() : "";
-        const isFull = !noteStr || noteStr === "كامل" || noteStr.toLowerCase() === "full";
-        if (isFull && del.status === "Delivered") {
+        let isFull = !noteStr || noteStr === "كامل" || noteStr.toLowerCase() === "full";
+        if (!isFull && parsedNotes && Array.isArray(parsedNotes.items) && parsedNotes.items.length === 0) {
+          isFull = true;
+        }
+        const isDelivered = ["Delivered", "تم التسليم", "مُسلَّم"].includes(del.status);
+        if (isFull && isDelivered) {
           lines.forEach(line => {
             if (map[line.id]) {
               map[line.id].delivered = line.quantity;
