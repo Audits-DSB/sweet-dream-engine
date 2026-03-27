@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useRef, useState, useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { quickProfit } from "@/lib/orderProfit";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote } from "lucide-react";
@@ -373,14 +374,13 @@ export default function OrderDetails() {
   const subVal = order.subscription?.value || 0;
   const subscriptionAmt = order.subscription?.type === "percentage" ? linesTotal * subVal / 100 : subVal;
   const operatingRevenue = linesTotal + subscriptionAmt;
-  const grossProfit = operatingRevenue - costTotal;
 
-  // Profit distribution (available after collection)
-  // companyProfitPercentage is snapshotted inside each founderContributions entry at order creation
   const snappedPct = (order.founderContributions[0] as any)?.companyProfitPercentage;
   const companyPct = snappedPct ?? order.companyProfitPercentage ?? rules.companyProfitPercentage ?? 15;
-  const companyProfit = grossProfit * companyPct / 100;
-  const foundersProfit = grossProfit - companyProfit;
+  const qpFull = quickProfit({ orderTotal: operatingRevenue, totalCost: costTotal, paidValue: operatingRevenue, companyProfitPct: companyPct });
+  const grossProfit = qpFull.expectedProfit;
+  const companyProfit = Math.round(qpFull.companyProfit);
+  const foundersProfit = Math.round(qpFull.foundersProfit);
   const isCollected = ["Delivered", "Completed", "مُسلَّم", "مكتمل"].includes(order.status);
 
   // Per-founder cost + profit share

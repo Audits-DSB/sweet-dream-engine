@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { Pool } from "pg";
+import { quickProfit, founderSplit } from "../src/lib/orderProfit";
 
 const router = Router();
 
@@ -787,21 +788,21 @@ router.get("/founder-balances", async (_req, res) => {
       const totalSelling = Number(order.total_selling ?? 0);
       const totalCost = Number(order.total_cost ?? 0);
       if (totalSelling <= 0 || paid <= 0) return;
-      const grossProfit = totalSelling - totalCost;
-      const paidRatio = Math.min(paid / totalSelling, 1);
-      const realizedProfit = grossProfit > 0 ? grossProfit * paidRatio : 0;
-      const capitalReturn = Math.max(0, paid - realizedProfit);
+      const qp = quickProfit({ orderTotal: totalSelling, totalCost, paidValue: paid, companyProfitPct: 40 });
+      const capitalReturn = Math.round(qp.recoveredCapital);
       if (capitalReturn <= 0) return;
       let contribs: any[] = [];
       const rawC = order.founder_contributions;
       if (Array.isArray(rawC)) contribs = rawC;
       else if (typeof rawC === "string") { try { contribs = JSON.parse(rawC); } catch { contribs = []; } }
-      const totalPct = contribs.length > 0 ? contribs.reduce((s: number, c: any) => s + (c.percentage || 0), 0) || 100 : 100;
+      const sm = order.split_mode || "equal";
+      const isWeighted = sm.includes("مساهمة") || sm.toLowerCase().includes("contribution") || sm === "weighted";
+      const splits = founderSplit(0, capitalReturn, contribs, isWeighted ? "weighted" : "equal");
       fList.forEach(f => {
         let share = 0;
         if (contribs.length > 0) {
-          const fc = contribs.find((c: any) => c.founderId === f.id || c.founder === f.name);
-          if (fc) share = capitalReturn * (fc.percentage || 0) / totalPct;
+          const match = splits.find(s => s.id === f.id || s.name === f.name);
+          if (match) share = match.capitalShare;
         } else {
           share = capitalReturn / (fList.length || 1);
         }

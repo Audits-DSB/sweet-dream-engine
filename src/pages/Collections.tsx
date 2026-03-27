@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
+import { quickProfit, founderSplit } from "@/lib/orderProfit";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -493,7 +494,6 @@ export default function CollectionsPage() {
                       const od = selectedOrdersData.find(o => o.orderId === orderId) || selectedOrdersData[0];
                       const linesWithCov = linesByOrderWithCov[orderId] || [];
 
-                      // Profit calc for this order
                       let profitBox: React.ReactNode = null;
                       if (od) {
                         const contribs = od.founderContributions || [];
@@ -502,14 +502,16 @@ export default function CollectionsPage() {
                         const orderTotal = lines.reduce((s, l) => s + l.lineTotal, 0);
                         const orderShare = allTotal > 0 ? orderTotal / allTotal : 1;
                         const orderPaid = selectedInvoice.paid * orderShare;
-                        const gross = od.totalSelling - od.totalCost;
+                        const qp = quickProfit({ orderTotal: od.totalSelling, totalCost: od.totalCost, paidValue: orderPaid, companyProfitPct: snappedPct });
+                        const gross = qp.expectedProfit;
                         const paidRatio = od.totalSelling > 0 ? Math.min(orderPaid / od.totalSelling, 1) : 0;
-                        const realized = Math.round(gross * paidRatio);
-                        const companyAmt = Math.round(realized * snappedPct / 100);
-                        const foundersAmt = realized - companyAmt;
-                        const totalFPct = contribs.reduce((s: number, fc: any) => s + (fc.percentage || 0), 0) || 100;
+                        const realized = Math.round(qp.realizedProfit);
+                        const companyAmt = Math.round(qp.companyProfit);
+                        const foundersAmt = Math.round(qp.foundersProfit);
+                        const splitMode = od.splitMode?.includes("مساهمة") || od.splitMode?.toLowerCase().includes("contribution") ? "weighted" as const : "equal" as const;
+                        const splits = founderSplit(foundersAmt, Math.round(qp.recoveredCapital), contribs, splitMode);
                         const founderRows = contribs.length > 0
-                          ? contribs.map((fc: any) => ({ name: fc.founder || fc.founderId || "مؤسس", amount: Math.round(foundersAmt * (fc.percentage || 0) / totalFPct) }))
+                          ? splits.map(s => ({ name: s.name, amount: Math.round(s.profit) }))
                           : founders.map(f => ({ name: f.name, amount: founders.length > 0 ? Math.round(foundersAmt / founders.length) : 0 }));
 
                         profitBox = (

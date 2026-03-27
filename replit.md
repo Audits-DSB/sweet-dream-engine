@@ -52,6 +52,12 @@ All business data in main Supabase project:
 - `server/index.ts` — Express entry point, seeds data on first run, proxies Vite on 5001
 - `server/routes.ts` — All CRUD API endpoints, camelCase↔snake_case helpers
 - `src/lib/api.ts` — Frontend API client (fetch wrapper to /api/*)
+- `src/lib/orderProfit.ts` — **Central calculation library** (single source of truth for all business math)
+  - `calculateOrderProfit()` — Full calculation with per-founder breakdown
+  - `quickProfit()` — Simplified version returning key numbers (expectedProfit, realizedProfit, recoveredCapital, companyProfit, foundersProfit)
+  - `founderSplit()` — Distributes profit/capital across founders (equal or weighted mode)
+  - All formulas: capital=orderTotal-expectedProfit, profitRatio=expectedProfit/orderTotal, realizedProfit=paidValue*profitRatio, recoveredCapital=paidValue*capitalRatio, companyProfit=realizedProfit*companyPct, foundersProfit=realizedProfit-companyProfit
+  - Used by: Collections.tsx, CompanyProfit.tsx, Founders.tsx, OrderDetails.tsx, TreasuryAccounts.tsx, server/routes.ts
 - `src/data/store.ts` — Static seed data (used for initial Supabase seeding only)
 
 ## Finance Section (fully dynamic from DB)

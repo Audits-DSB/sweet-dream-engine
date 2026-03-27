@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { quickProfit, founderSplit } from "@/lib/orderProfit";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -143,39 +144,29 @@ export default function FoundersPage() {
 
       const totalSelling = toNum(order.totalSelling ?? (order as any).total_selling);
       const totalCost = toNum(order.totalCost ?? (order as any).total_cost);
-      const grossProfit = totalSelling - totalCost;
       if (totalSelling <= 0) return;
 
-      const paidRatio = Math.min(col.paidAmount / totalSelling, 1);
-      const realizedProfit = grossProfit > 0 ? grossProfit * paidRatio : 0;
-      // Capital return = the non-profit portion of what was collected
-      const capitalReturn = Math.max(0, col.paidAmount - realizedProfit);
-
       const companyPct = rules.companyProfitPercentage ?? 40;
-      const foundersProfit = realizedProfit * (1 - companyPct / 100);
-
-      // Determine founder split settings from order
       const contribs = Array.isArray(order.founderContributions) ? order.founderContributions : [];
-      const splitMode = (order as any).splitMode || (order as any).split_mode || "equal";
-      const totalFounderPct = contribs.length > 0
-        ? contribs.reduce((s: number, c: any) => s + (c.percentage || 0), 0) || 100
-        : 100;
+      const splitMode = ((order as any).splitMode || (order as any).split_mode || "equal");
+      const isWeighted = splitMode.includes("مساهمة") || splitMode.toLowerCase().includes("contribution");
+
+      const qp = quickProfit({ orderTotal: totalSelling, totalCost, paidValue: col.paidAmount, companyProfitPct: companyPct });
+      const paidRatio = Math.min(col.paidAmount / totalSelling, 1);
+      const capitalReturn = Math.round(qp.recoveredCapital);
+      const foundersProfit = qp.foundersProfit;
+      const splits = founderSplit(foundersProfit, capitalReturn, contribs, isWeighted ? "weighted" : "equal");
 
       founders.forEach(f => {
         if (!profitMap[f.id]) profitMap[f.id] = [];
         if (!capitalMap[f.id]) capitalMap[f.id] = [];
 
-        // ── Profit share ──────────────────────────────────────────────────────
-        if (grossProfit > 0) {
+        if (qp.expectedProfit > 0) {
           let founderShare = 0;
           if (contribs.length > 0) {
-            // Use stored percentages — already set correctly at order creation
-            // (equal-split orders save equal %, custom orders save custom %)
-            // Founders not in contribs get 0 (they weren't part of this order)
-            const fc = contribs.find((c: any) => c.founderId === f.id || c.founder === f.name);
-            if (fc) founderShare = foundersProfit * (fc.percentage || 0) / totalFounderPct;
+            const match = splits.find(s => s.id === f.id || s.name === f.name);
+            if (match) founderShare = match.profit;
           } else {
-            // Fallback for legacy orders with no explicit contributions
             founderShare = foundersProfit / (founders.length || 1);
           }
           if (founderShare > 0) {
@@ -191,15 +182,12 @@ export default function FoundersPage() {
           }
         }
 
-        // ── Capital return share ──────────────────────────────────────────────
         if (capitalReturn > 0) {
           let founderCapShare = 0;
           if (contribs.length > 0) {
-            // Same logic: use stored percentages from the order
-            const fc = contribs.find((c: any) => c.founderId === f.id || c.founder === f.name);
-            if (fc) founderCapShare = capitalReturn * (fc.percentage || 0) / totalFounderPct;
+            const match = splits.find(s => s.id === f.id || s.name === f.name);
+            if (match) founderCapShare = match.capitalShare;
           } else {
-            // Fallback for legacy orders with no explicit contributions
             founderCapShare = capitalReturn / (founders.length || 1);
           }
           if (founderCapShare > 0) {

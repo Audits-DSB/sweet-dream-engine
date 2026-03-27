@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "@/lib/api";
+import { quickProfit, founderSplit } from "@/lib/orderProfit";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
@@ -96,23 +97,23 @@ export default function TreasuryAccountsPage() {
 
       const totalSelling = toNum(order.totalSelling ?? order.total_selling);
       const totalCost = toNum(order.totalCost ?? order.total_cost);
-      const grossProfit = totalSelling - totalCost;
       if (totalSelling <= 0) return;
 
-      const paidRatio = Math.min(paidAmount / totalSelling, 1);
-      const realizedProfit = grossProfit > 0 ? grossProfit * paidRatio : 0;
-      const capitalReturn = Math.max(0, paidAmount - realizedProfit);
+      const qp = quickProfit({ orderTotal: totalSelling, totalCost, paidValue: paidAmount, companyProfitPct: 40 });
+      const capitalReturn = Math.round(qp.recoveredCapital);
       if (capitalReturn <= 0) return;
 
       const contribs = Array.isArray(order.founderContributions) ? order.founderContributions
         : Array.isArray(order.founder_contributions) ? order.founder_contributions : [];
-      const totalFounderPct = contribs.length > 0 ? contribs.reduce((s: number, c: any) => s + (c.percentage || 0), 0) || 100 : 100;
+      const sm = (order as any).splitMode || (order as any).split_mode || "equal";
+      const isWeighted = sm.includes("مساهمة") || sm.toLowerCase().includes("contribution") || sm === "weighted";
+      const splits = founderSplit(0, capitalReturn, contribs, isWeighted ? "weighted" : "equal");
 
       founders.forEach(f => {
         let share = 0;
         if (contribs.length > 0) {
-          const fc = contribs.find((c: any) => c.founderId === f.id || c.founder_id === f.id || c.founder === f.name);
-          if (fc) share = capitalReturn * (fc.percentage || 0) / totalFounderPct;
+          const match = splits.find(s => s.id === f.id || s.name === f.name);
+          if (match) share = match.capitalShare;
         } else {
           share = capitalReturn / (founders.length || 1);
         }

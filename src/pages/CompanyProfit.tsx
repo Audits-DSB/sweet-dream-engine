@@ -2,6 +2,7 @@ import React from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
 import { useBusinessRules, getCompanyShareRatio, getFounderShareRatio } from "@/lib/useBusinessRules";
+import { quickProfit, founderSplit } from "@/lib/orderProfit";
 import { StatCard } from "@/components/StatCard";
 import {
   TrendingUp, TrendingDown, DollarSign, Percent, Download, Wallet,
@@ -164,19 +165,17 @@ export default function CompanyProfitPage() {
 
         const totalSelling = parseAmount(order.totalSelling ?? order.total_selling);
         const totalCost = parseAmount(order.totalCost ?? order.total_cost);
-        const grossProfit = totalSelling - totalCost;
 
-        // paidRatio = المدفوع ÷ إجمالي الأوردر الكامل (ليس قيمة التحصيل فقط)
-        // مثال: دفع 1000 من أوردر قيمته 1956 → النسبة 51.1% وليس 89.8%
-        const paidRatio = totalSelling > 0 ? Math.min(paidAmount / totalSelling, 1) : 0;
-        const realizedProfit = grossProfit * paidRatio;
-
-        // Company profit % — from order snapshot or business rules
         const contribs = parseJsonField(order.founderContributions ?? order.founder_contributions);
         const contribArray = Array.isArray(contribs) ? contribs : [];
         const snappedPct = contribArray[0]?.companyProfitPercentage ?? rules.companyProfitPercentage;
-        const companyProfit = Math.round(realizedProfit * snappedPct / 100);
-        const foundersProfit = Math.round(realizedProfit * (1 - snappedPct / 100));
+
+        const qp = quickProfit({ orderTotal: totalSelling, totalCost, paidValue: paidAmount, companyProfitPct: snappedPct });
+        const grossProfit = qp.expectedProfit;
+        const paidRatio = totalSelling > 0 ? Math.min(paidAmount / totalSelling, 1) : 0;
+        const realizedProfit = qp.realizedProfit;
+        const companyProfit = Math.round(qp.companyProfit);
+        const foundersProfit = Math.round(qp.foundersProfit);
 
         // Split mode from order
         const splitMode = order.splitMode || order.split_mode || "equal";

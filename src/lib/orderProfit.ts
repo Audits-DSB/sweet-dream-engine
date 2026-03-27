@@ -1,7 +1,7 @@
 export type Founder = {
   id: string;
   name: string;
-  weight?: number; // used in weighted mode (0–1), ignored in equal mode
+  weight?: number;
 };
 
 export type FounderResult = {
@@ -15,7 +15,7 @@ export type FounderResult = {
 export type OrderProfitInput = {
   orderTotal: number;
   expectedProfit: number;
-  companyProfitPercentage: number; // 0–1  e.g. 0.40 for 40%
+  companyProfitPercentage: number;
   consumedValue: number;
   paidValue: number;
   founders: Founder[];
@@ -101,4 +101,74 @@ export function calculateOrderProfit(input: OrderProfitInput): OrderProfitResult
     foundersProfitPool,
     founderResults,
   };
+}
+
+export type QuickProfitInput = {
+  orderTotal: number;
+  totalCost: number;
+  paidValue: number;
+  companyProfitPct: number;
+};
+
+export type QuickProfitResult = {
+  capital: number;
+  expectedProfit: number;
+  profitRatio: number;
+  capitalRatio: number;
+  realizedProfit: number;
+  recoveredCapital: number;
+  companyProfit: number;
+  foundersProfit: number;
+};
+
+export function quickProfit(input: QuickProfitInput): QuickProfitResult {
+  const { orderTotal, totalCost, paidValue, companyProfitPct } = input;
+  const expectedProfit = orderTotal - totalCost;
+  const profitRatio = orderTotal > 0 ? expectedProfit / orderTotal : 0;
+  const capitalRatio = orderTotal > 0 ? totalCost / orderTotal : 0;
+
+  const realizedProfit = paidValue * profitRatio;
+  const recoveredCapital = paidValue * capitalRatio;
+
+  const pct = Math.min(Math.max(companyProfitPct >= 2 ? companyProfitPct / 100 : companyProfitPct, 0), 1);
+  const companyProfit = realizedProfit * pct;
+  const foundersProfit = realizedProfit - companyProfit;
+
+  return {
+    capital: totalCost,
+    expectedProfit,
+    profitRatio,
+    capitalRatio,
+    realizedProfit,
+    recoveredCapital,
+    companyProfit,
+    foundersProfit,
+  };
+}
+
+export function founderSplit(
+  pool: number,
+  recoveredCapital: number,
+  contribs: Array<{ founderId?: string; founder?: string; percentage?: number }>,
+  splitMode: "equal" | "weighted",
+): Array<{ id: string; name: string; profit: number; capitalShare: number }> {
+  const n = contribs.length || 1;
+  if (splitMode === "equal") {
+    return contribs.map((fc) => ({
+      id: fc.founderId || fc.founder || "",
+      name: fc.founder || fc.founderId || "",
+      profit: pool / n,
+      capitalShare: recoveredCapital / n,
+    }));
+  }
+  const totalPct = contribs.reduce((s, fc) => s + (fc.percentage || 0), 0) || 100;
+  return contribs.map((fc) => {
+    const w = (fc.percentage || 0) / totalPct;
+    return {
+      id: fc.founderId || fc.founder || "",
+      name: fc.founder || fc.founderId || "",
+      profit: pool * w,
+      capitalShare: recoveredCapital * w,
+    };
+  });
 }
