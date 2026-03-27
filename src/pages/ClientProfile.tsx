@@ -82,7 +82,8 @@ export default function ClientProfile() {
       api.get<any[]>("/orders"),
       api.get<any[]>(`/client-inventory?clientId=${id}`).catch(() => []),
       api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] })),
-    ]).then(([clientsData, ordersData, invData, extData]) => {
+      api.get<any[]>("/materials").catch(() => []),
+    ]).then(([clientsData, ordersData, invData, extData, internalMats]) => {
       const found = (clientsData || []).find((c: any) => c.id === id);
       if (found) {
         const c = mapClient(found);
@@ -93,26 +94,38 @@ export default function ClientProfile() {
         .filter((o: any) => (o.clientId || o.client_id) === id)
         .map(mapOrder);
       setOrders(clientOrders);
-      // Build image map: code → imageUrl
+      // Build image map: code/sku → imageUrl
+      // Priority: internal materials (code field) → external catalog (sku field)
       const imgMap: Record<string, string> = {};
+      // External catalog: sku → image_url or image
       (extData?.products || []).forEach((p: any) => {
-        const key = p.sku || "";
-        if (key) imgMap[key] = p.image_url || "";
+        const key = p.sku || p.id || "";
+        const img = p.image_url || p.image || "";
+        if (key && img) imgMap[key] = img;
       });
-      setInventory((invData || []).map((r: any) => ({
-        id: r.id,
-        material: r.material || "",
-        code: r.code || "",
-        unit: r.unit || "",
-        delivered: Number(r.delivered ?? 0),
-        remaining: Number(r.remaining ?? 0),
-        sellingPrice: Number(r.sellingPrice ?? r.selling_price ?? 0),
-        deliveryDate: r.deliveryDate || r.delivery_date || "",
-        expiry: r.expiry || "",
-        sourceOrder: r.sourceOrder || r.source_order || "",
-        status: r.status || "In Stock",
-        imageUrl: imgMap[r.code || ""] || "",
-      })));
+      // Internal materials override (more reliable for code matching)
+      (internalMats || []).forEach((m: any) => {
+        const key = m.code || "";
+        const img = m.imageUrl || m.image_url || "";
+        if (key && img) imgMap[key] = img;
+      });
+      setInventory((invData || []).map((r: any) => {
+        const code = r.code || r.materialCode || "";
+        return {
+          id: r.id,
+          material: r.material || "",
+          code,
+          unit: r.unit || "",
+          delivered: Number(r.delivered ?? 0),
+          remaining: Number(r.remaining ?? 0),
+          sellingPrice: Number(r.sellingPrice ?? r.selling_price ?? 0),
+          deliveryDate: r.deliveryDate || r.delivery_date || "",
+          expiry: r.expiry || "",
+          sourceOrder: r.sourceOrder || r.source_order || "",
+          status: r.status || "In Stock",
+          imageUrl: imgMap[code] || "",
+        };
+      }));
     }).catch(() => toast.error(t.failedToLoadClientData))
       .finally(() => setLoading(false));
   }, [id]);
