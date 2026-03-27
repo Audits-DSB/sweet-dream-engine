@@ -3,9 +3,10 @@ import { useRef, useState, useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -93,6 +94,9 @@ export default function OrderDetails() {
   const [loading, setLoading] = useState(true);
   const [payingFounder, setPayingFounder] = useState<string | null>(null);
   const [orderDeliveries, setOrderDeliveries] = useState<OrderDelivery[]>([]);
+  const [founderBalances, setFounderBalances] = useState<Record<string, number>>({});
+  const [balanceDialog, setBalanceDialog] = useState<{ open: boolean; fp: any | null; available: number }>({ open: false, fp: null, available: 0 });
+  const [walletAmount, setWalletAmount] = useState("");
 
   // Edit state
   const [editOpen, setEditOpen] = useState(false);
@@ -106,7 +110,8 @@ export default function OrderDetails() {
       api.get<OrderLine[]>(`/orders/${id}/lines`).catch(() => []),
       api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] })),
       api.get<OrderDelivery[]>(`/deliveries?orderId=${id}`).catch(() => []),
-    ]).then(([all, fetchedLines, extData, deliveries]) => {
+      api.get<any[]>("/founder-transactions").catch(() => []),
+    ]).then(([all, fetchedLines, extData, deliveries, founderTxs]) => {
       const found = (all || []).find((o: any) => o.id === id);
       if (found) setOrder(mapOrder(found));
       const map: Record<string, ExtMaterial> = {};
@@ -121,6 +126,17 @@ export default function OrderDetails() {
       }));
       setLines(enriched);
       setOrderDeliveries(deliveries || []);
+      // Compute each founder's capital balance = capital_return − capital_withdrawal
+      const balMap: Record<string, number> = {};
+      (founderTxs || []).forEach((tx: any) => {
+        const name = tx.founderName || tx.founder_name || "";
+        if (!name) return;
+        const amt = Number(tx.amount ?? 0);
+        const type = tx.type || tx.txType || tx.tx_type || "";
+        if (type === "capital_return") balMap[name] = (balMap[name] || 0) + amt;
+        if (type === "capital_withdrawal") balMap[name] = (balMap[name] || 0) - amt;
+      });
+      setFounderBalances(balMap);
     });
 
   useEffect(() => {
@@ -157,6 +173,57 @@ export default function OrderDetails() {
         endpoint: `/orders/${order.id}`,
       });
       toast.success(`تم تسجيل دفع ${fc.founder}`);
+    } catch (err: any) {
+      toast.error(err?.message || "فشل تسجيل الدفع");
+    } finally {
+      setPayingFounder(null);
+    }
+  };
+
+  const handlePayWithBalance = async () => {
+    const { fp } = balanceDialog;
+    if (!order || !fp) return;
+    const walletUsed = Math.min(Math.max(parseFloat(walletAmount) || 0, 0), balanceDialog.available);
+    const required = toNum(fp.amount);
+    if (walletUsed <= 0) { toast.error("أدخل مبلغاً من الرصيد"); return; }
+    if (walletUsed > required) { toast.error("المبلغ المسحوب أكبر من الحصة المطلوبة"); return; }
+    const cashPortion = required - walletUsed;
+    setPayingFounder(fp.founder);
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      // 1. Deduct from wallet (capital_withdrawal)
+      await api.post("/founder-transactions", {
+        founderId: fp.founderId || undefined,
+        founderName: fp.founder,
+        type: "capital_withdrawal",
+        amount: walletUsed,
+        method: "balance",
+        orderId: order.id,
+        notes: `سحب من الرصيد لتمويل طلب ${order.id}`,
+        date: today,
+      });
+      // 2. Record funding transaction (cash portion if any, else full amount from balance)
+      await api.post("/founder-transactions", {
+        founderId: fp.founderId || undefined,
+        founderName: fp.founder,
+        type: "funding",
+        amount: required,
+        method: cashPortion > 0 ? "mixed" : "balance",
+        orderId: order.id,
+        notes: cashPortion > 0
+          ? `تمويل طلب ${order.id}: ${walletUsed.toLocaleString()} رصيد + ${cashPortion.toLocaleString()} كاش`
+          : `تمويل طلب ${order.id} من الرصيد`,
+        date: today,
+      });
+      // 3. Mark as paid in founderContributions
+      const updatedContribs = order.founderContributions.map(f =>
+        f.founder === fp.founder ? { ...f, paid: true, paidAt: new Date().toISOString() } : f
+      );
+      const patchedOrder = await api.patch<any>(`/orders/${order.id}`, { founderContributions: updatedContribs });
+      setOrder(mapOrder(patchedOrder));
+      setFounderBalances(prev => ({ ...prev, [fp.founder]: (prev[fp.founder] || 0) - walletUsed }));
+      setBalanceDialog({ open: false, fp: null, available: 0 });
+      toast.success(`تم تسجيل دفع ${fp.founder} — ${walletUsed.toLocaleString()} من الرصيد${cashPortion > 0 ? ` + ${cashPortion.toLocaleString()} كاش` : ""}`);
     } catch (err: any) {
       toast.error(err?.message || "فشل تسجيل الدفع");
     } finally {
@@ -896,19 +963,37 @@ export default function OrderDetails() {
                         <p className="text-xs text-muted-foreground">{fp.percentage?.toFixed(1)}% {t.sharePercent}</p>
                       </div>
 
-                      {/* Mark as paid button */}
+                      {/* Mark as paid buttons */}
                       {!fp.paid && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-shrink-0 h-8 text-xs border-primary text-primary hover:bg-primary hover:text-primary-foreground"
-                          disabled={payingFounder === fp.founder}
-                          onClick={() => handlePayFounder(fp)}
-                        >
-                          {payingFounder === fp.founder
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : "تسجيل الدفع"}
-                        </Button>
+                        <div className="flex flex-col gap-1.5 flex-shrink-0">
+                          {/* Balance button — only if founder has positive balance */}
+                          {(founderBalances[fp.founder] || 0) > 0 && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-xs border-amber-500 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 gap-1"
+                              disabled={payingFounder === fp.founder}
+                              onClick={() => {
+                                setWalletAmount(String(Math.min(founderBalances[fp.founder] || 0, toNum(fp.amount))));
+                                setBalanceDialog({ open: true, fp, available: founderBalances[fp.founder] || 0 });
+                              }}
+                            >
+                              <Wallet className="h-3 w-3" />
+                              سحب من الرصيد ({(founderBalances[fp.founder] || 0).toLocaleString()})
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                            disabled={payingFounder === fp.founder}
+                            onClick={() => handlePayFounder(fp)}
+                          >
+                            {payingFounder === fp.founder
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <><Banknote className="h-3 w-3 me-1" />كاش / تحويل</>}
+                          </Button>
+                        </div>
                       )}
                     </div>
                   ))}
@@ -949,6 +1034,81 @@ export default function OrderDetails() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Balance Payment Dialog */}
+      <Dialog open={balanceDialog.open} onOpenChange={(o) => { if (!o) setBalanceDialog({ open: false, fp: null, available: 0 }); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-amber-500" />
+              سحب من رصيد {balanceDialog.fp?.founder}
+            </DialogTitle>
+          </DialogHeader>
+          {balanceDialog.fp && (() => {
+            const required = toNum(balanceDialog.fp.amount);
+            const walletUsed = Math.min(Math.max(parseFloat(walletAmount) || 0, 0), balanceDialog.available);
+            const cashPortion = Math.max(required - walletUsed, 0);
+            return (
+              <div className="space-y-4 py-1">
+                {/* Info grid */}
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mb-0.5">الرصيد المتاح</p>
+                    <p className="font-bold text-amber-700 dark:text-amber-300">{balanceDialog.available.toLocaleString()} ج.م</p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground mb-0.5">الحصة المطلوبة</p>
+                    <p className="font-bold">{required.toLocaleString()} ج.م</p>
+                  </div>
+                </div>
+
+                {/* Wallet amount input */}
+                <div>
+                  <Label className="text-xs mb-1 block">المبلغ من الرصيد (ج.م)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={Math.min(balanceDialog.available, required)}
+                    value={walletAmount}
+                    onChange={e => setWalletAmount(e.target.value)}
+                    className="h-9"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    الحد الأقصى: {Math.min(balanceDialog.available, required).toLocaleString()} ج.م
+                  </p>
+                </div>
+
+                {/* Breakdown */}
+                <div className="rounded-lg border border-border p-3 space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400"><Wallet className="h-3.5 w-3.5" />من الرصيد</span>
+                    <span className="font-semibold">{walletUsed.toLocaleString()} ج.م</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="flex items-center gap-1.5 text-primary"><Banknote className="h-3.5 w-3.5" />كاش / تحويل</span>
+                    <span className={`font-semibold ${cashPortion > 0 ? "text-foreground" : "text-muted-foreground"}`}>{cashPortion.toLocaleString()} ج.م</span>
+                  </div>
+                  <div className="border-t border-border pt-1.5 flex justify-between text-xs text-muted-foreground">
+                    <span>الإجمالي</span>
+                    <span className={`font-medium ${walletUsed + cashPortion === required ? "text-success" : "text-destructive"}`}>{(walletUsed + cashPortion).toLocaleString()} ج.م</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setBalanceDialog({ open: false, fp: null, available: 0 })}>إلغاء</Button>
+            <Button
+              size="sm"
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+              disabled={payingFounder !== null || (parseFloat(walletAmount) || 0) <= 0}
+              onClick={handlePayWithBalance}
+            >
+              {payingFounder !== null ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Wallet className="h-3.5 w-3.5 me-1" />تأكيد السحب</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
