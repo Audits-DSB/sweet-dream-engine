@@ -512,10 +512,12 @@ export default function CollectionsPage() {
 
               {/* ── Material Coverage by Paid Amount ── */}
               {(() => {
-                // Use order lines from DB (primary) or lineItems from notes (fallback for audit collections)
+                // Priority: audited/consumed lineItems from notes (actual consumed materials)
+                // Fallback: original order lines from DB (if no audit data exists)
                 const sourceLines: LineItem[] =
-                  selectedOrderLines.length > 0 ? selectedOrderLines
-                  : (selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0 ? selectedInvoice.lineItems : []);
+                  (selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0)
+                  ? selectedInvoice.lineItems
+                  : selectedOrderLines;
                 if (sourceLines.length === 0 || selectedInvoice.paid <= 0) return null;
 
                 const hasCostData = sourceLines.some(l => (l.costPrice ?? 0) > 0);
@@ -571,10 +573,15 @@ export default function CollectionsPage() {
                   <div className="space-y-3">
                     {/* Header */}
                     <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                      <CheckCircle2 className="h-4 w-4 text-success" />
-                      المواد المغطّاة بالمبلغ المحصّل
+                      <Package className="h-4 w-4 text-primary" />
+                      {selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0
+                        ? "المواد المستهلكة فعلياً — تغطية المبلغ المحصّل"
+                        : "مواد الطلب — تغطية المبلغ المحصّل"}
                       <span className="text-xs font-normal text-muted-foreground">
-                        (مدفوع: {selectedInvoice.paid.toLocaleString()} ج.م من {selectedInvoice.total.toLocaleString()} ج.م)
+                        (مدفوع: {selectedInvoice.paid.toLocaleString()} ج.م
+                        {selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0
+                          ? ` من ${sourceLines.reduce((s, l) => s + l.lineTotal, 0).toLocaleString()} ج.م مستهلك`
+                          : ` من ${selectedInvoice.total.toLocaleString()} ج.م`})
                       </span>
                     </h4>
 
@@ -714,8 +721,8 @@ export default function CollectionsPage() {
                 );
               })()}
 
-              {/* Line items from audit */}
-              {selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0 && (
+              {/* Line items from audit — shown only when no payment yet (coverage section handles them when paid > 0) */}
+              {selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0 && selectedInvoice.paid <= 0 && (
                 <div>
                   <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5"><Package className="h-4 w-4 text-primary" />المواد المستهلكة</h4>
                   <div className="overflow-x-auto rounded-lg border border-border">
