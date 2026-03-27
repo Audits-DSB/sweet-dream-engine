@@ -486,19 +486,20 @@ export default function AuditsPage() {
   const initManualEntry = () => {
     if (clientInventory.length === 0) { toast.error(t.noInventoryForClient); return; }
     // Merge lots with the same code — show one row per unique material
-    const merged = new Map<string, { material: string; unit: string; expected: number; sellingPrice: number; storeCost: number; code: string }>();
+    const merged = new Map<string, { material: string; unit: string; expected: number; sellingPrice: number; storeCost: number; code: string; imageUrl: string }>();
     for (const inv of clientInventory) {
       const key = normalize(inv.code);
       if (merged.has(key)) {
         merged.get(key)!.expected += inv.remaining;
       } else {
-        merged.set(key, { material: inv.material, code: inv.code, unit: inv.unit, expected: inv.remaining, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost });
+        merged.set(key, { material: inv.material, code: inv.code, unit: inv.unit, expected: inv.remaining, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost, imageUrl: imageByCode[inv.code] || inv.imageUrl || "" });
       }
     }
     setComparisonRows(Array.from(merged.values()).map(inv => ({
       material: inv.material, code: inv.code, unit: inv.unit,
       expected: inv.expected, actual: inv.expected, diff: 0,
       result: "matched" as const, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost,
+      imageUrl: inv.imageUrl,
     })));
     setStep("compare");
   };
