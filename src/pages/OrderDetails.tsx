@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
@@ -96,7 +97,7 @@ export default function OrderDetails() {
   const [orderDeliveries, setOrderDeliveries] = useState<OrderDelivery[]>([]);
   const [founderBalances, setFounderBalances] = useState<Record<string, number>>({});
   const [balanceDialog, setBalanceDialog] = useState<{ open: boolean; fp: any | null; available: number }>({ open: false, fp: null, available: 0 });
-  const [walletAmount, setWalletAmount] = useState("");
+  const [useBalance, setUseBalance] = useState(false);
 
   // Edit state
   const [editOpen, setEditOpen] = useState(false);
@@ -110,8 +111,8 @@ export default function OrderDetails() {
       api.get<OrderLine[]>(`/orders/${id}/lines`).catch(() => []),
       api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] })),
       api.get<OrderDelivery[]>(`/deliveries?orderId=${id}`).catch(() => []),
-      api.get<any[]>("/founder-transactions").catch(() => []),
-    ]).then(([all, fetchedLines, extData, deliveries, founderTxs]) => {
+      api.get<{ founderId: string; founderName: string; balance: number }[]>("/founder-balances").catch(() => []),
+    ]).then(([all, fetchedLines, extData, deliveries, balances]) => {
       const found = (all || []).find((o: any) => o.id === id);
       if (found) setOrder(mapOrder(found));
       const map: Record<string, ExtMaterial> = {};
@@ -126,15 +127,11 @@ export default function OrderDetails() {
       }));
       setLines(enriched);
       setOrderDeliveries(deliveries || []);
-      // Compute each founder's capital balance = capital_return − capital_withdrawal
+      // Build balances keyed by founder name for dialog lookup
       const balMap: Record<string, number> = {};
-      (founderTxs || []).forEach((tx: any) => {
-        const name = tx.founderName || tx.founder_name || "";
-        if (!name) return;
-        const amt = Number(tx.amount ?? 0);
-        const type = tx.type || tx.txType || tx.tx_type || "";
-        if (type === "capital_return") balMap[name] = (balMap[name] || 0) + amt;
-        if (type === "capital_withdrawal") balMap[name] = (balMap[name] || 0) - amt;
+      (balances || []).forEach(b => {
+        if (b.founderName) balMap[b.founderName] = b.balance;
+        if (b.founderId) balMap[b.founderId] = b.balance;
       });
       setFounderBalances(balMap);
     });
@@ -183,8 +180,8 @@ export default function OrderDetails() {
   const handlePayWithBalance = async () => {
     const { fp } = balanceDialog;
     if (!order || !fp) return;
-    const walletUsed = Math.min(Math.max(parseFloat(walletAmount) || 0, 0), balanceDialog.available);
     const required = toNum(fp.amount);
+    const walletUsed = useBalance ? Math.min(balanceDialog.available, required) : 0;
     const cashPortion = required - walletUsed;
     setPayingFounder(fp.founder);
     try {
@@ -978,8 +975,8 @@ export default function OrderDetails() {
                           className="h-8 text-xs border-primary text-primary hover:bg-primary hover:text-primary-foreground gap-1 flex-shrink-0"
                           disabled={payingFounder === fp.founder}
                           onClick={() => {
-                            const bal = founderBalances[fp.founder] || 0;
-                            setWalletAmount(bal > 0 ? String(Math.min(bal, toNum(fp.amount))) : "0");
+                            const bal = founderBalances[fp.founder] || founderBalances[fp.founderId] || 0;
+                            setUseBalance(bal > 0);
                             setBalanceDialog({ open: true, fp, available: bal });
                           }}
                         >
@@ -1029,7 +1026,7 @@ export default function OrderDetails() {
       </Tabs>
 
       {/* Unified Payment Dialog */}
-      <Dialog open={balanceDialog.open} onOpenChange={(o) => { if (!o) setBalanceDialog({ open: false, fp: null, available: 0 }); }}>
+      <Dialog open={balanceDialog.open} onOpenChange={(o) => { if (!o) { setBalanceDialog({ open: false, fp: null, available: 0 }); setUseBalance(false); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1040,56 +1037,51 @@ export default function OrderDetails() {
           {balanceDialog.fp && (() => {
             const required = toNum(balanceDialog.fp.amount);
             const hasBalance = balanceDialog.available > 0;
-            const walletUsed = hasBalance ? Math.min(Math.max(parseFloat(walletAmount) || 0, 0), balanceDialog.available) : 0;
+            const walletUsed = (hasBalance && useBalance) ? Math.min(balanceDialog.available, required) : 0;
             const cashPortion = Math.max(required - walletUsed, 0);
             return (
               <div className="space-y-4 py-1">
                 {/* Info grid */}
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  {hasBalance ? (
-                    <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mb-0.5">رصيد متاح</p>
-                      <p className="font-bold text-amber-700 dark:text-amber-300">{balanceDialog.available.toLocaleString()} ج.م</p>
-                    </div>
-                  ) : (
-                    <div className="p-2.5 rounded-lg bg-muted/30 border border-border">
-                      <p className="text-xs text-muted-foreground mb-0.5">رصيد متاح</p>
-                      <p className="font-medium text-muted-foreground">لا يوجد رصيد</p>
-                    </div>
-                  )}
-                  <div className="p-2.5 rounded-lg bg-muted/50">
+                  <div className={`p-2.5 rounded-lg border ${hasBalance ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800" : "bg-muted/30 border-border"}`}>
+                    <p className={`text-xs mb-0.5 ${hasBalance ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>رصيد متاح</p>
+                    {hasBalance
+                      ? <p className="font-bold text-amber-700 dark:text-amber-300">{balanceDialog.available.toLocaleString("en-US")} ج.م</p>
+                      : <p className="font-medium text-muted-foreground">لا يوجد رصيد</p>
+                    }
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-muted/50 border border-border">
                     <p className="text-xs text-muted-foreground mb-0.5">الحصة المطلوبة</p>
-                    <p className="font-bold">{required.toLocaleString()} ج.م</p>
+                    <p className="font-bold">{required.toLocaleString("en-US")} ج.م</p>
                   </div>
                 </div>
 
-                {/* Balance amount input — only if has balance */}
+                {/* Checkbox: deduct from balance */}
                 {hasBalance && (
-                  <div>
-                    <Label className="text-xs mb-1 block">المبلغ من الرصيد (ج.م)</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={Math.min(balanceDialog.available, required)}
-                      value={walletAmount}
-                      onChange={e => setWalletAmount(e.target.value)}
-                      className="h-9"
+                  <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${useBalance ? "bg-primary/5 border-primary/30" : "bg-muted/20 border-border"}`}>
+                    <Checkbox
+                      checked={useBalance}
+                      onCheckedChange={(v) => setUseBalance(!!v)}
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      أقصى مبلغ من الرصيد: {Math.min(balanceDialog.available, required).toLocaleString()} ج.م — الباقي يُعدّ تمويلاً مالياً
-                    </p>
-                  </div>
+                    <div className="flex-1">
+                      <span className="text-sm font-medium">السحب من الرصيد</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        سيُخصم {Math.min(balanceDialog.available, required).toLocaleString("en-US")} ج.م من رصيده المتاح
+                        {cashPortion > 0 && useBalance && ` — الباقي ${cashPortion.toLocaleString("en-US")} ج.م تمويل مالي`}
+                      </p>
+                    </div>
+                  </label>
                 )}
 
                 {/* Breakdown */}
                 <div className="rounded-lg border border-border p-3 space-y-2 text-sm">
-                  {hasBalance && (
+                  {hasBalance && useBalance && (
                     <div className="flex justify-between items-center">
                       <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
                         <Wallet className="h-3.5 w-3.5" />من الرصيد
                       </span>
-                      <span className={`font-semibold ${walletUsed > 0 ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>
-                        {walletUsed.toLocaleString()} ج.م
+                      <span className="font-semibold text-amber-700 dark:text-amber-300">
+                        {walletUsed.toLocaleString("en-US")} ج.م
                       </span>
                     </div>
                   )}
@@ -1098,13 +1090,13 @@ export default function OrderDetails() {
                       <Banknote className="h-3.5 w-3.5" />تمويل مالي
                     </span>
                     <span className={`font-semibold ${cashPortion > 0 ? "text-foreground" : "text-muted-foreground"}`}>
-                      {cashPortion.toLocaleString()} ج.م
+                      {cashPortion.toLocaleString("en-US")} ج.م
                     </span>
                   </div>
                   <div className="border-t border-border pt-1.5 flex justify-between text-xs text-muted-foreground">
                     <span>الإجمالي</span>
-                    <span className={`font-medium ${walletUsed + cashPortion === required ? "text-success" : "text-destructive"}`}>
-                      {(walletUsed + cashPortion).toLocaleString()} ج.م
+                    <span className="font-medium text-success">
+                      {required.toLocaleString("en-US")} ج.م
                     </span>
                   </div>
                 </div>

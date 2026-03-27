@@ -760,6 +760,72 @@ function encodeFounderDesc(orderId: string | null, notes: string | null, extra?:
   return `[orderId:${orderId}] ${notes || ""}`.trim();
 }
 
+// ── Founder capital balances (mirrors TreasuryAccounts logic) ──
+router.get("/founder-balances", async (_req, res) => {
+  try {
+    const [{ data: founders }, { data: txData }, { data: cols }, { data: ords }] = await Promise.all([
+      supabaseAdmin.from("founders").select("id,name"),
+      supabaseAdmin.from("treasury_transactions").select("*").in("tx_type", FOUNDER_TX_TYPES),
+      supabaseAdmin.from("collections").select("id,order_id,paid_amount,total_amount,notes"),
+      supabaseAdmin.from("orders").select("id,total_selling,total_cost,founder_contributions,company_profit_percentage"),
+    ]);
+    const fList = (founders || []) as { id: string; name: string }[];
+    const txList = (txData || []) as any[];
+    const colList = (cols || []) as any[];
+    const ordList = (ords || []) as any[];
+
+    const orderMap: Record<string, any> = {};
+    ordList.forEach(o => { orderMap[o.id] = o; });
+
+    // Auto capital from paid collections
+    const autoCapital: Record<string, number> = {};
+    fList.forEach(f => { autoCapital[f.id] = 0; });
+    colList.forEach(col => {
+      const order = orderMap[col.order_id];
+      if (!order) return;
+      const paid = Number(col.paid_amount ?? 0);
+      const totalSelling = Number(order.total_selling ?? 0);
+      const totalCost = Number(order.total_cost ?? 0);
+      if (totalSelling <= 0 || paid <= 0) return;
+      const grossProfit = totalSelling - totalCost;
+      const paidRatio = Math.min(paid / totalSelling, 1);
+      const realizedProfit = grossProfit > 0 ? grossProfit * paidRatio : 0;
+      const capitalReturn = Math.max(0, paid - realizedProfit);
+      if (capitalReturn <= 0) return;
+      let contribs: any[] = [];
+      const rawC = order.founder_contributions;
+      if (Array.isArray(rawC)) contribs = rawC;
+      else if (typeof rawC === "string") { try { contribs = JSON.parse(rawC); } catch { contribs = []; } }
+      const totalPct = contribs.length > 0 ? contribs.reduce((s: number, c: any) => s + (c.percentage || 0), 0) || 100 : 100;
+      fList.forEach(f => {
+        let share = 0;
+        if (contribs.length > 0) {
+          const fc = contribs.find((c: any) => c.founderId === f.id || c.founder === f.name);
+          if (fc) share = capitalReturn * (fc.percentage || 0) / totalPct;
+        } else {
+          share = capitalReturn / (fList.length || 1);
+        }
+        if (share > 0) autoCapital[f.id] = (autoCapital[f.id] || 0) + Math.round(share);
+      });
+    });
+
+    // Manual capital_return additions & capital_withdrawal deductions per founder
+    const balances = fList.map(f => {
+      const myTxs = txList.filter(tx => tx.performed_by === f.id || tx.reference_id === f.name);
+      const manualReturn = myTxs.filter(tx => tx.tx_type === "capital_return").reduce((s: number, tx: any) => s + Math.abs(Number(tx.amount)), 0);
+      const withdrawn = myTxs.filter(tx => tx.tx_type === "capital_withdrawal").reduce((s: number, tx: any) => s + Math.abs(Number(tx.amount)), 0);
+      return {
+        founderId: f.id,
+        founderName: f.name,
+        balance: Math.round((autoCapital[f.id] || 0) + manualReturn - withdrawn),
+      };
+    });
+    res.json(balances);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get("/founder-transactions", async (_req, res) => {
   const { data, error } = await supabaseAdmin
     .from("treasury_transactions")
