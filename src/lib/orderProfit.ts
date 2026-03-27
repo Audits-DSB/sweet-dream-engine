@@ -1,0 +1,104 @@
+export type Founder = {
+  id: string;
+  name: string;
+  weight?: number; // used in weighted mode (0–1), ignored in equal mode
+};
+
+export type FounderResult = {
+  id: string;
+  name: string;
+  weight: number;
+  profit: number;
+  recoveredCapital: number;
+};
+
+export type OrderProfitInput = {
+  orderTotal: number;
+  expectedProfit: number;
+  companyProfitPercentage: number; // 0–1  e.g. 0.40 for 40%
+  consumedValue: number;
+  paidValue: number;
+  founders: Founder[];
+  founderDistributionMode: "equal" | "weighted";
+};
+
+export type OrderProfitResult = {
+  capital: number;
+  profitRatio: number;
+  capitalRatio: number;
+
+  consumedProfit: number;
+  consumedCapital: number;
+
+  realizedProfit: number;
+  recoveredCapital: number;
+
+  companyProfit: number;
+  foundersProfitPool: number;
+
+  founderResults: FounderResult[];
+};
+
+export function calculateOrderProfit(input: OrderProfitInput): OrderProfitResult {
+  const {
+    orderTotal,
+    expectedProfit,
+    companyProfitPercentage,
+    consumedValue,
+    paidValue,
+    founders,
+    founderDistributionMode,
+  } = input;
+
+  const capital = orderTotal - expectedProfit;
+  const profitRatio = orderTotal > 0 ? expectedProfit / orderTotal : 0;
+  const capitalRatio = orderTotal > 0 ? capital / orderTotal : 0;
+
+  const consumedProfit = consumedValue * profitRatio;
+  const consumedCapital = consumedValue * capitalRatio;
+
+  const realizedProfit = paidValue * profitRatio;
+  const recoveredCapital = paidValue * capitalRatio;
+
+  const companyProfit = realizedProfit * companyProfitPercentage;
+  const foundersProfitPool = realizedProfit - companyProfit;
+
+  const n = founders.length || 1;
+
+  let founderResults: FounderResult[];
+
+  if (founderDistributionMode === "equal") {
+    founderResults = founders.map((f) => ({
+      id: f.id,
+      name: f.name,
+      weight: 1 / n,
+      profit: foundersProfitPool / n,
+      recoveredCapital: recoveredCapital / n,
+    }));
+  } else {
+    const totalWeight = founders.reduce((s, f) => s + (f.weight ?? 0), 0) || 1;
+    founderResults = founders.map((f) => {
+      const w = (f.weight ?? 0) / totalWeight;
+      return {
+        id: f.id,
+        name: f.name,
+        weight: w,
+        profit: foundersProfitPool * w,
+        recoveredCapital: recoveredCapital * w,
+      };
+    });
+  }
+
+  return {
+    capital,
+    profitRatio,
+    capitalRatio,
+    consumedProfit,
+    consumedCapital,
+    realizedProfit,
+    recoveredCapital,
+    companyProfit,
+    foundersProfitPool,
+    founderResults,
+  };
+}
