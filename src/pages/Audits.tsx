@@ -355,15 +355,22 @@ export default function AuditsPage() {
         history: [],
       };
 
+      const notesPayload = JSON.stringify({
+        auditId: audit.id,
+        auditDate: audit.date,
+        sourceOrders,
+        lineItems,
+      });
       const saved = await api.post<any>("/collections", {
         clientId: audit.clientId,
+        orderId: primarySourceOrder || null,
         totalAmount: total,
         paidAmount: 0,
         outstanding: total,
         invoiceDate: today,
         dueDate: today,
         status: "Awaiting Confirmation",
-        notes: `جرد: ${audit.id}`,
+        notes: notesPayload,
       });
       await logAudit({ entity: "collection", entityId: saved.id, entityName: `${saved.id} - ${audit.clientName}`, action: "create", snapshot: { ...saved, auditId: audit.id }, endpoint: "/collections" });
       toast.success(`تم إنشاء التحصيل ${saved.id} — ${audit.clientName} (${total.toLocaleString()} ج.م)`);

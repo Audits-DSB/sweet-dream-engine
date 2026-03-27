@@ -26,28 +26,42 @@ type Collection = {
   issueDate: string; dueDate: string; total: number; paid: number;
   remaining: number; payments: { date: string; amount: number; method: string }[];
   status: string;
-  // Audit-sourced fields (stored inside payments JSONB meta)
-  auditId?: string; auditDate?: string; sourceOrder?: string; lineItems?: LineItem[];
+  // Audit-sourced fields (stored in notes JSON)
+  auditId?: string; auditDate?: string; sourceOrder?: string;
+  sourceOrders?: string[]; lineItems?: LineItem[];
 };
 
-function parsePaymentsField(raw: any): { payments: { date: string; amount: number; method: string }[]; meta: { auditId?: string; auditDate?: string; sourceOrder?: string; lineItems?: LineItem[] } } {
+function parseNotes(notes: any): { auditId?: string; auditDate?: string; sourceOrders?: string[]; sourceOrder?: string; lineItems?: LineItem[] } {
+  if (!notes) return {};
+  if (typeof notes === "string") {
+    try {
+      const parsed = JSON.parse(notes);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+    } catch { /* plain text */ }
+    // Legacy plain text like "جرد: AUD-001"
+    if (notes.startsWith("جرد:")) return { auditId: notes.replace("جرد:", "").trim() };
+    return {};
+  }
+  return {};
+}
+
+function parsePaymentsField(raw: any): { payments: { date: string; amount: number; method: string }[] } {
   let parsed: any = raw;
   if (typeof raw === "string") { try { parsed = JSON.parse(raw); } catch { parsed = []; } }
-  if (Array.isArray(parsed)) return { payments: parsed, meta: {} };
-  if (parsed && typeof parsed === "object") {
-    return { payments: Array.isArray(parsed.history) ? parsed.history : [], meta: parsed.meta || {} };
-  }
-  return { payments: [], meta: {} };
+  if (Array.isArray(parsed)) return { payments: parsed };
+  if (parsed && typeof parsed === "object" && Array.isArray(parsed.history)) return { payments: parsed.history };
+  return { payments: [] };
 }
 
 function mapCollection(raw: any, clientsMap: Record<string, string> = {}): Collection {
   const total = Number(raw.totalAmount ?? raw.total_amount ?? raw.total ?? 0);
   const paid = Number(raw.paidAmount ?? raw.paid_amount ?? raw.paid ?? 0);
   const clientId = raw.clientId || raw.client_id || "";
-  const { payments, meta } = parsePaymentsField(raw.payments);
+  const { payments } = parsePaymentsField(raw.payments);
+  const notesMeta = parseNotes(raw.notes);
   return {
     id: raw.id,
-    order: raw.order || raw.orderId || raw.order_id || "",
+    order: raw.order || raw.orderId || raw.order_id || notesMeta.sourceOrders?.[0] || notesMeta.sourceOrder || "",
     client: raw.client || raw.clientName || raw.client_name || clientsMap[clientId] || clientId,
     clientId,
     issueDate: raw.issueDate || raw.invoice_date || raw.invoiceDate || raw.createdAt || "",
@@ -56,8 +70,11 @@ function mapCollection(raw: any, clientsMap: Record<string, string> = {}): Colle
     remaining: Number(raw.outstanding ?? raw.remaining ?? (total - paid)),
     payments,
     status: raw.status || "Awaiting Confirmation",
-    auditId: meta.auditId || "", auditDate: meta.auditDate || "",
-    sourceOrder: meta.sourceOrder || "", lineItems: meta.lineItems || [],
+    auditId: notesMeta.auditId || "",
+    auditDate: notesMeta.auditDate || "",
+    sourceOrder: notesMeta.sourceOrders?.[0] || notesMeta.sourceOrder || "",
+    sourceOrders: notesMeta.sourceOrders || (notesMeta.sourceOrder ? [notesMeta.sourceOrder] : []),
+    lineItems: notesMeta.lineItems || [],
   };
 }
 
@@ -264,7 +281,19 @@ export default function CollectionsPage() {
             {filtered.map((inv) => (
               <tr key={inv.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setSelectedInvoice(inv)}>
                 <td className="py-3 px-3 font-mono text-xs font-medium">{inv.id}</td>
-                <td className="py-3 px-3 font-mono text-xs text-muted-foreground hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${inv.order}`); }}>{inv.order}</td>
+                <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                  {inv.sourceOrders && inv.sourceOrders.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {inv.sourceOrders.map(ordId => (
+                        <span key={ordId} className="font-mono text-xs text-primary underline-offset-2 hover:underline cursor-pointer" onClick={() => navigate(`/orders/${ordId}`)}>{ordId}</span>
+                      ))}
+                    </div>
+                  ) : inv.order ? (
+                    <span className="font-mono text-xs text-primary underline-offset-2 hover:underline cursor-pointer" onClick={() => navigate(`/orders/${inv.order}`)}>{inv.order}</span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </td>
                 <td className="py-3 px-3 font-medium hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${inv.clientId}`); }}>{inv.client}</td>
                 <td className="py-3 px-3 text-muted-foreground">{inv.issueDate}</td>
                 <td className="py-3 px-3 text-muted-foreground">{inv.dueDate}</td>
@@ -308,24 +337,40 @@ export default function CollectionsPage() {
           <DialogHeader><DialogTitle>{selectedInvoice?.id} — {selectedInvoice?.client}</DialogTitle></DialogHeader>
           {selectedInvoice && (
             <div className="space-y-4">
-              {/* Audit badge */}
+              {/* Audit source badge */}
               {selectedInvoice.auditId && (
-                <div className="flex flex-wrap gap-2 text-xs p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                <div className="flex flex-wrap items-center gap-2 text-xs p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
                   <span className="text-amber-700 dark:text-amber-300 font-medium">مصدر: جرد</span>
-                  <span className="text-muted-foreground">#{selectedInvoice.auditId}</span>
+                  <span className="text-muted-foreground font-mono">#{selectedInvoice.auditId}</span>
                   {selectedInvoice.auditDate && <span className="text-muted-foreground">— {selectedInvoice.auditDate}</span>}
-                  {selectedInvoice.sourceOrder && <span className="text-muted-foreground">| طلب: {selectedInvoice.sourceOrder}</span>}
                 </div>
               )}
+
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.totalAmount}</p><p className="font-semibold">{selectedInvoice.total.toLocaleString()} {t.currency}</p></div>
                 <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.remaining}</p><p className={`font-semibold ${selectedInvoice.remaining > 0 ? "text-destructive" : "text-success"}`}>{selectedInvoice.remaining > 0 ? `${selectedInvoice.remaining.toLocaleString()} ${t.currency}` : "مكتمل"}</p></div>
               </div>
+
+              {/* Orders linked to this collection */}
               <div className="grid grid-cols-2 gap-3 text-sm">
-                {selectedInvoice.order ? (
-                  <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setSelectedInvoice(null); navigate(`/orders/${selectedInvoice.order}`); }}><p className="text-xs text-muted-foreground">{t.order}</p><p className="font-semibold text-primary">{selectedInvoice.order}</p></div>
-                ) : <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.order}</p><p className="text-muted-foreground text-sm">—</p></div>}
-                <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setSelectedInvoice(null); navigate(`/clients/${selectedInvoice.clientId}`); }}><p className="text-xs text-muted-foreground">{t.client}</p><p className="font-semibold text-primary">{selectedInvoice.client}</p></div>
+                <div className="p-3 rounded-lg bg-muted/50">
+                  <p className="text-xs text-muted-foreground mb-1.5">{t.order}</p>
+                  {selectedInvoice.sourceOrders && selectedInvoice.sourceOrders.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedInvoice.sourceOrders.map(ordId => (
+                        <span key={ordId} className="font-mono text-sm font-semibold text-primary underline-offset-2 hover:underline cursor-pointer" onClick={() => { setSelectedInvoice(null); navigate(`/orders/${ordId}`); }}>{ordId}</span>
+                      ))}
+                    </div>
+                  ) : selectedInvoice.order ? (
+                    <span className="font-semibold text-primary underline-offset-2 hover:underline cursor-pointer" onClick={() => { setSelectedInvoice(null); navigate(`/orders/${selectedInvoice.order}`); }}>{selectedInvoice.order}</span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </div>
+                <div className="p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70" onClick={() => { setSelectedInvoice(null); navigate(`/clients/${selectedInvoice.clientId}`); }}>
+                  <p className="text-xs text-muted-foreground">{t.client}</p>
+                  <p className="font-semibold text-primary">{selectedInvoice.client}</p>
+                </div>
               </div>
 
               {/* Line items from audit */}
