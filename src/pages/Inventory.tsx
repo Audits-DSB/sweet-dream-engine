@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, Users, List, ChevronDown, ChevronUp, Download, ShoppingCart, Plus, Minus, Loader2, Pencil, Trash2 } from "lucide-react";
+import { AlertTriangle, Users, List, ChevronDown, ChevronUp, Download, ShoppingCart, Plus, Minus, Loader2, Pencil, Trash2, Package } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
@@ -35,6 +35,7 @@ type InventoryLot = {
   avgWeeklyUsage: number;
   leadTimeWeeks: number;
   safetyStock: number;
+  imageUrl?: string;
 };
 
 export default function InventoryPage() {
@@ -300,6 +301,7 @@ export default function InventoryPage() {
                             <table className="w-full text-sm">
                               <thead>
                                 <tr className="border-b border-border/40 bg-muted/10">
+                                  <th className="py-2 px-3 w-10"></th>
                                   <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>
                                   <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.code || "الكود"}</th>
                                   <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.deliveredQty}</th>
@@ -317,6 +319,13 @@ export default function InventoryPage() {
                                   const isNearExpiry = daysToExpiry !== null && daysToExpiry > 0 && daysToExpiry <= 30;
                                   return (
                                     <tr key={lot.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors cursor-pointer group" onClick={() => setDetailItem(lot)}>
+                                      <td className="py-2 px-3">
+                                        {lot.imageUrl ? (
+                                          <img src={lot.imageUrl} alt={lot.material} className="h-8 w-8 rounded object-cover border border-border" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                        ) : (
+                                          <div className="h-8 w-8 rounded bg-muted flex items-center justify-center"><Package className="h-3.5 w-3.5 text-muted-foreground" /></div>
+                                        )}
+                                      </td>
                                       <td className="py-2 px-3 font-medium">{lot.material}</td>
                                       <td className="py-2 px-3 font-mono text-xs text-muted-foreground">{lot.code}</td>
                                       <td className="py-2 px-3 text-end">{lot.delivered}</td>
@@ -356,6 +365,7 @@ export default function InventoryPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
+                <th className="py-3 px-3 w-10"></th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.batchNumber}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>
@@ -375,6 +385,13 @@ export default function InventoryPage() {
                 const isNearExpiry = daysToExpiry !== null && daysToExpiry > 0 && daysToExpiry <= 30;
                 return (
                   <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer group" onClick={() => setDetailItem(lot)}>
+                    <td className="py-3 px-3">
+                      {lot.imageUrl ? (
+                        <img src={lot.imageUrl} alt={lot.material} className="h-9 w-9 rounded object-cover border border-border" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      ) : (
+                        <div className="h-9 w-9 rounded bg-muted flex items-center justify-center"><Package className="h-4 w-4 text-muted-foreground" /></div>
+                      )}
+                    </td>
                     <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{lot.id}</td>
                     <td className="py-3 px-3 font-medium hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${lot.clientId}`); }}>{lot.clientName}</td>
                     <td className="py-3 px-3 hover:text-primary">{lot.material}</td>
