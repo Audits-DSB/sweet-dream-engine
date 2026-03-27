@@ -301,7 +301,7 @@ export default function InventoryPage() {
                             <table className="w-full text-sm">
                               <thead>
                                 <tr className="border-b border-border/40 bg-muted/10">
-                                  <th className="py-2 px-3 w-10"></th>
+                                  <th className="py-2 px-3 w-16"></th>
                                   <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>
                                   <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.code || "الكود"}</th>
                                   <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.deliveredQty}</th>
@@ -365,7 +365,7 @@ export default function InventoryPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                <th className="py-3 px-3 w-10"></th>
+                <th className="py-3 px-3 w-16"></th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.batchNumber}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>

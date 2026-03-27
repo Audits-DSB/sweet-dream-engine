@@ -126,6 +126,15 @@ export default function AuditsPage() {
     storeCost: Number(l.storeCost),
   }));
 
+  // Build code→imageUrl lookup from all inventory lots (already enriched by server)
+  const imageByCode = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const lot of lots) {
+      if (lot.imageUrl && lot.code) map[lot.code] = lot.imageUrl;
+    }
+    return map;
+  }, [lots]);
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/audits/${id}`),
     onSuccess: async (_, id) => {
@@ -608,8 +617,8 @@ export default function AuditsPage() {
                               {details.map((d, i) => (
                                 <tr key={i} className={`border-b border-border/50 ${d.result === "shortage" ? "bg-destructive/5" : d.result === "surplus" ? "bg-warning/5" : ""}`}>
                                   <td className="py-2 px-3">
-                                    {d.imageUrl ? (
-                                      <img src={d.imageUrl} alt={d.material} className="h-12 w-12 rounded-lg object-cover border border-border shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                    {(d.imageUrl || imageByCode[d.code]) ? (
+                                      <img src={d.imageUrl || imageByCode[d.code]} alt={d.material} className="h-12 w-12 rounded-lg object-cover border border-border shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                                     ) : (
                                       <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center border border-border"><Package className="h-5 w-5 text-muted-foreground" /></div>
                                     )}
