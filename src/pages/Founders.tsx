@@ -91,6 +91,8 @@ export default function FoundersPage() {
   const [editingFounder, setEditingFounder] = useState<Founder | null>(null);
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawFounderId, setWithdrawFounderId] = useState("");
+  const [withdrawMode, setWithdrawMode] = useState<"personal" | "fund_order">("personal");
+  const [withdrawOrderId, setWithdrawOrderId] = useState("");
   const [capitalRegForm, setCapitalRegForm] = useState({ founderId: "", founderName: "", amount: "", collectionId: "", orderId: "", clientName: "", notes: "" });
   const [form, setForm] = useState(emptyForm);
   const [editForm, setEditForm] = useState({ name: "", alias: "", email: "", phone: "" });
@@ -284,16 +286,45 @@ export default function FoundersPage() {
     if (!founder) return;
     const balance = founderCapitalBalance(founder.id);
     if (amt > balance) { toast.error(`الرصيد المتاح ${balance.toLocaleString()} ج.م فقط`); return; }
+    if (withdrawMode === "fund_order" && !withdrawOrderId.trim()) {
+      toast.error("اختر الطلب المراد تمويله"); return;
+    }
     setSaving(true);
     try {
-      const tx = await api.post<FounderTx>("/founder-transactions", {
-        founderId: founder.id, founderName: founder.name,
-        type: "capital_withdrawal", amount: amt,
-        notes: "سحب رأس مال", date: new Date().toISOString().split("T")[0],
-      });
-      setFounderTxs(prev => [tx, ...prev]);
-      setWithdrawOpen(false); setWithdrawAmount("");
-      toast.success(`تم تسجيل سحب ${amt.toLocaleString()} ج.م`);
+      const today = new Date().toISOString().split("T")[0];
+
+      if (withdrawMode === "fund_order") {
+        // 1. Deduct from founder's capital balance
+        const withdrawTx = await api.post<FounderTx>("/founder-transactions", {
+          founderId: founder.id, founderName: founder.name,
+          type: "capital_withdrawal", amount: amt,
+          orderId: withdrawOrderId.trim(),
+          notes: `سحب من الرصيد لتمويل طلب ${withdrawOrderId.trim()}`,
+          date: today,
+        });
+        // 2. Record as order_funding for the selected order
+        const fundingTx = await api.post<FounderTx>("/founder-transactions", {
+          founderId: founder.id, founderName: founder.name,
+          type: "order_funding",
+          amount: amt,
+          orderId: withdrawOrderId.trim(),
+          notes: `تمويل طلب ${withdrawOrderId.trim()} من رصيد ${founder.name}`,
+          date: today,
+        });
+        setFounderTxs(prev => [fundingTx, withdrawTx, ...prev]);
+        setWithdrawOpen(false); setWithdrawAmount(""); setWithdrawOrderId(""); setWithdrawMode("personal");
+        toast.success(`تم تمويل طلب ${withdrawOrderId.trim()} بمبلغ ${amt.toLocaleString()} ج.م من رصيد ${founder.name}`);
+      } else {
+        // Personal withdrawal
+        const tx = await api.post<FounderTx>("/founder-transactions", {
+          founderId: founder.id, founderName: founder.name,
+          type: "capital_withdrawal", amount: amt,
+          notes: "سحب رأس مال", date: today,
+        });
+        setFounderTxs(prev => [tx, ...prev]);
+        setWithdrawOpen(false); setWithdrawAmount(""); setWithdrawMode("personal");
+        toast.success(`تم تسجيل سحب ${amt.toLocaleString()} ج.م`);
+      }
     } catch { toast.error("فشل تسجيل السحب"); }
     finally { setSaving(false); }
   };
@@ -786,21 +817,112 @@ export default function FoundersPage() {
       </Dialog>
 
       {/* ── Withdraw Capital Dialog ── */}
-      <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
+      <Dialog open={withdrawOpen} onOpenChange={(v) => { setWithdrawOpen(v); if (!v) { setWithdrawMode("personal"); setWithdrawOrderId(""); setWithdrawAmount(""); } }}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><ArrowUpRight className="h-4 w-4 text-destructive" />سحب رأس المال</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              الرصيد المتاح: <strong>{founderCapitalBalance(withdrawFounderId).toLocaleString()} {t.currency}</strong>
-            </p>
-            <div>
-              <Label className="text-xs">المبلغ المراد سحبه ({t.currency}) *</Label>
-              <Input className="h-9 mt-1" type="number" value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="0" />
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="h-4 w-4 text-amber-500" />
+              سحب من الرصيد
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Available balance */}
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-3 text-sm">
+              <p className="text-muted-foreground text-xs mb-0.5">الرصيد المتاح</p>
+              <p className="font-bold text-amber-700 dark:text-amber-400 text-lg">
+                {founderCapitalBalance(withdrawFounderId).toLocaleString()} {t.currency}
+              </p>
             </div>
+
+            {/* Mode selection */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setWithdrawMode("personal")}
+                className={`rounded-lg border p-3 text-xs font-medium transition-colors text-center ${
+                  withdrawMode === "personal"
+                    ? "border-destructive bg-destructive/10 text-destructive"
+                    : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
+                }`}
+              >
+                <ArrowUpRight className="h-4 w-4 mx-auto mb-1" />
+                سحب شخصي
+              </button>
+              <button
+                type="button"
+                onClick={() => setWithdrawMode("fund_order")}
+                className={`rounded-lg border p-3 text-xs font-medium transition-colors text-center ${
+                  withdrawMode === "fund_order"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
+                }`}
+              >
+                <Coins className="h-4 w-4 mx-auto mb-1" />
+                تمويل عملية
+              </button>
+            </div>
+
+            {/* Order selector (only in fund_order mode) */}
+            {withdrawMode === "fund_order" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">اختر الطلب المراد تمويله *</Label>
+                <select
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  value={withdrawOrderId}
+                  onChange={(e) => setWithdrawOrderId(e.target.value)}
+                >
+                  <option value="">— اختر طلباً —</option>
+                  {Object.values(orders)
+                    .sort((a: any, b: any) => (b.date || "").localeCompare(a.date || ""))
+                    .slice(0, 50)
+                    .map((o: any) => (
+                      <option key={o.id} value={o.id}>
+                        {o.id} — {o.client || "بدون عميل"} ({o.status || ""})
+                      </option>
+                    ))}
+                </select>
+                {withdrawOrderId && orders[withdrawOrderId] && (
+                  <p className="text-xs text-muted-foreground">
+                    التكلفة الكلية: <span className="font-medium text-foreground">{Number(orders[withdrawOrderId].totalCost || 0).toLocaleString()} {t.currency}</span>
+                    {" · "}العميل: <span className="font-medium text-foreground">{(orders[withdrawOrderId] as any).client || "—"}</span>
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Amount */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">المبلغ ({t.currency}) *</Label>
+              <Input
+                className="h-9"
+                type="number"
+                value={withdrawAmount}
+                onChange={(e) => setWithdrawAmount(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+
+            {/* Summary for fund_order mode */}
+            {withdrawMode === "fund_order" && withdrawOrderId && parseFloat(withdrawAmount) > 0 && (
+              <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-xs space-y-1">
+                <p className="font-semibold text-primary text-sm">ملخص العملية</p>
+                <p>• سيُخصم <strong>{parseFloat(withdrawAmount).toLocaleString()} {t.currency}</strong> من رصيد المؤسس</p>
+                <p>• سيُسجَّل كـ <strong>تمويل</strong> لطلب <span className="font-mono">{withdrawOrderId}</span></p>
+              </div>
+            )}
           </div>
+
           <DialogFooter className="flex gap-2">
             <Button variant="outline" onClick={() => setWithdrawOpen(false)}>إلغاء</Button>
-            <Button variant="destructive" onClick={handleWithdrawCapital} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "تسجيل السحب"}</Button>
+            <Button
+              variant={withdrawMode === "fund_order" ? "default" : "destructive"}
+              onClick={handleWithdrawCapital}
+              disabled={saving}
+            >
+              {saving
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : withdrawMode === "fund_order" ? "تمويل العملية" : "تسجيل السحب"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
