@@ -441,7 +441,7 @@ export default function OrderDetails() {
           <Button variant="outline" size="sm" onClick={handleOpenEdit} data-testid="button-edit-order">
             <Pencil className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />تعديل
           </Button>
-          <Button size="sm" onClick={() => navigate("/deliveries")}><Truck className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.registerDelivery}</Button>
+          <Button size="sm" onClick={() => navigate(`/deliveries?new=${id}`)}><Truck className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.registerDelivery}</Button>
         </div>
       </div>
 
@@ -788,7 +788,7 @@ export default function OrderDetails() {
                   ? `${orderDeliveries.length} تسليم${orderDeliveries.length > 1 ? "ات" : ""} مسجّلة`
                   : "لا توجد تسليمات مسجّلة لهذا الطلب"}
               </p>
-              <Button variant="outline" size="sm" onClick={() => navigate("/deliveries")} data-testid="button-go-deliveries">
+              <Button variant="outline" size="sm" onClick={() => navigate(`/deliveries?new=${id}`)} data-testid="button-go-deliveries">
                 <ExternalLink className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />
                 إدارة التوصيلات
               </Button>
@@ -798,7 +798,7 @@ export default function OrderDetails() {
               <div className="stat-card flex flex-col items-center justify-center py-14 gap-3 text-center">
                 <Truck className="h-10 w-10 text-muted-foreground/40" />
                 <p className="text-muted-foreground text-sm">لا توجد توصيلات مرتبطة بهذا الطلب</p>
-                <Button size="sm" onClick={() => navigate("/deliveries")} data-testid="button-add-delivery">
+                <Button size="sm" onClick={() => navigate(`/deliveries?new=${id}`)} data-testid="button-add-delivery">
                   <Truck className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />
                   تسجيل توصيلة جديدة
                 </Button>
@@ -809,7 +809,7 @@ export default function OrderDetails() {
                   <div
                     key={del.id}
                     className="stat-card p-0 overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
-                    onClick={() => navigate("/deliveries")}
+                    onClick={() => navigate(`/deliveries?new=${id}`)}
                     data-testid={`card-delivery-${del.id}`}
                   >
                     {/* Card header */}
