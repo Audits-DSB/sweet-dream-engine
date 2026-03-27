@@ -63,6 +63,7 @@ type InventoryLot = {
   sellingPrice: number;
   storeCost: number;
   imageUrl?: string;
+  sourceOrder?: string;
 };
 
 function parseCsvText(text: string): { code: string; name: string; actual: number }[] {
@@ -758,6 +759,7 @@ export default function AuditsPage() {
                                 <th className="py-2 px-2.5 w-14"></th>
                                 <th className="text-start py-2 px-2.5 font-medium">{t.material}</th>
                                 <th className="text-start py-2 px-2.5 font-medium">{t.codeCol}</th>
+                                <th className="text-start py-2 px-2.5 font-medium">الطلب</th>
                                 <th className="text-end py-2 px-2.5 font-medium">{t.remaining}</th>
                                 <th className="text-start py-2 px-2.5 font-medium">{t.unit}</th>
                               </tr>
@@ -767,13 +769,18 @@ export default function AuditsPage() {
                                 <tr key={inv.id} className="border-b border-border/50">
                                   <td className="py-1.5 px-2.5">
                                     {inv.imageUrl ? (
-                                      <img src={inv.imageUrl} alt={inv.material} className="h-12 w-12 rounded-lg object-cover border border-border shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                      <img src={inv.imageUrl} alt={inv.material} className="h-12 w-12 rounded-xl object-contain bg-white border border-border shadow-sm p-0.5" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                                     ) : (
-                                      <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center border border-border"><Package className="h-5 w-5 text-muted-foreground" /></div>
+                                      <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center border border-border"><Package className="h-5 w-5 text-muted-foreground" /></div>
                                     )}
                                   </td>
                                   <td className="py-1.5 px-2.5 font-medium">{inv.material}</td>
                                   <td className="py-1.5 px-2.5 font-mono text-muted-foreground">{inv.code}</td>
+                                  <td className="py-1.5 px-2.5">
+                                    {inv.sourceOrder ? (
+                                      <span className="font-mono text-[11px] text-primary bg-primary/5 px-1.5 py-0.5 rounded">{inv.sourceOrder}</span>
+                                    ) : <span className="text-muted-foreground">—</span>}
+                                  </td>
                                   <td className="py-1.5 px-2.5 text-end font-medium">{inv.remaining}</td>
                                   <td className="py-1.5 px-2.5 text-muted-foreground">{inv.unit}</td>
                                 </tr>
