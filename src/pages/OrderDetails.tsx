@@ -977,9 +977,31 @@ export default function OrderDetails() {
                           variant="outline"
                           className="h-8 text-xs border-primary text-primary hover:bg-primary hover:text-primary-foreground gap-1 flex-shrink-0"
                           disabled={payingFounder === fp.founder}
-                          onClick={() => {
-                            const bal = founderBalances[fp.founder] || founderBalances[fp.founderId] || 0;
+                          onClick={async () => {
                             setUseBalance(false);
+                            // Always fetch fresh balances so we get the latest capital+profits
+                            let bal = 0;
+                            try {
+                              const freshBalances = await api.get<{ founderId: string; founderName: string; balance: number }[]>("/founder-balances");
+                              // Robust lookup: by founderId first, then exact name, then case-insensitive partial name
+                              const fpName = (fp.founder || "").trim().toLowerCase();
+                              const fpId = fp.founderId || "";
+                              const match = freshBalances.find(b =>
+                                (fpId && (b.founderId === fpId)) ||
+                                b.founderName === fp.founder ||
+                                b.founderName.trim().toLowerCase() === fpName ||
+                                b.founderName.trim().toLowerCase().includes(fpName) ||
+                                fpName.includes(b.founderName.trim().toLowerCase())
+                              );
+                              if (match) bal = match.balance;
+                              // Also update the map for inline display
+                              const newMap: Record<string, number> = {};
+                              freshBalances.forEach(b => {
+                                if (b.founderName) newMap[b.founderName] = b.balance;
+                                if (b.founderId) newMap[b.founderId] = b.balance;
+                              });
+                              setFounderBalances(newMap);
+                            } catch { /* use cached */ bal = founderBalances[fp.founder] || founderBalances[fp.founderId] || 0; }
                             setBalanceDialog({ open: true, fp, available: bal });
                           }}
                         >
