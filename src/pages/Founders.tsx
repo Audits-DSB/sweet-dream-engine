@@ -84,6 +84,10 @@ type OrderFundingEntry = {
   totalSelling: number;
   status: string;
   date: string;
+  paid: boolean;
+  paidAt?: string;
+  founderName: string;
+  founderId: string;
 };
 
 export default function FoundersPage() {
@@ -268,6 +272,10 @@ export default function FoundersPage() {
           totalSelling,
           status,
           date: typeof date === "string" ? date.split("T")[0] : "",
+          paid: !!c.paid,
+          paidAt: c.paidAt || undefined,
+          founderName: c.founder || "",
+          founderId: fId,
         });
       });
     });
@@ -409,6 +417,49 @@ export default function FoundersPage() {
     finally { setSaving(false); }
   };
 
+  const [payingEntry, setPayingEntry] = useState<string | null>(null);
+
+  const handlePayOrderFunding = async (entry: OrderFundingEntry) => {
+    const founder = founders.find(f => f.id === entry.founderId);
+    if (!founder) return;
+    const key = `${entry.orderId}-${entry.founderId}`;
+    setPayingEntry(key);
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      await api.post("/founder-transactions", {
+        founderId: entry.founderId,
+        founderName: entry.founderName || founder.name,
+        type: "funding",
+        amount: entry.amount,
+        method: "transfer",
+        orderId: entry.orderId,
+        notes: `حصة تمويل طلب ${entry.orderId}`,
+        date: today,
+      });
+      const order = orders[entry.orderId];
+      if (order) {
+        const contribs = Array.isArray(order.founderContributions) ? order.founderContributions : [];
+        const updatedContribs = contribs.map((c: any) =>
+          (c.founderId || c.founder_id) === entry.founderId
+            ? { ...c, paid: true, paidAt: new Date().toISOString() }
+            : c
+        );
+        await api.patch(`/orders/${entry.orderId}`, { founderContributions: updatedContribs });
+      }
+      await logAudit({
+        entity: "founder", entityId: founder.id, entityName: founder.name,
+        action: "update", snapshot: { type: "order_funding_paid", orderId: entry.orderId, amount: entry.amount },
+        endpoint: `/orders/${entry.orderId}`,
+      });
+      await loadData();
+      toast.success(`تم تسجيل دفع ${founder.name} لطلب ${entry.orderId} — ${entry.amount.toLocaleString()} ${t.currency}`);
+    } catch (err: any) {
+      toast.error(err?.message || "فشل تسجيل الدفع");
+    } finally {
+      setPayingEntry(null);
+    }
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -427,13 +478,24 @@ export default function FoundersPage() {
 
       {/* ── Top Stats ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title={t.totalContributions}
-          value={totalContributed > 0 ? `${(totalContributed / 1000).toFixed(0)}ك ${t.currency}` : "—"}
-          change={`${founders.length} ${t.foundersCount}`} changeType="neutral" icon={Wallet} />
-        <StatCard title="إجمالي التمويل من الأوردرات"
-          value={(() => { const total = founders.reduce((s, f) => s + (orderFundingByFounder[f.id] || []).reduce((ss, e) => ss + e.amount, 0), 0); return total > 0 ? `${total.toLocaleString()} ${t.currency}` : "—"; })()}
-          change={`${Object.values(orderFundingByFounder).reduce((s, arr) => s + arr.length, 0)} أوردر`}
-          changeType="neutral" icon={ShoppingBag} />
+        {(() => {
+          const allEntries = founders.flatMap(f => orderFundingByFounder[f.id] || []);
+          const totalOwed = allEntries.filter(e => !e.paid).reduce((s, e) => s + e.amount, 0);
+          const totalPaid = allEntries.filter(e => e.paid).reduce((s, e) => s + e.amount, 0);
+          const unpaidCount = allEntries.filter(e => !e.paid).length;
+          return (
+            <>
+              <StatCard title="عليهم فلوس (غير مدفوع)"
+                value={totalOwed > 0 ? `${totalOwed.toLocaleString()} ${t.currency}` : "—"}
+                change={unpaidCount > 0 ? `${unpaidCount} حصة في انتظار الدفع` : "الكل مدفوع"}
+                changeType={totalOwed > 0 ? "negative" : "positive"} icon={AlertTriangle} />
+              <StatCard title="تم الدفع (مساهمات)"
+                value={totalPaid > 0 ? `${totalPaid.toLocaleString()} ${t.currency}` : "—"}
+                change={`${allEntries.filter(e => e.paid).length} حصة مدفوعة`}
+                changeType={totalPaid > 0 ? "positive" : "neutral"} icon={Wallet} />
+            </>
+          );
+        })()}
         <div className="cursor-pointer" onClick={() => navigate("/company-profit")}>
           <StatCard title={t.totalProfits} value="عرض الأرباح" change="صفحة الأرباح التفصيلية" changeType="positive" icon={TrendingUp} />
         </div>
@@ -463,6 +525,10 @@ export default function FoundersPage() {
             const myCapital = capitalByFounder[f.id] || [];
             const myOrderFunding = orderFundingByFounder[f.id] || [];
             const totalOrderFunding = myOrderFunding.reduce((s, e) => s + e.amount, 0);
+            const unpaidFunding = myOrderFunding.filter(e => !e.paid);
+            const paidFunding = myOrderFunding.filter(e => e.paid);
+            const totalOwed = unpaidFunding.reduce((s, e) => s + e.amount, 0);
+            const totalPaidFunding = paidFunding.reduce((s, e) => s + e.amount, 0);
             const isExpanded = expandedFounder === f.id;
             const section = activeSection[f.id] || "ledger";
 
@@ -502,19 +568,21 @@ export default function FoundersPage() {
                 {/* ── Stats Row ── */}
                 <div className="grid grid-cols-5 gap-0 border-t border-border">
                   <div className="p-3 text-center border-l border-border rtl:border-r rtl:border-l-0">
-                    <div className="text-xs text-muted-foreground mb-1">إجمالي المساهمات</div>
-                    <div className="font-bold text-sm">{displayTotal > 0 ? displayTotal.toLocaleString() : "—"}</div>
-                    <div className="text-xs text-muted-foreground">{t.currency}</div>
+                    <div className="text-xs text-muted-foreground mb-1">عليه فلوس</div>
+                    <div className={`font-bold text-sm ${totalOwed > 0 ? "text-destructive" : "text-success"}`}>
+                      {totalOwed > 0 ? totalOwed.toLocaleString() : "✓"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">{unpaidFunding.length > 0 ? `${unpaidFunding.length} أوردر` : "مدفوع الكل"}</div>
                   </div>
                   <div className="p-3 text-center border-l border-border rtl:border-r rtl:border-l-0">
-                    <div className="text-xs text-muted-foreground mb-1">تمويل من الأوردرات</div>
+                    <div className="text-xs text-muted-foreground mb-1">تم الدفع (مساهمات)</div>
+                    <div className="font-bold text-sm text-success">{totalPaidFunding > 0 ? totalPaidFunding.toLocaleString() : "—"}</div>
+                    <div className="text-xs text-muted-foreground">{paidFunding.length > 0 ? `${paidFunding.length} أوردر` : t.currency}</div>
+                  </div>
+                  <div className="p-3 text-center border-l border-border rtl:border-r rtl:border-l-0">
+                    <div className="text-xs text-muted-foreground mb-1">إجمالي التمويل</div>
                     <div className="font-bold text-sm text-blue-600 dark:text-blue-400">{totalOrderFunding > 0 ? totalOrderFunding.toLocaleString() : "—"}</div>
                     <div className="text-xs text-muted-foreground">{myOrderFunding.length > 0 ? `${myOrderFunding.length} طلب` : t.currency}</div>
-                  </div>
-                  <div className="p-3 text-center border-l border-border rtl:border-r rtl:border-l-0">
-                    <div className="text-xs text-muted-foreground mb-1">تمويل يدوي</div>
-                    <div className="font-bold text-sm text-primary">{fundings.length > 0 ? fundings.length : "—"}</div>
-                    <div className="text-xs text-muted-foreground">طلب</div>
                   </div>
                   <div className="p-3 text-center border-l border-border rtl:border-r rtl:border-l-0">
                     <div className="text-xs text-muted-foreground mb-1">أرباح محصّلة</div>
@@ -623,44 +691,91 @@ export default function FoundersPage() {
                           </div>
                         ) : (
                           <div className="max-h-[500px] overflow-y-auto">
+                            {unpaidFunding.length > 0 && (
+                              <div className="px-5 py-2 bg-destructive/5 border-b border-destructive/20">
+                                <span className="text-xs font-semibold text-destructive flex items-center gap-1.5">
+                                  <AlertTriangle className="h-3.5 w-3.5" />
+                                  عليه {totalOwed.toLocaleString()} {t.currency} — {unpaidFunding.length} حصة في انتظار الدفع
+                                </span>
+                              </div>
+                            )}
                             <div className="divide-y divide-border/50">
                               {myOrderFunding
-                                .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-                                .map((entry, idx) => (
-                                  <div key={`of-${entry.orderId}-${idx}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-blue-500/10 flex items-center justify-center">
-                                      <ShoppingBag className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium">تمويل أوردر</span>
-                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                        </button>
-                                        {entry.clientName && <span className="text-xs text-muted-foreground">· {entry.clientName}</span>}
-                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">{entry.status}</Badge>
+                                .sort((a, b) => {
+                                  if (a.paid !== b.paid) return a.paid ? 1 : -1;
+                                  return (b.date || "").localeCompare(a.date || "");
+                                })
+                                .map((entry, idx) => {
+                                  const entryKey = `${entry.orderId}-${entry.founderId}`;
+                                  const isPaying = payingEntry === entryKey;
+                                  return (
+                                    <div key={`of-${entry.orderId}-${idx}`}
+                                      className={`flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors ${
+                                        entry.paid
+                                          ? "bg-emerald-50/50 dark:bg-emerald-950/10"
+                                          : "bg-red-50/30 dark:bg-red-950/10"
+                                      }`}>
+                                      <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${
+                                        entry.paid ? "bg-success/10" : "bg-destructive/10"
+                                      }`}>
+                                        {entry.paid
+                                          ? <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                                          : <XCircle className="h-3.5 w-3.5 text-destructive" />}
                                       </div>
-                                      <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
-                                        <span><Clock className="h-3 w-3 inline ml-0.5" />{entry.date}</span>
-                                        <span>نسبة: <span className="text-foreground font-medium">{entry.percentage.toFixed(1)}%</span></span>
-                                        <span>تكلفة الأوردر: <span className="text-foreground font-medium">{entry.totalCost.toLocaleString()} {t.currency}</span></span>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-sm font-medium">
+                                            {entry.paid ? "مساهمة (تم الدفع)" : "عليه فلوس"}
+                                          </span>
+                                          <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                            onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                            {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                          </button>
+                                          {entry.clientName && <span className="text-xs text-muted-foreground">· {entry.clientName}</span>}
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">{entry.status}</Badge>
+                                        </div>
+                                        <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
+                                          <span><Clock className="h-3 w-3 inline ml-0.5" />{entry.date}</span>
+                                          <span>نسبة: <span className="text-foreground font-medium">{entry.percentage.toFixed(1)}%</span></span>
+                                          <span>تكلفة الأوردر: <span className="text-foreground font-medium">{entry.totalCost.toLocaleString()} {t.currency}</span></span>
+                                          {entry.paid && entry.paidAt && (
+                                            <span className="text-success">دفع في {new Date(entry.paidAt).toLocaleDateString("ar-SA")}</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2 flex-shrink-0">
+                                        <div className="flex flex-col items-end gap-0.5">
+                                          <span className={`text-sm font-bold ${entry.paid ? "text-success" : "text-destructive"}`}>
+                                            {entry.amount.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">{t.currency}</span>
+                                          </span>
+                                        </div>
+                                        {!entry.paid && (
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 text-xs border-primary text-primary hover:bg-primary hover:text-primary-foreground gap-1"
+                                            disabled={isPaying}
+                                            onClick={() => handlePayOrderFunding(entry)}
+                                          >
+                                            {isPaying
+                                              ? <Loader2 className="h-3 w-3 animate-spin" />
+                                              : <><Wallet className="h-3 w-3" />تسديد</>}
+                                          </Button>
+                                        )}
                                       </div>
                                     </div>
-                                    <div className="flex flex-col items-end gap-0.5">
-                                      <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                                        {entry.amount.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">{t.currency}</span>
-                                      </span>
-                                    </div>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                             </div>
                           </div>
                         )}
                         {myOrderFunding.length > 0 && (
                           <div className="flex items-center justify-between px-5 py-2.5 bg-muted/20 border-t border-border text-xs text-muted-foreground">
-                            <span>إجمالي التمويل من {myOrderFunding.length} أوردر</span>
-                            <span className="font-bold text-blue-600 dark:text-blue-400">{totalOrderFunding.toLocaleString()} {t.currency}</span>
+                            <div className="flex gap-4">
+                              {totalOwed > 0 && <span>عليه: <span className="font-bold text-destructive">{totalOwed.toLocaleString()} {t.currency}</span></span>}
+                              {totalPaidFunding > 0 && <span>دفع: <span className="font-bold text-success">{totalPaidFunding.toLocaleString()} {t.currency}</span></span>}
+                            </div>
+                            <span className="font-bold text-foreground">الإجمالي: {totalOrderFunding.toLocaleString()} {t.currency}</span>
                           </div>
                         )}
                       </>
