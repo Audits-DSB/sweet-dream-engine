@@ -124,11 +124,15 @@ export default function FoundersPage() {
     loadData().catch(() => toast.error("تعذّر تحميل بيانات المؤسسين")).finally(() => setLoading(false));
   }, []);
 
-  // ── Calculate profit distributions per founder from collections ──────────────
-  const profitsByFounder = useMemo(() => {
-    const map: Record<string, Array<{
+  // ── Calculate profit AND capital distributions per founder from collections ──
+  const { profitsByFounder, capitalByFounder } = useMemo(() => {
+    const profitMap: Record<string, Array<{
       collectionId: string; orderId: string; clientName: string; date: string;
       paidAmount: number; founderShare: number; paidRatio: number; alreadyRegistered: boolean;
+    }>> = {};
+    const capitalMap: Record<string, Array<{
+      collectionId: string; orderId: string; clientName: string; date: string;
+      paidAmount: number; capitalShare: number;
     }>> = {};
 
     collections.forEach(col => {
@@ -138,55 +142,80 @@ export default function FoundersPage() {
       const totalSelling = toNum(order.totalSelling ?? (order as any).total_selling);
       const totalCost = toNum(order.totalCost ?? (order as any).total_cost);
       const grossProfit = totalSelling - totalCost;
-      if (grossProfit <= 0 || totalSelling <= 0) return;
+      if (totalSelling <= 0) return;
 
       const paidRatio = Math.min(col.paidAmount / totalSelling, 1);
-      const realizedProfit = grossProfit * paidRatio;
+      const realizedProfit = grossProfit > 0 ? grossProfit * paidRatio : 0;
+      // Capital return = the non-profit portion of what was collected
+      const capitalReturn = Math.max(0, col.paidAmount - realizedProfit);
+
       const companyPct = rules.companyProfitPercentage ?? 40;
       const foundersProfit = realizedProfit * (1 - companyPct / 100);
 
-      // Determine founder shares
+      // Determine founder split settings from order
       const contribs = Array.isArray(order.founderContributions) ? order.founderContributions : [];
       const splitMode = (order as any).splitMode || (order as any).split_mode || "equal";
+      const totalFounderPct = contribs.length > 0
+        ? contribs.reduce((s: number, c: any) => s + (c.percentage || 0), 0) || 100
+        : 100;
 
       founders.forEach(f => {
-        if (!map[f.id]) map[f.id] = [];
-        let founderShare = 0;
-        if (contribs.length > 0 && splitMode !== "equal") {
-          // fc.percentage is the founder's % of the FOUNDERS' PORTION, not total profit
-          const totalFounderPct = contribs.reduce((s: number, c: any) => s + (c.percentage || 0), 0) || 100;
-          const fc = contribs.find((c: any) => c.founderId === f.id || c.founder === f.name);
-          if (!fc) return;
-          founderShare = foundersProfit * (fc.percentage || 0) / totalFounderPct;
-        } else {
-          founderShare = foundersProfit / (founders.length || 1);
+        if (!profitMap[f.id]) profitMap[f.id] = [];
+        if (!capitalMap[f.id]) capitalMap[f.id] = [];
+
+        // ── Profit share ──────────────────────────────────────────────────────
+        if (grossProfit > 0) {
+          let founderShare = 0;
+          if (contribs.length > 0 && splitMode !== "equal") {
+            const fc = contribs.find((c: any) => c.founderId === f.id || c.founder === f.name);
+            if (fc) founderShare = foundersProfit * (fc.percentage || 0) / totalFounderPct;
+          } else {
+            founderShare = foundersProfit / (founders.length || 1);
+          }
+          if (founderShare > 0) {
+            const alreadyRegistered = founderTxs.some(
+              tx => tx.type === "capital_return" && tx.founderId === f.id && tx.collectionId === col.id
+            );
+            profitMap[f.id].push({
+              collectionId: col.id, orderId: col.orderId, clientName: col.client,
+              date: col.invoiceDate.split("T")[0],
+              paidAmount: col.paidAmount, founderShare: Math.round(founderShare),
+              paidRatio, alreadyRegistered,
+            });
+          }
         }
-        if (founderShare <= 0) return;
 
-        // Check if already registered as capital_return
-        const alreadyRegistered = founderTxs.some(
-          tx => tx.type === "capital_return" && tx.founderId === f.id && tx.collectionId === col.id
-        );
-
-        map[f.id].push({
-          collectionId: col.id, orderId: col.orderId, clientName: col.client,
-          date: col.invoiceDate.split("T")[0],
-          paidAmount: col.paidAmount, founderShare: Math.round(founderShare),
-          paidRatio, alreadyRegistered,
-        });
+        // ── Capital return share ──────────────────────────────────────────────
+        if (capitalReturn > 0) {
+          let founderCapShare = 0;
+          if (contribs.length > 0 && splitMode !== "equal") {
+            const fc = contribs.find((c: any) => c.founderId === f.id || c.founder === f.name);
+            if (fc) founderCapShare = capitalReturn * (fc.percentage || 0) / totalFounderPct;
+          } else {
+            founderCapShare = capitalReturn / (founders.length || 1);
+          }
+          if (founderCapShare > 0) {
+            capitalMap[f.id].push({
+              collectionId: col.id, orderId: col.orderId, clientName: col.client,
+              date: col.invoiceDate.split("T")[0],
+              paidAmount: col.paidAmount, capitalShare: Math.round(founderCapShare),
+            });
+          }
+        }
       });
     });
-    return map;
+    return { profitsByFounder: profitMap, capitalByFounder: capitalMap };
   }, [collections, orders, founders, founderTxs, rules.companyProfitPercentage]);
 
   const totalContributed = founders.reduce((s, f) => s + f.totalContributed, 0);
 
-  // Available capital per founder = capital_return - capital_withdrawal
+  // Available capital per founder = auto capital from collections + manual capital_returns - withdrawals
   function founderCapitalBalance(founderId: string): number {
     const myTxs = founderTxs.filter(tx => tx.founderId === founderId);
-    const returned = myTxs.filter(tx => tx.type === "capital_return").reduce((s, tx) => s + tx.amount, 0);
+    const autoCapital = (capitalByFounder[founderId] || []).reduce((s, e) => s + e.capitalShare, 0);
+    const manualReturn = myTxs.filter(tx => tx.type === "capital_return").reduce((s, tx) => s + tx.amount, 0);
     const withdrawn = myTxs.filter(tx => tx.type === "capital_withdrawal").reduce((s, tx) => s + tx.amount, 0);
-    return returned - withdrawn;
+    return autoCapital + manualReturn - withdrawn;
   }
 
   const totalAvailableCapital = founders.reduce((s, f) => s + Math.max(0, founderCapitalBalance(f.id)), 0);
@@ -329,10 +358,15 @@ export default function FoundersPage() {
             const withdrawals = myTxs.filter(tx => tx.type === "withdrawal");
 
             const myProfits = profitsByFounder[f.id] || [];
+            const myCapital = capitalByFounder[f.id] || [];
             const isExpanded = expandedFounder === f.id;
             const section = activeSection[f.id] || "ledger";
 
             const capitalBalance = founderCapitalBalance(f.id);
+            const autoCapitalTotal = myCapital.reduce((s, e) => s + e.capitalShare, 0);
+            const manualCapitalTotal = capitalReturns.reduce((s, tx) => s + tx.amount, 0);
+            const capitalWithdrawnTotal = capitalWithdrawals.reduce((s, tx) => s + tx.amount, 0);
+
             const txContribTotal = [...contributions, ...fundings].reduce((s, tx) => s + tx.amount, 0);
             const displayTotal = txContribTotal > 0 ? txContribTotal : f.totalContributed;
 
@@ -546,9 +580,11 @@ export default function FoundersPage() {
                           <p className={`text-2xl font-bold ${capitalBalance > 0 ? "text-primary" : "text-muted-foreground"}`}>
                             {capitalBalance.toLocaleString()} <span className="text-base font-normal">{t.currency}</span>
                           </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            وارد: {capitalReturns.reduce((s, tx) => s + tx.amount, 0).toLocaleString()} · مسحوب: {capitalWithdrawals.reduce((s, tx) => s + tx.amount, 0).toLocaleString()}
-                          </p>
+                          <div className="flex items-center justify-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
+                            <span>من تحصيلات: <span className="text-foreground font-medium">{autoCapitalTotal.toLocaleString()}</span></span>
+                            {manualCapitalTotal > 0 && <span>أرباح مسجّلة: <span className="text-foreground font-medium">{manualCapitalTotal.toLocaleString()}</span></span>}
+                            <span>مسحوب: <span className="text-destructive font-medium">{capitalWithdrawnTotal.toLocaleString()}</span></span>
+                          </div>
                           {capitalBalance > 0 && (
                             <div className="mt-3 flex gap-2 justify-center">
                               <button
@@ -565,16 +601,52 @@ export default function FoundersPage() {
                           )}
                         </div>
 
-                        {/* Capital Returns History */}
-                        {capitalReturns.length === 0 && capitalWithdrawals.length === 0 ? (
+                        {/* Capital History: auto from collections + manual returns + withdrawals */}
+                        {myCapital.length === 0 && capitalReturns.length === 0 && capitalWithdrawals.length === 0 ? (
                           <div className="py-6 text-center text-sm text-muted-foreground">
                             <Coins className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                            <p>لا يوجد رأس مال مسجّل بعد</p>
-                            <p className="text-xs mt-1">سجّل الأرباح كرأس مال من تبويب "الأرباح"</p>
+                            <p>لا توجد تحصيلات مرتبطة بأوردرات بعد</p>
+                            <p className="text-xs mt-1">سيظهر رأس المال تلقائياً عند تسجيل تحصيلات على الأوردرات</p>
                           </div>
                         ) : (
-                          <ScrollArea className="max-h-64">
+                          <ScrollArea className="max-h-72">
                             <div className="divide-y divide-border/50">
+                              {/* Auto capital entries from collections */}
+                              {myCapital
+                                .sort((a, b) => b.date.localeCompare(a.date))
+                                .map(entry => (
+                                  <div key={`cap-${entry.collectionId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center">
+                                      <ArrowDownLeft className="h-3.5 w-3.5 text-primary" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-medium">رأس مال عائد من تحصيل</span>
+                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-success/10 text-success px-1.5 py-0.5 rounded hover:bg-success/20"
+                                          onClick={() => navigate(`/collections?search=${entry.collectionId}`)}>
+                                          {entry.collectionId} <ExternalLink className="h-2.5 w-2.5" />
+                                        </button>
+                                        {entry.orderId && (
+                                          <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                            onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                            {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                          </button>
+                                        )}
+                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                                        <Clock className="h-3 w-3 flex-shrink-0" />
+                                        <span>{entry.date}</span>
+                                        <span>· محصّل: {entry.paidAmount.toLocaleString()} {t.currency}</span>
+                                      </div>
+                                    </div>
+                                    <div className="text-sm font-bold flex-shrink-0 text-primary">
+                                      +{entry.capitalShare.toLocaleString()}
+                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              {/* Manual capital_return + capital_withdrawal transactions */}
                               {[...capitalReturns, ...capitalWithdrawals]
                                 .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime())
                                 .map(tx => (
