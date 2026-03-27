@@ -332,6 +332,32 @@ router.get("/orders/:id/lines", async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
   res.json(camelizeKeys(data));
 });
+router.post("/orders/:id/lines", async (req, res) => {
+  const orderId = req.params.id;
+  const { items } = req.body;
+  if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: "No items provided" });
+  const lineRows = items.map((item: any) => ({
+    order_id: orderId,
+    material_code: String(item.materialCode || ""),
+    material_name: String(item.materialName || item.name || ""),
+    image_url: String(item.imageUrl || ""),
+    unit: String(item.unit || "unit"),
+    quantity: Number(item.quantity) || 1,
+    selling_price: Number(item.sellingPrice) || 0,
+    cost_price: Number(item.costPrice) || 0,
+    line_total: (Number(item.sellingPrice) || 0) * (Number(item.quantity) || 1),
+    line_cost: (Number(item.costPrice) || 0) * (Number(item.quantity) || 1),
+  }));
+  const { data, error } = await supabaseAdmin.from("order_lines").insert(lineRows).select();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(camelizeKeys(data));
+});
+router.delete("/order-lines/:id", async (req, res) => {
+  const { data: snap } = await supabaseAdmin.from("order_lines").select("*").eq("id", req.params.id).single();
+  const { error } = await supabaseAdmin.from("order_lines").delete().eq("id", req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true, deleted: snap ? camelizeKeys(snap) : null });
+});
 router.patch("/order-lines/:id", async (req, res) => {
   const { quantity, sellingPrice, costPrice } = req.body;
   const lineTotal = (quantity ?? 0) * (sellingPrice ?? 0);

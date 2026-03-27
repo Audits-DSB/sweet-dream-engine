@@ -4,7 +4,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { quickProfit } from "@/lib/orderProfit";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, CreditCard, ChevronLeft } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, CreditCard, ChevronLeft, Plus, Trash2, Search } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -82,7 +82,12 @@ function mapOrder(raw: any): Order {
   };
 }
 
-type ExtMaterial = { sku: string; name: string; imageUrl: string };
+type ExtMaterial = { sku: string; name: string; imageUrl: string; unit: string; sellingPrice: number; costPrice: number };
+
+type NewOrderItem = {
+  materialCode: string; materialName: string; quantity: number;
+  sellingPrice: number; costPrice: number; imageUrl: string; unit: string;
+};
 
 export default function OrderDetails() {
   const { id } = useParams();
@@ -107,6 +112,10 @@ export default function OrderDetails() {
   const [editForm, setEditForm] = useState({ status: "", date: "", source: "", deliveryFee: "" });
   const [editLines, setEditLines] = useState<Array<OrderLine & { _qty: string; _sell: string; _cost: string }>>([]);
   const [editSaving, setEditSaving] = useState(false);
+  const [editNewItems, setEditNewItems] = useState<NewOrderItem[]>([]);
+  const [editDeletedLineIds, setEditDeletedLineIds] = useState<number[]>([]);
+  const [editMatSearch, setEditMatSearch] = useState("");
+  const [extMaterials, setExtMaterials] = useState<ExtMaterial[]>([]);
 
   const loadOrder = () =>
     Promise.all([
@@ -121,10 +130,14 @@ export default function OrderDetails() {
       const found = (all || []).find((o: any) => o.id === id);
       if (found) setOrder(mapOrder(found));
       const map: Record<string, ExtMaterial> = {};
+      const allMats: ExtMaterial[] = [];
       (extData?.products || []).forEach((p: any) => {
         const key = p.sku || "";
-        if (key) map[key] = { sku: key, name: p.name || "", imageUrl: p.image_url || "" };
+        const mat: ExtMaterial = { sku: key, name: p.name || "", imageUrl: p.image_url || "", unit: p.unit || "unit", sellingPrice: p.price_retail || 0, costPrice: p.price_wholesale || 0 };
+        if (key) map[key] = mat;
+        allMats.push(mat);
       });
+      setExtMaterials(allMats);
       const enriched = (fetchedLines || []).map((l: any) => ({
         ...l,
         materialName: l.materialName || map[l.materialCode]?.name || l.materialCode,
@@ -254,18 +267,31 @@ export default function OrderDetails() {
       deliveryFee: String(order.deliveryFee ?? ""),
     });
     setEditLines(lines.map(l => ({ ...l, _qty: String(l.quantity), _sell: String(l.sellingPrice), _cost: String(l.costPrice) })));
+    setEditNewItems([]);
+    setEditDeletedLineIds([]);
+    setEditMatSearch("");
     setEditOpen(true);
   };
+
+  const usedCodesInEdit = useMemo(() => {
+    const existing = editLines.filter(l => !editDeletedLineIds.includes(l.id)).map(l => l.materialCode);
+    const newCodes = editNewItems.map(i => i.materialCode);
+    return [...existing, ...newCodes];
+  }, [editLines, editDeletedLineIds, editNewItems]);
+
+  const filteredEditMaterials = useMemo(() => extMaterials.filter(m => {
+    if (usedCodesInEdit.includes(m.sku)) return false;
+    if (!editMatSearch) return false;
+    return m.name.toLowerCase().includes(editMatSearch.toLowerCase()) || m.sku.toLowerCase().includes(editMatSearch.toLowerCase());
+  }), [editMatSearch, usedCodesInEdit, extMaterials]);
 
   const handleSaveEdit = async () => {
     if (!order) return;
     setEditSaving(true);
     try {
-      // Snapshot before
       const beforeOrder = { status: order.status, date: order.date, source: order.source, deliveryFee: order.deliveryFee };
       const beforeLines = lines.map(l => ({ id: l.id, quantity: l.quantity, sellingPrice: l.sellingPrice, costPrice: l.costPrice, lineTotal: l.lineTotal, lineCost: l.lineCost }));
 
-      // PATCH order header
       const orderPatch: Record<string, any> = {};
       if (editForm.status !== order.status) orderPatch.status = editForm.status;
       if (editForm.date !== order.date) orderPatch.date = editForm.date;
@@ -273,44 +299,57 @@ export default function OrderDetails() {
       const newFee = Number(editForm.deliveryFee) || 0;
       if (newFee !== (order.deliveryFee || 0)) orderPatch.deliveryFee = newFee;
 
-      // PATCH changed lines + recalc totals
       let newTotalSelling = 0;
       let newTotalCost = 0;
       const linePatches: Promise<any>[] = [];
-      const afterLines: typeof beforeLines = [];
 
-      for (const el of editLines) {
+      const activeEditLines = editLines.filter(l => !editDeletedLineIds.includes(l.id));
+      for (const el of activeEditLines) {
         const qty = Number(el._qty) || 0;
         const sell = Number(el._sell) || 0;
         const cost = Number(el._cost) || 0;
         newTotalSelling += qty * sell;
         newTotalCost += qty * cost;
-        afterLines.push({ id: el.id, quantity: qty, sellingPrice: sell, costPrice: cost, lineTotal: qty * sell, lineCost: qty * cost });
         const orig = lines.find(l => l.id === el.id);
         if (orig && (orig.quantity !== qty || orig.sellingPrice !== sell || orig.costPrice !== cost)) {
           linePatches.push(api.patch(`/order-lines/${el.id}`, { quantity: qty, sellingPrice: sell, costPrice: cost }));
         }
       }
 
-      // If we have lines, also update totalSelling/totalCost on the order
-      if (editLines.length > 0) {
-        orderPatch.totalSelling = newTotalSelling;
-        orderPatch.totalCost = newTotalCost;
+      for (const ni of editNewItems) {
+        newTotalSelling += ni.sellingPrice * ni.quantity;
+        newTotalCost += ni.costPrice * ni.quantity;
       }
 
-      // Apply changes
-      await Promise.all(linePatches);
+      const deleteOps: Promise<any>[] = editDeletedLineIds.map(lid => api.delete(`/order-lines/${lid}`));
+
+      let addOp: Promise<any> | null = null;
+      if (editNewItems.length > 0) {
+        addOp = api.post(`/orders/${order.id}/lines`, { items: editNewItems });
+      }
+
+      const linesChanged = linePatches.length > 0 || editDeletedLineIds.length > 0 || editNewItems.length > 0;
+
+      if (linesChanged) {
+        orderPatch.totalSelling = newTotalSelling;
+        orderPatch.totalCost = newTotalCost;
+        orderPatch.lines = activeEditLines.length + editNewItems.length;
+      }
+
+      await Promise.all([...linePatches, ...deleteOps]);
+      if (addOp) await addOp;
+
       let refreshedOrder = order;
       if (Object.keys(orderPatch).length > 0) {
         const updated = await api.patch<any>(`/orders/${order.id}`, orderPatch);
         refreshedOrder = mapOrder(updated);
       }
 
-      // Detect changes for summary
       const changedFields = Object.keys(orderPatch);
-      if (linePatches.length > 0) changedFields.push("سطور الطلب");
+      if (linePatches.length > 0) changedFields.push("تعديل سطور");
+      if (editNewItems.length > 0) changedFields.push(`إضافة ${editNewItems.length} مادة`);
+      if (editDeletedLineIds.length > 0) changedFields.push(`حذف ${editDeletedLineIds.length} مادة`);
 
-      // Log audit with before/after
       if (changedFields.length > 0) {
         await logAudit({
           entity: "order",
@@ -319,7 +358,7 @@ export default function OrderDetails() {
           action: "update",
           snapshot: {
             before: { order: beforeOrder, lines: beforeLines },
-            after: { order: orderPatch, lines: afterLines },
+            after: { order: orderPatch },
             changes: changedFields,
             orderId: order.id,
           },
@@ -331,11 +370,8 @@ export default function OrderDetails() {
       }
 
       setOrder(refreshedOrder);
-      if (linePatches.length > 0) {
-        // Reload lines from server
-        const freshLines = await api.get<any[]>(`/orders/${order.id}/lines`);
-        setLines(freshLines || []);
-      }
+      const freshLines = await api.get<any[]>(`/orders/${order.id}/lines`);
+      setLines(freshLines || []);
       setEditOpen(false);
     } catch (err: any) {
       toast.error(err?.message || "فشل حفظ التعديلات");
@@ -588,46 +624,122 @@ export default function OrderDetails() {
               </div>
 
               {/* Order lines */}
-              {editLines.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold mb-4 text-muted-foreground">سطور الطلب</h3>
-                  <div className="space-y-3">
-                    {editLines.map((el, idx) => (
-                      <div key={el.id} className="rounded-lg border border-border p-4 space-y-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-md border border-border overflow-hidden bg-muted/50 flex-shrink-0 flex items-center justify-center">
-                            {el.imageUrl
-                              ? <img src={el.imageUrl} alt={el.materialName} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                              : <Package className="h-4 w-4 text-muted-foreground" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm truncate">{el.materialName}</div>
-                            <div className="text-xs text-muted-foreground font-mono">{el.materialCode} · {el.unit}</div>
-                          </div>
+              <div>
+                <h3 className="text-sm font-semibold mb-4 text-muted-foreground">سطور الطلب</h3>
+                <div className="space-y-3">
+                  {editLines.filter(l => !editDeletedLineIds.includes(l.id)).map((el, idx) => (
+                    <div key={el.id} className="rounded-lg border border-border p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-md border border-border overflow-hidden bg-muted/50 flex-shrink-0 flex items-center justify-center">
+                          {el.imageUrl
+                            ? <img src={el.imageUrl} alt={el.materialName} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                            : <Package className="h-4 w-4 text-muted-foreground" />}
                         </div>
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="space-y-1">
-                            <Label className="text-xs">الكمية</Label>
-                            <Input type="number" min="0" value={el._qty} onChange={(e) => setEditLines(prev => prev.map((p, i) => i === idx ? { ...p, _qty: e.target.value } : p))} className="h-8 text-sm" data-testid={`input-qty-${el.id}`} />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">سعر البيع</Label>
-                            <Input type="number" min="0" value={el._sell} onChange={(e) => setEditLines(prev => prev.map((p, i) => i === idx ? { ...p, _sell: e.target.value } : p))} className="h-8 text-sm" data-testid={`input-sell-${el.id}`} />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">سعر الشراء</Label>
-                            <Input type="number" min="0" value={el._cost} onChange={(e) => setEditLines(prev => prev.map((p, i) => i === idx ? { ...p, _cost: e.target.value } : p))} className="h-8 text-sm" data-testid={`input-cost-${el.id}`} />
-                          </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">{el.materialName}</div>
+                          <div className="text-xs text-muted-foreground font-mono">{el.materialCode} · {el.unit}</div>
                         </div>
-                        <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
-                          <span>إجمالي البيع: <span className="font-semibold text-foreground">{((Number(el._qty) || 0) * (Number(el._sell) || 0)).toLocaleString()}</span></span>
-                          <span>إجمالي التكلفة: <span className="font-semibold text-foreground">{((Number(el._qty) || 0) * (Number(el._cost) || 0)).toLocaleString()}</span></span>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setEditDeletedLineIds(prev => [...prev, el.id])}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">الكمية</Label>
+                          <Input type="number" min="0" value={el._qty} onChange={(e) => { const realIdx = editLines.findIndex(p => p.id === el.id); setEditLines(prev => prev.map((p, i) => i === realIdx ? { ...p, _qty: e.target.value } : p)); }} className="h-8 text-sm" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">سعر البيع</Label>
+                          <Input type="number" min="0" value={el._sell} onChange={(e) => { const realIdx = editLines.findIndex(p => p.id === el.id); setEditLines(prev => prev.map((p, i) => i === realIdx ? { ...p, _sell: e.target.value } : p)); }} className="h-8 text-sm" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">سعر الشراء</Label>
+                          <Input type="number" min="0" value={el._cost} onChange={(e) => { const realIdx = editLines.findIndex(p => p.id === el.id); setEditLines(prev => prev.map((p, i) => i === realIdx ? { ...p, _cost: e.target.value } : p)); }} className="h-8 text-sm" />
                         </div>
                       </div>
-                    ))}
-                  </div>
+                      <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
+                        <span>إجمالي البيع: <span className="font-semibold text-foreground">{((Number(el._qty) || 0) * (Number(el._sell) || 0)).toLocaleString()}</span></span>
+                        <span>إجمالي التكلفة: <span className="font-semibold text-foreground">{((Number(el._qty) || 0) * (Number(el._cost) || 0)).toLocaleString()}</span></span>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* New items added during edit */}
+                  {editNewItems.map((ni, idx) => (
+                    <div key={`new-${idx}`} className="rounded-lg border-2 border-dashed border-green-400/50 bg-green-50/30 dark:bg-green-950/10 p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-md border border-border overflow-hidden bg-muted/50 flex-shrink-0 flex items-center justify-center">
+                          {ni.imageUrl
+                            ? <img src={ni.imageUrl} alt={ni.materialName} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                            : <Package className="h-4 w-4 text-muted-foreground" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">{ni.materialName} <span className="text-[10px] text-green-600 font-bold">(جديد)</span></div>
+                          <div className="text-xs text-muted-foreground font-mono">{ni.materialCode} · {ni.unit}</div>
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setEditNewItems(prev => prev.filter((_, i) => i !== idx))}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">الكمية</Label>
+                          <Input type="number" min="1" value={ni.quantity} onChange={(e) => setEditNewItems(prev => prev.map((p, i) => i === idx ? { ...p, quantity: Number(e.target.value) || 1 } : p))} className="h-8 text-sm" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">سعر البيع</Label>
+                          <Input type="number" min="0" value={ni.sellingPrice} onChange={(e) => setEditNewItems(prev => prev.map((p, i) => i === idx ? { ...p, sellingPrice: Number(e.target.value) || 0 } : p))} className="h-8 text-sm" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">سعر الشراء</Label>
+                          <Input type="number" min="0" value={ni.costPrice} onChange={(e) => setEditNewItems(prev => prev.map((p, i) => i === idx ? { ...p, costPrice: Number(e.target.value) || 0 } : p))} className="h-8 text-sm" />
+                        </div>
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
+                        <span>إجمالي البيع: <span className="font-semibold text-foreground">{(ni.sellingPrice * ni.quantity).toLocaleString()}</span></span>
+                        <span>إجمالي التكلفة: <span className="font-semibold text-foreground">{(ni.costPrice * ni.quantity).toLocaleString()}</span></span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              )}
+
+                {/* Add material search */}
+                <div className="mt-4 space-y-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                    <Plus className="h-4 w-4" /> إضافة مادة جديدة
+                  </h4>
+                  <div className="relative">
+                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input className="h-9 ps-9 text-sm" placeholder="ابحث عن مادة بالاسم أو الكود..." value={editMatSearch} onChange={(e) => setEditMatSearch(e.target.value)} />
+                  </div>
+                  {editMatSearch && filteredEditMaterials.length > 0 && (
+                    <div className="rounded-lg border border-border max-h-48 overflow-y-auto">
+                      {filteredEditMaterials.slice(0, 15).map(mat => (
+                        <button key={mat.sku} className="w-full flex items-center gap-3 px-3 py-2 text-start hover:bg-accent/50 transition-colors border-b border-border/50 last:border-0" onClick={() => {
+                          setEditNewItems(prev => [...prev, { materialCode: mat.sku, materialName: mat.name, quantity: 1, sellingPrice: mat.sellingPrice, costPrice: mat.costPrice, imageUrl: mat.imageUrl, unit: mat.unit }]);
+                          setEditMatSearch("");
+                        }}>
+                          <div className="w-8 h-8 rounded border border-border overflow-hidden bg-muted/50 flex-shrink-0 flex items-center justify-center">
+                            {mat.imageUrl ? <img src={mat.imageUrl} alt={mat.name} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} /> : <Package className="h-3 w-3 text-muted-foreground" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">{mat.name}</div>
+                            <div className="text-[11px] text-muted-foreground font-mono">{mat.sku} · {mat.unit}</div>
+                          </div>
+                          <div className="text-[11px] text-muted-foreground text-left whitespace-nowrap">
+                            <div>بيع: {mat.sellingPrice}</div>
+                            <div>شراء: {mat.costPrice}</div>
+                          </div>
+                          <Plus className="h-4 w-4 text-green-600 flex-shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {editMatSearch && filteredEditMaterials.length === 0 && (
+                    <div className="text-center py-2 text-muted-foreground text-xs">لا توجد نتائج</div>
+                  )}
+                </div>
+              </div>
             </div>
           </ScrollArea>
           <div className="px-6 py-4 border-t border-border flex justify-end gap-3 shrink-0">

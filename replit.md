@@ -47,6 +47,8 @@ All business data in main Supabase project:
 ## Key API Endpoints (server/routes.ts)
 - `/api/clients`, `/api/suppliers`, `/api/materials`, `/api/founders` — CRUD
 - `/api/orders`, `/api/orders/next-id` — Orders CRUD + auto-increment ID
+- `/api/orders/:id/lines` — POST: add new materials to existing order; GET: fetch order lines
+- `/api/order-lines/:id` — PATCH: update line qty/price; DELETE: remove a line from order
 - `/api/requests`, `/api/deliveries`, `/api/collections` — CRUD
 - `/api/inventory`, `/api/notifications` — CRUD
 - `/api/treasury/accounts`, `/api/treasury/transactions` — Treasury CRUD (supports deposit via txType "deposit")
