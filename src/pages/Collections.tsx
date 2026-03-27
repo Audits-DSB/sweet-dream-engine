@@ -474,16 +474,19 @@ export default function CollectionsPage() {
                   for (const od of selectedOrdersData) linesByOrder[od.orderId] = [];
                 }
 
-                // Sequential coverage: shared `rem` across all order groups
-                let covRem = selectedInvoice.paid;
+                // Proportional coverage: each item gets the same paid% as the collection overall
+                // If 75% of the invoice is paid → every item shows 75% coverage (partial)
+                // Only "مكتملة" (covered) when 100% is paid
+                const payRatio = selectedInvoice.total > 0
+                  ? Math.min(selectedInvoice.paid / selectedInvoice.total, 1)
+                  : 0;
                 const linesByOrderWithCov = Object.fromEntries(
                   Object.entries(linesByOrder).map(([oid, lines]) => [
                     oid,
                     lines.map(item => {
-                      if (covRem <= 0) return { ...item, coveredTotal: 0, cov: "pending" as const };
-                      if (covRem >= item.lineTotal) { covRem -= item.lineTotal; return { ...item, coveredTotal: item.lineTotal, cov: "covered" as const }; }
-                      const amt = covRem; covRem = 0;
-                      return { ...item, coveredTotal: amt, cov: "partial" as const };
+                      if (payRatio <= 0) return { ...item, coveredTotal: 0, cov: "pending" as const };
+                      if (payRatio >= 1) return { ...item, coveredTotal: item.lineTotal, cov: "covered" as const };
+                      return { ...item, coveredTotal: item.lineTotal * payRatio, cov: "partial" as const };
                     }),
                   ])
                 );
@@ -602,7 +605,7 @@ export default function CollectionsPage() {
                                       {selectedInvoice.paid > 0 && (
                                         <td className="py-2 px-2 text-center">
                                           {item.cov === "covered" && <span className="text-success font-medium">✓ مكتملة</span>}
-                                          {item.cov === "partial" && <span className="text-amber-600 font-medium">~ {Math.round(item.coveredTotal).toLocaleString("en-US")}</span>}
+                                          {item.cov === "partial" && <span className="text-amber-600 font-medium">~ {(payRatio * 100).toFixed(1)}%</span>}
                                           {item.cov === "pending" && <span className="text-muted-foreground">—</span>}
                                         </td>
                                       )}
