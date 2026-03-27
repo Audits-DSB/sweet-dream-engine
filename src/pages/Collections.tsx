@@ -91,6 +91,7 @@ export default function CollectionsPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<Collection | null>(null);
   const [loadingCollections, setLoadingCollections] = useState(true);
   const [selectedOrderData, setSelectedOrderData] = useState<{ totalSelling: number; totalCost: number; splitMode: string; founderContributions: any[] } | null>(null);
+  const [selectedOrderLines, setSelectedOrderLines] = useState<LineItem[]>([]);
   const [founders, setFounders] = useState<{ id: string; name: string }[]>([]);
   const [loadingOrderData, setLoadingOrderData] = useState(false);
 
@@ -120,13 +121,15 @@ export default function CollectionsPage() {
     }).finally(() => setLoadingCollections(false));
   }, []);
 
-  // Fetch linked order data when a collection is selected
+  // Fetch linked order data + order lines when a collection is selected
   useEffect(() => {
     const orderId = selectedInvoice?.order || selectedInvoice?.sourceOrders?.[0];
-    if (!orderId) { setSelectedOrderData(null); return; }
+    if (!orderId) { setSelectedOrderData(null); setSelectedOrderLines([]); return; }
     setLoadingOrderData(true);
-    api.get<any>(`/orders/${orderId}`)
-      .then(o => {
+    Promise.all([
+      api.get<any>(`/orders/${orderId}`),
+      api.get<any[]>(`/orders/${orderId}/lines`).catch(() => []),
+    ]).then(([o, rawLines]) => {
         if (o) {
           let contribs: any[] = [];
           const raw = o.founderContributions ?? o.founder_contributions;
@@ -139,8 +142,23 @@ export default function CollectionsPage() {
             founderContributions: Array.isArray(contribs) ? contribs : [],
           });
         }
+        // Map order lines → LineItem format
+        const mappedLines: LineItem[] = (rawLines || []).map((l: any) => {
+          const qty = Number(l.quantity ?? 0);
+          const price = Number(l.sellingPrice ?? l.selling_price ?? 0);
+          return {
+            code: l.materialCode || l.material_code || "",
+            material: l.materialName || l.material_name || l.materialCode || "",
+            imageUrl: l.imageUrl || l.image_url || "",
+            unit: l.unit || "",
+            quantity: qty,
+            sellingPrice: price,
+            lineTotal: qty * price,
+          };
+        }).filter((l: LineItem) => l.lineTotal > 0);
+        setSelectedOrderLines(mappedLines);
       })
-      .catch(() => setSelectedOrderData(null))
+      .catch(() => { setSelectedOrderData(null); setSelectedOrderLines([]); })
       .finally(() => setLoadingOrderData(false));
   }, [selectedInvoice?.id]);
 
@@ -484,55 +502,129 @@ export default function CollectionsPage() {
               )}
 
               {/* ── Material Coverage by Paid Amount ── */}
-              {selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0 && selectedInvoice.paid > 0 && (() => {
+              {(() => {
+                // Use order lines from DB (primary) or lineItems from notes (fallback for audit collections)
+                const sourceLines: LineItem[] =
+                  selectedOrderLines.length > 0 ? selectedOrderLines
+                  : (selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0 ? selectedInvoice.lineItems : []);
+                if (sourceLines.length === 0 || selectedInvoice.paid <= 0) return null;
+
                 let remaining = selectedInvoice.paid;
-                const coverage = selectedInvoice.lineItems!.map(item => {
+                const coverage = sourceLines.map(item => {
                   if (remaining <= 0) return { ...item, coveredQty: 0, coveredTotal: 0, status: "pending" as const };
                   if (remaining >= item.lineTotal) {
                     remaining -= item.lineTotal;
                     return { ...item, coveredQty: item.quantity, coveredTotal: item.lineTotal, status: "covered" as const };
                   }
-                  const coveredQty = Math.floor(remaining / item.sellingPrice);
+                  // Partial: how many WHOLE units can be covered
+                  const coveredQty = item.sellingPrice > 0 ? Math.floor(remaining / item.sellingPrice) : 0;
                   const coveredTotal = coveredQty * item.sellingPrice;
-                  const partial = remaining - coveredTotal;
+                  const leftoverValue = remaining - coveredTotal; // fractional amount left
                   remaining = 0;
-                  return { ...item, coveredQty: coveredQty || 0, coveredTotal: coveredTotal + partial, status: coveredQty > 0 ? "partial" as const : "pending" as const };
+                  // If we couldn't cover even 1 unit but there's money left, show as partial with 0 units
+                  return {
+                    ...item,
+                    coveredQty,
+                    coveredTotal: coveredTotal + leftoverValue, // include the sub-unit leftover in the amount
+                    status: (coveredQty > 0 || leftoverValue > 0) ? "partial" as const : "pending" as const,
+                  };
                 });
-                const hasCoverage = coverage.some(c => c.status !== "pending");
-                if (!hasCoverage) return null;
+
+                const totalOrderValue = sourceLines.reduce((s, l) => s + l.lineTotal, 0);
+                const coveredTotal = coverage.reduce((s, c) => s + c.coveredTotal, 0);
+                const uncoveredTotal = totalOrderValue - coveredTotal;
+                const coveredCount = coverage.filter(c => c.status === "covered").length;
+                const partialCount = coverage.filter(c => c.status === "partial").length;
+
                 return (
-                  <div>
-                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
-                      <CheckCircle2 className="h-4 w-4 text-success" />
-                      المواد المغطّاة بالمبلغ المحصّل
-                      <span className="text-xs font-normal text-muted-foreground">({selectedInvoice.paid.toLocaleString()} ج.م)</span>
-                    </h4>
+                  <div className="space-y-3">
+                    {/* Summary bar */}
+                    <div>
+                      <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                        <CheckCircle2 className="h-4 w-4 text-success" />
+                        المواد المغطّاة بالمبلغ المحصّل
+                        <span className="text-xs font-normal text-muted-foreground">
+                          (مدفوع: {selectedInvoice.paid.toLocaleString()} ج.م من {selectedInvoice.total.toLocaleString()} ج.م)
+                        </span>
+                      </h4>
+                      {/* Coverage progress */}
+                      <div className="rounded-lg bg-muted/30 border border-border p-3 mb-3">
+                        <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+                          <span>مغطّى: <strong className="text-success">{coveredTotal.toLocaleString()} ج.م</strong></span>
+                          <span>متبقّي بدون تغطية: <strong className="text-destructive">{Math.max(0, uncoveredTotal).toLocaleString()} ج.م</strong></span>
+                        </div>
+                        <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-success rounded-full transition-all"
+                            style={{ width: `${totalOrderValue > 0 ? Math.min((coveredTotal / totalOrderValue) * 100, 100) : 0}%` }}
+                          />
+                        </div>
+                        <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-success" />{coveredCount} مادة مكتملة</span>
+                          {partialCount > 0 && <span className="flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-amber-500" />{partialCount} جزئية</span>}
+                          <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-muted-foreground" />{coverage.filter(c => c.status === "pending").length} معلّقة</span>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="overflow-x-auto rounded-lg border border-border">
                       <table className="w-full text-xs">
                         <thead className="bg-muted/60">
                           <tr>
                             <th className="text-start py-2 px-2 font-medium text-muted-foreground">المادة</th>
                             <th className="text-end py-2 px-2 font-medium text-muted-foreground">الكمية الكلية</th>
-                            <th className="text-end py-2 px-2 font-medium text-muted-foreground">المغطّى</th>
-                            <th className="text-end py-2 px-2 font-medium text-muted-foreground">المبلغ</th>
+                            <th className="text-end py-2 px-2 font-medium text-muted-foreground">سعر الوحدة</th>
+                            <th className="text-end py-2 px-2 font-medium text-muted-foreground">قيمة السطر</th>
+                            <th className="text-end py-2 px-2 font-medium text-muted-foreground">الكمية المغطّاة</th>
+                            <th className="text-end py-2 px-2 font-medium text-muted-foreground">المبلغ المغطّى</th>
                             <th className="text-center py-2 px-2 font-medium text-muted-foreground">الحالة</th>
                           </tr>
                         </thead>
                         <tbody>
                           {coverage.map((item, i) => (
-                            <tr key={i} className={`border-t border-border/50 ${item.status === "pending" ? "opacity-40" : ""}`}>
-                              <td className="py-2 px-2 font-medium">{item.material}</td>
+                            <tr key={i} className={`border-t border-border/50 transition-colors ${
+                              item.status === "covered" ? "bg-success/5" :
+                              item.status === "partial" ? "bg-amber-50/50 dark:bg-amber-950/10" :
+                              "opacity-40"
+                            }`}>
+                              <td className="py-2 px-2">
+                                <div className="flex items-center gap-2">
+                                  {item.imageUrl ? (
+                                    <img src={item.imageUrl} alt={item.material} className="h-7 w-7 rounded object-cover flex-shrink-0 border border-border" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                  ) : (
+                                    <div className="h-7 w-7 rounded bg-muted flex items-center justify-center flex-shrink-0"><Package className="h-3 w-3 text-muted-foreground" /></div>
+                                  )}
+                                  <span className="font-medium">{item.material}</span>
+                                </div>
+                              </td>
                               <td className="py-2 px-2 text-end">{item.quantity} {item.unit}</td>
-                              <td className="py-2 px-2 text-end">{item.coveredQty} {item.unit}</td>
-                              <td className="py-2 px-2 text-end font-semibold">{item.coveredTotal.toLocaleString()} ج.م</td>
+                              <td className="py-2 px-2 text-end text-muted-foreground">{item.sellingPrice.toLocaleString()}</td>
+                              <td className="py-2 px-2 text-end">{item.lineTotal.toLocaleString()}</td>
+                              <td className="py-2 px-2 text-end font-medium">
+                                {item.status === "covered" ? `${item.coveredQty} ${item.unit}` :
+                                 item.status === "partial" ? `${item.coveredQty} ${item.unit}` :
+                                 "—"}
+                              </td>
+                              <td className="py-2 px-2 text-end font-semibold">
+                                {item.status !== "pending" ? `${Math.round(item.coveredTotal).toLocaleString()} ج.م` : "—"}
+                              </td>
                               <td className="py-2 px-2 text-center">
-                                {item.status === "covered" && <span className="inline-flex items-center gap-1 text-success text-xs font-medium"><CheckCircle2 className="h-3 w-3" />مغطّاة</span>}
+                                {item.status === "covered" && <span className="inline-flex items-center gap-1 text-success text-xs font-medium"><CheckCircle2 className="h-3 w-3" />مكتملة</span>}
                                 {item.status === "partial" && <span className="inline-flex items-center gap-1 text-amber-600 text-xs font-medium"><AlertTriangle className="h-3 w-3" />جزئية</span>}
-                                {item.status === "pending" && <span className="text-muted-foreground text-xs">معلقة</span>}
+                                {item.status === "pending" && <span className="text-muted-foreground text-xs">غير مغطّاة</span>}
                               </td>
                             </tr>
                           ))}
                         </tbody>
+                        <tfoot className="bg-muted/40 border-t border-border">
+                          <tr>
+                            <td colSpan={3} className="py-2 px-2 font-semibold text-end text-xs text-muted-foreground">الإجمالي</td>
+                            <td className="py-2 px-2 text-end font-bold text-xs">{totalOrderValue.toLocaleString()} ج.م</td>
+                            <td />
+                            <td className="py-2 px-2 text-end font-bold text-xs text-success">{Math.round(coveredTotal).toLocaleString()} ج.م</td>
+                            <td />
+                          </tr>
+                        </tfoot>
                       </table>
                     </div>
                   </div>
