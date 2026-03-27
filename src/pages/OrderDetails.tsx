@@ -956,9 +956,12 @@ export default function OrderDetails() {
                         {fp.paid && fp.paidAt && (
                           <p className="text-xs text-muted-foreground">دفع في {new Date(fp.paidAt).toLocaleDateString("ar-SA")}</p>
                         )}
-                        {!fp.paid && (
-                          <p className="text-xs text-muted-foreground">في انتظار الدفع</p>
-                        )}
+                        {!fp.paid && (() => {
+                          const bal = founderBalances[fp.founder] || founderBalances[fp.founderId] || 0;
+                          return bal > 0
+                            ? <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5"><Wallet className="h-3 w-3" />رصيد متاح: {bal.toLocaleString("en-US")} {t.currency}</p>
+                            : <p className="text-xs text-muted-foreground">في انتظار الدفع</p>;
+                        })()}
                       </div>
 
                       {/* Amount + percentage */}
@@ -976,7 +979,7 @@ export default function OrderDetails() {
                           disabled={payingFounder === fp.founder}
                           onClick={() => {
                             const bal = founderBalances[fp.founder] || founderBalances[fp.founderId] || 0;
-                            setUseBalance(bal > 0);
+                            setUseBalance(false);
                             setBalanceDialog({ open: true, fp, available: bal });
                           }}
                         >
