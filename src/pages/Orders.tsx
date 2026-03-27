@@ -302,7 +302,7 @@ export default function OrdersPage() {
   }), [materialSearch, usedMaterialCodes, realMaterials]);
 
   const addMaterialDirectly = (mat: MaterialItem) => {
-    setOrderItems([...orderItems, { materialCode: mat.code, name: mat.name, quantity: 1, sellingPrice: mat.sellingPrice, costPrice: mat.storeCost, imageUrl: mat.imageUrl, unit: mat.unit }]);
+    setOrderItems([{ materialCode: mat.code, name: mat.name, quantity: 1, sellingPrice: mat.sellingPrice, costPrice: mat.storeCost, imageUrl: mat.imageUrl, unit: mat.unit }, ...orderItems]);
     setMaterialSearch("");
   };
 
