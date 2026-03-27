@@ -79,7 +79,7 @@ export default function DeliveriesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Delivery | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  type OrderLine = { id: string; materialCode: string; materialName: string; quantity: number; unit: string; imageUrl?: string; sellingPrice?: number };
+  type OrderLine = { id: string; materialCode: string; materialName: string; quantity: number; unit: string; imageUrl?: string; sellingPrice?: number; fullyDelivered?: boolean; alreadyDelivered?: number; totalQty?: number };
   const [orderLines, setOrderLines] = useState<OrderLine[]>([]);
   const [loadingLines, setLoadingLines] = useState(false);
   const [partialItems, setPartialItems] = useState<Record<string, { selected: boolean; qty: number }>>({});
@@ -150,6 +150,8 @@ export default function DeliveriesPage() {
 
       setDeliveredQtyMap(qtyMap);
 
+      const hasPrior = Object.keys(qtyMap).length > 0;
+
       const mapped = (lines || []).filter((l: any) => (Number(l.quantity) || 0) > 0).map((l: any) => {
         const lineId = String(l.id);
         const totalQty = Number(l.quantity) || 0;
@@ -168,10 +170,19 @@ export default function DeliveriesPage() {
       const allDelivered = mapped.length > 0 && mapped.every(m => m.remaining <= 0);
       setIsFullyDelivered(allDelivered);
 
-      const available = mapped.filter(m => m.remaining > 0);
-      setOrderLines(available.map(m => ({ id: m.id, materialCode: m.materialCode, materialName: m.materialName, quantity: m.remaining, unit: m.unit, imageUrl: m.imageUrl })));
+      if (hasPrior && !allDelivered) {
+        setDeliveryType("partial");
+      }
+
+      setOrderLines(mapped.map(m => ({ id: m.id, materialCode: m.materialCode, materialName: m.materialName, quantity: m.remaining > 0 ? m.remaining : m.quantity, unit: m.unit, imageUrl: m.imageUrl, sellingPrice: undefined, fullyDelivered: m.remaining <= 0, alreadyDelivered: m.alreadyDelivered, totalQty: m.quantity })) as any);
       const init: Record<string, { selected: boolean; qty: number }> = {};
-      available.forEach(l => { init[l.id] = { selected: false, qty: l.remaining }; });
+      mapped.forEach(m => {
+        if (m.remaining > 0) {
+          init[m.id] = { selected: true, qty: m.remaining };
+        } else {
+          init[m.id] = { selected: false, qty: 0 };
+        }
+      });
       setPartialItems(init);
     }).catch(() => { if (!cancelled) { setOrderLines([]); setPartialItems({}); setDeliveredQtyMap({}); } }).finally(() => { if (!cancelled) setLoadingLines(false); });
     return () => { cancelled = true; };
@@ -287,11 +298,12 @@ export default function DeliveriesPage() {
     let notesPayload: string;
 
     if (deliveryType === "partial") {
-      const lineIds = new Set(orderLines.map(l => String(l.id)));
+      const availableLines = orderLines.filter(l => !(l as any).fullyDelivered);
+      const lineIds = new Set(availableLines.map(l => String(l.id)));
       const selectedLines = Object.entries(partialItems)
         .filter(([lineId, v]) => v.selected && v.qty > 0 && lineIds.has(String(lineId)))
         .map(([lineId, v]) => {
-          const line = orderLines.find(l => String(l.id) === String(lineId))!;
+          const line = availableLines.find(l => String(l.id) === String(lineId))!;
           const qty = Math.min(v.qty, line.quantity);
           return { lineId, materialCode: line.materialCode, materialName: line.materialName, qty, unit: line.unit };
         });
@@ -300,7 +312,7 @@ export default function DeliveriesPage() {
     } else {
       const hasPriorDeliveries = Object.keys(deliveredQtyMap).length > 0;
       if (hasPriorDeliveries && orderLines.length > 0) {
-        const remainingItems = orderLines.map(l => ({
+        const remainingItems = orderLines.filter(l => !(l as any).fullyDelivered).map(l => ({
           lineId: l.id, materialCode: l.materialCode, materialName: l.materialName, qty: l.quantity, unit: l.unit,
         }));
         itemsCount = remainingItems.length;
@@ -753,16 +765,29 @@ export default function DeliveriesPage() {
               <div className="space-y-2">
                 <Label className="text-xs flex items-center gap-1.5"><Package className="h-3.5 w-3.5" /> المواد المتبقية التي سيتم توصيلها</Label>
                 <div className="border rounded-lg divide-y max-h-48 overflow-y-auto">
-                  {orderLines.map(line => (
-                    <div key={line.id} className="flex items-center gap-3 px-3 py-2 text-xs">
-                      {line.imageUrl && <img src={line.imageUrl} alt="" className="h-8 w-8 rounded object-cover flex-shrink-0" />}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{line.materialName}</p>
-                        <p className="text-xs text-muted-foreground">{line.materialCode} · {line.unit}</p>
+                  {orderLines.map(line => {
+                    const isDelivered = !!(line as any).fullyDelivered;
+                    return (
+                      <div key={line.id} className={`flex items-center gap-3 px-3 py-2 text-xs ${isDelivered ? "opacity-40 bg-muted/20" : ""}`}>
+                        {line.imageUrl ? (
+                          <img src={line.imageUrl} alt="" className="h-8 w-8 rounded-lg object-contain bg-white border flex-shrink-0" />
+                        ) : (
+                          <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                            <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium truncate ${isDelivered ? "line-through" : ""}`}>{line.materialName}</p>
+                          <p className="text-xs text-muted-foreground">{line.materialCode} · {line.unit}</p>
+                        </div>
+                        {isDelivered ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium flex-shrink-0">تم التسليم ✓</span>
+                        ) : (
+                          <span className="text-sm font-semibold text-primary">{line.quantity}</span>
+                        )}
                       </div>
-                      <span className="text-sm font-semibold text-primary">{line.quantity}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -775,43 +800,61 @@ export default function DeliveriesPage() {
                 ) : orderLines.length === 0 ? (
                   <div className="text-center py-3 text-xs text-muted-foreground">لا توجد مواد في هذا الطلب</div>
                 ) : (
-                  <div className="border rounded-lg divide-y max-h-48 overflow-y-auto">
+                  <div className="border rounded-lg divide-y max-h-64 overflow-y-auto">
                     {orderLines.map(line => {
                       const item = partialItems[line.id] || { selected: false, qty: line.quantity };
+                      const isDelivered = !!(line as any).fullyDelivered;
                       return (
-                        <div key={line.id} className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${item.selected ? "bg-primary/5" : "hover:bg-muted/30"}`}>
+                        <div key={line.id} className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${isDelivered ? "opacity-50 bg-muted/20" : item.selected ? "bg-primary/5" : "hover:bg-muted/30"}`}>
                           <Checkbox
-                            checked={item.selected}
+                            checked={isDelivered ? false : item.selected}
+                            disabled={isDelivered}
                             onCheckedChange={(checked) => setPartialItems(prev => ({ ...prev, [line.id]: { ...prev[line.id], selected: !!checked } }))}
                           />
-                          {line.imageUrl && <img src={line.imageUrl} alt="" className="h-8 w-8 rounded object-cover flex-shrink-0" />}
+                          {line.imageUrl ? (
+                            <img src={line.imageUrl} alt="" className="h-8 w-8 rounded-lg object-contain bg-white border flex-shrink-0" />
+                          ) : (
+                            <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                              <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                            </div>
+                          )}
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{line.materialName}</p>
+                            <p className={`text-sm font-medium truncate ${isDelivered ? "line-through" : ""}`}>{line.materialName}</p>
                             <p className="text-xs text-muted-foreground">{line.materialCode} · {line.unit}</p>
                           </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <Input
-                              type="number" min={1} max={line.quantity}
-                              className="h-7 w-16 text-center text-xs"
-                              value={item.qty}
-                              disabled={!item.selected}
-                              onChange={(e) => {
-                                const v = Math.min(Math.max(1, Number(e.target.value) || 1), line.quantity);
-                                setPartialItems(prev => ({ ...prev, [line.id]: { ...prev[line.id], qty: v } }));
-                              }}
-                            />
-                            <span className="text-xs text-muted-foreground">/ {line.quantity}</span>
-                          </div>
+                          {isDelivered ? (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium flex-shrink-0">تم التسليم ✓</span>
+                          ) : (
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <Input
+                                type="number" min={1} max={line.quantity}
+                                className="h-7 w-16 text-center text-xs"
+                                value={item.qty}
+                                disabled={!item.selected}
+                                onChange={(e) => {
+                                  const v = Math.min(Math.max(1, Number(e.target.value) || 1), line.quantity);
+                                  setPartialItems(prev => ({ ...prev, [line.id]: { ...prev[line.id], qty: v } }));
+                                }}
+                              />
+                              <span className="text-xs text-muted-foreground">/ {line.quantity}</span>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
                 )}
-                {orderLines.length > 0 && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    {Object.values(partialItems).filter(v => v.selected).length} من {orderLines.length} مادة مختارة
-                  </p>
-                )}
+                {orderLines.length > 0 && (() => {
+                  const selectableLines = orderLines.filter(l => !(l as any).fullyDelivered);
+                  const selectedCount = Object.entries(partialItems).filter(([id, v]) => v.selected && !orderLines.find(l => l.id === id && (l as any).fullyDelivered)).length;
+                  const deliveredCount = orderLines.filter(l => (l as any).fullyDelivered).length;
+                  return (
+                    <div className="text-xs text-muted-foreground text-center space-y-0.5">
+                      <p>{selectedCount} من {selectableLines.length} مادة مختارة للتسليم</p>
+                      {deliveredCount > 0 && <p className="text-green-600">{deliveredCount} مادة تم تسليمها مسبقاً</p>}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
