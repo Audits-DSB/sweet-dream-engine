@@ -267,38 +267,43 @@ export default function TreasuryAccountsPage() {
         )}
       </div>
 
-      {/* ── Company Profit Account ── */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-            <TrendingUp className="h-4 w-4 text-emerald-600" />
-          </div>
-          <div>
-            <h2 className="text-base font-semibold">حساب الشركة</h2>
-            <p className="text-xs text-muted-foreground">صافي أرباح الشركة المحققة — بعد خصم المصروفات</p>
-          </div>
-        </div>
-        <div className="stat-card overflow-x-auto">
-          {companyProfit === null ? (
-            <div className="text-center py-6 text-muted-foreground text-sm">جارٍ التحميل...</div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4">
-              <div className="rounded-lg border border-border p-4 text-center">
-                <p className="text-xs text-muted-foreground mb-1">إجمالي الأرباح</p>
-                <p className="text-lg font-bold text-emerald-600">{companyProfit.totalCompanyProfit.toLocaleString("en-US")} {t.egp}</p>
+      {/* ── Company Profit Reference ── */}
+      {companyProfit !== null && (
+        <div className="stat-card p-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <TrendingUp className="h-4 w-4 text-emerald-600" />
               </div>
-              <div className="rounded-lg border border-border p-4 text-center">
-                <p className="text-xs text-muted-foreground mb-1">المصروفات</p>
-                <p className="text-lg font-bold text-destructive">{companyProfit.totalExpenses.toLocaleString("en-US")} {t.egp}</p>
-              </div>
-              <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-center">
-                <p className="text-xs text-muted-foreground mb-1">صافي ربح الشركة</p>
-                <p className={`text-xl font-bold ${companyProfit.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{companyProfit.netProfit.toLocaleString("en-US")} {t.egp}</p>
+              <div>
+                <p className="text-xs text-muted-foreground">أرباح الشركة المحققة (مرجع)</p>
+                <div className="flex items-center gap-3 mt-0.5">
+                  <span className="text-sm">إجمالي: <span className="font-bold text-emerald-600">{companyProfit.totalCompanyProfit.toLocaleString("en-US")}</span></span>
+                  {companyProfit.totalExpenses > 0 && <span className="text-sm">مصروفات: <span className="font-bold text-destructive">{companyProfit.totalExpenses.toLocaleString("en-US")}</span></span>}
+                  <span className="text-sm">صافي: <span className={`font-bold ${companyProfit.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{companyProfit.netProfit.toLocaleString("en-US")} {t.egp}</span></span>
+                </div>
               </div>
             </div>
-          )}
+            {canManage && (() => {
+              const companyAcc = accounts.find(a => a.name === "حساب الشركة");
+              if (!companyAcc || companyProfit.netProfit <= 0) return null;
+              return (
+                <button
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 transition-colors font-medium"
+                  onClick={() => {
+                    setDepositAccount(companyAcc);
+                    setDepositAmount(String(companyProfit.netProfit));
+                    setDepositNotes("إيداع أرباح الشركة المحققة");
+                    setDepositOpen(true);
+                  }}
+                >
+                  <ArrowDownLeft className="h-3 w-3" />إيداع الأرباح في حساب الشركة
+                </button>
+              );
+            })()}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Founder Capital Accounts ── */}
       <div className="space-y-3">
