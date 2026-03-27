@@ -256,7 +256,9 @@ export default function TreasuryAccountsPage() {
                           <ArrowDownLeft className="h-3 w-3" />إيداع
                         </button>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(a)} data-testid={`button-edit-account-${a.id}`}><Pencil className="h-3.5 w-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => confirmDelete(a)} data-testid={`button-delete-account-${a.id}`}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                        {a.name !== "حساب الشركة" && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => confirmDelete(a)} data-testid={`button-delete-account-${a.id}`}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                        )}
                       </div>
                     </td>
                   )}
@@ -286,18 +288,23 @@ export default function TreasuryAccountsPage() {
             </div>
             {canManage && (() => {
               const companyAcc = accounts.find(a => a.name === "حساب الشركة");
-              if (!companyAcc || companyProfit.netProfit <= 0) return null;
+              if (!companyAcc) return null;
+              const alreadyDeposited = Number(companyAcc.balance) || 0;
+              const remainingProfit = companyProfit.netProfit - alreadyDeposited;
+              if (remainingProfit <= 0) return (
+                <span className="text-xs text-muted-foreground">تم إيداع كل الأرباح المتاحة</span>
+              );
               return (
                 <button
                   className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 transition-colors font-medium"
                   onClick={() => {
                     setDepositAccount(companyAcc);
-                    setDepositAmount(String(companyProfit.netProfit));
+                    setDepositAmount(String(remainingProfit));
                     setDepositNotes("إيداع أرباح الشركة المحققة");
                     setDepositOpen(true);
                   }}
                 >
-                  <ArrowDownLeft className="h-3 w-3" />إيداع الأرباح في حساب الشركة
+                  <ArrowDownLeft className="h-3 w-3" />إيداع {remainingProfit.toLocaleString("en-US")} {t.egp} في حساب الشركة
                 </button>
               );
             })()}
