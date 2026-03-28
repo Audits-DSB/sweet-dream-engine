@@ -25,6 +25,7 @@ type CompanyLot = {
   sourceOrder: string;
   dateAdded: string;
   status: string;
+  imageUrl?: string;
 };
 
 function mapLot(raw: any): CompanyLot {
@@ -54,9 +55,20 @@ export default function CompanyInventoryPage() {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    api.get<any[]>("/company-inventory")
-      .then(data => setLots((data || []).map(mapLot)))
-      .catch(() => toast.error("فشل تحميل مخزون الشركة"))
+    Promise.all([
+      api.get<any[]>("/company-inventory"),
+      api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] })),
+    ]).then(([data, extData]) => {
+      const imgMap: Record<string, string> = {};
+      (extData?.products || []).forEach((p: any) => {
+        if (p.sku && p.image_url) imgMap[p.sku] = p.image_url;
+      });
+      setLots((data || []).map(raw => {
+        const lot = mapLot(raw);
+        lot.imageUrl = imgMap[lot.materialCode] || "";
+        return lot;
+      }));
+    }).catch(() => toast.error("فشل تحميل مخزون الشركة"))
       .finally(() => setLoading(false));
   }, []);
 
@@ -68,9 +80,10 @@ export default function CompanyInventoryPage() {
   }), [lots, search, filters]);
 
   const materialGroups = useMemo(() => {
-    const map: Record<string, { name: string; code: string; unit: string; totalRemaining: number; totalValue: number; lots: CompanyLot[] }> = {};
+    const map: Record<string, { name: string; code: string; unit: string; imageUrl: string; totalRemaining: number; totalValue: number; lots: CompanyLot[] }> = {};
     filtered.forEach(l => {
-      if (!map[l.materialCode]) map[l.materialCode] = { name: l.materialName, code: l.materialCode, unit: l.unit, totalRemaining: 0, totalValue: 0, lots: [] };
+      if (!map[l.materialCode]) map[l.materialCode] = { name: l.materialName, code: l.materialCode, unit: l.unit, imageUrl: l.imageUrl || "", totalRemaining: 0, totalValue: 0, lots: [] };
+      if (l.imageUrl && !map[l.materialCode].imageUrl) map[l.materialCode].imageUrl = l.imageUrl;
       map[l.materialCode].totalRemaining += l.remaining;
       map[l.materialCode].totalValue += l.remaining * l.costPrice;
       map[l.materialCode].lots.push(l);
@@ -163,6 +176,7 @@ export default function CompanyInventoryPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
+                <th className="text-center py-3 px-3 text-xs font-medium text-muted-foreground w-12">صورة</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">المادة</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">الكود</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">الدُفعة</th>
@@ -179,6 +193,13 @@ export default function CompanyInventoryPage() {
             <tbody>
               {filtered.map(lot => (
                 <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                  <td className="py-2 px-3 text-center">
+                    {lot.imageUrl ? (
+                      <img src={lot.imageUrl} alt={lot.materialName} className="w-9 h-9 rounded-md object-cover border border-border mx-auto" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-md bg-muted flex items-center justify-center mx-auto"><Package className="h-4 w-4 text-muted-foreground/50" /></div>
+                    )}
+                  </td>
                   <td className="py-3 px-3 font-medium">{lot.materialName}</td>
                   <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{lot.materialCode}</td>
                   <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{lot.lotNumber.slice(0, 15)}</td>
