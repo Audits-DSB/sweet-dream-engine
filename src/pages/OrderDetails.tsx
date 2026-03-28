@@ -917,7 +917,16 @@ export default function OrderDetails() {
                         </div>
                       )}
                       {(ni as any).fromInventory && (
-                        <div className="flex items-center gap-1 text-[10px] text-primary"><Warehouse className="h-3 w-3" />من المخزون — متاح: {(ni as any).inventoryRemaining} {ni.unit} · مورد: {ni.supplierId && suppliers.find(s => s.id === ni.supplierId) ? suppliers.find(s => s.id === ni.supplierId)?.name : "بدون"}</div>
+                        <div className="rounded-md bg-primary/5 border border-primary/20 px-2 py-1.5 space-y-0.5">
+                          <div className="flex items-center gap-1.5 text-[10px] text-primary font-medium">
+                            <Warehouse className="h-3 w-3 shrink-0" />
+                            <span>من المخزون</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-[10px] text-muted-foreground pr-[18px]">
+                            <span>متاح: <span className="font-medium text-foreground">{(ni as any).inventoryRemaining} {ni.unit}</span></span>
+                            <span>مورد: <span className="font-medium text-foreground">{ni.supplierId && suppliers.find(s => s.id === ni.supplierId) ? suppliers.find(s => s.id === ni.supplierId)?.name : "بدون"}</span></span>
+                          </div>
+                        </div>
                       )}
                       <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
                         <span>إجمالي البيع: <span className="font-semibold text-foreground">{(ni.sellingPrice * ni.quantity).toLocaleString()}</span></span>
