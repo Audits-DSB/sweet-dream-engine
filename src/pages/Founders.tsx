@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { quickProfit, founderSplit } from "@/lib/orderProfit";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
@@ -92,6 +93,8 @@ type OrderFundingEntry = {
 
 export default function FoundersPage() {
   const { t } = useLanguage();
+  const { profile } = useAuth();
+  const _userName = profile?.full_name || "مستخدم";
   const navigate = useNavigate();
   const { rules } = useBusinessRules();
 
@@ -305,7 +308,7 @@ export default function FoundersPage() {
     try {
       const newId = `F${Date.now().toString().slice(-6)}`;
       const saved = await api.post<any>("/founders", { id: newId, name: form.name.trim(), alias: form.alias.trim(), email: form.email.trim(), phone: form.phone.trim() });
-      await logAudit({ entity: "founder", entityId: saved.id || newId, entityName: form.name.trim(), action: "create", snapshot: saved, endpoint: "/founders" });
+      await logAudit({ entity: "founder", entityId: saved.id || newId, entityName: form.name.trim(), action: "create", snapshot: saved, endpoint: "/founders" , performedBy: _userName });
       await loadData();
       setForm(emptyForm); setAddOpen(false);
       toast.success("تمت إضافة المؤسس");
@@ -318,7 +321,7 @@ export default function FoundersPage() {
     setSaving(true);
     try {
       await api.patch(`/founders/${editingFounder.id}`, editForm);
-      await logAudit({ entity: "founder", entityId: editingFounder.id, entityName: editForm.name, action: "update", snapshot: { ...editingFounder, ...editForm }, endpoint: "/founders" });
+      await logAudit({ entity: "founder", entityId: editingFounder.id, entityName: editForm.name, action: "update", snapshot: { ...editingFounder, ...editForm }, endpoint: "/founders", performedBy: _userName });
       setFounders(founders.map(f => f.id === editingFounder.id ? { ...f, ...editForm } : f));
       setEditOpen(false); toast.success("تم تحديث بيانات المؤسس");
     } catch { toast.error("فشل تحديث بيانات المؤسس"); }
@@ -330,7 +333,7 @@ export default function FoundersPage() {
     setSaving(true);
     try {
       await api.delete(`/founders/${editingFounder.id}`);
-      await logAudit({ entity: "founder", entityId: editingFounder.id, entityName: editingFounder.name, action: "delete", snapshot: editingFounder as any, endpoint: "/founders" });
+      await logAudit({ entity: "founder", entityId: editingFounder.id, entityName: editingFounder.name, action: "delete", snapshot: editingFounder as any, endpoint: "/founders" , performedBy: _userName });
       setFounders(founders.filter(f => f.id !== editingFounder.id));
       setDeleteOpen(false); setEditOpen(false); toast.success("تم حذف المؤسس");
     } catch { toast.error("فشل حذف المؤسس"); }
@@ -450,8 +453,7 @@ export default function FoundersPage() {
       await logAudit({
         entity: "founder", entityId: founder.id, entityName: founder.name,
         action: "update", snapshot: { type: "order_funding_paid", orderId: entry.orderId, amount: entry.amount },
-        endpoint: `/orders/${entry.orderId}`,
-      });
+        endpoint: `/orders/${entry.orderId}`, performedBy: _userName });
       await loadData();
       toast.success(`تم تسجيل دفع ${founder.name} لطلب ${entry.orderId} — ${entry.amount.toLocaleString()} ${t.currency}`);
     } catch (err: any) {

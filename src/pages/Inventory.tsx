@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useWorkflow } from "@/contexts/WorkflowContext";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
@@ -40,6 +41,8 @@ type InventoryLot = {
 
 export default function InventoryPage() {
   const { t } = useLanguage();
+  const { profile } = useAuth();
+  const _userName = profile?.full_name || "مستخدم";
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { createOrderFromInventory } = useWorkflow();
@@ -106,7 +109,7 @@ export default function InventoryPage() {
     mutationFn: async (data: Partial<InventoryLot>) => {
       const id = `LOT-${Date.now().toString(36).toUpperCase()}`;
       const saved = await api.post<InventoryLot>("/client-inventory", { ...data, id });
-      await logAudit({ entity: "client-inventory", entityId: id, entityName: `${data.material} — ${data.clientName}`, action: "create", snapshot: { ...data, id }, endpoint: "/client-inventory" });
+      await logAudit({ entity: "client-inventory", entityId: id, entityName: `${data.material} — ${data.clientName}`, action: "create", snapshot: { ...data, id }, endpoint: "/client-inventory", performedBy: _userName });
       return saved;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/client-inventory"] }); setAddDialogOpen(false); setNewLot({}); toast.success("تم إضافة الدفعة"); },
@@ -116,7 +119,7 @@ export default function InventoryPage() {
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<InventoryLot> }) => {
       const saved = await api.patch<InventoryLot>(`/client-inventory/${id}`, data);
-      await logAudit({ entity: "client-inventory", entityId: id, entityName: `${data.material} — ${data.clientName}`, action: "update", snapshot: data as any, endpoint: "/client-inventory" });
+      await logAudit({ entity: "client-inventory", entityId: id, entityName: `${data.material} — ${data.clientName}`, action: "update", snapshot: data as any, endpoint: "/client-inventory", performedBy: _userName });
       return saved;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/client-inventory"] }); setEditItem(null); toast.success("تم تحديث الدفعة"); },
@@ -126,7 +129,7 @@ export default function InventoryPage() {
   const deleteMutation = useMutation({
     mutationFn: async (lot: InventoryLot) => {
       await api.delete(`/client-inventory/${lot.id}`);
-      await logAudit({ entity: "client-inventory", entityId: lot.id, entityName: `${lot.material} — ${lot.clientName}`, action: "delete", snapshot: lot as any, endpoint: "/client-inventory", idField: "id" });
+      await logAudit({ entity: "client-inventory", entityId: lot.id, entityName: `${lot.material} — ${lot.clientName}`, action: "delete", snapshot: lot as any, endpoint: "/client-inventory", idField: "id", performedBy: _userName });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/client-inventory"] }); setDeleteTarget(null); toast.success("تم حذف الدفعة"); },
     onError: () => toast.error("فشل الحذف"),

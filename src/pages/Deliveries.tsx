@@ -55,7 +55,8 @@ export default function DeliveriesPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const _userName = profile?.full_name || "مستخدم";
 
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -336,7 +337,7 @@ export default function DeliveriesPage() {
     };
     try {
       const saved = await api.post<any>("/deliveries", payload);
-      await logAudit({ entity: "delivery", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${order.client || order.id}`, action: "create", snapshot: saved, endpoint: "/deliveries" });
+      await logAudit({ entity: "delivery", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${order.client || order.id}`, action: "create", snapshot: saved, endpoint: "/deliveries", performedBy: _userName });
       setDeliveries([mapDelivery(saved), ...deliveries]);
       sendNotification(t.newDelivery || "تسليم جديد", `${newId} - ${order.client}`, "info");
       setSelectedOrder(""); setSelectedActor(""); setCustomActor(""); setDeliveryType("full"); setRequestedDate(new Date().toISOString().split("T")[0]); setOrderLines([]); setPartialItems({});
@@ -354,7 +355,7 @@ export default function DeliveriesPage() {
     setDeleting(true);
     try {
       await api.delete(`/deliveries/${deleteTarget.id}`);
-      await logAudit({ entity: "delivery", entityId: deleteTarget.id, entityName: `${deleteTarget.id} - ${deleteTarget.client}`, action: "delete", snapshot: deleteTarget as any, endpoint: "/deliveries" });
+      await logAudit({ entity: "delivery", entityId: deleteTarget.id, entityName: `${deleteTarget.id} - ${deleteTarget.client}`, action: "delete", snapshot: deleteTarget as any, endpoint: "/deliveries", performedBy: _userName });
       setDeliveries(prev => prev.filter(d => d.id !== deleteTarget.id));
       setDeleteTarget(null);
       toast.success(`تم حذف التسليم: ${deleteTarget.id}`);

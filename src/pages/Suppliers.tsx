@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,8 @@ function normalizeSupplier(raw: any): Supplier {
 
 export default function SuppliersPage() {
   const { t } = useLanguage();
+  const { profile } = useAuth();
+  const _userName = profile?.full_name || "مستخدم";
   const navigate = useNavigate();
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -164,7 +167,7 @@ export default function SuppliersPage() {
     const newId = `SUP-${String(num).padStart(3, "0")}`;
     try {
       const saved = await api.post<any>("/suppliers", { ...form, id: newId, active: true });
-      await logAudit({ entity: "supplier", entityId: saved.id || newId, entityName: form.name, action: "create", snapshot: saved, endpoint: "/suppliers" });
+      await logAudit({ entity: "supplier", entityId: saved.id || newId, entityName: form.name, action: "create", snapshot: saved, endpoint: "/suppliers" , performedBy: _userName });
       setSuppliers(prev => [...prev, normalizeSupplier(saved)]);
       setForm({ name: "", country: "", email: "", phone: "", paymentTerms: "Net 30" });
       setDialogOpen(false);
@@ -184,7 +187,7 @@ export default function SuppliersPage() {
         email: editForm.email, phone: editForm.phone, paymentTerms: editForm.paymentTerms,
       });
       const updated = normalizeSupplier(saved);
-      await logAudit({ entity: "supplier", entityId: detailItem.id, entityName: editForm.name || detailItem.name, action: "update", snapshot: { ...detailItem, ...editForm }, endpoint: "/suppliers" });
+      await logAudit({ entity: "supplier", entityId: detailItem.id, entityName: editForm.name || detailItem.name, action: "update", snapshot: { ...detailItem, ...editForm }, endpoint: "/suppliers", performedBy: _userName });
       setSuppliers(prev => prev.map(s => s.id === detailItem.id ? updated : s));
       setDetailItem(updated);
       setEditMode(false);
@@ -200,7 +203,7 @@ export default function SuppliersPage() {
     setDeleting(true);
     try {
       await api.delete(`/suppliers/${deleteTarget.id}`);
-      await logAudit({ entity: "supplier", entityId: deleteTarget.id, entityName: deleteTarget.name, action: "delete", snapshot: deleteTarget as any, endpoint: "/suppliers" });
+      await logAudit({ entity: "supplier", entityId: deleteTarget.id, entityName: deleteTarget.name, action: "delete", snapshot: deleteTarget as any, endpoint: "/suppliers" , performedBy: _userName });
       setSuppliers(prev => prev.filter(s => s.id !== deleteTarget.id));
       setDetailItem(null);
       setDeleteTarget(null);

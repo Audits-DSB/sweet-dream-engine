@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -45,6 +46,8 @@ const emptyForm = { name: "", contact: "", email: "", phone: "", city: "", statu
 
 export default function ClientsPage() {
   const { t } = useLanguage();
+  const { profile } = useAuth();
+  const _userName = profile?.full_name || "مستخدم";
   const [searchParams] = useSearchParams();
   const initialStatus = searchParams.get("status") || "";
   const [clients, setClients] = useState<Client[]>([]);
@@ -83,7 +86,7 @@ export default function ClientsPage() {
         email: form.email, phone: form.phone, city: form.city,
         status: form.status,
       });
-      await logAudit({ entity: "client", entityId: saved.id || newId, entityName: form.name, action: "create", snapshot: saved, endpoint: "/clients" });
+      await logAudit({ entity: "client", entityId: saved.id || newId, entityName: form.name, action: "create", snapshot: saved, endpoint: "/clients" , performedBy: _userName });
       setClients(prev => [...prev, mapClient(saved)]);
       setForm(emptyForm);
       setDialogOpen(false);
@@ -100,7 +103,7 @@ export default function ClientsPage() {
     setDeleting(true);
     try {
       await api.delete(`/clients/${deleteTarget.id}`);
-      await logAudit({ entity: "client", entityId: deleteTarget.id, entityName: deleteTarget.name, action: "delete", snapshot: deleteTarget as any, endpoint: "/clients" });
+      await logAudit({ entity: "client", entityId: deleteTarget.id, entityName: deleteTarget.name, action: "delete", snapshot: deleteTarget as any, endpoint: "/clients" , performedBy: _userName });
       setClients(prev => prev.filter(c => c.id !== deleteTarget.id));
       setDeleteTarget(null);
       toast.success(`تم حذف العميل: ${deleteTarget.name}`);

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -66,6 +67,8 @@ function mapOrder(raw: any): Order {
 
 export default function OrdersPage() {
   const { t } = useLanguage();
+  const { profile } = useAuth();
+  const _userName = profile?.full_name || "مستخدم";
   const [searchParams] = useSearchParams();
   const urlStatus = searchParams.get("status") || "";
   const { rules } = useBusinessRules();
@@ -400,7 +403,7 @@ export default function OrdersPage() {
         toast.warning(`تم حفظ الطلب لكن فشل حفظ تفاصيل المواد: ${saved._linesError}`);
       }
 
-      await logAudit({ entity: "order", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${clientName}`, action: "create", snapshot: saved, endpoint: "/orders" });
+      await logAudit({ entity: "order", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${clientName}`, action: "create", snapshot: saved, endpoint: "/orders", performedBy: _userName });
 
       setOrders(prev => [mapOrder(saved), ...prev]);
       setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client" });
@@ -425,8 +428,7 @@ export default function OrdersPage() {
         entityName: `${deleteTarget.id} - ${deleteTarget.client}`,
         action: "delete",
         snapshot: { ...snapshot, _related: related } as any,
-        endpoint: "/orders",
-      });
+        endpoint: "/orders", performedBy: _userName });
       setOrders(prev => prev.filter(o => o.id !== deleteTarget.id));
       setCollectionsMap(prev => { const next = { ...prev }; delete next[deleteTarget.id]; return next; });
       queryClient.invalidateQueries({ queryKey: ["orders_full"] });

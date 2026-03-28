@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,6 +68,8 @@ export default function ClientProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { profile } = useAuth();
+  const _userName = profile?.full_name || "مستخدم";
   const [client, setClient] = useState<Client | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [inventory, setInventory] = useState<InventoryLot[]>([]);
@@ -120,7 +123,7 @@ export default function ClientProfile() {
     setSaving(true);
     try {
       await api.patch(`/clients/${client.id}`, editForm);
-      await logAudit({ entity: "client", entityId: client.id, entityName: editForm.name || client.name, action: "update", snapshot: { ...client, ...editForm }, endpoint: "/clients" });
+      await logAudit({ entity: "client", entityId: client.id, entityName: editForm.name || client.name, action: "update", snapshot: { ...client, ...editForm }, endpoint: "/clients", performedBy: _userName });
       setClient({ ...client, ...editForm });
       setEditOpen(false);
       toast.success(t.clientUpdated);

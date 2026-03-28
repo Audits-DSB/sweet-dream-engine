@@ -59,7 +59,8 @@ export default function CompanyProfitPage() {
   const { t, lang } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const _userName = profile?.full_name || "مستخدم";
   const queryClient = useQueryClient();
   const [monthsFilter, setMonthsFilter] = useState("6");
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
@@ -503,7 +504,7 @@ export default function CompanyProfitPage() {
       await logAudit({
         entity: "treasury_transaction", entityId: deleteTxTarget.id,
         entityName: `${categoryLabel(deleteTxTarget.category)} — ${Math.abs(deleteTxTarget.amount).toLocaleString()} ${t.currency}`,
-        action: "delete", snapshot: deleteTxTarget, endpoint: "/treasury/transactions",
+        action: "delete", snapshot: deleteTxTarget, endpoint: "/treasury/transactions", performedBy: _userName,
       });
       queryClient.invalidateQueries({ queryKey: ["treasury_transactions"] });
       queryClient.invalidateQueries({ queryKey: ["treasury_accounts"] });

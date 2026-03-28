@@ -81,7 +81,8 @@ function mapCollection(raw: any, clientsMap: Record<string, string> = {}): Colle
 
 export default function CollectionsPage() {
   const { t, lang } = useLanguage();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const _userName = profile?.full_name || "مستخدم";
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const urlStatus = searchParams.get("status") || "";
@@ -210,7 +211,7 @@ export default function CollectionsPage() {
     setDeleting(true);
     try {
       await api.delete(`/collections/${deleteTarget.id}`);
-      await logAudit({ entity: "collection", entityId: deleteTarget.id, entityName: `${deleteTarget.id} - ${deleteTarget.client}`, action: "delete", snapshot: deleteTarget as any, endpoint: "/collections" });
+      await logAudit({ entity: "collection", entityId: deleteTarget.id, entityName: `${deleteTarget.id} - ${deleteTarget.client}`, action: "delete", snapshot: deleteTarget as any, endpoint: "/collections", performedBy: _userName });
       setCollections(prev => prev.filter(c => c.id !== deleteTarget.id));
       setDeleteTarget(null);
       toast.success(`تم حذف التحصيل: ${deleteTarget.id}`);
@@ -258,7 +259,7 @@ export default function CollectionsPage() {
     if (newRemaining <= 0 && paymentInvoice.order) {
       try {
         await api.patch(`/orders/${paymentInvoice.order}`, { status: "Delivered" });
-        await logAudit({ entity: "order", entityId: paymentInvoice.order, entityName: `طلب ${paymentInvoice.order}`, action: "update", snapshot: { status: "Delivered", trigger: "collection_paid", collectionId: paymentInvoice.id }, endpoint: `/orders/${paymentInvoice.order}` });
+        await logAudit({ entity: "order", entityId: paymentInvoice.order, entityName: `طلب ${paymentInvoice.order}`, action: "update", snapshot: { status: "Delivered", trigger: "collection_paid", collectionId: paymentInvoice.id }, endpoint: `/orders/${paymentInvoice.order}`, performedBy: _userName });
         toast.info("تم تحديث حالة الطلب — الأرباح جاهزة للتوزيع");
       } catch { /* non-critical */ }
     }
@@ -278,7 +279,7 @@ export default function CollectionsPage() {
       }
     }
 
-    await logAudit({ entity: "collection", entityId: paymentInvoice.id, entityName: `${paymentInvoice.id} - ${paymentInvoice.client}`, action: "update", snapshot: { paid: newPaid, remaining: newRemaining, status: newStatus, newPayment: newPaymentEntry }, endpoint: `/collections/${paymentInvoice.id}` });
+    await logAudit({ entity: "collection", entityId: paymentInvoice.id, entityName: `${paymentInvoice.id} - ${paymentInvoice.client}`, action: "update", snapshot: { paid: newPaid, remaining: newRemaining, status: newStatus, newPayment: newPaymentEntry }, endpoint: `/collections/${paymentInvoice.id}`, performedBy: _userName });
 
     // Update local state (including _notesObj so subsequent payments in same session work)
     setCollections(prev => prev.map(c => c.id !== paymentInvoice.id ? c : { ...c, paid: newPaid, remaining: newRemaining, payments: newPaymentHistory, status: newStatus, _notesObj: updatedNotesObj }));

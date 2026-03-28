@@ -233,7 +233,7 @@ export default function OrderDetails() {
       await logAudit({
         entity: "order", entityId: order.id, entityName: `${order.id} - ${order.client}`,
         action: "update", snapshot: { founderPaid: fc.founder, amount: fc.amount },
-        endpoint: `/orders/${order.id}`,
+        endpoint: `/orders/${order.id}`, performedBy: userName,
       });
       toast.success(`تم تسجيل دفع ${fc.founder}`);
     } catch (err: any) {
@@ -516,7 +516,7 @@ export default function OrderDetails() {
             changes: changedFields,
             orderId: order.id,
           },
-          endpoint: `/orders/${order.id}`,
+          endpoint: `/orders/${order.id}`, performedBy: userName,
         });
         toast.success("تم حفظ التعديلات بنجاح");
       } else {

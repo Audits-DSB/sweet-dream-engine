@@ -28,7 +28,8 @@ export default function TreasuryTransactionsPage() {
   const { t, lang } = useLanguage();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { isAdmin, hasRole, user } = useAuth();
+  const { isAdmin, hasRole, user, profile } = useAuth();
+  const _userName = profile?.full_name || "مستخدم";
   const canManage = isAdmin || hasRole("founder");
   const [transactions, setTransactions] = useState<Tx[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -114,7 +115,7 @@ export default function TreasuryTransactionsPage() {
       entityName: `${txTypeLabel(form.tx_type)} — ${account.name} — ${fmtMoney(amt)} ${t.currency}`,
       action: "create",
       snapshot: { ...txPayload, accountName: account.name },
-      endpoint: "/treasury/transactions",
+      endpoint: "/treasury/transactions", performedBy: _userName,
     });
 
     toast.success(t.treasuryTxAdded);
@@ -134,7 +135,7 @@ export default function TreasuryTransactionsPage() {
         action: "delete",
         snapshot: tx as any,
         endpoint: "/treasury/transactions",
-        idField: "id",
+        idField: "id", performedBy: _userName,
       });
       setTransactions(prev => prev.filter(t => t.id !== tx.id));
       setDeleteTarget(null);
@@ -156,7 +157,7 @@ export default function TreasuryTransactionsPage() {
         entityName: `حذف كل سجلات الخزينة (${result.deleted} سجل)`,
         action: "delete",
         snapshot: { count: result.deleted },
-        endpoint: "/treasury/transactions/all",
+        endpoint: "/treasury/transactions/all", performedBy: _userName,
       });
       setTransactions([]);
       setDeleteAllOpen(false);

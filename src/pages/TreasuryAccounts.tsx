@@ -28,7 +28,8 @@ const ACCOUNT_TYPES = ["cashbox", "bank", "wallet", "founder_held", "other"] as 
 export default function TreasuryAccountsPage() {
   const { t, lang } = useLanguage();
   const navigate = useNavigate();
-  const { isAdmin, hasRole } = useAuth();
+  const { isAdmin, hasRole, profile } = useAuth();
+  const _userName = profile?.full_name || "مستخدم";
   const canManage = isAdmin || hasRole("founder");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,7 +110,7 @@ export default function TreasuryAccountsPage() {
       await logAudit({
         entity: "treasury-account", entityId: depositAccount.id, entityName: depositAccount.name,
         action: "deposit", snapshot: { amount: amt, notes: depositNotes, newBalance },
-        endpoint: "/treasury/transactions",
+        endpoint: "/treasury/transactions", performedBy: _userName,
       });
       toast.success(`تم إيداع ${amt.toLocaleString("en-US")} ج.م في حساب ${depositAccount.name}`);
       setDepositOpen(false); setDepositAmount(""); setDepositNotes("");
@@ -193,7 +194,7 @@ export default function TreasuryAccountsPage() {
           accountNumber: deleteTarget.account_number ?? null,
           description: deleteTarget.description ?? null,
         },
-        endpoint: "/treasury/accounts",
+        endpoint: "/treasury/accounts", performedBy: _userName,
       });
       toast.success(`تم حذف الحساب "${deleteTarget.name}" بنجاح`);
       setDeleteTarget(null);

@@ -1,19 +1,26 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useWorkflow } from "@/contexts/WorkflowContext";
 import { api } from "@/lib/api";
-import { Bell, CheckCheck, AlertTriangle, Clock, Info, CheckCircle2, Package, Truck, Wallet, RefreshCw } from "lucide-react";
+import {
+  Bell, CheckCheck, AlertTriangle, Clock, Info, CheckCircle2, Package, Truck, Wallet,
+  ShoppingCart, Users, Factory, UserCog, Boxes, Receipt, ClipboardCheck, FileText,
+  Plus, Edit, Trash2, X, User, Filter, Volume2, VolumeX,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Popover, PopoverContent, PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { toast } from "sonner";
 
 const DISMISSED_KEY = "dsb_dismissed_alerts";
+const SOUND_KEY = "dsb_notif_sound";
 function getDismissed(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]")); } catch { return new Set(); }
+}
+function getSoundEnabled(): boolean {
+  return localStorage.getItem(SOUND_KEY) !== "off";
 }
 
 type Alert = {
@@ -21,7 +28,7 @@ type Alert = {
   title: string; description: string; date: string; link?: string;
 };
 
-const typeConfig: Record<string, { icon: typeof Bell; label: string; color: string }> = {
+const alertTypeConfig: Record<string, { icon: typeof Bell; label: string; color: string }> = {
   refill:    { icon: Package, label: "إعادة طلب", color: "text-violet-600" },
   low_stock: { icon: AlertTriangle, label: "مخزون منخفض", color: "text-destructive" },
   overdue:   { icon: Wallet, label: "فاتورة متأخرة", color: "text-red-600" },
@@ -36,6 +43,126 @@ const sevBg: Record<string, string> = {
   info: "bg-primary/5",
 };
 
+const entityIcons: Record<string, typeof Bell> = {
+  client: Users, order: ShoppingCart, delivery: Truck, supplier: Factory,
+  material: Boxes, collection: Receipt, request: FileText, founder: UserCog,
+  "founder-transaction": UserCog, "treasury-account": Wallet, "treasury-transaction": Wallet,
+  audits: ClipboardCheck, "client-inventory": Package, "external-material": Boxes,
+  "company-inventory": Package,
+};
+
+const entityLabels: Record<string, string> = {
+  client: "عميل", order: "طلب", delivery: "توصيل", supplier: "مورّد",
+  material: "مادة", collection: "تحصيل", request: "طلب عميل",
+  founder: "مؤسس", "founder-transaction": "معاملة مؤسس",
+  "treasury-account": "حساب خزينة", "treasury-transaction": "معاملة خزينة",
+  audits: "جرد", "client-inventory": "مخزون عميل", "external-material": "مادة (كاتالوج)",
+  "company-inventory": "مخزون شركة",
+};
+
+const actionConfig: Record<string, { icon: typeof Plus; label: string; color: string; bgColor: string }> = {
+  create: { icon: Plus, label: "إنشاء", color: "text-green-600", bgColor: "bg-green-500/10" },
+  update: { icon: Edit, label: "تعديل", color: "text-blue-600", bgColor: "bg-blue-500/10" },
+  delete: { icon: Trash2, label: "حذف", color: "text-destructive", bgColor: "bg-destructive/10" },
+};
+
+function getEntityRoute(entity: string, entityId: string): string | null {
+  if (!entity || !entityId) return null;
+  switch (entity) {
+    case "order": return `/orders/${entityId}`;
+    case "client": return `/clients/${entityId}`;
+    case "delivery": return `/deliveries`;
+    case "supplier": return `/suppliers`;
+    case "material": return `/materials`;
+    case "collection": return `/collections`;
+    case "founder": return `/founders`;
+    case "founder-transaction": return `/founder-funding`;
+    case "treasury-account": return `/treasury/accounts`;
+    case "treasury-transaction": return `/treasury/transactions`;
+    case "audits": return `/audits`;
+    case "client-inventory": return `/inventory`;
+    case "external-material": return `/materials`;
+    case "company-inventory": return `/company-inventory`;
+    case "request": return `/requests`;
+    default: return null;
+  }
+}
+
+function timeSince(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  if (isNaN(then)) return dateStr;
+  const diff = now - then;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "الآن";
+  if (mins < 60) return `منذ ${mins} د`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `منذ ${hrs} س`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return "أمس";
+  if (days < 7) return `منذ ${days} يوم`;
+  if (days < 30) return `منذ ${Math.floor(days / 7)} أسبوع`;
+  return `منذ ${Math.floor(days / 30)} شهر`;
+}
+
+function getTimeGroup(dateStr: string): string {
+  const now = new Date();
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "أقدم";
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 86400000);
+  if (d >= today) return "اليوم";
+  if (d >= yesterday) return "أمس";
+  return "أقدم";
+}
+
+type ParsedNotif = {
+  entity?: string; entityId?: string; entityName?: string;
+  action?: string; performedBy?: string; changes?: string[];
+  snapshot?: any;
+};
+
+function parseNotifMessage(msg: string | undefined): ParsedNotif | null {
+  if (!msg) return null;
+  try { return JSON.parse(msg); } catch { return null; }
+}
+
+function playNotifSound() {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 800;
+    osc.type = "sine";
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.3);
+  } catch {}
+}
+
+type EntityFilter = "all" | "order" | "client" | "delivery" | "collection" | "founder" | "other";
+const filterOptions: { value: EntityFilter; label: string }[] = [
+  { value: "all", label: "الكل" },
+  { value: "order", label: "طلبات" },
+  { value: "client", label: "عملاء" },
+  { value: "delivery", label: "توصيل" },
+  { value: "collection", label: "تحصيل" },
+  { value: "founder", label: "مؤسسين" },
+  { value: "other", label: "أخرى" },
+];
+const filterEntities: Record<EntityFilter, string[]> = {
+  all: [],
+  order: ["order"],
+  client: ["client", "client-inventory"],
+  delivery: ["delivery"],
+  collection: ["collection"],
+  founder: ["founder", "founder-transaction"],
+  other: ["supplier", "material", "treasury-account", "treasury-transaction", "audits", "external-material", "company-inventory", "request"],
+};
+
 export function NotificationBell() {
   const navigate = useNavigate();
   const { t, lang } = useLanguage();
@@ -44,12 +171,15 @@ export function NotificationBell() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [dismissed] = useState<Set<string>>(getDismissed);
   const [tab, setTab] = useState<"alerts" | "notifs">("alerts");
+  const [entityFilter, setEntityFilter] = useState<EntityFilter>("all");
+  const [soundEnabled, setSoundEnabled] = useState(getSoundEnabled);
+  const prevCountRef = useRef(0);
 
   useEffect(() => {
     api.get<Alert[]>("/alerts").then(data => setAlerts(data || [])).catch(() => {});
     const interval = setInterval(() => {
       api.get<Alert[]>("/alerts").then(data => setAlerts(data || [])).catch(() => {});
-    }, 30000);
+    }, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -59,11 +189,26 @@ export function NotificationBell() {
     }
   }, [open]);
 
+  useEffect(() => {
+    const unreadCount = notifications.filter(n => !n.read).length;
+    if (unreadCount > prevCountRef.current && prevCountRef.current > 0 && soundEnabled) {
+      playNotifSound();
+    }
+    prevCountRef.current = unreadCount;
+  }, [notifications, soundEnabled]);
+
+  const toggleSound = useCallback(() => {
+    setSoundEnabled(prev => {
+      const next = !prev;
+      localStorage.setItem(SOUND_KEY, next ? "on" : "off");
+      return next;
+    });
+  }, []);
+
   const unreadNotifs = notifications.filter((n) => !n.read);
   const activeAlerts = alerts.filter(a => !dismissed.has(a.id));
   const criticalAlerts = activeAlerts.filter(a => a.severity === "critical");
   const warningAlerts = activeAlerts.filter(a => a.severity === "warning");
-  const infoAlerts = activeAlerts.filter(a => a.severity === "info");
   const totalUnread = unreadNotifs.length + activeAlerts.length;
 
   const groupedAlerts = useMemo(() => {
@@ -74,14 +219,30 @@ export function NotificationBell() {
     }
     const typeOrder = ["refill", "low_stock", "overdue", "expiry", "delivery", "audit"];
     const sorted: [string, Alert[]][] = [];
-    for (const t of typeOrder) {
-      if (groups[t]) sorted.push([t, groups[t]]);
-    }
-    for (const [k, v] of Object.entries(groups)) {
-      if (!typeOrder.includes(k)) sorted.push([k, v]);
-    }
+    for (const tp of typeOrder) { if (groups[tp]) sorted.push([tp, groups[tp]]); }
+    for (const [k, v] of Object.entries(groups)) { if (!typeOrder.includes(k)) sorted.push([k, v]); }
     return sorted;
   }, [activeAlerts]);
+
+  const filteredNotifications = useMemo(() => {
+    if (entityFilter === "all") return notifications;
+    const allowed = filterEntities[entityFilter];
+    return notifications.filter(n => {
+      const parsed = parseNotifMessage(n.message);
+      if (!parsed?.entity) return entityFilter === "other";
+      return allowed.includes(parsed.entity);
+    });
+  }, [notifications, entityFilter]);
+
+  const groupedNotifications = useMemo(() => {
+    const groups: Record<string, typeof notifications> = { "اليوم": [], "أمس": [], "أقدم": [] };
+    for (const n of filteredNotifications) {
+      const g = getTimeGroup(n.createdAt || n.date || "");
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(n);
+    }
+    return Object.entries(groups).filter(([, items]) => items.length > 0);
+  }, [filteredNotifications]);
 
   const markAsRead = async (id: string) => {
     await api.patch(`/notifications/${id}`, { read: true });
@@ -95,51 +256,32 @@ export function NotificationBell() {
     refreshData();
   };
 
-    const typeColor: Record<string, string> = {
-    info: "bg-primary/10 text-primary",
-    warning: "bg-yellow-500/10 text-yellow-600",
-    error: "bg-destructive/10 text-destructive",
-    success: "bg-green-500/10 text-green-600",
-    audit_create: "bg-green-500/10 text-green-600",
-    audit_update: "bg-blue-500/10 text-blue-600",
-    audit_delete: "bg-destructive/10 text-destructive",
-  };
-
-  const typeLabel: Record<string, string> = {
-    info: "معلومة",
-    warning: "تحذير",
-    error: "خطأ",
-    success: "نجاح",
-    audit_create: "إنشاء",
-    audit_update: "تعديل",
-    audit_delete: "حذف",
-  };
-
-  const formatNotifMessage = (msg: string | undefined): string | null => {
-    if (!msg) return null;
+  const deleteNotif = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
-      const parsed = JSON.parse(msg);
-      if (parsed.entity && parsed.action) {
-        const entityLabels: Record<string, string> = {
-          client: "عميل", order: "طلب", delivery: "توصيل", supplier: "مورّد",
-          material: "مادة", collection: "تحصيل", request: "طلب عميل",
-          founder: "مؤسس", "founder-transaction": "معاملة مؤسس",
-          "treasury-account": "حساب خزينة", "treasury-transaction": "معاملة خزينة",
-          audits: "جرد", "client-inventory": "مخزون عميل",
-        };
-        const actionLabels: Record<string, string> = { create: "تم إنشاء", update: "تم تعديل", delete: "تم حذف" };
-        const label = entityLabels[parsed.entity] || parsed.entity;
-        const action = actionLabels[parsed.action] || parsed.action;
-        const parts: string[] = [`${action} ${label}`];
-        if (parsed.changes && Array.isArray(parsed.changes) && parsed.changes.length > 0) {
-          parts.push(`الحقول: ${parsed.changes.join("، ")}`);
-        }
-        return parts.join(" — ");
-      }
-      return null;
-    } catch {
-      return msg.length > 100 ? null : msg;
+      await api.delete(`/notifications/${id}`);
+      refreshData();
+    } catch { toast.error("فشل الحذف"); }
+  };
+
+  const clearAllRead = async () => {
+    const readNotifs = notifications.filter(n => n.read);
+    for (const n of readNotifs) {
+      try { await api.delete(`/notifications/${n.id}`); } catch {}
     }
+    refreshData();
+    toast.success(`تم حذف ${readNotifs.length} إشعار`);
+  };
+
+  const handleNotifClick = (n: any) => {
+    if (!n.read) markAsRead(n.id);
+    const parsed = parseNotifMessage(n.message);
+    if (parsed?.entity && parsed?.entityId) {
+      const route = getEntityRoute(parsed.entity, parsed.entityId);
+      if (route) { setOpen(false); navigate(route); return; }
+    }
+    setOpen(false);
+    navigate("/activity");
   };
 
   return (
@@ -154,10 +296,13 @@ export function NotificationBell() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-96 p-0" align="end" dir={lang === "ar" ? "rtl" : "ltr"}>
+      <PopoverContent className="w-[420px] p-0" align="end" dir={lang === "ar" ? "rtl" : "ltr"}>
         <div className="flex items-center justify-between p-3 border-b border-border">
           <h4 className="font-semibold text-sm">{t.notifications}</h4>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
+            <button onClick={toggleSound} className="p-1 rounded hover:bg-muted transition-colors" title={soundEnabled ? "كتم الصوت" : "تشغيل الصوت"}>
+              {soundEnabled ? <Volume2 className="h-3.5 w-3.5 text-muted-foreground" /> : <VolumeX className="h-3.5 w-3.5 text-muted-foreground" />}
+            </button>
             {criticalAlerts.length > 0 && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive font-medium animate-pulse">
                 {criticalAlerts.length} حرج
@@ -194,7 +339,7 @@ export function NotificationBell() {
           </button>
         </div>
 
-        <ScrollArea className="h-[420px]">
+        <ScrollArea className="h-[440px]">
           {tab === "alerts" ? (
             activeAlerts.length === 0 ? (
               <div className="p-6 text-center text-sm text-muted-foreground">
@@ -204,7 +349,7 @@ export function NotificationBell() {
             ) : (
               <div>
                 {groupedAlerts.map(([type, items]) => {
-                  const cfg = typeConfig[type] || { icon: Bell, label: type, color: "text-muted-foreground" };
+                  const cfg = alertTypeConfig[type] || { icon: Bell, label: type, color: "text-muted-foreground" };
                   const TypeIcon = cfg.icon;
                   return (
                     <div key={type}>
@@ -245,47 +390,106 @@ export function NotificationBell() {
               </div>
             )
           ) : (
-            notifications.length === 0 ? (
+            filteredNotifications.length === 0 ? (
               <div className="p-6 text-center text-sm text-muted-foreground">{t.noNotifications}</div>
             ) : (
               <div>
-                {unreadNotifs.length > 0 && (
-                  <div className="flex items-center justify-between px-3 py-1.5 bg-muted/40 border-b border-border/50">
-                    <span className="text-[11px] font-semibold text-muted-foreground">غير مقروء ({unreadNotifs.length})</span>
-                    <button onClick={markAllAsRead} className="text-[11px] text-primary hover:underline flex items-center gap-1">
-                      <CheckCheck className="h-3 w-3" /> قراءة الكل
+                {/* Filter chips */}
+                <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/50 overflow-x-auto">
+                  <Filter className="h-3 w-3 text-muted-foreground shrink-0" />
+                  {filterOptions.map(opt => (
+                    <button
+                      key={opt.value}
+                      className={`text-[10px] px-2 py-1 rounded-full font-medium whitespace-nowrap transition-colors ${
+                        entityFilter === opt.value
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted/60 text-muted-foreground hover:bg-muted"
+                      }`}
+                      onClick={() => setEntityFilter(opt.value)}
+                    >
+                      {opt.label}
                     </button>
+                  ))}
+                </div>
+
+                {/* Actions bar */}
+                {unreadNotifs.length > 0 && (
+                  <div className="flex items-center justify-between px-3 py-1.5 bg-muted/30 border-b border-border/50">
+                    <span className="text-[11px] font-semibold text-muted-foreground">غير مقروء ({unreadNotifs.length})</span>
+                    <div className="flex items-center gap-2">
+                      <button onClick={markAllAsRead} className="text-[11px] text-primary hover:underline flex items-center gap-1">
+                        <CheckCheck className="h-3 w-3" /> قراءة الكل
+                      </button>
+                      {notifications.filter(n => n.read).length > 0 && (
+                        <button onClick={clearAllRead} className="text-[11px] text-muted-foreground hover:text-destructive flex items-center gap-1">
+                          <Trash2 className="h-3 w-3" /> مسح المقروء
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
-                {notifications.map((n) => {
-                  const friendlyMsg = formatNotifMessage(n.message);
-                  return (
-                  <div
-                    key={n.id}
-                    className={`px-3 py-2.5 flex gap-2.5 cursor-pointer hover:bg-accent/50 transition-colors border-b border-border/30 ${!n.read ? "bg-primary/5" : ""}`}
-                    onClick={() => !n.read && markAsRead(n.id)}
-                  >
-                    <div className="flex flex-col items-center gap-1 shrink-0 pt-1">
-                      <div className={`h-2 w-2 rounded-full ${n.read ? "bg-transparent" : "bg-primary"}`} />
+
+                {/* Grouped notifications */}
+                {groupedNotifications.map(([group, items]) => (
+                  <div key={group}>
+                    <div className="px-3 py-1.5 bg-muted/20 border-b border-border/40">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">{group}</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${typeColor[n.type] ?? typeColor.info}`}>
-                          {typeLabel[n.type] || n.type}
-                        </span>
-                      </div>
-                      <p className="text-xs font-medium">{n.title}</p>
-                      {friendlyMsg && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{friendlyMsg}</p>}
-                      <p className="text-[10px] text-muted-foreground mt-1">{n.date} {n.time}</p>
-                    </div>
-                    {!n.read && (
-                      <button onClick={(e) => { e.stopPropagation(); markAsRead(n.id); }} className="shrink-0 p-1 text-muted-foreground hover:text-primary" title="تحديد كمقروء">
-                        <CheckCheck className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+                    {items.map((n) => {
+                      const parsed = parseNotifMessage(n.message);
+                      const action = parsed?.action || "create";
+                      const aCfg = actionConfig[action] || actionConfig.create;
+                      const ActionIcon = aCfg.icon;
+                      const entity = parsed?.entity || "";
+                      const EntityIcon = entityIcons[entity] || Bell;
+                      const eLabel = entityLabels[entity] || "";
+
+                      return (
+                        <div
+                          key={n.id}
+                          className={`group px-3 py-2.5 flex gap-2.5 cursor-pointer hover:bg-accent/50 transition-all border-b border-border/20 ${!n.read ? "bg-primary/5" : ""}`}
+                          onClick={() => handleNotifClick(n)}
+                        >
+                          <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${aCfg.bgColor}`}>
+                            <ActionIcon className={`h-3.5 w-3.5 ${aCfg.color}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${aCfg.bgColor} ${aCfg.color}`}>
+                                {aCfg.label}
+                              </span>
+                              {eLabel && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium flex items-center gap-0.5">
+                                  <EntityIcon className="h-2.5 w-2.5" />{eLabel}
+                                </span>
+                              )}
+                              {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />}
+                            </div>
+                            <p className="text-xs font-medium leading-snug">{n.title}</p>
+                            {parsed?.performedBy && (
+                              <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5 flex items-center gap-1">
+                                <User className="h-2.5 w-2.5" />{parsed.performedBy}
+                              </p>
+                            )}
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              {timeSince(n.createdAt || `${n.date}T${n.time || "00:00"}`)}
+                            </p>
+                          </div>
+                          <div className="flex items-start gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {!n.read && (
+                              <button onClick={(e) => { e.stopPropagation(); markAsRead(n.id); }} className="p-1 text-muted-foreground hover:text-primary rounded" title="تحديد كمقروء">
+                                <CheckCheck className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            <button onClick={(e) => deleteNotif(n.id, e)} className="p-1 text-muted-foreground hover:text-destructive rounded" title="حذف">
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  );
-                })}
+                ))}
               </div>
             )
           )}
@@ -296,9 +500,9 @@ export function NotificationBell() {
             <AlertTriangle className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />
             كل التنبيهات
           </Button>
-          <Button variant="ghost" size="sm" className="flex-1 h-8 text-xs" onClick={() => { setOpen(false); navigate("/refill"); }}>
-            <Package className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />
-            إعادة الطلب
+          <Button variant="ghost" size="sm" className="flex-1 h-8 text-xs" onClick={() => { setOpen(false); navigate("/activity"); }}>
+            <Clock className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />
+            سجل الأنشطة
           </Button>
         </div>
       </PopoverContent>

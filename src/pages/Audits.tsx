@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
 import { printInvoice } from "@/lib/printInvoice";
@@ -92,6 +93,8 @@ function parseCsvText(text: string): { code: string; name: string; actual: numbe
 
 export default function AuditsPage() {
   const { t } = useLanguage();
+  const { profile } = useAuth();
+  const _userName = profile?.full_name || "مستخدم";
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const urlAuditId = searchParams.get("auditId") || "";
@@ -163,7 +166,7 @@ export default function AuditsPage() {
     onSuccess: async (_, id) => {
       const target = audits.find(a => a.id === id);
       if (target) {
-        await logAudit({ entity: "audits", entityId: id, entityName: `${target.id} — ${target.clientName}`, action: "delete", snapshot: target, endpoint: "/api/audits", idField: "id" });
+        await logAudit({ entity: "audits", entityId: id, entityName: `${target.id} — ${target.clientName}`, action: "delete", snapshot: target, endpoint: "/api/audits", idField: "id", performedBy: _userName });
       }
       qc.invalidateQueries({ queryKey: ["/api/audits"] });
       setDeleteTarget(null);
@@ -435,10 +438,10 @@ export default function AuditsPage() {
         status: "Awaiting Confirmation",
         notes: notesPayload,
       });
-      await logAudit({ entity: "collection", entityId: saved.id, entityName: `${saved.id} - ${audit.clientName}`, action: "create", snapshot: { ...saved, auditId: audit.id }, endpoint: "/collections" });
+      await logAudit({ entity: "collection", entityId: saved.id, entityName: `${saved.id} - ${audit.clientName}`, action: "create", snapshot: { ...saved, auditId: audit.id }, endpoint: "/collections", performedBy: _userName });
 
       await api.patch(`/audits/${audit.id}`, { status: "تم التحصيل" }).catch(() => {});
-      await logAudit({ entity: "audits", entityId: audit.id, entityName: `${audit.id} — ${audit.clientName}`, action: "update", snapshot: { ...audit, status: "تم التحصيل", collectionId: saved.id }, endpoint: "/api/audits" });
+      await logAudit({ entity: "audits", entityId: audit.id, entityName: `${audit.id} — ${audit.clientName}`, action: "update", snapshot: { ...audit, status: "تم التحصيل", collectionId: saved.id }, endpoint: "/api/audits", performedBy: _userName });
 
       qc.invalidateQueries({ queryKey: ["/api/collections"] });
       qc.invalidateQueries({ queryKey: ["/api/audits"] });
