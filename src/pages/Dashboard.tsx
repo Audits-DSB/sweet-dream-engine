@@ -166,7 +166,7 @@ export default function Dashboard() {
     return Object.entries(map)
       .sort(([a], [b]) => a.localeCompare(b))
       .slice(-8)
-      .map(([ym, vals]) => ({ month: ARABIC_MONTHS[ym.slice(5, 7)] || ym, ...vals }));
+      .map(([ym, vals]) => ({ month: ARABIC_MONTHS[ym.slice(5, 7)] || ym, ym, ...vals }));
   }, [orders]);
 
   const clientOrders = useMemo(() => orders.filter(o => o.clientId !== "company-inventory"), [orders]);
@@ -218,7 +218,7 @@ export default function Dashboard() {
       else map[m].pending += 1;
     });
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-6)
-      .map(([ym, v]) => ({ month: ARABIC_MONTHS[ym.slice(5, 7)] || ym, ...v }));
+      .map(([ym, v]) => ({ month: ARABIC_MONTHS[ym.slice(5, 7)] || ym, ym, ...v }));
   }, [deliveries]);
 
   const collectionTrend = useMemo(() => {
@@ -231,10 +231,18 @@ export default function Dashboard() {
       map[m].outstanding += c.outstanding;
     });
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-6)
-      .map(([ym, v]) => ({ month: ARABIC_MONTHS[ym.slice(5, 7)] || ym, ...v }));
+      .map(([ym, v]) => ({ month: ARABIC_MONTHS[ym.slice(5, 7)] || ym, ym, ...v }));
   }, [collections]);
 
   const recentOrders = [...orders].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 5);
+
+  const handleChartClick = (data: any) => {
+    const ym = data?.activePayload?.[0]?.payload?.ym || data?.ym;
+    if (ym) {
+      const [y, m] = ym.split("-");
+      navigate(`/monthly/${y}/${m}`);
+    }
+  };
 
   const renderActiveShape = (props: any) => {
     const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
@@ -305,7 +313,7 @@ export default function Dashboard() {
           </div>
           {monthlyData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={monthlyData}>
+              <ComposedChart data={monthlyData} onClick={handleChartClick} className="cursor-pointer">
                 <defs>
                   <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
@@ -379,7 +387,7 @@ export default function Dashboard() {
           </div>
           {deliveryMonthly.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={deliveryMonthly}>
+              <BarChart data={deliveryMonthly} onClick={handleChartClick} className="cursor-pointer">
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
                 <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
@@ -557,7 +565,7 @@ export default function Dashboard() {
             <button className="text-xs text-primary hover:underline" onClick={() => navigate("/collections")}>عرض كل التحصيلات ←</button>
           </div>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={collectionTrend}>
+            <BarChart data={collectionTrend} onClick={handleChartClick} className="cursor-pointer">
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />

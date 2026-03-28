@@ -117,6 +117,14 @@ export default function FinancialReportPage() {
 
   const toggleSection = (key: string) => setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
 
+  const handleChartClick = (data: any) => {
+    const mk = data?.activePayload?.[0]?.payload?.monthKey;
+    if (mk) {
+      const [y, m] = mk.split("-");
+      navigate(`/monthly/${y}/${m}`);
+    }
+  };
+
   const { data: orders = [], isLoading: loadingOrders } = useQuery<Order[]>({
     queryKey: ["orders"],
     queryFn: () => api.get<Order[]>("/orders"),
@@ -166,7 +174,7 @@ export default function FinancialReportPage() {
       const cid = o.clientId || o.client_id || "";
       if (cid === "company-inventory") return;
       if (!deliveredStatuses.includes(o.status)) return;
-      const dateStr = o.createdAt || o.created_at;
+      const dateStr = o.date || o.createdAt || o.created_at;
       if (!dateStr) return;
       try {
         const d = parseISO(dateStr);
@@ -237,6 +245,7 @@ export default function FinancialReportPage() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, d]) => ({
         month: format(parseISO(key + "-01"), "MMM yy"),
+        monthKey: key,
         inflows: d.inflows,
         outflows: d.outflows,
         net: d.inflows - d.outflows,
@@ -606,7 +615,7 @@ export default function FinancialReportPage() {
                   <p className="text-center py-16 text-muted-foreground text-sm">{t.noDataPeriod}</p>
                 ) : (
                   <ResponsiveContainer width="100%" height={280}>
-                    <ComposedChart data={monthlyPnL}>
+                    <ComposedChart data={monthlyPnL} onClick={handleChartClick} className="cursor-pointer">
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
                       <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
@@ -626,7 +635,7 @@ export default function FinancialReportPage() {
                   <p className="text-center py-16 text-muted-foreground text-sm">{t.noDataPeriod}</p>
                 ) : (
                   <ResponsiveContainer width="100%" height={280}>
-                    <AreaChart data={monthlyPnL}>
+                    <AreaChart data={monthlyPnL} onClick={handleChartClick} className="cursor-pointer">
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
                       <YAxis tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" domain={[0, 'auto']} />
@@ -651,7 +660,7 @@ export default function FinancialReportPage() {
                   <p className="text-center py-16 text-muted-foreground text-sm">{t.noDataPeriod}</p>
                 ) : (
                   <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={monthlyPnL}>
+                    <BarChart data={monthlyPnL} onClick={handleChartClick} className="cursor-pointer">
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
                       <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
@@ -670,7 +679,7 @@ export default function FinancialReportPage() {
                   <p className="text-center py-16 text-muted-foreground text-sm">{t.noDataPeriod}</p>
                 ) : (
                   <ResponsiveContainer width="100%" height={250}>
-                    <ComposedChart data={monthlyPnL}>
+                    <ComposedChart data={monthlyPnL} onClick={handleChartClick} className="cursor-pointer">
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
                       <YAxis yAxisId="left" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
@@ -725,7 +734,7 @@ export default function FinancialReportPage() {
                   <p className="text-center py-16 text-muted-foreground text-sm">{t.noDataPeriod}</p>
                 ) : (
                   <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={cashFlowData}>
+                    <BarChart data={cashFlowData} onClick={handleChartClick} className="cursor-pointer">
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
                       <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />

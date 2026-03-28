@@ -42,6 +42,7 @@ import ForgotPasswordPage from "./pages/ForgotPassword";
 import ResetPasswordPage from "./pages/ResetPassword";
 import Walkthrough from "./pages/Walkthrough";
 import ActivityPage from "./pages/Activity";
+import MonthlyDetailPage from "./pages/MonthlyDetail";
 import CompanyInventoryPage from "./pages/CompanyInventory";
 import InventoryLotDetail from "./pages/InventoryLotDetail";
 import NotFound from "./pages/NotFound";
@@ -97,6 +98,7 @@ const App = () => (
                 <Route path="/user-management" element={<UserManagementPage />} />
                 <Route path="/walkthrough" element={<Walkthrough />} />
                 <Route path="/activity" element={<ActivityPage />} />
+                <Route path="/monthly/:year/:month" element={<MonthlyDetailPage />} />
                 <Route path="/company-inventory" element={<CompanyInventoryPage />} />
                 <Route path="/company-inventory/:id" element={<InventoryLotDetail />} />
               </Route>

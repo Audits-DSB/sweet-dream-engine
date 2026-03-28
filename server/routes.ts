@@ -334,8 +334,9 @@ router.get("/orders/:id", async (req, res) => {
   res.json(camelizeKeys({ ...orderRes.data, client: clientName, founderContributions: contribRes.data?.contributions || [] }));
 });
 router.post("/orders", async (req, res) => {
-  const { items, founderContributions, client, supplierId: _supplierId, ...orderBody } = req.body;
+  const { items, founderContributions, client, supplierId, ...orderBody } = req.body;
   const data = snakifyKeys(orderBody);
+  if (supplierId) data.supplier_id = supplierId;
   const result = await supabaseAdmin.from("orders").insert(data).select().single();
   if (result.error) return res.status(400).json({ error: result.error.message });
   if (!result.error && data.client_id && data.order_type !== "inventory") {
@@ -947,8 +948,9 @@ router.patch("/deliveries/:id", async (req, res) => {
     const deliveryId = del.id;
     const deliveryDate = del.date || new Date().toISOString().split("T")[0];
     try {
-      const { data: orderData } = await supabaseAdmin.from("orders").select("order_type").eq("id", orderId).single();
+      const { data: orderData } = await supabaseAdmin.from("orders").select("order_type, supplier_id").eq("id", orderId).single();
       const orderType = orderData?.order_type || "client";
+      const orderSupplierId = orderData?.supplier_id || "";
 
       const { data: existingForDelivery } = await supabaseAdmin.from(orderType === "inventory" ? "company_inventory" : "client_inventory").select("id").like("id", `CI-${deliveryId}-%`).limit(1);
       if (!existingForDelivery || existingForDelivery.length === 0) {
@@ -1039,6 +1041,7 @@ router.patch("/deliveries/:id", async (req, res) => {
               source_order: row.source_order,
               date_added: row.delivery_date,
               status: "In Stock",
+              supplier_id: orderSupplierId,
             }));
             await supabaseAdmin.from("company_inventory").insert(companyRows);
           } else {

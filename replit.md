@@ -57,6 +57,12 @@ All business data in main Supabase project:
 - `/api/company-profit-summary` — Total company profit from collections minus expenses (handles line-item, sourceOrders, and single-order paths)
 - `/api/external-materials` — Proxy to catalog Supabase project
 
+## Monthly Detail Drill-Down
+- **Route**: `/monthly/:year/:month` — Detailed view of all activity for a specific month
+- **Page**: `src/pages/MonthlyDetail.tsx` — Shows orders, deliveries, collections, and KPI summary for the selected month
+- **Chart Click Navigation**: All monthly charts in Dashboard and FinancialReport navigate to the monthly detail page on click
+- **Data**: Each chart data point includes `ym` (Dashboard) or `monthKey` (FinancialReport) for navigation
+
 ## Key Files
 - `server/index.ts` — Express entry point, seeds data on first run, proxies Vite on 5001
 - `server/routes.ts` — All CRUD API endpoints, camelCase↔snake_case helpers
