@@ -373,11 +373,14 @@ export default function OrdersPage() {
         case "date": va = a.date; vb = b.date; break;
         case "selling": va = Number(a.totalSelling); vb = Number(b.totalSelling); break;
         case "cost": va = Number(a.totalCost); vb = Number(b.totalCost); break;
-        case "profit": va = Number(a.totalSelling) - Number(a.totalCost); vb = Number(b.totalSelling) - Number(b.totalCost); break;
+        case "profit": va = a.clientId === "company-inventory" ? null : Number(a.totalSelling) - Number(a.totalCost); vb = b.clientId === "company-inventory" ? null : Number(b.totalSelling) - Number(b.totalCost); break;
         case "lines": va = a.lines; vb = b.lines; break;
         case "status": va = a.status; vb = b.status; break;
         default: va = a.date; vb = b.date;
       }
+      if (va === null && vb === null) return 0;
+      if (va === null) return 1;
+      if (vb === null) return -1;
       if (va < vb) return sortDir === "asc" ? -1 : 1;
       if (va > vb) return sortDir === "asc" ? 1 : -1;
       return 0;
@@ -471,13 +474,16 @@ export default function OrdersPage() {
   };
 
   const totalStats = useMemo(() => {
-    const totalSelling = filtered.reduce((s, o) => s + Number(o.totalSelling), 0);
-    const totalCost = filtered.reduce((s, o) => s + Number(o.totalCost), 0);
+    const clientOrders = filtered.filter(o => o.clientId !== "company-inventory");
+    const inventoryOrders = filtered.filter(o => o.clientId === "company-inventory");
+    const totalSelling = clientOrders.reduce((s, o) => s + Number(o.totalSelling), 0);
+    const totalCost = clientOrders.reduce((s, o) => s + Number(o.totalCost), 0);
     const activeCount = filtered.filter(o => ["Processing", "Draft", "Confirmed", "Ready for Delivery", "Awaiting Purchase"].includes(o.status)).length;
-    const totalCollPaid = filtered.reduce((s, o) => s + (collectionsMap[o.id]?.paid || 0), 0);
-    const totalCollTotal = filtered.reduce((s, o) => s + (collectionsMap[o.id]?.total || 0), 0);
+    const totalCollPaid = clientOrders.reduce((s, o) => s + (collectionsMap[o.id]?.paid || 0), 0);
+    const totalCollTotal = clientOrders.reduce((s, o) => s + (collectionsMap[o.id]?.total || 0), 0);
     const collPct = totalCollTotal > 0 ? Math.round((totalCollPaid / totalCollTotal) * 100) : 0;
-    return { totalSelling, totalCost, profit: totalSelling - totalCost, activeCount, collPct, totalCollPaid, totalCollTotal };
+    const inventoryValue = inventoryOrders.reduce((s, o) => s + Number(o.totalCost), 0);
+    return { totalSelling, totalCost, profit: totalSelling - totalCost, activeCount, collPct, totalCollPaid, totalCollTotal, inventoryValue };
   }, [filtered, collectionsMap]);
 
   const usedMaterialCodes = orderItems.map(i => i.materialCode);
@@ -612,7 +618,7 @@ export default function OrdersPage() {
       </div>
 
       {!loading && orders.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div className="stat-card p-4 flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><DollarSign className="h-5 w-5 text-primary" /></div>
             <div><div className="text-[11px] text-muted-foreground">إجمالي المبيعات</div><div className="text-lg font-bold">{totalStats.totalSelling.toLocaleString()}</div></div>
@@ -620,6 +626,10 @@ export default function OrdersPage() {
           <div className="stat-card p-4 flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center shrink-0"><TrendingUp className="h-5 w-5 text-orange-600" /></div>
             <div><div className="text-[11px] text-muted-foreground">الربح المتوقع</div><div className="text-lg font-bold">{totalStats.profit.toLocaleString()}</div></div>
+          </div>
+          <div className="stat-card p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-violet-100 dark:bg-violet-900/20 flex items-center justify-center shrink-0"><Warehouse className="h-5 w-5 text-violet-600" /></div>
+            <div><div className="text-[11px] text-muted-foreground">مخزون محتجز</div><div className="text-lg font-bold">{totalStats.inventoryValue.toLocaleString()}</div></div>
           </div>
           <div className="stat-card p-4 flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center shrink-0"><ShoppingCart className="h-5 w-5 text-blue-600" /></div>
@@ -639,7 +649,7 @@ export default function OrdersPage() {
         filters={[{ label: t.status, value: "status", options: statusOptions }]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("orders", [t.orderNumber, t.client, t.date, t.lines, t.selling, t.costCol, "الربح", t.splitMode, t.source, t.status], filtered.map(o => [o.id, o.client, o.date, o.lines, o.totalSelling, o.totalCost, String(Number(o.totalSelling) - Number(o.totalCost)), o.splitMode, o.source, o.status]))}
+        onExport={() => exportToCsv("orders", [t.orderNumber, t.client, t.date, t.lines, t.selling, t.costCol, "الربح", t.splitMode, t.source, t.status], filtered.map(o => [o.id, o.client, o.date, o.lines, o.totalSelling, o.totalCost, o.clientId === "company-inventory" ? "مخزون" : String(Number(o.totalSelling) - Number(o.totalCost)), o.splitMode, o.source, o.status]))}
         actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.newOrder}</Button>}
       />
 
@@ -706,6 +716,7 @@ export default function OrdersPage() {
                 const auditInfo = auditsMap[order.id];
                 const colInfo = collectionsMap[order.id];
                 const colPct = colInfo && colInfo.total > 0 ? Math.round((colInfo.paid / colInfo.total) * 100) : 0;
+                const isInventoryOrder = order.clientId === "company-inventory";
                 const profit = Number(order.totalSelling) - Number(order.totalCost);
                 const overdueOrder = isOverdue(order);
                 return (
@@ -726,7 +737,11 @@ export default function OrdersPage() {
                   <td className="py-3 px-2 text-muted-foreground text-xs">{order.date}</td>
                   <td className="py-3 px-2 text-center text-xs text-muted-foreground">{order.lines}</td>
                   <td className="py-3 px-2 text-end font-medium text-xs">{Number(order.totalSelling).toLocaleString()}</td>
-                  <td className={`py-3 px-2 text-end font-medium text-xs ${profit > 0 ? "text-green-600" : profit < 0 ? "text-red-600" : "text-muted-foreground"}`}>{profit.toLocaleString()}</td>
+                  {isInventoryOrder ? (
+                    <td className="py-3 px-2 text-end font-medium text-xs text-violet-600"><span className="inline-flex items-center gap-1"><Warehouse className="h-3 w-3" />مخزون</span></td>
+                  ) : (
+                    <td className={`py-3 px-2 text-end font-medium text-xs ${profit > 0 ? "text-green-600" : profit < 0 ? "text-red-600" : "text-muted-foreground"}`}>{profit.toLocaleString()}</td>
+                  )}
                   <td className="py-3 px-2" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>

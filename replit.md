@@ -108,11 +108,11 @@ npx tsx server/index.ts   # starts Express on 5000, spawns Vite on 5001
 - Server auto-updates order status to "Processing" when delivery is first created
 
 ## Orders Page Enhancements
-- **Stats cards**: 4 KPI cards at top (total sales, expected profit, active orders, collection %)
+- **Stats cards**: 5 KPI cards at top (total sales, expected profit, مخزون محتجز/inventory held value, active orders, collection %). Sales and profit stats EXCLUDE inventory orders (clientId=company-inventory) — inventory value shown separately
 - **Date filter**: Today, last week, this month, last 3 months, all periods
 - **Client & supplier filter dropdowns**: Filter by specific client or supplier
 - **Sortable columns**: Click column headers to sort (order #, client, date, materials, selling, profit, status)
-- **Profit column**: Shows expected profit per order (selling - cost), color-coded (green/red)
+- **Profit column**: Shows expected profit per order (selling - cost), color-coded (green/red). Inventory orders show "مخزون" badge instead of negative profit
 - **Materials count column**: Shows number of line items per order
 - **Row coloring**: Subtle background colors by status (green=closed, red=cancelled, amber=in-progress)
 - **Quick status change**: Click status badge in table to change status via dropdown (no need to open order details)
