@@ -111,8 +111,9 @@ npx tsx server/index.ts   # starts Express on 5000, spawns Vite on 5001
 - **Table**: `company_inventory` — lot-based tracking (id, material_code, material_name, unit, lot_number, quantity, remaining, cost_price, source_order, date_added, status)
 - **Order Types**: `orders.order_type` column — 'client' (default) or 'inventory' (for company stock purchases)
 - **Inventory Pull**: `order_lines.from_inventory` boolean + `inventory_lot_id` text — when pulling from company inventory for client orders
-- **API Endpoints**: GET/POST/PATCH/DELETE `/api/company-inventory`, POST `/api/company-inventory/withdraw`
-- **Page**: `src/pages/CompanyInventory.tsx` — displays all company inventory lots with filters, stats, value calculations
+- **API Endpoints**: GET/POST/PATCH/DELETE `/api/company-inventory`, GET `/api/company-inventory/:id`, POST `/api/company-inventory/withdraw`
+- **Pages**: `src/pages/CompanyInventory.tsx` — lot list with filters/stats; `src/pages/InventoryLotDetail.tsx` — lot detail page (image, usage bar, source order link)
+- **Inventory Badges on Order Lines**: Lines pulled from inventory show "مخزون" badge + clickable lot ID linking to `/company-inventory/:lotId`
 - **Sidebar**: "مخزون الشركة" link under Inventory section
 - **Order Creation**: Toggle between "لعميل" (client order) and "للمخزون" (inventory purchase). Inventory orders set client="مخزون الشركة", selling price=0
 - **Inventory Pull in Orders**: "سحب من المخزون" button shows available company inventory lots; pulled items use original lot cost price for accurate profit calculations

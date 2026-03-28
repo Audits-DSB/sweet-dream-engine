@@ -220,6 +220,7 @@ export default function CompanyInventoryPage() {
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => navigate(`/company-inventory/${encodeURIComponent(lot.id)}`)}><Package className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />تفاصيل الدُفعة</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => navigate(`/orders/${lot.sourceOrder}`)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />عرض الأوردر</DropdownMenuItem>
                         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(lot)}>
                           <Trash2 className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />حذف

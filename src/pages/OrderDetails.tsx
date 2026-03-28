@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useRef, useState, useEffect, useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { quickProfit } from "@/lib/orderProfit";
@@ -1188,6 +1188,21 @@ export default function OrderDetails() {
                       <div className="font-medium text-sm truncate">{line.materialName}</div>
                       <div className="text-xs text-muted-foreground font-mono mt-0.5">{line.materialCode}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">{line.unit}</div>
+                      {line.fromInventory && line.inventoryLotId && (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                            <Warehouse className="h-3 w-3" />
+                            مخزون
+                          </span>
+                          <Link
+                            to={`/company-inventory/${encodeURIComponent(line.inventoryLotId)}`}
+                            className="text-[10px] font-mono text-primary hover:underline cursor-pointer"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {line.inventoryLotId}
+                          </Link>
+                        </div>
+                      )}
                     </div>
 
                     {/* Quantity badge */}

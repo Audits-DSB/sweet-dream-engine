@@ -1193,6 +1193,15 @@ router.get("/company-inventory", async (_req, res) => {
   res.json(camelizeKeys(data || []));
 });
 
+router.get("/company-inventory/:id", async (req, res) => {
+  const { data, error } = await supabaseAdmin.from("company_inventory").select("*").eq("id", req.params.id).single();
+  if (error) {
+    if (error.code === "PGRST116") return res.status(404).json({ error: "Lot not found" });
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(camelizeKeys(data));
+});
+
 router.post("/company-inventory", async (req, res) => {
   const body = snakifyKeys(req.body);
   const { data, error } = await supabaseAdmin.from("company_inventory").insert(body).select().single();
