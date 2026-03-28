@@ -30,6 +30,7 @@ import ReportsPage from "./pages/Reports";
 import SettingsPage from "./pages/Settings";
 import UserManagementPage from "./pages/UserManagement";
 import SuppliersPage from "./pages/Suppliers";
+import SupplierProfile from "./pages/SupplierProfile";
 import TreasuryDashboard from "./pages/Treasury";
 import TreasuryAccountsPage from "./pages/TreasuryAccounts";
 import TreasuryTransactionsPage from "./pages/TreasuryTransactions";
@@ -86,6 +87,7 @@ const App = () => (
                 <Route path="/company-profit" element={<CompanyProfitPage />} />
                 <Route path="/founder-funding" element={<FounderFundingPage />} />
                 <Route path="/suppliers" element={<SuppliersPage />} />
+                <Route path="/suppliers/:id" element={<SupplierProfile />} />
                 <Route path="/treasury" element={<TreasuryDashboard />} />
                 <Route path="/treasury/accounts" element={<TreasuryAccountsPage />} />
                 <Route path="/treasury/transactions" element={<TreasuryTransactionsPage />} />

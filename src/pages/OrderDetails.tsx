@@ -48,6 +48,8 @@ type Order = {
   totalCost: string | number;
   companyProfitPercentage?: number;
   orderType: string;
+  supplierId: string;
+  supplierName: string;
 };
 
 function toNum(v: any): number {
@@ -84,6 +86,8 @@ function mapOrder(raw: any): Order {
     totalCost: raw.totalCost ?? raw.total_cost ?? 0,
     companyProfitPercentage: raw.companyProfitPercentage ?? raw.company_profit_percentage,
     orderType: raw.orderType || raw.order_type || "client",
+    supplierId: raw.supplierId || raw.supplier_id || "",
+    supplierName: "",
   };
 }
 
@@ -145,9 +149,16 @@ export default function OrderDetails() {
       api.get<any[]>("/collections").catch(() => []),
       api.get<any[]>("/audits").catch(() => []),
       api.get<any[]>("/company-inventory").catch(() => []),
-    ]).then(([all, fetchedLines, extData, deliveries, balances, inventory, collections, audits, compInv]) => {
+      api.get<any[]>("/suppliers").catch(() => []),
+    ]).then(([all, fetchedLines, extData, deliveries, balances, inventory, collections, audits, compInv, suppliers]) => {
+      const supMap: Record<string, string> = {};
+      (suppliers || []).forEach((s: any) => { supMap[s.id] = s.name; });
       const found = (all || []).find((o: any) => o.id === id);
-      if (found) setOrder(mapOrder(found));
+      if (found) {
+        const mapped = mapOrder(found);
+        mapped.supplierName = supMap[mapped.supplierId] || "";
+        setOrder(mapped);
+      }
       const map: Record<string, ExtMaterial> = {};
       const nameMap: Record<string, ExtMaterial> = {};
       const allMats: ExtMaterial[] = [];
@@ -695,6 +706,9 @@ export default function OrderDetails() {
             <span className="cursor-pointer hover:text-primary" onClick={() => navigate(`/clients/${order.clientId}`)}>{order.client}</span>
             {" · "}{order.date}
             {order.source && order.source !== "—" ? ` · ${t.orderDetailsSource || "المصدر"}: ${order.source}` : ""}
+            {order.supplierId && order.supplierName && (
+              <>{" · "}<Link to={`/suppliers/${order.supplierId}`} className="text-primary hover:underline">🏭 {order.supplierName}</Link></>
+            )}
           </p>
         </div>
         <div className="flex gap-2">
@@ -1207,16 +1221,28 @@ export default function OrderDetails() {
 
             {/* Client info */}
             <div className="px-6 py-4 border-b border-border/50 bg-muted/10">
-              <div className="text-xs text-muted-foreground mb-0.5">العميل</div>
-              <div
-                className="font-semibold cursor-pointer hover:text-primary transition-colors"
-                onClick={() => navigate(`/clients/${order.clientId}`)}
-              >
-                {order.client}
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-xs text-muted-foreground mb-0.5">العميل</div>
+                  <div
+                    className="font-semibold cursor-pointer hover:text-primary transition-colors"
+                    onClick={() => navigate(`/clients/${order.clientId}`)}
+                  >
+                    {order.client}
+                  </div>
+                  {order.splitMode && order.splitMode !== "—" && (
+                    <div className="text-xs text-muted-foreground mt-0.5">نمط التقسيم: {order.splitMode}</div>
+                  )}
+                </div>
+                {order.supplierId && order.supplierName && (
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-0.5">المورد</div>
+                    <Link to={`/suppliers/${order.supplierId}`} className="font-semibold text-primary hover:underline transition-colors">
+                      {order.supplierName}
+                    </Link>
+                  </div>
+                )}
               </div>
-              {order.splitMode && order.splitMode !== "—" && (
-                <div className="text-xs text-muted-foreground mt-0.5">نمط التقسيم: {order.splitMode}</div>
-              )}
             </div>
 
             {/* Delivery Progress Banner */}

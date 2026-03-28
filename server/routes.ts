@@ -262,6 +262,92 @@ router.delete("/materials/:code", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── SUPPLIER PROFILE (aggregated data) ──────────────────────────────────────
+router.get("/suppliers/:id/profile", async (req, res) => {
+  try {
+    const sid = req.params.id;
+    const [supRes, matsRes, ordersRes, invRes] = await Promise.all([
+      supabaseAdmin.from("suppliers").select("*").eq("id", sid).single(),
+      supabaseAdmin.from("supplier_materials").select("*").eq("supplier_id", sid).order("material_name"),
+      supabaseAdmin.from("orders").select("*").eq("supplier_id", sid).order("date", { ascending: false }),
+      supabaseAdmin.from("company_inventory").select("*").eq("supplier_id", sid).order("date_added", { ascending: false }),
+    ]);
+    if (supRes.error) return res.status(404).json({ error: "Supplier not found" });
+    if (ordersRes.error) return res.status(500).json({ error: ordersRes.error.message });
+    if (invRes.error) return res.status(500).json({ error: invRes.error.message });
+
+    const orders = ordersRes.data || [];
+    const inventory = invRes.data || [];
+    const totalPurchases = orders.reduce((s: number, o: any) => s + (parseFloat(o.total_cost) || 0), 0);
+    const totalOrders = orders.length;
+    const lastOrderDate = orders.length > 0 ? orders[0].date : null;
+
+    const totalLots = inventory.length;
+    const totalUnitsSupplied = inventory.reduce((s: number, lot: any) => s + (parseFloat(lot.quantity) || 0), 0);
+    const totalRemainingUnits = inventory.reduce((s: number, lot: any) => s + (parseFloat(lot.remaining) || 0), 0);
+
+    res.json(camelizeKeys({
+      supplier: supRes.data,
+      materials: matsRes.data || [],
+      orders,
+      inventory,
+      stats: {
+        total_purchases: totalPurchases,
+        total_orders: totalOrders,
+        last_order_date: lastOrderDate,
+        total_lots: totalLots,
+        total_units_supplied: totalUnitsSupplied,
+        total_remaining_units: totalRemainingUnits,
+        materials_count: (matsRes.data || []).length,
+      },
+    }));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── SUPPLIER STATS (summary for all suppliers) ─────────────────────────────
+router.get("/suppliers-stats", async (_req, res) => {
+  try {
+    const [ordersRes, invRes, matsRes] = await Promise.all([
+      supabaseAdmin.from("orders").select("id, supplier_id, total_cost, date").not("supplier_id", "is", null).not("supplier_id", "eq", ""),
+      supabaseAdmin.from("company_inventory").select("supplier_id, quantity, remaining"),
+      supabaseAdmin.from("supplier_materials").select("supplier_id, material_code"),
+    ]);
+    if (ordersRes.error || invRes.error || matsRes.error) {
+      return res.status(500).json({ error: (ordersRes.error || invRes.error || matsRes.error)!.message });
+    }
+    const orders = ordersRes.data || [];
+    const inventory = invRes.data || [];
+    const mats = matsRes.data || [];
+
+    const statsMap: Record<string, any> = {};
+    orders.forEach((o: any) => {
+      if (!o.supplier_id) return;
+      if (!statsMap[o.supplier_id]) statsMap[o.supplier_id] = { totalOrders: 0, totalPurchases: 0, lastOrderDate: null, materialsCount: 0, totalLots: 0 };
+      statsMap[o.supplier_id].totalOrders++;
+      statsMap[o.supplier_id].totalPurchases += parseFloat(o.total_cost) || 0;
+      if (!statsMap[o.supplier_id].lastOrderDate || o.date > statsMap[o.supplier_id].lastOrderDate) {
+        statsMap[o.supplier_id].lastOrderDate = o.date;
+      }
+    });
+    inventory.forEach((lot: any) => {
+      if (!lot.supplier_id) return;
+      if (!statsMap[lot.supplier_id]) statsMap[lot.supplier_id] = { totalOrders: 0, totalPurchases: 0, lastOrderDate: null, materialsCount: 0, totalLots: 0 };
+      statsMap[lot.supplier_id].totalLots++;
+    });
+    mats.forEach((m: any) => {
+      if (!m.supplier_id) return;
+      if (!statsMap[m.supplier_id]) statsMap[m.supplier_id] = { totalOrders: 0, totalPurchases: 0, lastOrderDate: null, materialsCount: 0, totalLots: 0 };
+      statsMap[m.supplier_id].materialsCount++;
+    });
+
+    res.json(statsMap);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── SUPPLIER MATERIALS ───────────────────────────────────────────────────────
 router.get("/suppliers/:id/materials", async (req, res) => {
   const { data, error } = await supabaseAdmin.from("supplier_materials").select("*").eq("supplier_id", req.params.id).order("material_name");

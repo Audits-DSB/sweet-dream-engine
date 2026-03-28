@@ -131,6 +131,18 @@ npx tsx server/index.ts   # starts Express on 5000, spawns Vite on 5001
 - **Delivery Logic**: When delivery confirmed for inventory-type orders, items go to `company_inventory` instead of `client_inventory`
 - **Migration**: POST `/api/migrate/company-inventory` checks and reports schema status
 
+## Supplier Integration System
+- **Supplier Profile Page** (`src/pages/SupplierProfile.tsx`) — Route `/suppliers/:id`, shows full supplier details, stats, orders, inventory lots, materials, and analytics (monthly purchase chart, supplier statement)
+- **API Endpoints**:
+  - `GET /api/suppliers/:id/profile` — Aggregated supplier data (supplier info + orders + inventory + materials + computed stats)
+  - `GET /api/suppliers-stats` — Summary stats for all suppliers (order count, total purchases, last order date, materials count, lots count)
+- **Suppliers List Enhancements**: Each supplier card shows order count, total purchases, last order date with clickable name linking to profile
+- **Supplier Selection in All Orders**: Supplier dropdown available for both client and inventory orders (not just inventory)
+- **Supplier Display in OrderDetails**: Supplier name shown in order header and client info section, clickable link to supplier profile
+- **Supplier Display in Orders List**: New "المورد" column in orders table showing supplier name with clickable link
+- **Company Inventory**: Supplier names link to `/suppliers/:id` profile page (not just `/suppliers` list)
+- **Data Model**: `suppliers` table, `supplier_materials` join table, `orders.supplier_id`, `company_inventory.supplier_id`
+
 ## Notes
 - API returns camelCase; Supabase stores snake_case. Helpers `camelizeKeys`/`snakifyKeys` handle conversion in routes.ts
 - Seed runs only once when `clients` table is empty

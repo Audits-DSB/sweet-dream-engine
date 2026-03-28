@@ -27,6 +27,7 @@ type Order = {
   id: string; client: string; clientId: string; date: string; lines: number;
   totalSelling: string; totalCost: string; splitMode: string;
   deliveryFee: number; deliveryFeeBearer: string; status: string; source: string;
+  supplierId: string; supplierName: string;
 };
 
 type Client = { id: string; name: string; city: string; status: string; };
@@ -62,6 +63,8 @@ function mapOrder(raw: any): Order {
     deliveryFeeBearer: raw.deliveryFeeBearer ?? raw.delivery_fee_bearer ?? "client",
     status: raw.status || "Draft",
     source: raw.source || "",
+    supplierId: raw.supplierId || raw.supplier_id || "",
+    supplierName: "",
   };
 }
 
@@ -141,7 +144,10 @@ export default function OrdersPage() {
       api.get<any[]>("/audits"),
       api.get<any[]>("/suppliers").catch(() => []),
     ]).then(([ordersData, clientsData, collectionsData, deliveriesData, inventoryData, auditsData, suppliersData]) => {
-      setSuppliers((suppliersData || []).map((s: any) => ({ id: s.id, name: s.name })));
+      const supArr = (suppliersData || []).map((s: any) => ({ id: s.id, name: s.name }));
+      setSuppliers(supArr);
+      const supMap: Record<string, string> = {};
+      supArr.forEach(s => { supMap[s.id] = s.name; });
       const clientMap: Record<string, string> = {};
       const clientArr = (clientsData || []).map((c: any) => {
         clientMap[c.id] = c.name || "";
@@ -155,6 +161,7 @@ export default function OrdersPage() {
         } else if (!o.client && o.clientId) {
           o.client = clientMap[o.clientId] || o.clientId;
         }
+        o.supplierName = supMap[o.supplierId] || "";
         return o;
       }));
       const cmap: Record<string, { paid: number; total: number; collectionId: string; status: string; date: string }> = {};
@@ -395,7 +402,7 @@ export default function OrdersPage() {
         deliveryFeeBearer: form.deliveryFeeBearer,
         status: "Processing", source: t.manual,
         orderType,
-        supplierId: orderType === "inventory" ? selectedSupplier : "",
+        supplierId: selectedSupplier || "",
         founderContributions,
         items: orderItems.map(i => ({ ...i, fromInventory: i.fromInventory || false, inventoryLotId: i.inventoryLotId || "" })),
       });
@@ -405,9 +412,12 @@ export default function OrdersPage() {
 
       await logAudit({ entity: "order", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${clientName}`, action: "create", snapshot: saved, endpoint: "/orders", performedBy: _userName });
 
-      setOrders(prev => [mapOrder(saved), ...prev]);
+      const newOrder = mapOrder(saved);
+      const supName = suppliers.find(s => s.id === selectedSupplier)?.name || "";
+      newOrder.supplierName = supName;
+      setOrders(prev => [newOrder, ...prev]);
       setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client" });
-      setSelectedClient(""); setOrderItems([]); setDialogOpen(false); setOrderType("client");
+      setSelectedClient(""); setOrderItems([]); setDialogOpen(false); setOrderType("client"); setSelectedSupplier("");
       if (!saved._linesError) toast.success(t.orderCreated);
     } catch (err: any) {
       toast.error(err?.message || t.failedToSaveOrder);
@@ -475,6 +485,7 @@ export default function OrdersPage() {
               <tr className="border-b border-border">
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.orderNumber}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">المورد</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.date}</th>
                 <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.selling}</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
@@ -495,6 +506,11 @@ export default function OrdersPage() {
                 <tr key={order.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/orders/${order.id}`)}>
                   <td className="py-3 px-3 font-mono text-xs font-medium">{order.id}</td>
                   <td className="py-3 px-3 font-medium hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${order.clientId}`); }}>{order.client}</td>
+                  <td className="py-3 px-3 text-xs" onClick={(e) => e.stopPropagation()}>
+                    {order.supplierId && order.supplierName ? (
+                      <button className="text-primary hover:underline" onClick={() => navigate(`/suppliers/${order.supplierId}`)}>{order.supplierName}</button>
+                    ) : <span className="text-muted-foreground">—</span>}
+                  </td>
                   <td className="py-3 px-3 text-muted-foreground text-xs">{order.date}</td>
                   <td className="py-3 px-3 text-end font-medium">{order.totalSelling}</td>
                   <td className="py-3 px-3"><StatusBadge status={order.status} /></td>
@@ -572,7 +588,7 @@ export default function OrdersPage() {
         loading={deleting}
       />
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setOrderItems([]); setSelectedClient(""); setMaterialSearch(""); setOrderType("client"); setShowInventoryPicker(false); setInventorySearch(""); } }}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setOrderItems([]); setSelectedClient(""); setSelectedSupplier(""); setMaterialSearch(""); setOrderType("client"); setShowInventoryPicker(false); setInventorySearch(""); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader><DialogTitle>{t.newOrder}</DialogTitle></DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-2">
@@ -601,24 +617,23 @@ export default function OrdersPage() {
               )}
 
               {orderType === "inventory" && (
-                <div className="space-y-3">
-                  <div className="p-3 rounded-md border border-primary/20 bg-primary/5 text-xs text-muted-foreground">
-                    <Warehouse className="h-4 w-4 inline-block ml-1 text-primary" />
-                    طلب لمخزون الشركة — المواد ستضاف للمخزون عند التسليم
-                  </div>
-                  <div>
-                    <Label className="text-xs">المورد</Label>
-                    <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
-                      <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="اختر المورد (اختياري)" /></SelectTrigger>
-                      <SelectContent>
-                        {suppliers.map(s => (
-                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="p-3 rounded-md border border-primary/20 bg-primary/5 text-xs text-muted-foreground">
+                  <Warehouse className="h-4 w-4 inline-block ml-1 text-primary" />
+                  طلب لمخزون الشركة — المواد ستضاف للمخزون عند التسليم
                 </div>
               )}
+
+              <div>
+                <Label className="text-xs">المورد</Label>
+                <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
+                  <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="اختر المورد (اختياري)" /></SelectTrigger>
+                  <SelectContent>
+                    {suppliers.map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
               <div>
                 <Label className="text-xs font-medium mb-2 block">{t.orderItemsLabel} *</Label>

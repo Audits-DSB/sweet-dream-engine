@@ -242,7 +242,7 @@ export default function CompanyInventoryPage() {
                   <td className="py-3 px-3 text-end font-medium text-primary">{(lot.remaining * lot.costPrice).toLocaleString()} {t.currency}</td>
                   <td className="py-3 px-3 text-xs">
                     {lot.supplierId && supplierMap[lot.supplierId] ? (
-                      <button className="text-primary hover:underline" onClick={(e) => { e.stopPropagation(); navigate(`/suppliers`); }}>{supplierMap[lot.supplierId]}</button>
+                      <button className="text-primary hover:underline" onClick={(e) => { e.stopPropagation(); navigate(`/suppliers/${lot.supplierId}`); }}>{supplierMap[lot.supplierId]}</button>
                     ) : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="py-3 px-3">

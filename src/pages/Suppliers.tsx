@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { DataToolbar } from "@/components/DataToolbar";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Globe, Mail, Phone, Package, Loader2, Trash2, Pencil, X, Search, Check, ImageOff } from "lucide-react";
+import { Plus, Globe, Mail, Phone, Package, Loader2, Trash2, Pencil, X, Search, Check, ImageOff, ShoppingCart, Wallet, Calendar, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
@@ -90,14 +90,23 @@ export default function SuppliersPage() {
   const [deleteTarget, setDeleteTarget] = useState<Supplier | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Material detail
+  const [supStats, setSupStats] = useState<Record<string, any>>({});
+
   const [matDetail, setMatDetail] = useState<CatalogMaterial | null>(null);
   const [matImgErrors, setMatImgErrors] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadSuppliers();
     loadCatalog();
+    loadStats();
   }, []);
+
+  const loadStats = async () => {
+    try {
+      const data = await api.get<Record<string, any>>("/suppliers-stats");
+      setSupStats(data || {});
+    } catch { /* ignore */ }
+  };
 
   const loadSuppliers = async () => {
     setLoading(true);
@@ -283,15 +292,19 @@ export default function SuppliersPage() {
           {filtered.length === 0 && (
             <p className="col-span-full text-center py-12 text-muted-foreground text-sm">{t.noResults}</p>
           )}
-          {filtered.map((sup) => (
+          {filtered.map((sup) => {
+            const st = supStats[sup.id];
+            return (
             <div key={sup.id} className="stat-card space-y-3 cursor-pointer hover:shadow-md transition-shadow" onClick={() => openDetail(sup)}>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Link to={`/suppliers/${sup.id}`} onClick={e => e.stopPropagation()} className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors">
                     <span className="text-sm font-bold text-primary">{sup.name.charAt(0)}</span>
-                  </div>
+                  </Link>
                   <div>
-                    <p className="font-semibold text-sm">{sup.name}</p>
+                    <Link to={`/suppliers/${sup.id}`} onClick={e => e.stopPropagation()} className="font-semibold text-sm hover:text-primary hover:underline transition-colors">
+                      {sup.name}
+                    </Link>
                     <p className="text-xs text-muted-foreground flex items-center gap-1"><Globe className="h-3 w-3" />{sup.country || "—"}</p>
                   </div>
                 </div>
@@ -303,15 +316,47 @@ export default function SuppliersPage() {
                 {sup.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{sup.email}</span>}
                 {sup.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{sup.phone}</span>}
               </div>
+              {st && (
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="p-1.5 rounded-md bg-muted/40 text-center">
+                    <div className="flex items-center justify-center gap-1 text-muted-foreground mb-0.5">
+                      <ShoppingCart className="h-3 w-3" />
+                    </div>
+                    <span className="font-semibold">{st.totalOrders}</span>
+                    <span className="text-muted-foreground text-[10px] block">طلب</span>
+                  </div>
+                  <div className="p-1.5 rounded-md bg-muted/40 text-center">
+                    <div className="flex items-center justify-center gap-1 text-muted-foreground mb-0.5">
+                      <Wallet className="h-3 w-3" />
+                    </div>
+                    <span className="font-semibold">{(st.totalPurchases || 0).toLocaleString()}</span>
+                    <span className="text-muted-foreground text-[10px] block">ج.م</span>
+                  </div>
+                  <div className="p-1.5 rounded-md bg-muted/40 text-center">
+                    <div className="flex items-center justify-center gap-1 text-muted-foreground mb-0.5">
+                      <Calendar className="h-3 w-3" />
+                    </div>
+                    <span className="font-semibold text-[11px]">{st.lastOrderDate ? st.lastOrderDate.slice(0, 10) : "—"}</span>
+                    <span className="text-muted-foreground text-[10px] block">آخر طلب</span>
+                  </div>
+                </div>
+              )}
               <div className="flex items-center justify-between pt-2 border-t border-border">
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <Package className="h-3 w-3" />
                   {matCounts[sup.id] ?? 0} {t.materialsCount}
                 </span>
-                <span className="text-xs text-muted-foreground">{sup.paymentTerms}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{sup.paymentTerms}</span>
+                  <Link to={`/suppliers/${sup.id}`} onClick={e => e.stopPropagation()} className="text-primary hover:underline text-[11px] flex items-center gap-0.5">
+                    <ExternalLink className="h-3 w-3" />
+                    الملف
+                  </Link>
+                </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
