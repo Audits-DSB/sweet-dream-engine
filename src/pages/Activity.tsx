@@ -787,10 +787,15 @@ export default function ActivityPage() {
                                   </Badge>
                                 )}
                               </div>
-                              <div className="flex items-center gap-3 mt-0.5">
+                              <div className="flex items-center gap-3 mt-1 flex-wrap">
                                 {data?.performedBy && (
-                                  <span className="text-[10px] bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                    <User className="h-2.5 w-2.5" />{data.performedBy}
+                                  <span className="text-xs bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-md flex items-center gap-1.5 font-medium border border-blue-200 dark:border-blue-800/50">
+                                    <User className="h-3 w-3" />{data.performedBy}
+                                  </span>
+                                )}
+                                {!data?.performedBy && (
+                                  <span className="text-[10px] bg-muted/50 text-muted-foreground px-1.5 py-0.5 rounded flex items-center gap-1">
+                                    <User className="h-2.5 w-2.5" />مستخدم غير معروف
                                   </span>
                                 )}
                                 {data?.entityId && (
