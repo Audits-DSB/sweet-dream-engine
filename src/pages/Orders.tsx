@@ -365,13 +365,14 @@ export default function OrdersPage() {
       const today = new Date().toISOString().split("T")[0];
       const splitLabel = form.splitMode === "equal" ? t.equal : t.byContribution;
       const participating = founders.filter(f => selectedFounders.includes(f.id));
-      const effectiveTotalCost = orderType === "inventory" ? totalCost : totalCost;
+      const nonInventoryCost = orderItems.filter(i => !i.fromInventory).reduce((sum, i) => sum + i.costPrice * i.quantity, 0);
+      const fundingCost = orderType === "inventory" ? totalCost : nonInventoryCost;
       const founderContributions = participating.map(f => {
         const pct = form.splitMode === "equal"
           ? (participating.length > 0 ? 100 / participating.length : 0)
           : (founderPcts[f.id] || 0);
-        const share = effectiveTotalCost * pct / 100;
-        return { founderId: f.id, founder: f.name, amount: Math.round(share * 100) / 100, percentage: Math.round(pct * 100) / 100, paid: false, companyProfitPercentage: rules.companyProfitPercentage };
+        const share = fundingCost * pct / 100;
+        return { founderId: f.id, founder: f.name, amount: Math.round(share * 100) / 100, percentage: Math.round(pct * 100) / 100, paid: fundingCost === 0, companyProfitPercentage: rules.companyProfitPercentage };
       });
 
       const effectiveSelling = orderType === "inventory" ? "0" : String(totalSelling);

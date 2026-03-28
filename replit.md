@@ -116,6 +116,7 @@ npx tsx server/index.ts   # starts Express on 5000, spawns Vite on 5001
 - **Sidebar**: "مخزون الشركة" link under Inventory section
 - **Order Creation**: Toggle between "لعميل" (client order) and "للمخزون" (inventory purchase). Inventory orders set client="مخزون الشركة", selling price=0
 - **Inventory Pull in Orders**: "سحب من المخزون" button shows available company inventory lots; pulled items use original lot cost price for accurate profit calculations
+- **Founder Funding for Inventory Items**: Items pulled from company inventory (fromInventory=true) are excluded from founder contribution calculations — founders already paid when the inventory was purchased. No duplicate treasury transactions are created. Full cost is preserved in totalCost for correct profit distribution.
 - **Delivery Logic**: When delivery confirmed for inventory-type orders, items go to `company_inventory` instead of `client_inventory`
 - **Migration**: POST `/api/migrate/company-inventory` checks and reports schema status
 

@@ -46,6 +46,7 @@ type Order = {
   totalSelling: string | number;
   totalCost: string | number;
   companyProfitPercentage?: number;
+  orderType: string;
 };
 
 function toNum(v: any): number {
@@ -81,6 +82,7 @@ function mapOrder(raw: any): Order {
     totalSelling: raw.totalSelling ?? raw.total_selling ?? 0,
     totalCost: raw.totalCost ?? raw.total_cost ?? 0,
     companyProfitPercentage: raw.companyProfitPercentage ?? raw.company_profit_percentage,
+    orderType: raw.orderType || raw.order_type || "client",
   };
 }
 
@@ -356,10 +358,22 @@ export default function OrderDetails() {
       orderPatch.lines = activeEditLines.length + editNewItems.length;
 
       if (order.founderContributions && order.founderContributions.length > 0) {
+        let nonInventoryCost = 0;
+        for (const el of activeEditLines) {
+          const orig = lines.find(l => l.id === el.id);
+          if (orig && orig.fromInventory) continue;
+          nonInventoryCost += (Number(el._qty) || 0) * (Number(el._cost) || 0);
+        }
+        for (const ni of editNewItems) {
+          if (ni.fromInventory) continue;
+          nonInventoryCost += ni.costPrice * ni.quantity;
+        }
+        const fundingCost = order.orderType === "inventory" ? newTotalCost : nonInventoryCost;
         const totalPctAll = order.founderContributions.reduce((s, f) => s + (f.percentage || 0), 0) || 100;
         const updatedContributions = order.founderContributions.map(fc => ({
           ...fc,
-          amount: Math.round(newTotalCost * (fc.percentage || 0) / totalPctAll * 100) / 100,
+          amount: Math.round(fundingCost * (fc.percentage || 0) / totalPctAll * 100) / 100,
+          paid: fundingCost === 0 ? true : fc.paid,
         }));
         orderPatch.founderContributions = updatedContributions;
       }
