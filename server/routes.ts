@@ -529,6 +529,7 @@ router.post("/orders", async (req, res) => {
       line_cost: (Number(item.costPrice) || 0) * (Number(item.quantity) || 1),
       from_inventory: item.fromInventory === true,
       inventory_lot_id: String(item.inventoryLotId || ""),
+      supplier_id: String(item.supplierId || ""),
     }));
     const { error: linesErr } = await supabaseAdmin.from("order_lines").insert(lineRows);
     if (linesErr) {
@@ -587,6 +588,7 @@ router.post("/orders/:id/lines", async (req, res) => {
     line_cost: (Number(item.costPrice) || 0) * (Number(item.quantity) || 1),
     from_inventory: item.fromInventory === true,
     inventory_lot_id: String(item.inventoryLotId || ""),
+    supplier_id: String(item.supplierId || ""),
   }));
   const { data, error } = await supabaseAdmin.from("order_lines").insert(lineRows).select();
   if (error) return res.status(500).json({ error: error.message });
@@ -662,13 +664,13 @@ router.delete("/order-lines/:id", async (req, res) => {
   res.json({ ok: true, deleted: snap ? camelizeKeys(snap) : null });
 });
 router.patch("/order-lines/:id", async (req, res) => {
-  const { quantity, sellingPrice, costPrice } = req.body;
+  const { quantity, sellingPrice, costPrice, supplierId } = req.body;
   const lineTotal = (quantity ?? 0) * (sellingPrice ?? 0);
   const lineCost = (quantity ?? 0) * (costPrice ?? 0);
   const { data: oldLine } = await supabaseAdmin.from("order_lines").select("*").eq("id", req.params.id).single();
-  const { data, error } = await supabaseAdmin.from("order_lines").update(
-    { quantity, selling_price: sellingPrice, cost_price: costPrice, line_total: lineTotal, line_cost: lineCost }
-  ).eq("id", req.params.id).select().single();
+  const updateFields: Record<string, any> = { quantity, selling_price: sellingPrice, cost_price: costPrice, line_total: lineTotal, line_cost: lineCost };
+  if (supplierId !== undefined) updateFields.supplier_id = supplierId;
+  const { data, error } = await supabaseAdmin.from("order_lines").update(updateFields).eq("id", req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
 
   if (oldLine && data && oldLine.from_inventory && oldLine.inventory_lot_id) {

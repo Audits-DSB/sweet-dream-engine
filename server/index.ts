@@ -194,26 +194,42 @@ async function reloadSupabaseSchemaCache() {
 async function ensureSupplierIdColumn() {
   const url = process.env.VITE_SUPABASE_URL!;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const headers = { apikey: key, Authorization: `Bearer ${key}`, Accept: "application/json" };
   try {
-    const checkResp = await fetch(`${url}/rest/v1/company_inventory?select=supplier_id&limit=1`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: "application/json" },
-    });
+    const checkResp = await fetch(`${url}/rest/v1/company_inventory?select=supplier_id&limit=1`, { headers });
     if (checkResp.ok) {
       console.log("✅ supplier_id column already exists on company_inventory");
-      return;
-    }
-    const sqlResp = await fetch(`${url}/rest/v1/rpc/exec_sql`, {
-      method: "POST",
-      headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ sql_text: "ALTER TABLE public.company_inventory ADD COLUMN IF NOT EXISTS supplier_id text DEFAULT '';" }),
-    });
-    if (sqlResp.ok) {
-      console.log("✅ Added supplier_id column to company_inventory via RPC");
     } else {
-      console.warn("⚠️ Could not add supplier_id column automatically. Please run in Supabase SQL Editor: ALTER TABLE public.company_inventory ADD COLUMN IF NOT EXISTS supplier_id text DEFAULT '';");
+      const sqlResp = await fetch(`${url}/rest/v1/rpc/exec_sql`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ sql_text: "ALTER TABLE public.company_inventory ADD COLUMN IF NOT EXISTS supplier_id text DEFAULT '';" }),
+      });
+      if (sqlResp.ok) console.log("✅ Added supplier_id column to company_inventory via RPC");
+      else console.warn("⚠️ Could not add supplier_id to company_inventory automatically.");
     }
   } catch (e: any) {
     console.warn("⚠️ supplier_id column check failed:", e.message);
+  }
+  try {
+    const checkResp2 = await fetch(`${url}/rest/v1/order_lines?select=supplier_id&limit=1`, { headers });
+    if (checkResp2.ok) {
+      console.log("✅ supplier_id column already exists on order_lines");
+    } else {
+      const sqlResp2 = await fetch(`${url}/rest/v1/rpc/exec_sql`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ sql_text: "ALTER TABLE public.order_lines ADD COLUMN IF NOT EXISTS supplier_id text DEFAULT '';" }),
+      });
+      if (sqlResp2.ok) {
+        console.log("✅ Added supplier_id column to order_lines via RPC");
+        await reloadSupabaseSchemaCache();
+      } else {
+        console.warn("⚠️ Could not add supplier_id to order_lines automatically. Run in Supabase SQL Editor: ALTER TABLE public.order_lines ADD COLUMN IF NOT EXISTS supplier_id text DEFAULT '';");
+      }
+    }
+  } catch (e: any) {
+    console.warn("⚠️ order_lines supplier_id check failed:", e.message);
   }
 }
 

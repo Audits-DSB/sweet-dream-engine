@@ -41,6 +41,7 @@ interface OrderItem {
   materialCode: string; name: string; quantity: number;
   sellingPrice: number; costPrice: number; imageUrl: string; unit: string;
   fromInventory?: boolean; inventoryLotId?: string;
+  supplierId?: string;
 }
 
 type CompanyLot = {
@@ -404,7 +405,7 @@ export default function OrdersPage() {
         orderType,
         supplierId: selectedSupplier || "",
         founderContributions,
-        items: orderItems.map(i => ({ ...i, fromInventory: i.fromInventory || false, inventoryLotId: i.inventoryLotId || "" })),
+        items: orderItems.map(i => ({ ...i, fromInventory: i.fromInventory || false, inventoryLotId: i.inventoryLotId || "", supplierId: i.supplierId || selectedSupplier || "" })),
       });
       if (saved._linesError) {
         toast.warning(`تم حفظ الطلب لكن فشل حفظ تفاصيل المواد: ${saved._linesError}`);
@@ -730,6 +731,16 @@ export default function OrdersPage() {
                         <div><Label className="text-[10px] text-muted-foreground">{t.quantity}</Label><Input className="h-7 text-xs mt-0.5" type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", parseInt(e.target.value) || 1)} /></div>
                         <div><Label className="text-[10px] text-muted-foreground">{t.sellingPrice}</Label><Input className={`h-7 text-xs mt-0.5 ${orderType === "inventory" ? "opacity-50" : ""}`} type="number" value={orderType === "inventory" ? 0 : item.sellingPrice} onChange={(e) => updateItem(idx, "sellingPrice", parseFloat(e.target.value) || 0)} disabled={orderType === "inventory"} /></div>
                         <div><Label className="text-[10px] text-muted-foreground">{t.costPrice}</Label><Input className="h-7 text-xs mt-0.5" type="number" value={item.costPrice} onChange={(e) => updateItem(idx, "costPrice", parseFloat(e.target.value) || 0)} /></div>
+                      </div>
+                      <div>
+                        <Label className="text-[10px] text-muted-foreground">المورد</Label>
+                        <Select value={item.supplierId || "__none__"} onValueChange={(v) => { const updated = [...orderItems]; updated[idx] = { ...updated[idx], supplierId: v === "__none__" ? "" : v }; setOrderItems(updated); }}>
+                          <SelectTrigger className="h-7 text-xs mt-0.5"><SelectValue placeholder="اختر مورد" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">— بدون —</SelectItem>
+                            {suppliers.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       {item.fromInventory && (
                         <div className="flex items-center gap-1 text-[10px] text-primary"><Warehouse className="h-3 w-3" />من المخزون — دُفعة: {item.inventoryLotId?.slice(0, 15)}</div>

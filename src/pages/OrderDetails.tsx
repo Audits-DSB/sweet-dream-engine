@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { quickProfit } from "@/lib/orderProfit";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, ClipboardCheck, CreditCard, ChevronLeft, ChevronDown, Plus, Trash2, Search, Warehouse, Undo2, UserPlus } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, ClipboardCheck, CreditCard, ChevronLeft, ChevronDown, Plus, Trash2, Search, Warehouse, Undo2, UserPlus, Factory } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -25,6 +25,7 @@ type OrderLine = {
   id: number; orderId: string; materialCode: string; materialName: string;
   imageUrl: string; unit: string; quantity: number;
   sellingPrice: number; costPrice: number; lineTotal: number; lineCost: number;
+  supplierId?: string;
 };
 type OrderDelivery = {
   id: string; orderId: string; client: string; clientId: string;
@@ -96,6 +97,7 @@ type ExtMaterial = { sku: string; name: string; imageUrl: string; unit: string; 
 type NewOrderItem = {
   materialCode: string; materialName: string; quantity: number;
   sellingPrice: number; costPrice: number; imageUrl: string; unit: string;
+  supplierId?: string;
 };
 
 export default function OrderDetails() {
@@ -129,7 +131,7 @@ export default function OrderDetails() {
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({ status: "", date: "", source: "", deliveryFee: "", deliveryFeeBearer: "client", supplierId: "" });
   const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
-  const [editLines, setEditLines] = useState<Array<OrderLine & { _qty: string; _sell: string; _cost: string }>>([]);
+  const [editLines, setEditLines] = useState<Array<OrderLine & { _qty: string; _sell: string; _cost: string; _supplierId: string }>>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [editNewItems, setEditNewItems] = useState<NewOrderItem[]>([]);
   const [editDeletedLineIds, setEditDeletedLineIds] = useState<number[]>([]);
@@ -417,7 +419,7 @@ export default function OrderDetails() {
       deliveryFeeBearer: order.deliveryFeeBearer || "client",
       supplierId: order.supplierId || "",
     });
-    setEditLines(lines.map(l => ({ ...l, _qty: String(l.quantity), _sell: String(l.sellingPrice), _cost: String(l.costPrice) })));
+    setEditLines(lines.map(l => ({ ...l, _qty: String(l.quantity), _sell: String(l.sellingPrice), _cost: String(l.costPrice), _supplierId: l.supplierId || "" })));
     setEditNewItems([]);
     setEditDeletedLineIds([]);
     setEditMatSearch("");
@@ -464,8 +466,9 @@ export default function OrderDetails() {
         newTotalSelling += qty * sell;
         newTotalCost += qty * cost;
         const orig = lines.find(l => l.id === el.id);
-        if (orig && (orig.quantity !== qty || orig.sellingPrice !== sell || orig.costPrice !== cost)) {
-          linePatches.push(api.patch(`/order-lines/${el.id}`, { quantity: qty, sellingPrice: sell, costPrice: cost }));
+        const supChanged = (el._supplierId || "") !== (orig?.supplierId || "");
+        if (orig && (orig.quantity !== qty || orig.sellingPrice !== sell || orig.costPrice !== cost || supChanged)) {
+          linePatches.push(api.patch(`/order-lines/${el.id}`, { quantity: qty, sellingPrice: sell, costPrice: cost, supplierId: el._supplierId || "" }));
         }
       }
 
@@ -862,6 +865,16 @@ export default function OrderDetails() {
                           <Input type="number" min="0" value={el._cost} onChange={(e) => { const realIdx = editLines.findIndex(p => p.id === el.id); setEditLines(prev => prev.map((p, i) => i === realIdx ? { ...p, _cost: e.target.value } : p)); }} className="h-8 text-sm" />
                         </div>
                       </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">المورد</Label>
+                        <Select value={el._supplierId || "__none__"} onValueChange={(v) => { const realIdx = editLines.findIndex(p => p.id === el.id); setEditLines(prev => prev.map((p, i) => i === realIdx ? { ...p, _supplierId: v === "__none__" ? "" : v } : p)); }}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر مورد" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">— بدون —</SelectItem>
+                            {suppliers.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
                         <span>إجمالي البيع: <span className="font-semibold text-foreground">{((Number(el._qty) || 0) * (Number(el._sell) || 0)).toLocaleString()}</span></span>
                         <span>إجمالي التكلفة: <span className="font-semibold text-foreground">{((Number(el._qty) || 0) * (Number(el._cost) || 0)).toLocaleString()}</span></span>
@@ -899,6 +912,16 @@ export default function OrderDetails() {
                           <Label className="text-xs">سعر الشراء</Label>
                           <Input type="number" min="0" value={ni.costPrice} onChange={(e) => setEditNewItems(prev => prev.map((p, i) => i === idx ? { ...p, costPrice: Number(e.target.value) || 0 } : p))} className="h-8 text-sm" />
                         </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">المورد</Label>
+                        <Select value={ni.supplierId || "__none__"} onValueChange={(v) => setEditNewItems(prev => prev.map((p, i) => i === idx ? { ...p, supplierId: v === "__none__" ? "" : v } : p))}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر مورد" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">— بدون —</SelectItem>
+                            {suppliers.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
                         <span>إجمالي البيع: <span className="font-semibold text-foreground">{(ni.sellingPrice * ni.quantity).toLocaleString()}</span></span>
@@ -1340,6 +1363,11 @@ export default function OrderDetails() {
                       <div className="font-medium text-sm truncate">{line.materialName}</div>
                       <div className="text-xs text-muted-foreground font-mono mt-0.5">{line.materialCode}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">{line.unit}</div>
+                      {line.supplierId && suppliers.find(s => s.id === line.supplierId) && (
+                        <Link to={`/suppliers/${line.supplierId}`} className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline mt-0.5" onClick={e => e.stopPropagation()}>
+                          <Factory className="h-3 w-3" />{suppliers.find(s => s.id === line.supplierId)?.name}
+                        </Link>
+                      )}
                       {line.fromInventory && line.inventoryLotId && (
                         <div className="flex items-center gap-1.5 mt-1">
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
