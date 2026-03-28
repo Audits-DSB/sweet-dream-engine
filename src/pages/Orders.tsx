@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2, Users, Package, CreditCard, CheckCircle2, Warehouse } from "lucide-react";
+import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2, Users, Package, CreditCard, CheckCircle2, Warehouse, Factory } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -319,6 +319,7 @@ export default function OrdersPage() {
           costPrice: mat?.storeCost ?? 0,
           imageUrl: mat?.imageUrl || "",
           unit: mat?.unit || item.unit || "unit",
+          supplierId: item.supplierId || "",
         };
       }));
       const uniqueClients = [...new Set(data.items.map((i: any) => i.clientId).filter(Boolean))];
@@ -343,7 +344,7 @@ export default function OrdersPage() {
   }), [materialSearch, usedMaterialCodes, realMaterials]);
 
   const addMaterialDirectly = (mat: MaterialItem) => {
-    setOrderItems([{ materialCode: mat.code, name: mat.name, quantity: 1, sellingPrice: orderType === "inventory" ? 0 : mat.sellingPrice, costPrice: mat.storeCost, imageUrl: mat.imageUrl, unit: mat.unit }, ...orderItems]);
+    setOrderItems([{ materialCode: mat.code, name: mat.name, quantity: 1, sellingPrice: orderType === "inventory" ? 0 : mat.sellingPrice, costPrice: mat.storeCost, imageUrl: mat.imageUrl, unit: mat.unit, supplierId: selectedSupplier || "" }, ...orderItems]);
     setMaterialSearch("");
   };
 
@@ -405,7 +406,7 @@ export default function OrdersPage() {
         orderType,
         supplierId: selectedSupplier || "",
         founderContributions,
-        items: orderItems.map(i => ({ ...i, fromInventory: i.fromInventory || false, inventoryLotId: i.inventoryLotId || "", supplierId: i.supplierId || selectedSupplier || "" })),
+        items: orderItems.map(i => ({ ...i, fromInventory: i.fromInventory || false, inventoryLotId: i.inventoryLotId || "", supplierId: i.supplierId || "" })),
       });
       if (saved._linesError) {
         toast.warning(`تم حفظ الطلب لكن فشل حفظ تفاصيل المواد: ${saved._linesError}`);
@@ -625,10 +626,11 @@ export default function OrdersPage() {
               )}
 
               <div>
-                <Label className="text-xs">المورد</Label>
-                <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
-                  <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="اختر المورد (اختياري)" /></SelectTrigger>
+                <Label className="text-xs">المورد الحالي <span className="text-muted-foreground font-normal">(المواد اللي هتضيفها هتتربط بيه)</span></Label>
+                <Select value={selectedSupplier || "__none__"} onValueChange={(v) => setSelectedSupplier(v === "__none__" ? "" : v)}>
+                  <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="اختر المورد" /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="__none__">— بدون مورد —</SelectItem>
                     {suppliers.map(s => (
                       <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                     ))}
@@ -688,7 +690,7 @@ export default function OrdersPage() {
                           return (
                           <div key={lot.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors border-b border-border/30" onClick={() => {
                             if (orderItems.some(i => i.inventoryLotId === lot.id)) { toast.error("هذه الدُفعة مضافة بالفعل"); return; }
-                            setOrderItems(prev => [...prev, { materialCode: lot.materialCode, name: lot.materialName, quantity: 1, sellingPrice: 0, costPrice: lot.costPrice, imageUrl: lotImg, unit: lot.unit, fromInventory: true, inventoryLotId: lot.id }]);
+                            setOrderItems(prev => [...prev, { materialCode: lot.materialCode, name: lot.materialName, quantity: 1, sellingPrice: 0, costPrice: lot.costPrice, imageUrl: lotImg, unit: lot.unit, fromInventory: true, inventoryLotId: lot.id, supplierId: selectedSupplier || "" }]);
                             setShowInventoryPicker(false);
                             setInventorySearch("");
                           }}>
@@ -742,16 +744,12 @@ export default function OrdersPage() {
                         <div><Label className="text-[10px] text-muted-foreground">{t.sellingPrice}</Label><Input className={`h-7 text-xs mt-0.5 ${orderType === "inventory" ? "opacity-50" : ""}`} type="number" value={orderType === "inventory" ? 0 : item.sellingPrice} onChange={(e) => updateItem(idx, "sellingPrice", parseFloat(e.target.value) || 0)} disabled={orderType === "inventory"} /></div>
                         <div><Label className="text-[10px] text-muted-foreground">{t.costPrice}</Label><Input className="h-7 text-xs mt-0.5" type="number" value={item.costPrice} onChange={(e) => updateItem(idx, "costPrice", parseFloat(e.target.value) || 0)} /></div>
                       </div>
-                      <div>
-                        <Label className="text-[10px] text-muted-foreground">المورد</Label>
-                        <Select value={item.supplierId || "__none__"} onValueChange={(v) => { const updated = [...orderItems]; updated[idx] = { ...updated[idx], supplierId: v === "__none__" ? "" : v }; setOrderItems(updated); }}>
-                          <SelectTrigger className="h-7 text-xs mt-0.5"><SelectValue placeholder="اختر مورد" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">— بدون —</SelectItem>
-                            {suppliers.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {item.supplierId && suppliers.find(s => s.id === item.supplierId) && (
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                          <Factory className="h-3 w-3" />
+                          <span>{suppliers.find(s => s.id === item.supplierId)?.name}</span>
+                        </div>
+                      )}
                       {item.fromInventory && (
                         <div className="flex items-center gap-1 text-[10px] text-primary"><Warehouse className="h-3 w-3" />من المخزون — دُفعة: {item.inventoryLotId?.slice(0, 15)}</div>
                       )}

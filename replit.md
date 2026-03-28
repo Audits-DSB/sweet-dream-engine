@@ -132,16 +132,20 @@ npx tsx server/index.ts   # starts Express on 5000, spawns Vite on 5001
 - **Migration**: POST `/api/migrate/company-inventory` checks and reports schema status
 
 ## Supplier Integration System
-- **Supplier Profile Page** (`src/pages/SupplierProfile.tsx`) — Route `/suppliers/:id`, shows full supplier details, stats, orders, inventory lots, materials, and analytics (monthly purchase chart, supplier statement)
+- **Supplier Profile Page** (`src/pages/SupplierProfile.tsx`) — Route `/suppliers/:id`, shows full supplier details, stats, orders, inventory lots, materials, and analytics (monthly purchase chart, supplier statement). Includes edit dialog and delete with confirmation + audit logging.
 - **API Endpoints**:
   - `GET /api/suppliers/:id/profile` — Aggregated supplier data (supplier info + orders + inventory + materials + computed stats)
   - `GET /api/suppliers-stats` — Summary stats for all suppliers (order count, total purchases, last order date, materials count, lots count)
-- **Suppliers List Enhancements**: Each supplier card shows order count, total purchases, last order date with clickable name linking to profile
-- **Supplier Selection in All Orders**: Supplier dropdown available for both client and inventory orders (not just inventory)
-- **Supplier Display in OrderDetails**: Supplier name shown in order header and client info section, clickable link to supplier profile
-- **Supplier Display in Orders List**: New "المورد" column in orders table showing supplier name with clickable link
-- **Company Inventory**: Supplier names link to `/suppliers/:id` profile page (not just `/suppliers` list)
-- **Data Model**: `suppliers` table, `supplier_materials` join table, `orders.supplier_id`, `company_inventory.supplier_id`
+- **Suppliers List**: Cards show stats, clicking any card navigates directly to supplier profile page
+- **Per-Line Supplier ("المورد الحالي" Flow)**:
+  - Order creation: "المورد الحالي" dropdown at top — user selects supplier, then adds materials; each added material auto-inherits the current supplier
+  - User can switch suppliers mid-entry and keep adding materials from different suppliers
+  - Supplier name shown as read-only badge on each line item (no per-item dropdown — streamlined UX)
+  - Same flow in OrderDetails edit: order-level supplier dropdown, new items inherit it
+  - Per-line `supplier_id` saved to `order_lines` table in Supabase
+  - Order-level `supplier_id` saved to `orders` table (represents primary supplier)
+- **Supplier Display**: Supplier name clickable everywhere (Orders table, OrderDetails header/info, per-line badges, CompanyInventory) → navigates to supplier profile
+- **Data Model**: `suppliers` table, `supplier_materials` join table, `orders.supplier_id`, `order_lines.supplier_id`, `company_inventory.supplier_id`
 
 ## Notes
 - API returns camelCase; Supabase stores snake_case. Helpers `camelizeKeys`/`snakifyKeys` handle conversion in routes.ts

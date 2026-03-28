@@ -815,10 +815,10 @@ export default function OrderDetails() {
                     </div>
                   )}
                   <div className="space-y-1.5">
-                    <Label>المورد</Label>
+                    <Label>المورد الأساسي للطلب</Label>
                     <Select value={editForm.supplierId || "__none__"} onValueChange={(v) => setEditForm(f => ({ ...f, supplierId: v === "__none__" ? "" : v }))}>
                       <SelectTrigger data-testid="select-edit-supplier">
-                        <SelectValue placeholder="اختر المورد (اختياري)" />
+                        <SelectValue placeholder="اختر المورد" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">— بدون مورد —</SelectItem>
@@ -865,16 +865,12 @@ export default function OrderDetails() {
                           <Input type="number" min="0" value={el._cost} onChange={(e) => { const realIdx = editLines.findIndex(p => p.id === el.id); setEditLines(prev => prev.map((p, i) => i === realIdx ? { ...p, _cost: e.target.value } : p)); }} className="h-8 text-sm" />
                         </div>
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">المورد</Label>
-                        <Select value={el._supplierId || "__none__"} onValueChange={(v) => { const realIdx = editLines.findIndex(p => p.id === el.id); setEditLines(prev => prev.map((p, i) => i === realIdx ? { ...p, _supplierId: v === "__none__" ? "" : v } : p)); }}>
-                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر مورد" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">— بدون —</SelectItem>
-                            {suppliers.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {el._supplierId && suppliers.find(s => s.id === el._supplierId) && (
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                          <Factory className="h-3 w-3" />
+                          <span>{suppliers.find(s => s.id === el._supplierId)?.name}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
                         <span>إجمالي البيع: <span className="font-semibold text-foreground">{((Number(el._qty) || 0) * (Number(el._sell) || 0)).toLocaleString()}</span></span>
                         <span>إجمالي التكلفة: <span className="font-semibold text-foreground">{((Number(el._qty) || 0) * (Number(el._cost) || 0)).toLocaleString()}</span></span>
@@ -913,16 +909,12 @@ export default function OrderDetails() {
                           <Input type="number" min="0" value={ni.costPrice} onChange={(e) => setEditNewItems(prev => prev.map((p, i) => i === idx ? { ...p, costPrice: Number(e.target.value) || 0 } : p))} className="h-8 text-sm" />
                         </div>
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">المورد</Label>
-                        <Select value={ni.supplierId || "__none__"} onValueChange={(v) => setEditNewItems(prev => prev.map((p, i) => i === idx ? { ...p, supplierId: v === "__none__" ? "" : v } : p))}>
-                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر مورد" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">— بدون —</SelectItem>
-                            {suppliers.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {ni.supplierId && suppliers.find(s => s.id === ni.supplierId) && (
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                          <Factory className="h-3 w-3" />
+                          <span>{suppliers.find(s => s.id === ni.supplierId)?.name}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
                         <span>إجمالي البيع: <span className="font-semibold text-foreground">{(ni.sellingPrice * ni.quantity).toLocaleString()}</span></span>
                         <span>إجمالي التكلفة: <span className="font-semibold text-foreground">{(ni.costPrice * ni.quantity).toLocaleString()}</span></span>
@@ -957,6 +949,7 @@ export default function OrderDetails() {
                                 materialCode: lot.materialCode, materialName: lot.materialName, quantity: 1,
                                 sellingPrice: 0, costPrice: lot.costPrice, imageUrl: lotImg, unit: lot.unit,
                                 fromInventory: true, inventoryLotId: lot.id,
+                                supplierId: editForm.supplierId || "",
                               } as any]);
                               setShowEditInventoryPicker(false);
                               setEditInventorySearch("");
@@ -1003,7 +996,7 @@ export default function OrderDetails() {
                     <div className="rounded-lg border border-border max-h-48 overflow-y-auto">
                       {filteredEditMaterials.slice(0, 15).map(mat => (
                         <button key={mat.sku} className="w-full flex items-center gap-3 px-3 py-2 text-start hover:bg-accent/50 transition-colors border-b border-border/50 last:border-0" onClick={() => {
-                          setEditNewItems(prev => [...prev, { materialCode: mat.sku, materialName: mat.name, quantity: 1, sellingPrice: mat.sellingPrice, costPrice: mat.costPrice, imageUrl: mat.imageUrl, unit: mat.unit }]);
+                          setEditNewItems(prev => [...prev, { materialCode: mat.sku, materialName: mat.name, quantity: 1, sellingPrice: mat.sellingPrice, costPrice: mat.costPrice, imageUrl: mat.imageUrl, unit: mat.unit, supplierId: editForm.supplierId || "" }]);
                           setEditMatSearch("");
                         }}>
                           <div className="w-8 h-8 rounded border border-border overflow-hidden bg-muted/50 flex-shrink-0 flex items-center justify-center">
