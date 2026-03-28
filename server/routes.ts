@@ -488,15 +488,22 @@ router.patch("/order-lines/:id", async (req, res) => {
     if (orderData?.order_type === "inventory") {
       const oldQty = Number(oldLine.quantity) || 0;
       const newQty = Number(quantity) || 0;
-      if (oldQty !== newQty) {
-        const { data: ciRows } = await supabaseAdmin.from("company_inventory").select("*").eq("source_order", orderId).or(`material_code.eq.${oldLine.material_code},id.like.CI-%-${oldLine.material_code}-%,id.like.CI-edit-${oldLine.id}-%`);
-        const matchRow = (ciRows || []).find((r: any) => r.material_code === oldLine.material_code && Number(r.quantity) === oldQty);
+      const oldCost = Number(oldLine.cost_price) || 0;
+      const newCost = Number(costPrice) || 0;
+      if (oldQty !== newQty || Math.abs(oldCost - newCost) > 0.001) {
+        const { data: ciRows } = await supabaseAdmin.from("company_inventory").select("*").eq("source_order", orderId).eq("material_code", oldLine.material_code);
+        const matchRow = (ciRows || []).find((r: any) => r.material_code === oldLine.material_code);
         if (matchRow) {
-          const diff = newQty - oldQty;
-          const newRemaining = Math.max(0, Number(matchRow.remaining) + diff);
-          const newTotal = Math.max(0, Number(matchRow.quantity) + diff);
-          const newStatus = newRemaining <= 0 ? "Depleted" : newRemaining < newTotal * 0.2 ? "Low Stock" : "In Stock";
-          await supabaseAdmin.from("company_inventory").update({ quantity: newTotal, remaining: newRemaining, cost_price: Number(costPrice) || Number(matchRow.cost_price), status: newStatus }).eq("id", matchRow.id);
+          const updateFields: any = { cost_price: newCost };
+          if (oldQty !== newQty) {
+            const diff = newQty - oldQty;
+            const newRemaining = Math.max(0, Number(matchRow.remaining) + diff);
+            const newTotal = Math.max(0, Number(matchRow.quantity) + diff);
+            updateFields.quantity = newTotal;
+            updateFields.remaining = newRemaining;
+            updateFields.status = newRemaining <= 0 ? "Depleted" : newRemaining < newTotal * 0.2 ? "Low Stock" : "In Stock";
+          }
+          await supabaseAdmin.from("company_inventory").update(updateFields).eq("id", matchRow.id);
         }
       }
     }
