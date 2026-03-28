@@ -25,8 +25,11 @@ type CompanyLot = {
   sourceOrder: string;
   dateAdded: string;
   status: string;
+  supplierId: string;
   imageUrl?: string;
 };
+
+type Supplier = { id: string; name: string };
 
 function mapLot(raw: any): CompanyLot {
   return {
@@ -41,6 +44,7 @@ function mapLot(raw: any): CompanyLot {
     sourceOrder: raw.sourceOrder || raw.source_order || "",
     dateAdded: raw.dateAdded || raw.date_added || "",
     status: raw.status || "In Stock",
+    supplierId: raw.supplierId || raw.supplier_id || "",
   };
 }
 
@@ -48,17 +52,25 @@ export default function CompanyInventoryPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const [lots, setLots] = useState<CompanyLot[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<CompanyLot | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const supplierMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    suppliers.forEach(s => { map[s.id] = s.name; });
+    return map;
+  }, [suppliers]);
+
   useEffect(() => {
     Promise.all([
       api.get<any[]>("/company-inventory"),
       api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] })),
-    ]).then(([data, extData]) => {
+      api.get<any[]>("/suppliers").catch(() => []),
+    ]).then(([data, extData, supData]) => {
       const imgMap: Record<string, string> = {};
       (extData?.products || []).forEach((p: any) => {
         if (p.sku && p.image_url) imgMap[p.sku] = p.image_url;
@@ -68,16 +80,19 @@ export default function CompanyInventoryPage() {
         lot.imageUrl = imgMap[lot.materialCode] || "";
         return lot;
       }));
+      setSuppliers((supData || []).map((s: any) => ({ id: s.id, name: s.name })));
     }).catch(() => toast.error("فشل تحميل مخزون الشركة"))
       .finally(() => setLoading(false));
   }, []);
 
   const filtered = useMemo(() => lots.filter(l => {
     const q = search.toLowerCase().trim();
-    const matchSearch = !q || l.materialName.toLowerCase().includes(q) || l.materialCode.toLowerCase().includes(q) || l.lotNumber.toLowerCase().includes(q) || l.sourceOrder.toLowerCase().includes(q);
+    const supName = supplierMap[l.supplierId] || "";
+    const matchSearch = !q || l.materialName.toLowerCase().includes(q) || l.materialCode.toLowerCase().includes(q) || l.lotNumber.toLowerCase().includes(q) || l.sourceOrder.toLowerCase().includes(q) || supName.toLowerCase().includes(q);
     const matchStatus = !filters.status || filters.status === "all" || l.status === filters.status;
-    return matchSearch && matchStatus;
-  }), [lots, search, filters]);
+    const matchSupplier = !filters.supplier || filters.supplier === "all" || l.supplierId === filters.supplier;
+    return matchSearch && matchStatus && matchSupplier;
+  }), [lots, search, filters, supplierMap]);
 
   const materialGroups = useMemo(() => {
     const map: Record<string, { name: string; code: string; unit: string; imageUrl: string; totalRemaining: number; totalValue: number; lots: CompanyLot[] }> = {};
@@ -164,10 +179,13 @@ export default function CompanyInventoryPage() {
         searchPlaceholder="بحث في مخزون الشركة..."
         searchValue={search}
         onSearchChange={setSearch}
-        filters={[{ label: "الحالة", value: "status", options: statusOptions }]}
+        filters={[
+          { label: "الحالة", value: "status", options: statusOptions },
+          { label: "المورد", value: "supplier", options: suppliers.map(s => ({ label: s.name, value: s.id })) },
+        ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("company-inventory", ["المادة", "الكود", "الدُفعة", "الكمية", "المتبقي", "سعر الشراء", "الأوردر", "التاريخ", "الحالة"], filtered.map(l => [l.materialName, l.materialCode, l.lotNumber, l.quantity, l.remaining, l.costPrice, l.sourceOrder, l.dateAdded, statusLabel(l.status)]))}
+        onExport={() => exportToCsv("company-inventory", ["المادة", "الكود", "الدُفعة", "الكمية", "المتبقي", "سعر الشراء", "المورد", "الأوردر", "التاريخ", "الحالة"], filtered.map(l => [l.materialName, l.materialCode, l.lotNumber, l.quantity, l.remaining, l.costPrice, supplierMap[l.supplierId] || "—", l.sourceOrder, l.dateAdded, statusLabel(l.status)]))}
       />
 
       <div className="stat-card overflow-x-auto">
@@ -191,6 +209,7 @@ export default function CompanyInventoryPage() {
                 <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">المتبقي</th>
                 <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">سعر الشراء</th>
                 <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">القيمة</th>
+                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">المورد</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">الأوردر</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">التاريخ</th>
                 <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">الحالة</th>
@@ -214,6 +233,11 @@ export default function CompanyInventoryPage() {
                   <td className="py-3 px-3 text-end font-medium">{lot.remaining} {lot.unit}</td>
                   <td className="py-3 px-3 text-end">{lot.costPrice.toLocaleString()} {t.currency}</td>
                   <td className="py-3 px-3 text-end font-medium text-primary">{(lot.remaining * lot.costPrice).toLocaleString()} {t.currency}</td>
+                  <td className="py-3 px-3 text-xs">
+                    {lot.supplierId && supplierMap[lot.supplierId] ? (
+                      <button className="text-primary hover:underline" onClick={(e) => { e.stopPropagation(); navigate(`/suppliers`); }}>{supplierMap[lot.supplierId]}</button>
+                    ) : <span className="text-muted-foreground">—</span>}
+                  </td>
                   <td className="py-3 px-3">
                     <button className="text-xs text-primary hover:underline font-mono" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${lot.sourceOrder}`); }}>{lot.sourceOrder}</button>
                   </td>

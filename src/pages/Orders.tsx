@@ -86,6 +86,8 @@ export default function OrdersPage() {
   const [deleting, setDeleting] = useState(false);
   const [founders, setFounders] = useState<{ id: string; name: string }[]>([]);
   const [orderType, setOrderType] = useState<"client" | "inventory">("client");
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
+  const [selectedSupplier, setSelectedSupplier] = useState("");
   const [companyLots, setCompanyLots] = useState<CompanyLot[]>([]);
   const [inventorySearch, setInventorySearch] = useState("");
   const [showInventoryPicker, setShowInventoryPicker] = useState(false);
@@ -134,7 +136,9 @@ export default function OrdersPage() {
       api.get<any[]>("/deliveries"),
       api.get<any[]>("/client-inventory"),
       api.get<any[]>("/audits"),
-    ]).then(([ordersData, clientsData, collectionsData, deliveriesData, inventoryData, auditsData]) => {
+      api.get<any[]>("/suppliers").catch(() => []),
+    ]).then(([ordersData, clientsData, collectionsData, deliveriesData, inventoryData, auditsData, suppliersData]) => {
+      setSuppliers((suppliersData || []).map((s: any) => ({ id: s.id, name: s.name })));
       const clientMap: Record<string, string> = {};
       const clientArr = (clientsData || []).map((c: any) => {
         clientMap[c.id] = c.name || "";
@@ -388,6 +392,7 @@ export default function OrdersPage() {
         deliveryFeeBearer: form.deliveryFeeBearer,
         status: "Processing", source: t.manual,
         orderType,
+        supplierId: orderType === "inventory" ? selectedSupplier : "",
         founderContributions,
         items: orderItems.map(i => ({ ...i, fromInventory: i.fromInventory || false, inventoryLotId: i.inventoryLotId || "" })),
       });
@@ -594,9 +599,22 @@ export default function OrdersPage() {
               )}
 
               {orderType === "inventory" && (
-                <div className="p-3 rounded-md border border-primary/20 bg-primary/5 text-xs text-muted-foreground">
-                  <Warehouse className="h-4 w-4 inline-block ml-1 text-primary" />
-                  طلب لمخزون الشركة — المواد ستضاف للمخزون عند التسليم
+                <div className="space-y-3">
+                  <div className="p-3 rounded-md border border-primary/20 bg-primary/5 text-xs text-muted-foreground">
+                    <Warehouse className="h-4 w-4 inline-block ml-1 text-primary" />
+                    طلب لمخزون الشركة — المواد ستضاف للمخزون عند التسليم
+                  </div>
+                  <div>
+                    <Label className="text-xs">المورد</Label>
+                    <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
+                      <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="اختر المورد (اختياري)" /></SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map(s => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
 

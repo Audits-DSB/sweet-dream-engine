@@ -334,7 +334,7 @@ router.get("/orders/:id", async (req, res) => {
   res.json(camelizeKeys({ ...orderRes.data, client: clientName, founderContributions: contribRes.data?.contributions || [] }));
 });
 router.post("/orders", async (req, res) => {
-  const { items, founderContributions, client, ...orderBody } = req.body;
+  const { items, founderContributions, client, supplierId: _supplierId, ...orderBody } = req.body;
   const data = snakifyKeys(orderBody);
   const result = await supabaseAdmin.from("orders").insert(data).select().single();
   if (result.error) return res.status(400).json({ error: result.error.message });

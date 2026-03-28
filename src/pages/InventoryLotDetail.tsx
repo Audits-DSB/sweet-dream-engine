@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Package, Warehouse, Calendar, Hash, DollarSign, Loader2, ExternalLink, TrendingUp, Layers } from "lucide-react";
+import { ArrowLeft, Package, Warehouse, Calendar, Hash, DollarSign, Loader2, ExternalLink, TrendingUp, Layers, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -19,7 +19,25 @@ type LotDetail = {
   sourceOrder: string;
   dateAdded: string;
   status: string;
+  supplierId: string;
 };
+
+function mapLotDetail(raw: any): LotDetail {
+  return {
+    id: raw.id,
+    materialCode: raw.materialCode || raw.material_code || "",
+    materialName: raw.materialName || raw.material_name || "",
+    unit: raw.unit || "",
+    lotNumber: raw.lotNumber || raw.lot_number || "",
+    quantity: Number(raw.quantity ?? 0),
+    remaining: Number(raw.remaining ?? 0),
+    costPrice: Number(raw.costPrice ?? raw.cost_price ?? 0),
+    sourceOrder: raw.sourceOrder || raw.source_order || "",
+    dateAdded: raw.dateAdded || raw.date_added || "",
+    status: raw.status || "In Stock",
+    supplierId: raw.supplierId || raw.supplier_id || "",
+  };
+}
 
 export default function InventoryLotDetail() {
   const { id } = useParams<{ id: string }>();
@@ -28,19 +46,26 @@ export default function InventoryLotDetail() {
   const [lot, setLot] = useState<LotDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [imageUrl, setImageUrl] = useState("");
+  const [supplierName, setSupplierName] = useState("");
 
   useEffect(() => {
     if (!id) { setLoading(false); return; }
     Promise.all([
-      api.get<LotDetail>(`/company-inventory/${encodeURIComponent(id)}`),
+      api.get<any>(`/company-inventory/${encodeURIComponent(id)}`),
       api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] })),
-    ]).then(([lotData, extData]) => {
-      setLot(lotData);
+      api.get<any[]>("/suppliers").catch(() => []),
+    ]).then(([lotData, extData, supData]) => {
+      const mapped = mapLotDetail(lotData);
+      setLot(mapped);
       const products = extData?.products || [];
-      const match = products.find((p: any) => p.sku === lotData.materialCode);
+      const match = products.find((p: any) => p.sku === mapped.materialCode);
       if (match) {
         const img = match.image_url || match.image || "";
         if (img.startsWith("http")) setImageUrl(img);
+      }
+      if (mapped.supplierId) {
+        const sup = (supData || []).find((s: any) => s.id === mapped.supplierId);
+        if (sup) setSupplierName(sup.name);
       }
     }).catch(() => {
       setLot(null);
@@ -191,6 +216,16 @@ export default function InventoryLotDetail() {
                   <Link to={`/orders/${lot.sourceOrder}`} className="font-mono text-sm font-medium text-primary hover:underline">
                     {lot.sourceOrder}
                   </Link>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0">
+                  <Truck className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">المورد</div>
+                  <div className="font-medium text-sm">{supplierName || "غير محدد"}</div>
                 </div>
               </div>
             </div>
