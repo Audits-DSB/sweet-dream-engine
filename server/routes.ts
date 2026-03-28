@@ -373,20 +373,38 @@ router.delete("/suppliers/:id/materials/:code", async (req, res) => {
 router.get("/material-last-suppliers", async (_req, res) => {
   const { data: lines } = await supabaseAdmin
     .from("order_lines")
-    .select("material_code, supplier_id, id")
-    .neq("supplier_id", "")
+    .select("material_code, supplier_id, cost_price, order_id, id")
     .order("id", { ascending: false });
   if (!lines) return res.json({});
   const { data: suppliers } = await supabaseAdmin.from("suppliers").select("id, name");
   const supMap: Record<string, string> = {};
   (suppliers || []).forEach((s: any) => { supMap[s.id] = s.name; });
-  const result: Record<string, { supplierId: string; supplierName: string }> = {};
+  const orderIds = [...new Set(lines.map(l => l.order_id).filter(Boolean))];
+  const { data: orders } = await supabaseAdmin.from("orders").select("id, date, status").in("id", orderIds.slice(0, 500));
+  const orderMap: Record<string, { date: string; status: string }> = {};
+  (orders || []).forEach((o: any) => { orderMap[o.id] = { date: o.date, status: o.status }; });
+  const result: Record<string, { supplierId: string; supplierName: string; lastCostPrice: number; lastOrderDate: string }> = {};
+  const pendingOrders: Record<string, Set<string>> = {};
   for (const l of lines) {
-    if (!result[l.material_code] && l.supplier_id && supMap[l.supplier_id]) {
-      result[l.material_code] = { supplierId: l.supplier_id, supplierName: supMap[l.supplier_id] };
+    const o = orderMap[l.order_id];
+    if (!result[l.material_code]) {
+      result[l.material_code] = {
+        supplierId: l.supplier_id && supMap[l.supplier_id] ? l.supplier_id : "",
+        supplierName: l.supplier_id && supMap[l.supplier_id] ? supMap[l.supplier_id] : "",
+        lastCostPrice: Number(l.cost_price) || 0,
+        lastOrderDate: o?.date || "",
+      };
+    }
+    if (o && ["Draft", "Processing", "Confirmed", "Awaiting Purchase"].includes(o.status)) {
+      if (!pendingOrders[l.material_code]) pendingOrders[l.material_code] = new Set();
+      pendingOrders[l.material_code].add(l.order_id);
     }
   }
-  res.json(result);
+  const pending: Record<string, string[]> = {};
+  for (const [code, ids] of Object.entries(pendingOrders)) {
+    pending[code] = [...ids];
+  }
+  res.json({ materials: result, pending });
 });
 
 // ─── FOUNDERS ─────────────────────────────────────────────────────────────────

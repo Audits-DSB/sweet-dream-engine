@@ -62,6 +62,9 @@ type RefillItem = {
   auditId?: string;
   lastSupplierId?: string;
   lastSupplierName?: string;
+  lastCostPrice?: number;
+  lastOrderDate?: string;
+  pendingOrderIds?: string[];
 };
 
 function computePriority(coverageWeeks: number, leadTimeWeeks: number): "Critical" | "Urgent" | "Normal" | "OK" {
@@ -107,12 +110,18 @@ export default function RefillPage() {
     queryFn: () => api.get<AuditRecord[]>("/audits").catch(() => []),
   });
 
-  const { data: lastSuppliers = {} } = useQuery<Record<string, { supplierId: string; supplierName: string }>>({
+  const { data: materialHistory = { materials: {}, pending: {} } } = useQuery<{
+    materials: Record<string, { supplierId: string; supplierName: string; lastCostPrice: number; lastOrderDate: string }>;
+    pending: Record<string, string[]>;
+  }>({
     queryKey: ["/api/material-last-suppliers"],
-    queryFn: () => api.get("/material-last-suppliers").catch(() => ({})),
+    queryFn: () => api.get("/material-last-suppliers").catch(() => ({ materials: {}, pending: {} })),
   });
 
   const [converting, setConverting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [editQty, setEditQty] = useState<Record<string, number>>({});
+  const [supplierFilter, setSupplierFilter] = useState("");
 
   const lots: InventoryLot[] = rawLots.map(l => ({
     ...l,
@@ -161,7 +170,8 @@ export default function RefillPage() {
 
         const audit = l.sourceOrder ? auditsByOrder[l.sourceOrder] : undefined;
 
-        const ls = lastSuppliers[l.code];
+        const ls = materialHistory.materials?.[l.code];
+        const pend = materialHistory.pending?.[l.code];
         return {
           id: l.id,
           client: l.clientName,
@@ -184,9 +194,12 @@ export default function RefillPage() {
           auditId: audit?.id,
           lastSupplierId: ls?.supplierId,
           lastSupplierName: ls?.supplierName,
+          lastCostPrice: ls?.lastCostPrice,
+          lastOrderDate: ls?.lastOrderDate,
+          pendingOrderIds: pend,
         };
       });
-  }, [lots, auditsByOrder, lastSuppliers]);
+  }, [lots, auditsByOrder, materialHistory]);
 
   useEffect(() => {
     const f = searchParams.get("filter");
@@ -194,6 +207,11 @@ export default function RefillPage() {
   }, [searchParams]);
 
   const clientNames = [...new Set(refillItems.map(r => r.client))];
+  const supplierNames = useMemo(() => {
+    const names = new Set<string>();
+    refillItems.forEach(r => { if (r.lastSupplierName) names.add(r.lastSupplierName); });
+    return [...names].sort();
+  }, [refillItems]);
   const priorityLabel = (p: string) => p === "Critical" ? t.critical : p === "Urgent" ? t.urgent : p === "Normal" ? t.normal : t.ok;
 
   const priorityCounts = priorityOrder.reduce((acc, p) => {
@@ -213,7 +231,8 @@ export default function RefillPage() {
     const matchSearch = !search || r.client.toLowerCase().includes(search.toLowerCase()) || r.material.toLowerCase().includes(search.toLowerCase());
     const matchPriority = activePriorities.size === 0 || activePriorities.has(r.priority);
     const matchClient = !filters.client || filters.client === "all" || r.client === filters.client;
-    return matchQuickFilter && matchSearch && matchPriority && matchClient;
+    const matchSupplier = !supplierFilter || r.lastSupplierName === supplierFilter;
+    return matchQuickFilter && matchSearch && matchPriority && matchClient && matchSupplier;
   });
 
   const groupedData = filtered.reduce((acc: Record<string, RefillItem[]>, item) => {
@@ -299,18 +318,37 @@ export default function RefillPage() {
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{t.groupBy}:</span>
-          <Select value={groupBy} onValueChange={(value: "client" | "material") => setGroupBy(value)}>
-            <SelectTrigger className="h-9 w-[140px]">
-              {groupBy === "client" ? <Users className="h-3.5 w-3.5 mr-1.5" /> : <Package2 className="h-3.5 w-3.5 mr-1.5" />}
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="client">{t.client}</SelectItem>
-              <SelectItem value="material">{t.material}</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">{t.groupBy}:</span>
+            <Select value={groupBy} onValueChange={(value: "client" | "material") => setGroupBy(value)}>
+              <SelectTrigger className="h-9 w-[140px]">
+                {groupBy === "client" ? <Users className="h-3.5 w-3.5 mr-1.5" /> : <Package2 className="h-3.5 w-3.5 mr-1.5" />}
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="client">{t.client}</SelectItem>
+                <SelectItem value="material">{t.material}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {supplierNames.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">المورد:</span>
+              <Select value={supplierFilter || "__all__"} onValueChange={(v) => setSupplierFilter(v === "__all__" ? "" : v)}>
+                <SelectTrigger className="h-9 w-[160px]">
+                  <Factory className="h-3.5 w-3.5 mr-1.5" />
+                  <SelectValue placeholder="الكل" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">الكل</SelectItem>
+                  {supplierNames.map(s => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -323,21 +361,89 @@ export default function RefillPage() {
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("refill", [t.client, t.material, t.code, t.unit, t.currentStock, t.avgPerWeek, t.coverage, t.reorderPoint, t.suggestedQty, t.priority], filtered.map(r => [r.client, r.material, r.code, r.unit, r.currentStock, r.avgWeeklyUsage, r.coverageWeeks, r.reorderPoint, r.suggestedQty, r.priority]))}
+        onExport={() => exportToCsv("refill", [t.client, t.material, t.code, t.unit, t.currentStock, t.avgPerWeek, t.coverage, t.reorderPoint, t.suggestedQty, "آخر مورد", "آخر سعر", t.priority], filtered.map(r => [r.client, r.material, r.code, r.unit, r.currentStock, r.avgWeeklyUsage, r.coverageWeeks, r.reorderPoint, r.suggestedQty, r.lastSupplierName || "", r.lastCostPrice || "", r.priority]))}
         actions={
           <div className="flex gap-2">
             <Button size="sm" variant="outline" className="h-9" onClick={selectAllNeedRefill}>{t.selectAll}</Button>
             {selected.size > 0 && (
-              <Button size="sm" className="h-9" disabled={converting} onClick={async () => {
-                const refillable = filtered.filter(r => selected.has(r.id) && r.suggestedQty > 0);
+              <Button size="sm" className="h-9" onClick={() => setShowConfirm(true)}>
+                <ShoppingCart className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />
+                تحويل لطلب ({selected.size})
+              </Button>
+            )}
+          </div>
+        }
+      />
+
+      {showConfirm && (() => {
+        const refillable = filtered.filter(r => selected.has(r.id) && r.suggestedQty > 0);
+        const totalEstCost = refillable.reduce((s, i) => s + (editQty[i.id] ?? i.suggestedQty) * (i.lastCostPrice || 0), 0);
+        const supplierGroups = new Map<string, number>();
+        refillable.forEach(r => {
+          const sup = r.lastSupplierName || "بدون مورد";
+          supplierGroups.set(sup, (supplierGroups.get(sup) || 0) + 1);
+        });
+        const hasPending = refillable.some(r => r.pendingOrderIds && r.pendingOrderIds.length > 0);
+        return (
+          <div className="stat-card p-5 space-y-4 border-2 border-primary/30 bg-primary/5">
+            <h3 className="font-semibold text-sm flex items-center gap-2"><ShoppingCart className="h-4 w-4 text-primary" />ملخص التحويل لطلب</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              <div><span className="text-muted-foreground">عدد المواد:</span> <span className="font-bold">{refillable.length}</span></div>
+              <div><span className="text-muted-foreground">إجمالي التكلفة المتوقعة:</span> <span className="font-bold">{totalEstCost.toLocaleString()}</span></div>
+              <div><span className="text-muted-foreground">موردين:</span> <span className="font-bold">{supplierGroups.size}</span></div>
+              <div><span className="text-muted-foreground">العميل:</span> <span className="font-bold">{refillable[0]?.client}</span></div>
+            </div>
+            {hasPending && (
+              <div className="flex items-center gap-2 p-2 rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>بعض المواد موجودة بالفعل في طلبات قيد التنفيذ — تأكد إنك مش بتطلبها مرتين</span>
+              </div>
+            )}
+            <div className="rounded-lg border border-border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead><tr className="bg-muted/50 border-b border-border">
+                  <th className="py-2 px-3 text-start">المادة</th>
+                  <th className="py-2 px-3 text-end">الكمية</th>
+                  <th className="py-2 px-3 text-end">سعر الشراء</th>
+                  <th className="py-2 px-3 text-start">المورد</th>
+                  <th className="py-2 px-3 text-start">حالة</th>
+                </tr></thead>
+                <tbody>
+                  {refillable.map(r => (
+                    <tr key={r.id} className="border-b border-border/50">
+                      <td className="py-2 px-3 font-medium">{r.material} <span className="text-muted-foreground">({r.unit})</span></td>
+                      <td className="py-2 px-3 text-end">
+                        <input type="number" min={1} className="w-16 h-7 text-center text-xs border border-border rounded px-1 bg-background" value={editQty[r.id] ?? r.suggestedQty} onChange={(e) => setEditQty(prev => ({ ...prev, [r.id]: Math.max(1, Number(e.target.value) || 1) }))} />
+                      </td>
+                      <td className="py-2 px-3 text-end text-muted-foreground">{r.lastCostPrice ? r.lastCostPrice.toLocaleString() : "—"}</td>
+                      <td className="py-2 px-3">{r.lastSupplierName ? <span className="inline-flex items-center gap-1"><Factory className="h-3 w-3" />{r.lastSupplierName}</span> : <span className="text-muted-foreground">—</span>}</td>
+                      <td className="py-2 px-3">{r.pendingOrderIds && r.pendingOrderIds.length > 0 ? <span className="text-amber-600 text-[10px] font-bold">⚠ في طلب قائم</span> : <span className="text-green-600 text-[10px]">✓</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button size="sm" variant="outline" onClick={() => { setShowConfirm(false); setEditQty({}); }}>إلغاء</Button>
+              <Button size="sm" disabled={converting} onClick={async () => {
                 if (refillable.length === 0) return;
                 setConverting(true);
                 try {
                   const uniqueClients = [...new Set(refillable.map(i => i.clientId))];
-                  const clientId = uniqueClients.length === 1 ? uniqueClients[0] : uniqueClients[0];
+                  const clientId = uniqueClients[0];
                   const clientName = refillable[0].client;
                   const today = new Date().toISOString().slice(0, 10);
-                  const totalCost = refillable.reduce((s, i) => s + i.suggestedQty * 0, 0);
+                  const items = refillable.map(item => ({
+                    materialCode: item.code,
+                    name: item.material,
+                    quantity: editQty[item.id] ?? item.suggestedQty,
+                    sellingPrice: 0,
+                    costPrice: item.lastCostPrice || 0,
+                    imageUrl: item.imageUrl || "",
+                    unit: item.unit,
+                    supplierId: item.lastSupplierId || "",
+                  }));
+                  const totalCost = items.reduce((s, i) => s + i.costPrice * i.quantity, 0);
                   const order = await api.post("/orders", {
                     id: `ORD-${Date.now()}`,
                     clientId,
@@ -349,18 +455,11 @@ export default function RefillPage() {
                     totalSelling: "0",
                     totalCost: String(totalCost),
                     splitMode: "equal",
-                    items: refillable.map(item => ({
-                      materialCode: item.code,
-                      name: item.material,
-                      quantity: item.suggestedQty,
-                      sellingPrice: 0,
-                      costPrice: 0,
-                      imageUrl: item.imageUrl || "",
-                      unit: item.unit,
-                      supplierId: item.lastSupplierId || "",
-                    })),
+                    items,
                   });
                   toast.success(`تم إنشاء الطلب ${order.id} بنجاح`);
+                  setShowConfirm(false);
+                  setEditQty({});
                   navigate(`/orders/${order.id}`);
                 } catch (e: any) {
                   toast.error("خطأ في إنشاء الطلب: " + (e.message || ""));
@@ -369,12 +468,12 @@ export default function RefillPage() {
                 }
               }}>
                 {converting ? <Loader2 className="h-3.5 w-3.5 animate-spin ltr:mr-1.5 rtl:ml-1.5" /> : <ShoppingCart className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />}
-                تحويل لطلب ({selected.size})
+                تأكيد وإنشاء الطلب
               </Button>
-            )}
+            </div>
           </div>
-        }
-      />
+        );
+      })()}
 
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <span>{filtered.length} / {refillItems.length} {t.itemsCount}</span>
@@ -429,6 +528,8 @@ export default function RefillPage() {
                     <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.reorderPoint}</th>
                     <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.suggestedQty}</th>
                     <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">آخر مورد</th>
+                    <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">آخر سعر</th>
+                    <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">آخر توريد</th>
                     <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.priority}</th>
                     <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">الجرد</th>
                   </tr>
@@ -482,6 +583,15 @@ export default function RefillPage() {
                             <Factory className="h-3 w-3" />{r.lastSupplierName}
                           </button>
                         ) : <span className="text-muted-foreground text-xs">—</span>}
+                      </td>
+                      <td className="py-3 px-3 text-end text-xs text-muted-foreground">{r.lastCostPrice ? r.lastCostPrice.toLocaleString() : "—"}</td>
+                      <td className="py-3 px-3 text-xs text-muted-foreground">
+                        {r.lastOrderDate || "—"}
+                        {r.pendingOrderIds && r.pendingOrderIds.length > 0 && (
+                          <span className="ms-1 inline-flex items-center gap-0.5 text-[10px] text-amber-600 font-bold" title={`موجودة في ${r.pendingOrderIds.join(", ")}`}>
+                            <AlertTriangle className="h-3 w-3" />طلب قائم
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-3">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${priorityStyles[r.priority]}`}>
