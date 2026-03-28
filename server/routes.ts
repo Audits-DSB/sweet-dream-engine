@@ -525,6 +525,12 @@ router.patch("/orders/:id", async (req, res) => {
   const { data, error } = await supabaseAdmin.from("orders").update(snakifyKeys(rest)).eq("id", req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
 
+  if (rest.date && data?.order_type === "inventory") {
+    try {
+      await supabaseAdmin.from("company_inventory").update({ date_added: rest.date }).eq("source_order", req.params.id);
+    } catch (e: any) { console.warn("[order-patch] sync inventory date:", e.message); }
+  }
+
   if (rest.totalCost !== undefined) {
     try {
       const { data: fundingTxs } = await supabaseAdmin
