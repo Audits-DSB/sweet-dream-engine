@@ -349,7 +349,10 @@ export default function InventoryPage() {
                                     <tr key={lot.id} className="border-b border-border/30 hover:bg-muted/20 transition-colors cursor-pointer group" onClick={() => setDetailItem(lot)}>
                                       <td className="py-2 px-3">
                                         {lot.imageUrl ? (
-                                          <img src={lot.imageUrl} alt={lot.material} className="h-14 w-14 rounded-xl object-contain bg-white border border-border shadow-sm p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                          <div className="relative h-14 w-14">
+                                            <img src={lot.imageUrl} alt={lot.material} className="h-14 w-14 rounded-xl object-contain bg-white border border-border shadow-sm p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
+                                            <div className="hidden h-14 w-14 rounded-xl bg-muted flex items-center justify-center border border-border absolute inset-0"><Package className="h-6 w-6 text-muted-foreground" /></div>
+                                          </div>
                                         ) : (
                                           <div className="h-14 w-14 rounded-xl bg-muted flex items-center justify-center border border-border"><Package className="h-6 w-6 text-muted-foreground" /></div>
                                         )}
@@ -422,7 +425,10 @@ export default function InventoryPage() {
                   <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer group" onClick={() => setDetailItem(lot)}>
                     <td className="py-3 px-3">
                       {lot.imageUrl ? (
-                        <img src={lot.imageUrl} alt={lot.material} className="h-14 w-14 rounded-xl object-contain bg-white border border-border shadow-sm p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        <div className="relative h-14 w-14">
+                          <img src={lot.imageUrl} alt={lot.material} className="h-14 w-14 rounded-xl object-contain bg-white border border-border shadow-sm p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
+                          <div className="hidden h-14 w-14 rounded-xl bg-muted flex items-center justify-center border border-border absolute inset-0"><Package className="h-6 w-6 text-muted-foreground" /></div>
+                        </div>
                       ) : (
                         <div className="h-14 w-14 rounded-xl bg-muted flex items-center justify-center border border-border"><Package className="h-6 w-6 text-muted-foreground" /></div>
                       )}
@@ -472,11 +478,12 @@ export default function InventoryPage() {
           </DialogHeader>
           {detailItem && (
             <div className="space-y-3 text-sm">
-              {detailItem.imageUrl && (
-                <div className="flex justify-center">
-                  <img src={detailItem.imageUrl} alt={detailItem.material} className="h-28 w-28 rounded-2xl object-contain bg-white border border-border shadow-sm p-2" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                </div>
-              )}
+              <div className="flex justify-center">
+                {detailItem.imageUrl ? (
+                  <img src={detailItem.imageUrl} alt={detailItem.material} className="h-28 w-28 rounded-2xl object-contain bg-white border border-border shadow-sm p-2" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
+                ) : null}
+                <div className={`h-28 w-28 rounded-2xl bg-muted flex items-center justify-center border border-border ${detailItem.imageUrl ? "hidden" : ""}`}><Package className="h-10 w-10 text-muted-foreground/50" /></div>
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <div><span className="text-muted-foreground">{t.clientColon}</span> {detailItem.clientName}</div>
                 <div><span className="text-muted-foreground">{t.codeColon}</span> {detailItem.code}</div>

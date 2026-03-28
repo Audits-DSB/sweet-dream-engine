@@ -225,7 +225,10 @@ export default function CompanyInventoryPage() {
                 <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/company-inventory/${encodeURIComponent(lot.id)}`)}>
                   <td className="py-2 px-3 text-center">
                     {lot.imageUrl ? (
-                      <img src={lot.imageUrl} alt={lot.materialName} className="w-9 h-9 rounded-md object-cover border border-border mx-auto" />
+                      <div className="relative w-9 h-9 mx-auto">
+                        <img src={lot.imageUrl} alt={lot.materialName} className="w-9 h-9 rounded-md object-cover border border-border" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
+                        <div className="hidden w-9 h-9 rounded-md bg-muted flex items-center justify-center absolute inset-0"><Package className="h-4 w-4 text-muted-foreground/50" /></div>
+                      </div>
                     ) : (
                       <div className="w-9 h-9 rounded-md bg-muted flex items-center justify-center mx-auto"><Package className="h-4 w-4 text-muted-foreground/50" /></div>
                     )}

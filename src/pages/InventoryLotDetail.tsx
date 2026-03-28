@@ -115,12 +115,17 @@ export default function InventoryLotDetail() {
         <Card className="md:col-span-1">
           <CardContent className="p-6 flex flex-col items-center justify-center">
             {imageUrl ? (
-              <img
-                src={imageUrl}
-                alt={lot.materialName}
-                className="w-40 h-40 object-contain rounded-lg border border-border mb-3"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-              />
+              <div className="relative mb-3">
+                <img
+                  src={imageUrl}
+                  alt={lot.materialName}
+                  className="w-40 h-40 object-contain rounded-lg border border-border"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }}
+                />
+                <div className="hidden w-40 h-40 rounded-lg border border-border bg-muted/30 flex items-center justify-center absolute inset-0">
+                  <Package className="h-16 w-16 text-muted-foreground" />
+                </div>
+              </div>
             ) : (
               <div className="w-40 h-40 rounded-lg border border-border bg-muted/30 flex items-center justify-center mb-3">
                 <Package className="h-16 w-16 text-muted-foreground" />
