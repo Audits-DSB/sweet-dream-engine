@@ -687,7 +687,7 @@ export default function CompanyProfitPage() {
                       <span className="font-medium">{fmtNum(entry.paidAmount)}</span>
                       <span className="text-muted-foreground text-xs"> / {fmtNum(entry.totalCollection)}</span>
                     </td>
-                    <td className="py-2.5 px-3 text-end font-semibold text-success">{fmtNum(entry.realizedProfit)} {t.currency}</td>
+                    <td className={`py-2.5 px-3 text-end font-semibold ${entry.realizedProfit >= 0 ? "text-success" : "text-destructive"}`}>{fmtNum(entry.realizedProfit)} {t.currency}</td>
                     <td className="py-2.5 px-3 text-end">
                       <span className="text-primary font-medium">{fmtNum(entry.companyProfit)}</span>
                       <span className="text-muted-foreground text-xs"> ({entry.companyProfitPct}%)</span>
@@ -774,7 +774,7 @@ export default function CompanyProfitPage() {
                               <div><span className="text-muted-foreground">الربح الكلي للأوردر (P)</span><br/><span className="font-semibold text-foreground">{fmtNum(entry.grossProfit)} {t.currency}</span></div>
                               <div>
                                 <span className="text-muted-foreground">الربح المحقق = D × r</span><br/>
-                                <span className="font-semibold text-success">{fmtNum(entry.realizedProfit)} {t.currency}
+                                <span className={`font-semibold ${entry.realizedProfit >= 0 ? "text-success" : "text-destructive"}`}>{fmtNum(entry.realizedProfit)} {t.currency}
                                   <span className="font-normal text-muted-foreground"> ({fmtNum(entry.paidAmount)} × {entry.orderTotal > 0 ? ((entry.grossProfit / entry.orderTotal) * 100).toFixed(1) : "0"}%)</span>
                                 </span>
                               </div>
@@ -829,7 +829,7 @@ export default function CompanyProfitPage() {
                   <td className="py-2.5 px-3 text-end">{i > 0 ? <ChangeIndicator value={m.revenueChange} percent={m.revenueChangePercent} /> : "-"}</td>
                   <td className="py-2.5 px-3 text-end text-muted-foreground">{fmtNum(m.cost)} {t.currency}</td>
                   <td className="py-2.5 px-3 text-end">{i > 0 ? <ChangeIndicator value={-m.costChange} percent={-m.costChangePercent} /> : "-"}</td>
-                  <td className="py-2.5 px-3 text-end font-medium text-success">{fmtNum(m.profit)} {t.currency}</td>
+                  <td className={`py-2.5 px-3 text-end font-medium ${m.profit >= 0 ? "text-success" : "text-destructive"}`}>{fmtNum(m.profit)} {t.currency}</td>
                   <td className="py-2.5 px-3 text-end">{i > 0 ? <ChangeIndicator value={m.profitChange} percent={m.profitChangePercent} /> : "-"}</td>
                   <td className="py-2.5 px-3 text-end text-primary font-medium">{fmtNum(m.companyShare)} {t.currency}</td>
                   <td className="py-2.5 px-3 text-end">{fmtNum(m.founderShare)} {t.currency}</td>
@@ -882,7 +882,7 @@ export default function CompanyProfitPage() {
                     <ReferenceLine y={avgProfit} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4"
                       label={{ value: `متوسط الربح`, position: "insideTopRight", fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
                     <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} name="المُحصَّل" dot={{ r: 4 }} activeDot={{ r: 7, strokeWidth: 2 }} />
-                    <Line type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2} name="الربح الإجمالي" dot={{ r: 4 }} activeDot={{ r: 7, strokeWidth: 2 }} />
+                    <Line type="monotone" dataKey="profit" stroke="#94a3b8" strokeWidth={2} name="الربح الإجمالي" dot={(props: any) => { const c = props.payload.profit >= 0 ? "#22c55e" : "#ef4444"; return <circle key={props.key} cx={props.cx} cy={props.cy} r={4} fill={c} stroke={c} />; }} activeDot={{ r: 7, strokeWidth: 2 }} />
                     <Line type="monotone" dataKey="companyShare" stroke="hsl(var(--chart-2))" strokeWidth={2} name="حصة الشركة" dot={{ r: 3 }} activeDot={{ r: 6 }} strokeDasharray="6 2" />
                     <Line type="monotone" dataKey="cost" stroke="#ef4444" strokeWidth={1.5} strokeDasharray="5 5" name={t.cost} dot={false} />
                   </LineChart>

@@ -260,7 +260,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3">
         <div className="cursor-pointer" onClick={() => navigate("/company-profit")}>
-          <StatCard title="صافي الربح" value={profit > 0 ? `${(profit / 1000).toFixed(0)}k` : "—"} change={`${profitMargin.toFixed(1)}% هامش`} changeType={profit > 0 ? "positive" : "neutral"} icon={TrendingUp} />
+          <StatCard title="صافي الربح" value={profit !== 0 ? `${(profit / 1000).toFixed(0)}k` : "—"} change={`${profitMargin.toFixed(1)}% هامش`} changeType={profit >= 0 ? "positive" : "negative"} icon={TrendingUp} />
         </div>
         <div className="cursor-pointer" onClick={() => navigate("/orders")}>
           <StatCard title="الإيرادات" value={`${(totalRevenue / 1000).toFixed(0)}k`} change={`${deliveredOrders.length} مسلّم`} changeType="positive" icon={Banknote} />
@@ -311,7 +311,7 @@ export default function Dashboard() {
                 <Legend wrapperStyle={{ fontSize: "11px" }} />
                 <Area yAxisId="left" type="monotone" dataKey="revenue" fill="url(#revGrad)" stroke="#3b82f6" strokeWidth={2} name="الإيرادات" />
                 <Bar yAxisId="left" dataKey="cost" fill="#94a3b8" radius={[4, 4, 0, 0]} name="التكلفة" barSize={20} />
-                <Line yAxisId="left" type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2.5} dot={{ fill: "#22c55e", r: 4 }} name="الربح" />
+                <Line yAxisId="left" type="monotone" dataKey="profit" stroke="#94a3b8" strokeWidth={2.5} dot={(props: any) => { const c = props.payload.profit >= 0 ? "#22c55e" : "#ef4444"; return <circle key={props.key} cx={props.cx} cy={props.cy} r={4} fill={c} stroke={c} />; }} name="الربح" />
                 <Line yAxisId="right" type="monotone" dataKey="orders" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={{ fill: "#f59e0b", r: 3 }} name="عدد الأوردرات" />
               </ComposedChart>
             </ResponsiveContainer>

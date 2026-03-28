@@ -245,7 +245,7 @@ export default function ReportsPage() {
                 <Legend wrapperStyle={{ fontSize: "11px" }} />
                 <Bar dataKey="revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} name="الإيرادات" />
                 <Bar dataKey="cost" fill="#94a3b8" radius={[4, 4, 0, 0]} name="التكلفة" />
-                <Line type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2} dot={{ fill: "#22c55e", r: 3 }} name="الربح" />
+                <Line type="monotone" dataKey="profit" stroke="#94a3b8" strokeWidth={2} dot={(props: any) => { const c = props.payload.profit >= 0 ? "#22c55e" : "#ef4444"; return <circle key={props.key} cx={props.cx} cy={props.cy} r={3} fill={c} stroke={c} />; }} name="الربح" />
               </ComposedChart>
             </ResponsiveContainer>
           ) : (

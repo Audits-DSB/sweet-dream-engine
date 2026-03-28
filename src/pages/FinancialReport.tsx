@@ -604,7 +604,7 @@ export default function FinancialReportPage() {
                       <Legend />
                       <Area type="monotone" dataKey="revenue" name="الإيرادات" fill="hsl(var(--primary))" fillOpacity={0.1} stroke="hsl(var(--primary))" strokeWidth={2} />
                       <Bar dataKey="cost" name="التكلفة" fill="hsl(var(--chart-4))" radius={[4, 4, 0, 0]} opacity={0.7} />
-                      <Line type="monotone" dataKey="profit" name="الربح" stroke="hsl(var(--chart-2))" strokeWidth={2.5} dot={{ r: 4 }} />
+                      <Line type="monotone" dataKey="profit" name="الربح" stroke="#94a3b8" strokeWidth={2.5} dot={(props: any) => { const c = props.payload.profit >= 0 ? "#22c55e" : "#ef4444"; return <circle key={props.key} cx={props.cx} cy={props.cy} r={4} fill={c} stroke={c} />; }} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 )}

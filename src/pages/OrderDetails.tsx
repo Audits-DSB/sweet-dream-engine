@@ -1413,7 +1413,7 @@ export default function OrderDetails() {
                           </div>
                           <div>
                             <div className="text-xs text-muted-foreground">حصته من الربح</div>
-                            <div className="font-bold text-emerald-600 dark:text-emerald-400">{fp.profitShare.toLocaleString(undefined, { maximumFractionDigits: 0 })} {t.currency}</div>
+                            <div className={`font-bold ${fp.profitShare >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>{fp.profitShare.toLocaleString(undefined, { maximumFractionDigits: 0 })} {t.currency}</div>
                           </div>
                         </div>
                       </div>
