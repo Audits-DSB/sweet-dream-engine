@@ -421,6 +421,16 @@ router.post("/orders/:id/lines", async (req, res) => {
 });
 router.delete("/order-lines/:id", async (req, res) => {
   const { data: snap } = await supabaseAdmin.from("order_lines").select("*").eq("id", req.params.id).single();
+  if (snap && snap.from_inventory && snap.inventory_lot_id) {
+    try {
+      const { data: lot } = await supabaseAdmin.from("company_inventory").select("remaining, quantity").eq("id", snap.inventory_lot_id).single();
+      if (lot) {
+        const newRemaining = Math.min(Number(lot.quantity), Number(lot.remaining) + Number(snap.quantity));
+        const newStatus = newRemaining <= 0 ? "Depleted" : newRemaining < Number(lot.quantity) * 0.2 ? "Low Stock" : "In Stock";
+        await supabaseAdmin.from("company_inventory").update({ remaining: newRemaining, status: newStatus }).eq("id", snap.inventory_lot_id);
+      }
+    } catch (e: any) { console.warn("[delete-line] inventory restore error:", e.message); }
+  }
   const { error } = await supabaseAdmin.from("order_lines").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true, deleted: snap ? camelizeKeys(snap) : null });
@@ -533,6 +543,18 @@ router.delete("/orders/:id", async (req, res) => {
     companyInventory: (companyInvRes as any)?.data || [],
     audits: auditsRes.data || [],
   };
+
+  const inventoryLines = (linesRes.data || []).filter((l: any) => l.from_inventory && l.inventory_lot_id);
+  for (const line of inventoryLines) {
+    try {
+      const { data: lot } = await supabaseAdmin.from("company_inventory").select("remaining, quantity").eq("id", line.inventory_lot_id).single();
+      if (lot) {
+        const newRemaining = Math.min(Number(lot.quantity), Number(lot.remaining) + Number(line.quantity));
+        const newStatus = newRemaining <= 0 ? "Depleted" : newRemaining < Number(lot.quantity) * 0.2 ? "Low Stock" : "In Stock";
+        await supabaseAdmin.from("company_inventory").update({ remaining: newRemaining, status: newStatus }).eq("id", line.inventory_lot_id);
+      }
+    } catch (e: any) { console.warn("[delete-order] inventory restore error:", e.message); }
+  }
 
   const childDeletes = await Promise.allSettled([
     supabaseAdmin.from("order_lines").delete().eq("order_id", orderId),
