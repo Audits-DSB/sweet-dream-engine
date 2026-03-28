@@ -696,8 +696,16 @@ export default function OrdersPage() {
                     <div key={idx} className="border border-border rounded-md p-3 space-y-2 bg-muted/20">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-xs">
-                          <span className="font-mono text-muted-foreground">{item.materialCode}</span>
-                          <span className="font-medium">{item.name}</span>
+                          {item.imageUrl ? (
+                            <img src={item.imageUrl} alt={item.name} className="h-9 w-9 rounded object-cover shrink-0 border border-border" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
+                          ) : null}
+                          <div className={`h-9 w-9 rounded bg-muted flex items-center justify-center shrink-0 ${item.imageUrl ? "hidden" : ""}`}>
+                            <Package className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-medium block">{item.name}</span>
+                            <span className="font-mono text-muted-foreground">{item.materialCode}</span>
+                          </div>
                         </div>
                         <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => removeItem(idx)}><Trash2 className="h-3.5 w-3.5" /></Button>
                       </div>
