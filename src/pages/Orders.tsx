@@ -328,11 +328,12 @@ export default function OrdersPage() {
   }), [materialSearch, usedMaterialCodes, realMaterials]);
 
   const addMaterialDirectly = (mat: MaterialItem) => {
-    setOrderItems([{ materialCode: mat.code, name: mat.name, quantity: 1, sellingPrice: mat.sellingPrice, costPrice: mat.storeCost, imageUrl: mat.imageUrl, unit: mat.unit }, ...orderItems]);
+    setOrderItems([{ materialCode: mat.code, name: mat.name, quantity: 1, sellingPrice: orderType === "inventory" ? 0 : mat.sellingPrice, costPrice: mat.storeCost, imageUrl: mat.imageUrl, unit: mat.unit }, ...orderItems]);
     setMaterialSearch("");
   };
 
   const updateItem = (index: number, field: keyof OrderItem, value: string | number) => {
+    if (field === "sellingPrice" && orderType === "inventory") return;
     const updated = [...orderItems];
     (updated[index] as any)[field] = value;
     setOrderItems(updated);
@@ -572,7 +573,7 @@ export default function OrdersPage() {
                 <button className={`flex-1 py-2 px-3 rounded-md text-xs font-medium transition-colors ${orderType === "client" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`} onClick={() => setOrderType("client")}>
                   لعميل
                 </button>
-                <button className={`flex-1 py-2 px-3 rounded-md text-xs font-medium transition-colors ${orderType === "inventory" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`} onClick={() => { setOrderType("inventory"); setSelectedClient(""); }}>
+                <button className={`flex-1 py-2 px-3 rounded-md text-xs font-medium transition-colors ${orderType === "inventory" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`} onClick={() => { setOrderType("inventory"); setSelectedClient(""); setOrderItems(prev => prev.map(i => ({ ...i, sellingPrice: 0 }))); }}>
                   <Warehouse className="h-3.5 w-3.5 inline-block ml-1" />للمخزون
                 </button>
               </div>
