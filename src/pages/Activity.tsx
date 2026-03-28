@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   History, Trash2, Plus, Edit, RotateCcw, Search, Filter, Package, Users, ShoppingCart, Truck,
   Receipt, Boxes, Factory, UserCog, Wallet, ClipboardCheck, FileText, ChevronDown, ChevronUp,
-  X, AlertTriangle, Loader2, Eye, User,
+  X, AlertTriangle, Loader2, Eye, User, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -743,6 +743,10 @@ export default function ActivityPage() {
                       const hasSnapshot = data?.snapshot && Object.keys(data.snapshot).length > 0;
                       const isHighlighted = highlightId === entry.id;
                       const entityRoute = data?.entity && data?.entityId ? getEntityRoute(data.entity, data.entityId) : null;
+                      const financialEntities = ["treasury-transaction", "treasury_transaction", "treasury-account", "collection"];
+                      const isFinancial = financialEntities.includes(data?.entity || "")
+                        || (data?.entity === "order" && data?.snapshot && (data.snapshot.founderPaid || data.snapshot.type === "funding_undo" || data.snapshot.type === "split_edit" || data.snapshot.newPaymentEntry))
+                        || (data?.entity === "founder" && data?.snapshot?.type === "order_funding_paid");
 
                       return (
                         <div
@@ -784,6 +788,12 @@ export default function ActivityPage() {
                                 {isReverted && (
                                   <Badge variant="outline" className="text-[10px] h-4 px-1.5 text-amber-600 border-amber-400/50 shrink-0">
                                     مُرجَع
+                                  </Badge>
+                                )}
+                                {isFinancial && (
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1.5 text-amber-600 border-amber-500/40 shrink-0 gap-0.5">
+                                    <Lock className="h-2.5 w-2.5" />
+                                    سجل مالي
                                   </Badge>
                                 )}
                               </div>
@@ -842,14 +852,20 @@ export default function ActivityPage() {
                                   {isExpanded ? <ChevronUp className="h-4 w-4" /> : <Eye className="h-3.5 w-3.5 text-muted-foreground" />}
                                 </Button>
                               )}
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                                onClick={() => setDeleteTarget(entry)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                              {isFinancial ? (
+                                <span className="h-7 w-7 flex items-center justify-center text-amber-500" title="سجل مالي — لا يمكن حذفه">
+                                  <Lock className="h-3.5 w-3.5" />
+                                </span>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                  onClick={() => setDeleteTarget(entry)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
                             </div>
                           </div>
 
