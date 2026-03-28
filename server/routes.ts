@@ -2284,13 +2284,12 @@ router.delete("/trash", async (_req, res) => {
 const SUPER_ADMIN_EMAIL = "drseifelshamy@gmail.com";
 
 router.get("/admin/users", async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: "Unauthorized" });
-  const token = authHeader.replace("Bearer ", "");
-  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !user || user.email !== SUPER_ADMIN_EMAIL) {
-    return res.status(403).json({ error: "Only the super admin can manage users" });
+  const auth = await verifySuperAdmin(req);
+  if ("error" in auth) {
+    console.log("[admin/users] Access denied. Auth result:", JSON.stringify(auth));
+    return res.status(403).json({ error: auth.error });
   }
+  const user = auth.user;
   const { data: profiles } = await supabaseAdmin.from("profiles").select("user_id, full_name, avatar_url, created_at");
   const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id, role");
   const { data: { users: authUsers } } = await supabaseAdmin.auth.admin.listUsers();
@@ -2306,12 +2305,12 @@ router.get("/admin/users", async (req, res) => {
 
 async function verifySuperAdmin(req: any): Promise<{ user: any } | { error: string }> {
   const authHeader = req.headers.authorization;
-  if (!authHeader) return { error: "Unauthorized" };
+  if (!authHeader) { console.log("[verifySuperAdmin] No auth header"); return { error: "Unauthorized" }; }
   const token = authHeader.replace("Bearer ", "");
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !user || user.email !== SUPER_ADMIN_EMAIL) {
-    return { error: "Only the super admin can manage users" };
-  }
+  if (error) { console.log("[verifySuperAdmin] Token error:", error.message); return { error: "Only the super admin can manage users" }; }
+  if (!user) { console.log("[verifySuperAdmin] No user from token"); return { error: "Only the super admin can manage users" }; }
+  if (user.email !== SUPER_ADMIN_EMAIL) { console.log("[verifySuperAdmin] Email mismatch:", user.email, "vs", SUPER_ADMIN_EMAIL); return { error: "Only the super admin can manage users" }; }
   return { user };
 }
 
