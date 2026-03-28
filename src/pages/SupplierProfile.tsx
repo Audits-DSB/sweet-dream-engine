@@ -3,15 +3,20 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
+import { logAudit } from "@/lib/auditLog";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ArrowLeft, Factory, Globe, Mail, Phone, CreditCard, Package, ShoppingCart,
   Boxes, TrendingUp, Calendar, ExternalLink, Search, BarChart3,
-  Wallet, Layers, Clock,
+  Wallet, Layers, Clock, Pencil, Trash2, Loader2, Save,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -84,7 +89,8 @@ export default function SupplierProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   useLanguage();
-  useAuth();
+  const { profile } = useAuth();
+  const _userName = profile?.full_name || "مستخدم";
 
   const [supplier, setSupplier] = useState<SupplierData | null>(null);
   const [orders, setOrders] = useState<SupplierOrder[]>([]);
@@ -95,7 +101,14 @@ export default function SupplierProfile() {
   const [orderSearch, setOrderSearch] = useState("");
   const [invSearch, setInvSearch] = useState("");
 
-  useEffect(() => {
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState<SupplierData | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const loadProfile = () => {
     if (!id) return;
     setLoading(true);
     api.get<any>(`/suppliers/${id}/profile`)
@@ -108,7 +121,65 @@ export default function SupplierProfile() {
       })
       .catch(() => toast.error("فشل تحميل بيانات المورد"))
       .finally(() => setLoading(false));
-  }, [id]);
+  };
+
+  useEffect(() => { loadProfile(); }, [id]);
+
+  const handleOpenEdit = () => {
+    if (!supplier) return;
+    setEditForm({ ...supplier });
+    setEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editForm || !supplier || !id) return;
+    setEditSaving(true);
+    try {
+      const beforeSnapshot = { ...supplier };
+      await api.patch<any>(`/suppliers/${id}`, {
+        name: editForm.name, country: editForm.country,
+        email: editForm.email, phone: editForm.phone,
+        paymentTerms: editForm.paymentTerms, active: editForm.active,
+      });
+      await logAudit({
+        entity: "supplier", entityId: id,
+        entityName: editForm.name || supplier.name,
+        action: "update",
+        snapshot: { before: beforeSnapshot, after: editForm },
+        endpoint: "/suppliers",
+        performedBy: _userName,
+      });
+      setSupplier(editForm);
+      setEditOpen(false);
+      toast.success("تم تحديث بيانات المورد");
+    } catch {
+      toast.error("فشل حفظ التعديلات");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!supplier || !id) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/suppliers/${id}`);
+      await logAudit({
+        entity: "supplier", entityId: id,
+        entityName: supplier.name,
+        action: "delete",
+        snapshot: supplier as any,
+        endpoint: "/suppliers",
+        performedBy: _userName,
+      });
+      toast.success(`تم حذف المورد: ${supplier.name}`);
+      navigate("/suppliers");
+    } catch (err: any) {
+      toast.error(err?.message || "فشل حذف المورد");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const filteredOrders = useMemo(() => {
     if (!orderSearch) return orders;
@@ -170,6 +241,16 @@ export default function SupplierProfile() {
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground font-mono">{supplier.id}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={handleOpenEdit}>
+            <Pencil className="h-3.5 w-3.5" />
+            تعديل
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteOpen(true)}>
+            <Trash2 className="h-3.5 w-3.5" />
+            حذف
+          </Button>
         </div>
       </div>
 
@@ -499,6 +580,68 @@ export default function SupplierProfile() {
           )}
         </TabsContent>
       </Tabs>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-lg" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>تعديل بيانات المورد</DialogTitle>
+          </DialogHeader>
+          {editForm && (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">اسم المورد *</Label>
+                <Input className="h-9" value={editForm.name} onChange={e => setEditForm(f => f ? { ...f, name: e.target.value } : f)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">البلد</Label>
+                  <Input className="h-9" value={editForm.country} onChange={e => setEditForm(f => f ? { ...f, country: e.target.value } : f)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">البريد الإلكتروني</Label>
+                  <Input className="h-9" type="email" value={editForm.email} onChange={e => setEditForm(f => f ? { ...f, email: e.target.value } : f)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">الهاتف</Label>
+                  <Input className="h-9" value={editForm.phone} onChange={e => setEditForm(f => f ? { ...f, phone: e.target.value } : f)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">شروط الدفع</Label>
+                  <Input className="h-9" value={editForm.paymentTerms} onChange={e => setEditForm(f => f ? { ...f, paymentTerms: e.target.value } : f)} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">الحالة</Label>
+                <Select value={editForm.active ? "active" : "inactive"} onValueChange={v => setEditForm(f => f ? { ...f, active: v === "active" } : f)}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">نشط</SelectItem>
+                    <SelectItem value="inactive">غير نشط</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(false)}>إلغاء</Button>
+            <Button size="sm" className="gap-1.5" onClick={handleSaveEdit} disabled={editSaving || !editForm?.name?.trim()}>
+              {editSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+              حفظ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="حذف المورد"
+        description={`هل تريد حذف المورد "${supplier.name}"؟ سيتم نقله إلى سلة المهملات.`}
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
     </div>
   );
 }

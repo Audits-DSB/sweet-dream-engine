@@ -127,7 +127,8 @@ export default function OrderDetails() {
 
   // Edit state
   const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ status: "", date: "", source: "", deliveryFee: "", deliveryFeeBearer: "client" });
+  const [editForm, setEditForm] = useState({ status: "", date: "", source: "", deliveryFee: "", deliveryFeeBearer: "client", supplierId: "" });
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
   const [editLines, setEditLines] = useState<Array<OrderLine & { _qty: string; _sell: string; _cost: string }>>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [editNewItems, setEditNewItems] = useState<NewOrderItem[]>([]);
@@ -151,8 +152,10 @@ export default function OrderDetails() {
       api.get<any[]>("/company-inventory").catch(() => []),
       api.get<any[]>("/suppliers").catch(() => []),
     ]).then(([all, fetchedLines, extData, deliveries, balances, inventory, collections, audits, compInv, suppliers]) => {
+      const supArr = (suppliers || []).map((s: any) => ({ id: s.id, name: s.name }));
+      setSuppliers(supArr);
       const supMap: Record<string, string> = {};
-      (suppliers || []).forEach((s: any) => { supMap[s.id] = s.name; });
+      supArr.forEach(s => { supMap[s.id] = s.name; });
       const found = (all || []).find((o: any) => o.id === id);
       if (found) {
         const mapped = mapOrder(found);
@@ -412,6 +415,7 @@ export default function OrderDetails() {
       source: order.source || "",
       deliveryFee: String(order.deliveryFee ?? ""),
       deliveryFeeBearer: order.deliveryFeeBearer || "client",
+      supplierId: order.supplierId || "",
     });
     setEditLines(lines.map(l => ({ ...l, _qty: String(l.quantity), _sell: String(l.sellingPrice), _cost: String(l.costPrice) })));
     setEditNewItems([]);
@@ -436,7 +440,7 @@ export default function OrderDetails() {
     if (!order) return;
     setEditSaving(true);
     try {
-      const beforeOrder = { status: order.status, date: order.date, source: order.source, deliveryFee: order.deliveryFee, deliveryFeeBearer: order.deliveryFeeBearer };
+      const beforeOrder = { status: order.status, date: order.date, source: order.source, deliveryFee: order.deliveryFee, deliveryFeeBearer: order.deliveryFeeBearer, supplierId: order.supplierId };
       const beforeLines = lines.map(l => ({ id: l.id, quantity: l.quantity, sellingPrice: l.sellingPrice, costPrice: l.costPrice, lineTotal: l.lineTotal, lineCost: l.lineCost }));
 
       const orderPatch: Record<string, any> = {};
@@ -446,6 +450,7 @@ export default function OrderDetails() {
       const newFee = Number(editForm.deliveryFee) || 0;
       if (newFee !== (order.deliveryFee || 0)) orderPatch.deliveryFee = newFee;
       if (editForm.deliveryFeeBearer !== (order.deliveryFeeBearer || "client")) orderPatch.deliveryFeeBearer = editForm.deliveryFeeBearer;
+      if (editForm.supplierId !== (order.supplierId || "")) orderPatch.supplierId = editForm.supplierId;
 
       let newTotalSelling = 0;
       let newTotalCost = 0;
@@ -806,6 +811,20 @@ export default function OrderDetails() {
                       </div>
                     </div>
                   )}
+                  <div className="space-y-1.5">
+                    <Label>المورد</Label>
+                    <Select value={editForm.supplierId || "__none__"} onValueChange={(v) => setEditForm(f => ({ ...f, supplierId: v === "__none__" ? "" : v }))}>
+                      <SelectTrigger data-testid="select-edit-supplier">
+                        <SelectValue placeholder="اختر المورد (اختياري)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— بدون مورد —</SelectItem>
+                        {suppliers.map(s => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
 
