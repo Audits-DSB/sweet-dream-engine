@@ -191,8 +191,35 @@ async function reloadSupabaseSchemaCache() {
   }
 }
 
+async function ensureSupplierIdColumn() {
+  const url = process.env.VITE_SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  try {
+    const checkResp = await fetch(`${url}/rest/v1/company_inventory?select=supplier_id&limit=1`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: "application/json" },
+    });
+    if (checkResp.ok) {
+      console.log("✅ supplier_id column already exists on company_inventory");
+      return;
+    }
+    const sqlResp = await fetch(`${url}/rest/v1/rpc/exec_sql`, {
+      method: "POST",
+      headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ sql_text: "ALTER TABLE public.company_inventory ADD COLUMN IF NOT EXISTS supplier_id text DEFAULT '';" }),
+    });
+    if (sqlResp.ok) {
+      console.log("✅ Added supplier_id column to company_inventory via RPC");
+    } else {
+      console.warn("⚠️ Could not add supplier_id column automatically. Please run in Supabase SQL Editor: ALTER TABLE public.company_inventory ADD COLUMN IF NOT EXISTS supplier_id text DEFAULT '';");
+    }
+  } catch (e: any) {
+    console.warn("⚠️ supplier_id column check failed:", e.message);
+  }
+}
+
 app.listen(PORT, "0.0.0.0", async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   await reloadSupabaseSchemaCache();
+  await ensureSupplierIdColumn();
   await seedIfEmpty();
 });

@@ -16,6 +16,9 @@ router.post("/migrate/company-inventory", async (_req, res) => {
   const { error: col2Err } = await supabaseAdmin.from("order_lines").select("from_inventory").limit(1);
   const fromInvExists = !col2Err;
 
+  const { error: supColErr } = await supabaseAdmin.from("company_inventory").select("supplier_id").limit(1);
+  const supplierColExists = !supColErr;
+
   if (tableExists) results.push("✅ company_inventory table exists");
   else results.push("❌ company_inventory table missing");
 
@@ -25,14 +28,26 @@ router.post("/migrate/company-inventory", async (_req, res) => {
   if (fromInvExists) results.push("✅ from_inventory column exists on order_lines");
   else results.push("❌ from_inventory column missing on order_lines");
 
+  if (supplierColExists) results.push("✅ supplier_id column exists on company_inventory");
+  else results.push("❌ supplier_id column missing on company_inventory");
+
   if (!tableExists || !orderTypeExists || !fromInvExists) {
     results.push("Run the following in your Supabase SQL Editor:");
-    if (!tableExists) results.push(`CREATE TABLE IF NOT EXISTS public.company_inventory (id text PRIMARY KEY, material_code text NOT NULL DEFAULT '', material_name text NOT NULL DEFAULT '', unit text NOT NULL DEFAULT '', lot_number text NOT NULL DEFAULT '', quantity numeric(14,2) NOT NULL DEFAULT 0, remaining numeric(14,2) NOT NULL DEFAULT 0, cost_price numeric(14,2) NOT NULL DEFAULT 0, source_order text NOT NULL DEFAULT '', date_added text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'In Stock', created_at timestamptz NOT NULL DEFAULT now()); ALTER TABLE public.company_inventory ENABLE ROW LEVEL SECURITY; CREATE POLICY "service_role_all" ON public.company_inventory FOR ALL TO service_role USING (true) WITH CHECK (true);`);
+    if (!tableExists) results.push(`CREATE TABLE IF NOT EXISTS public.company_inventory (id text PRIMARY KEY, material_code text NOT NULL DEFAULT '', material_name text NOT NULL DEFAULT '', unit text NOT NULL DEFAULT '', lot_number text NOT NULL DEFAULT '', quantity numeric(14,2) NOT NULL DEFAULT 0, remaining numeric(14,2) NOT NULL DEFAULT 0, cost_price numeric(14,2) NOT NULL DEFAULT 0, source_order text NOT NULL DEFAULT '', date_added text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'In Stock', supplier_id text DEFAULT '', created_at timestamptz NOT NULL DEFAULT now()); ALTER TABLE public.company_inventory ENABLE ROW LEVEL SECURITY; CREATE POLICY "service_role_all" ON public.company_inventory FOR ALL TO service_role USING (true) WITH CHECK (true);`);
     if (!orderTypeExists) results.push(`ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS order_type text NOT NULL DEFAULT 'client';`);
     if (!fromInvExists) results.push(`ALTER TABLE public.order_lines ADD COLUMN IF NOT EXISTS from_inventory boolean NOT NULL DEFAULT false; ALTER TABLE public.order_lines ADD COLUMN IF NOT EXISTS inventory_lot_id text DEFAULT '';`);
   }
 
-  res.json({ ok: tableExists && orderTypeExists && fromInvExists, allReady: tableExists && orderTypeExists && fromInvExists, results });
+  if (!supplierColExists && tableExists) {
+    try {
+      await supabaseAdmin.rpc("exec_sql", { sql: "ALTER TABLE public.company_inventory ADD COLUMN IF NOT EXISTS supplier_id text DEFAULT '';" });
+      results.push("✅ Added supplier_id column via RPC");
+    } catch {
+      results.push("⚠️ Could not add supplier_id automatically. Run: ALTER TABLE public.company_inventory ADD COLUMN IF NOT EXISTS supplier_id text DEFAULT '';");
+    }
+  }
+
+  res.json({ ok: tableExists && orderTypeExists && fromInvExists, allReady: tableExists && orderTypeExists && fromInvExists && supplierColExists, results });
 });
 
 async function softDelete(entityType: string, entityId: string, entityName: string, snapshot: any, relatedData: any = {}) {
