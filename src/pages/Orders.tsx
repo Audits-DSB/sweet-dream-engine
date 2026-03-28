@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2, Users, Package, CreditCard, CheckCircle2, Warehouse, Factory } from "lucide-react";
+import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2, Users, Package, CreditCard, CheckCircle2, Warehouse, Factory, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, StickyNote, ChevronLeft, ChevronRight, TrendingUp, DollarSign, ShoppingCart, Clock } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -28,6 +28,7 @@ type Order = {
   totalSelling: string; totalCost: string; splitMode: string;
   deliveryFee: number; deliveryFeeBearer: string; status: string; source: string;
   supplierId: string; supplierName: string;
+  notes?: string;
 };
 
 type Client = { id: string; name: string; city: string; status: string; };
@@ -68,6 +69,7 @@ function mapOrder(raw: any): Order {
     source: raw.source || "",
     supplierId: raw.supplierId || raw.supplier_id || "",
     supplierName: "",
+    notes: raw.notes || "",
   };
 }
 
@@ -106,6 +108,14 @@ export default function OrdersPage() {
   const [deliveriesMap, setDeliveriesMap] = useState<Record<string, { total: number; confirmed: number }>>({});
   const [inventoryMap, setInventoryMap] = useState<Record<string, { count: number; date: string }>>({});
   const [auditsMap, setAuditsMap] = useState<Record<string, { auditId: string; status: string; date: string }>>({});
+  const [sortCol, setSortCol] = useState<string>("date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(25);
+  const [dateRange, setDateRange] = useState<string>("all");
+  const [clientFilter, setClientFilter] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState("");
+  const [statusChanging, setStatusChanging] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -331,13 +341,144 @@ export default function OrdersPage() {
     } catch { /* ignore malformed data */ }
   }, [realMaterials]);
 
-  const filtered = orders.filter((o) => {
-    const q = search.toLowerCase().trim();
-    const matchSearch = !q || o.client.toLowerCase().includes(q) || o.id.toLowerCase().includes(q) || o.date.includes(q) || o.source.toLowerCase().includes(q) || o.status.toLowerCase().includes(q);
-    const activeStatuses = ["Processing", "Draft", "Confirmed", "Ready for Delivery"];
-    const matchStatus = !filters.status || filters.status === "all" || (filters.status === "active" ? activeStatuses.includes(o.status) : o.status === filters.status);
-    return matchSearch && matchStatus;
-  });
+  const getDateFilterRange = (range: string): [string, string] | null => {
+    if (range === "all") return null;
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
+    const fmt = (dt: Date) => dt.toISOString().split("T")[0];
+    if (range === "today") return [fmt(now), fmt(now)];
+    if (range === "week") { const s = new Date(y, m, d - 7); return [fmt(s), fmt(now)]; }
+    if (range === "month") { const s = new Date(y, m, 1); return [fmt(s), fmt(now)]; }
+    if (range === "quarter") { const s = new Date(y, m - 3, d); return [fmt(s), fmt(now)]; }
+    return null;
+  };
+
+  const filtered = useMemo(() => {
+    const dateFilterRange = getDateFilterRange(dateRange);
+    let result = orders.filter((o) => {
+      const q = search.toLowerCase().trim();
+      const matchSearch = !q || o.client.toLowerCase().includes(q) || o.id.toLowerCase().includes(q) || o.date.includes(q) || o.source.toLowerCase().includes(q) || o.status.toLowerCase().includes(q) || o.supplierName.toLowerCase().includes(q);
+      const activeStatuses = ["Processing", "Draft", "Confirmed", "Ready for Delivery"];
+      const matchStatus = !filters.status || filters.status === "all" || (filters.status === "active" ? activeStatuses.includes(o.status) : o.status === filters.status);
+      const matchDate = !dateFilterRange || (o.date >= dateFilterRange[0] && o.date <= dateFilterRange[1]);
+      const matchClient = !clientFilter || o.clientId === clientFilter;
+      const matchSupplier = !supplierFilter || o.supplierId === supplierFilter;
+      return matchSearch && matchStatus && matchDate && matchClient && matchSupplier;
+    });
+    result.sort((a, b) => {
+      let va: any, vb: any;
+      switch (sortCol) {
+        case "id": va = a.id; vb = b.id; break;
+        case "client": va = a.client; vb = b.client; break;
+        case "date": va = a.date; vb = b.date; break;
+        case "selling": va = Number(a.totalSelling); vb = Number(b.totalSelling); break;
+        case "cost": va = Number(a.totalCost); vb = Number(b.totalCost); break;
+        case "profit": va = Number(a.totalSelling) - Number(a.totalCost); vb = Number(b.totalSelling) - Number(b.totalCost); break;
+        case "lines": va = a.lines; vb = b.lines; break;
+        case "status": va = a.status; vb = b.status; break;
+        default: va = a.date; vb = b.date;
+      }
+      if (va < vb) return sortDir === "asc" ? -1 : 1;
+      if (va > vb) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return result;
+  }, [orders, search, filters, dateRange, clientFilter, supplierFilter, sortCol, sortDir]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  const paginatedOrders = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useEffect(() => { setCurrentPage(1); }, [search, filters, dateRange, clientFilter, supplierFilter]);
+
+  const toggleSort = (col: string) => {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("desc"); }
+  };
+
+  const SortIcon = ({ col }: { col: string }) => {
+    if (sortCol !== col) return <ArrowUpDown className="h-3 w-3 opacity-30" />;
+    return sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />;
+  };
+
+  const getDaysSinceDate = (dateStr: string) => {
+    if (!dateStr) return 0;
+    return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  const isOverdue = (order: Order) => {
+    const staleDays = 7;
+    if (!["Processing", "Draft", "Confirmed", "Awaiting Purchase"].includes(order.status)) return false;
+    const days = getDaysSinceDate(order.date);
+    const hasDelivery = !!deliveriesMap[order.id];
+    const hasInventory = !!inventoryMap[order.id];
+    return days >= staleDays && !hasDelivery && !hasInventory;
+  };
+
+  const handleStatusChange = async (orderId: string, newStatus: string) => {
+    setStatusChanging(orderId);
+    try {
+      await api.patch(`/orders/${orderId}`, { status: newStatus });
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+      await logAudit({ entity: "order", entityId: orderId, entityName: orderId, action: "update", snapshot: { field: "status", newValue: newStatus }, endpoint: "/orders", performedBy: _userName });
+      toast.success(`تم تحديث حالة ${orderId} إلى ${newStatus}`);
+    } catch { toast.error("فشل تحديث الحالة"); }
+    finally { setStatusChanging(null); }
+  };
+
+  const handleDuplicate = async (order: Order) => {
+    try {
+      const lines = await api.get<any[]>(`/orders/${order.id}/lines`);
+      const { nextId: newId } = await api.get<{ nextId: string }>("/orders/next-id");
+      const today = new Date().toISOString().split("T")[0];
+      const items = (lines || []).map((l: any) => ({
+        materialCode: l.materialCode || l.material_code || "",
+        materialName: l.materialName || l.material_name || "",
+        quantity: Number(l.quantity ?? 1),
+        sellingPrice: Number(l.sellingPrice ?? l.selling_price ?? 0),
+        costPrice: Number(l.costPrice ?? l.cost_price ?? 0),
+        unit: l.unit || "unit",
+        fromInventory: l.fromInventory ?? l.from_inventory ?? false,
+        inventoryLotId: l.inventoryLotId ?? l.inventory_lot_id ?? "",
+        supplierId: l.supplierId ?? l.supplier_id ?? "",
+      }));
+      const saved = await api.post<any>("/orders", {
+        id: newId, clientId: order.clientId, client: order.client, date: today,
+        lines: items.length,
+        totalSelling: order.totalSelling, totalCost: order.totalCost,
+        splitMode: order.splitMode, deliveryFee: String(order.deliveryFee),
+        deliveryFeeBearer: order.deliveryFeeBearer,
+        status: "Processing", source: "نسخ من " + order.id,
+        supplierId: order.supplierId || "",
+        founderContributions: [],
+        items,
+      });
+      await logAudit({ entity: "order", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${order.client}`, action: "create", snapshot: { ...saved, duplicatedFrom: order.id }, endpoint: "/orders", performedBy: _userName });
+      const newOrder = mapOrder(saved);
+      newOrder.supplierName = order.supplierName;
+      setOrders(prev => [newOrder, ...prev]);
+      toast.success(`تم نسخ الطلب ${order.id} → ${newId}`);
+      queryClient.invalidateQueries({ queryKey: ["orders_full"] });
+    } catch (err: any) { toast.error(err?.message || "فشل نسخ الطلب"); }
+  };
+
+  const getRowStatusColor = (status: string) => {
+    switch (status) {
+      case "Closed": case "Delivered": return "bg-green-50/50 dark:bg-green-950/10";
+      case "Cancelled": return "bg-red-50/50 dark:bg-red-950/10";
+      case "Processing": case "Draft": case "Confirmed": case "Awaiting Purchase": return "";
+      case "Partially Delivered": case "Ready for Delivery": return "bg-amber-50/30 dark:bg-amber-950/10";
+      default: return "";
+    }
+  };
+
+  const totalStats = useMemo(() => {
+    const totalSelling = filtered.reduce((s, o) => s + Number(o.totalSelling), 0);
+    const totalCost = filtered.reduce((s, o) => s + Number(o.totalCost), 0);
+    const activeCount = filtered.filter(o => ["Processing", "Draft", "Confirmed", "Ready for Delivery", "Awaiting Purchase"].includes(o.status)).length;
+    const totalCollPaid = filtered.reduce((s, o) => s + (collectionsMap[o.id]?.paid || 0), 0);
+    const totalCollTotal = filtered.reduce((s, o) => s + (collectionsMap[o.id]?.total || 0), 0);
+    const collPct = totalCollTotal > 0 ? Math.round((totalCollPaid / totalCollTotal) * 100) : 0;
+    return { totalSelling, totalCost, profit: totalSelling - totalCost, activeCount, collPct, totalCollPaid, totalCollTotal };
+  }, [filtered, collectionsMap]);
 
   const usedMaterialCodes = orderItems.map(i => i.materialCode);
   const filteredMaterials = useMemo(() => realMaterials.filter(m => {
@@ -467,8 +608,29 @@ export default function OrdersPage() {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="page-header">{t.ordersTitle}</h1>
-        <p className="page-description">{orders.length} {t.orderCount} · {orders.filter(o => ["Processing", "Draft", "Confirmed", "Ready for Delivery"].includes(o.status)).length} {t.activeOrdersCount}</p>
+        <p className="page-description">{orders.length} {t.orderCount} · {totalStats.activeCount} {t.activeOrdersCount}</p>
       </div>
+
+      {!loading && orders.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="stat-card p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><DollarSign className="h-5 w-5 text-primary" /></div>
+            <div><div className="text-[11px] text-muted-foreground">إجمالي المبيعات</div><div className="text-lg font-bold">{totalStats.totalSelling.toLocaleString()}</div></div>
+          </div>
+          <div className="stat-card p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center shrink-0"><TrendingUp className="h-5 w-5 text-orange-600" /></div>
+            <div><div className="text-[11px] text-muted-foreground">الربح المتوقع</div><div className="text-lg font-bold">{totalStats.profit.toLocaleString()}</div></div>
+          </div>
+          <div className="stat-card p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center shrink-0"><ShoppingCart className="h-5 w-5 text-blue-600" /></div>
+            <div><div className="text-[11px] text-muted-foreground">طلبات نشطة</div><div className="text-lg font-bold">{totalStats.activeCount}</div></div>
+          </div>
+          <div className="stat-card p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/20 flex items-center justify-center shrink-0"><CreditCard className="h-5 w-5 text-green-600" /></div>
+            <div><div className="text-[11px] text-muted-foreground">نسبة التحصيل</div><div className="text-lg font-bold">{totalStats.collPct}%</div></div>
+          </div>
+        </div>
+      )}
 
       <DataToolbar
         searchPlaceholder={t.searchOrders}
@@ -477,9 +639,44 @@ export default function OrdersPage() {
         filters={[{ label: t.status, value: "status", options: statusOptions }]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("orders", [t.orderNumber, t.client, t.date, t.lines, t.selling, t.costCol, t.splitMode, t.source, t.status], filtered.map(o => [o.id, o.client, o.date, o.lines, o.totalSelling, o.totalCost, o.splitMode, o.source, o.status]))}
+        onExport={() => exportToCsv("orders", [t.orderNumber, t.client, t.date, t.lines, t.selling, t.costCol, "الربح", t.splitMode, t.source, t.status], filtered.map(o => [o.id, o.client, o.date, o.lines, o.totalSelling, o.totalCost, String(Number(o.totalSelling) - Number(o.totalCost)), o.splitMode, o.source, o.status]))}
         actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.newOrder}</Button>}
       />
+
+      <div className="flex flex-wrap gap-2 items-center">
+        <Select value={dateRange} onValueChange={setDateRange}>
+          <SelectTrigger className="h-8 w-[130px] text-xs"><Clock className="h-3 w-3 ml-1" /><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">كل الفترات</SelectItem>
+            <SelectItem value="today">اليوم</SelectItem>
+            <SelectItem value="week">آخر أسبوع</SelectItem>
+            <SelectItem value="month">هذا الشهر</SelectItem>
+            <SelectItem value="quarter">آخر 3 شهور</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={clientFilter || "__all__"} onValueChange={v => setClientFilter(v === "__all__" ? "" : v)}>
+          <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue placeholder="كل العملاء" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">كل العملاء</SelectItem>
+            {clients.filter(c => orders.some(o => o.clientId === c.id)).map(c => (
+              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={supplierFilter || "__all__"} onValueChange={v => setSupplierFilter(v === "__all__" ? "" : v)}>
+          <SelectTrigger className="h-8 w-[150px] text-xs"><Factory className="h-3 w-3 ml-1" /><SelectValue placeholder="كل الموردين" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">كل الموردين</SelectItem>
+            {suppliers.filter(s => orders.some(o => o.supplierId === s.id)).map(s => (
+              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {(dateRange !== "all" || clientFilter || supplierFilter) && (
+          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDateRange("all"); setClientFilter(""); setSupplierFilter(""); }}>مسح الفلاتر</Button>
+        )}
+        <span className="text-xs text-muted-foreground mr-auto">{filtered.length} نتيجة</span>
+      </div>
 
       <div className="stat-card overflow-x-auto">
         {loading ? (
@@ -488,37 +685,64 @@ export default function OrdersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.orderNumber}</th>
-                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>
-                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">المورد</th>
-                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.date}</th>
-                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.selling}</th>
-                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.status}</th>
-                <th className="text-center py-3 px-3 text-xs font-medium text-muted-foreground"><Truck className="h-3.5 w-3.5 inline-block ml-1" />التوصيل</th>
-                <th className="text-center py-3 px-3 text-xs font-medium text-muted-foreground"><Package className="h-3.5 w-3.5 inline-block ml-1" />الجرد</th>
-                <th className="text-center py-3 px-3 text-xs font-medium text-muted-foreground"><CreditCard className="h-3.5 w-3.5 inline-block ml-1" />التحصيل</th>
-                <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.actions}</th>
+                <th className="text-start py-3 px-2 text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("id")}><span className="inline-flex items-center gap-1">{t.orderNumber} <SortIcon col="id" /></span></th>
+                <th className="text-start py-3 px-2 text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("client")}><span className="inline-flex items-center gap-1">{t.client} <SortIcon col="client" /></span></th>
+                <th className="text-start py-3 px-2 text-xs font-medium text-muted-foreground">المورد</th>
+                <th className="text-start py-3 px-2 text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("date")}><span className="inline-flex items-center gap-1">{t.date} <SortIcon col="date" /></span></th>
+                <th className="text-center py-3 px-2 text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("lines")}><span className="inline-flex items-center gap-1">مواد <SortIcon col="lines" /></span></th>
+                <th className="text-end py-3 px-2 text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("selling")}><span className="inline-flex items-center gap-1">{t.selling} <SortIcon col="selling" /></span></th>
+                <th className="text-end py-3 px-2 text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("profit")}><span className="inline-flex items-center gap-1">الربح <SortIcon col="profit" /></span></th>
+                <th className="text-start py-3 px-2 text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("status")}><span className="inline-flex items-center gap-1">{t.status} <SortIcon col="status" /></span></th>
+                <th className="text-center py-3 px-2 text-xs font-medium text-muted-foreground"><Truck className="h-3.5 w-3.5 inline-block ml-1" />التوصيل</th>
+                <th className="text-center py-3 px-2 text-xs font-medium text-muted-foreground"><Package className="h-3.5 w-3.5 inline-block ml-1" />الجرد</th>
+                <th className="text-center py-3 px-2 text-xs font-medium text-muted-foreground"><CreditCard className="h-3.5 w-3.5 inline-block ml-1" />التحصيل</th>
+                <th className="text-end py-3 px-2 text-xs font-medium text-muted-foreground">{t.actions}</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((order) => {
+              {paginatedOrders.map((order) => {
                 const delInfo = deliveriesMap[order.id];
                 const invInfo = inventoryMap[order.id];
                 const auditInfo = auditsMap[order.id];
                 const colInfo = collectionsMap[order.id];
                 const colPct = colInfo && colInfo.total > 0 ? Math.round((colInfo.paid / colInfo.total) * 100) : 0;
+                const profit = Number(order.totalSelling) - Number(order.totalCost);
+                const overdueOrder = isOverdue(order);
                 return (
-                <tr key={order.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/orders/${order.id}`)}>
-                  <td className="py-3 px-3 font-mono text-xs font-medium">{order.id}</td>
-                  <td className="py-3 px-3 font-medium hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${order.clientId}`); }}>{order.client}</td>
-                  <td className="py-3 px-3 text-xs" onClick={(e) => e.stopPropagation()}>
+                <tr key={order.id} className={`border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer ${getRowStatusColor(order.status)}`} onClick={() => navigate(`/orders/${order.id}`)}>
+                  <td className="py-3 px-2 font-mono text-xs font-medium">
+                    <span className="inline-flex items-center gap-1">
+                      {order.id}
+                      {overdueOrder && <AlertTriangle className="h-3.5 w-3.5 text-amber-500" title={`متأخر ${getDaysSinceDate(order.date)} يوم`} />}
+                      {order.notes && <StickyNote className="h-3 w-3 text-muted-foreground" title={order.notes} />}
+                    </span>
+                  </td>
+                  <td className="py-3 px-2 font-medium hover:text-primary text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${order.clientId}`); }}>{order.client}</td>
+                  <td className="py-3 px-2 text-xs" onClick={(e) => e.stopPropagation()}>
                     {order.supplierId && order.supplierName ? (
                       <button className="text-primary hover:underline" onClick={() => navigate(`/suppliers/${order.supplierId}`)}>{order.supplierName}</button>
                     ) : <span className="text-muted-foreground">—</span>}
                   </td>
-                  <td className="py-3 px-3 text-muted-foreground text-xs">{order.date}</td>
-                  <td className="py-3 px-3 text-end font-medium">{order.totalSelling}</td>
-                  <td className="py-3 px-3"><StatusBadge status={order.status} /></td>
+                  <td className="py-3 px-2 text-muted-foreground text-xs">{order.date}</td>
+                  <td className="py-3 px-2 text-center text-xs text-muted-foreground">{order.lines}</td>
+                  <td className="py-3 px-2 text-end font-medium text-xs">{Number(order.totalSelling).toLocaleString()}</td>
+                  <td className={`py-3 px-2 text-end font-medium text-xs ${profit > 0 ? "text-green-600" : profit < 0 ? "text-red-600" : "text-muted-foreground"}`}>{profit.toLocaleString()}</td>
+                  <td className="py-3 px-2" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="cursor-pointer" disabled={statusChanging === order.id}>
+                          {statusChanging === order.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <StatusBadge status={order.status} />}
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        {statusOptions.map(so => (
+                          <DropdownMenuItem key={so.value} onClick={() => handleStatusChange(order.id, so.value)} className={order.status === so.value ? "bg-primary/10 font-medium" : ""}>
+                            {so.label}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </td>
                   <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                     {delInfo ? (
                       <button className="inline-flex items-center gap-1 text-xs hover:underline" onClick={() => navigate(`/deliveries?orderId=${order.id}`)}>
@@ -558,7 +782,7 @@ export default function OrdersPage() {
                       </button>
                     ) : <span className="text-xs text-muted-foreground">—</span>}
                   </td>
-                  <td className="py-3 px-3 text-end" onClick={(e) => e.stopPropagation()}>
+                  <td className="py-3 px-2 text-end" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
@@ -566,8 +790,7 @@ export default function OrdersPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => navigate(`/orders/${order.id}`)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewDetails}</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => navigate(`/deliveries?new=${order.id}`)}><Truck className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.registerDelivery}</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toast.success(`${t.createInvoice}: ${order.id}`)}><FileText className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.createInvoice}</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toast.success(`${t.copy}: ${order.id}`)}><Copy className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.copy}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDuplicate(order)}><Copy className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />نسخ الطلب</DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(order)} data-testid={`button-delete-order-${order.id}`}>
                           <Trash2 className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />حذف
@@ -582,6 +805,31 @@ export default function OrdersPage() {
           </table>
         )}
         {!loading && filtered.length === 0 && <div className="text-center py-12 text-muted-foreground text-sm">{t.noResults}</div>}
+        {!loading && totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <span className="text-xs text-muted-foreground">صفحة {currentPage} من {totalPages} ({filtered.length} طلب)</span>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)}>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                let page: number;
+                if (totalPages <= 5) page = i + 1;
+                else if (currentPage <= 3) page = i + 1;
+                else if (currentPage >= totalPages - 2) page = totalPages - 4 + i;
+                else page = currentPage - 2 + i;
+                return (
+                  <Button key={page} variant={currentPage === page ? "default" : "outline"} size="sm" className="h-7 w-7 p-0 text-xs" onClick={() => setCurrentPage(page)}>
+                    {page}
+                  </Button>
+                );
+              })}
+              <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)}>
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <ConfirmDeleteDialog

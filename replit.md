@@ -107,6 +107,21 @@ npx tsx server/index.ts   # starts Express on 5000, spawns Vite on 5001
 - Inventory page supports `?sourceOrder=ORD-xxx` URL filter with order banner
 - Server auto-updates order status to "Processing" when delivery is first created
 
+## Orders Page Enhancements
+- **Stats cards**: 4 KPI cards at top (total sales, expected profit, active orders, collection %)
+- **Date filter**: Today, last week, this month, last 3 months, all periods
+- **Client & supplier filter dropdowns**: Filter by specific client or supplier
+- **Sortable columns**: Click column headers to sort (order #, client, date, materials, selling, profit, status)
+- **Profit column**: Shows expected profit per order (selling - cost), color-coded (green/red)
+- **Materials count column**: Shows number of line items per order
+- **Row coloring**: Subtle background colors by status (green=closed, red=cancelled, amber=in-progress)
+- **Quick status change**: Click status badge in table to change status via dropdown (no need to open order details)
+- **Overdue warning**: Triangle icon on orders stuck in processing for 7+ days with no delivery/inventory activity
+- **Notes tooltip**: Sticky note icon on orders that have notes (hover to see)
+- **Duplicate order**: Functional "copy order" action — creates new order with same items, client, and supplier
+- **Pagination**: 25 orders per page with page navigation controls
+- **Supplier search**: Search bar also matches supplier names
+
 ## Delivery-Order Sync System
 - **Per-line delivery tracking**: OrderDetails.tsx computes delivered/remaining quantities per order line from all linked deliveries
 - **Partial delivery items**: Stored as JSON in delivery `notes` field: `{ type: "جزئي", items: [{ lineId, materialCode, materialName, qty, unit }] }`
