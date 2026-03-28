@@ -122,6 +122,13 @@ npx tsx server/index.ts   # starts Express on 5000, spawns Vite on 5001
 - **Pagination**: 25 orders per page with page navigation controls
 - **Supplier search**: Search bar also matches supplier names
 
+## Refill Planning Enhancements
+- **Last supplier column**: Each material in the refill table shows the last supplier that provided it (from order_lines history)
+- **Convert to Order button**: Replaces the old localStorage flow. Selected items with shortages are directly converted to an order via API, navigating to the order details page
+- **Auto supplier linking**: When converting to order, each material line is automatically assigned its last known supplier
+- **Server endpoint**: `GET /api/material-last-suppliers` returns a map of materialCode → {supplierId, supplierName} from order_lines history
+- **Per-line supplier editing**: OrderDetails edit mode now has supplier dropdown on each existing and new line item
+
 ## Delivery-Order Sync System
 - **Per-line delivery tracking**: OrderDetails.tsx computes delivered/remaining quantities per order line from all linked deliveries
 - **Partial delivery items**: Stored as JSON in delivery `notes` field: `{ type: "جزئي", items: [{ lineId, materialCode, materialName, qty, unit }] }`

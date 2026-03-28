@@ -7,7 +7,7 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Package, ShoppingCart, AlertTriangle, TrendingDown, Users, Package2, CheckCircle2, Loader2, ClipboardCheck } from "lucide-react";
+import { Package, ShoppingCart, AlertTriangle, TrendingDown, Users, Package2, CheckCircle2, Loader2, ClipboardCheck, Factory } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 
@@ -60,6 +60,8 @@ type RefillItem = {
   sourceOrder?: string;
   auditStatus?: string;
   auditId?: string;
+  lastSupplierId?: string;
+  lastSupplierName?: string;
 };
 
 function computePriority(coverageWeeks: number, leadTimeWeeks: number): "Critical" | "Urgent" | "Normal" | "OK" {
@@ -104,6 +106,13 @@ export default function RefillPage() {
     queryKey: ["/api/audits"],
     queryFn: () => api.get<AuditRecord[]>("/audits").catch(() => []),
   });
+
+  const { data: lastSuppliers = {} } = useQuery<Record<string, { supplierId: string; supplierName: string }>>({
+    queryKey: ["/api/material-last-suppliers"],
+    queryFn: () => api.get("/material-last-suppliers").catch(() => ({})),
+  });
+
+  const [converting, setConverting] = useState(false);
 
   const lots: InventoryLot[] = rawLots.map(l => ({
     ...l,
@@ -152,6 +161,7 @@ export default function RefillPage() {
 
         const audit = l.sourceOrder ? auditsByOrder[l.sourceOrder] : undefined;
 
+        const ls = lastSuppliers[l.code];
         return {
           id: l.id,
           client: l.clientName,
@@ -172,9 +182,11 @@ export default function RefillPage() {
           sourceOrder: l.sourceOrder,
           auditStatus: audit?.status,
           auditId: audit?.id,
+          lastSupplierId: ls?.supplierId,
+          lastSupplierName: ls?.supplierName,
         };
       });
-  }, [lots, auditsByOrder]);
+  }, [lots, auditsByOrder, lastSuppliers]);
 
   useEffect(() => {
     const f = searchParams.get("filter");
@@ -316,17 +328,48 @@ export default function RefillPage() {
           <div className="flex gap-2">
             <Button size="sm" variant="outline" className="h-9" onClick={selectAllNeedRefill}>{t.selectAll}</Button>
             {selected.size > 0 && (
-              <Button size="sm" className="h-9" onClick={() => {
+              <Button size="sm" className="h-9" disabled={converting} onClick={async () => {
                 const refillable = filtered.filter(r => selected.has(r.id) && r.suggestedQty > 0);
-                const refillOrderData = {
-                  items: refillable.map(item => ({ materialCode: item.code, materialName: item.material, quantity: item.suggestedQty, unit: item.unit, client: item.client, clientId: item.clientId, currentStock: item.currentStock, reorderPoint: item.reorderPoint, priority: item.priority })),
-                  createdAt: Date.now()
-                };
-                localStorage.setItem("refillOrderData", JSON.stringify(refillOrderData));
-                navigate("/orders");
-                toast.success(t.createOrderFromSelection);
+                if (refillable.length === 0) return;
+                setConverting(true);
+                try {
+                  const uniqueClients = [...new Set(refillable.map(i => i.clientId))];
+                  const clientId = uniqueClients.length === 1 ? uniqueClients[0] : uniqueClients[0];
+                  const clientName = refillable[0].client;
+                  const today = new Date().toISOString().slice(0, 10);
+                  const totalCost = refillable.reduce((s, i) => s + i.suggestedQty * 0, 0);
+                  const order = await api.post("/orders", {
+                    id: `ORD-${Date.now()}`,
+                    clientId,
+                    client: clientName,
+                    date: today,
+                    status: "Draft",
+                    source: "Refill",
+                    orderType: "client",
+                    totalSelling: "0",
+                    totalCost: String(totalCost),
+                    splitMode: "equal",
+                    items: refillable.map(item => ({
+                      materialCode: item.code,
+                      name: item.material,
+                      quantity: item.suggestedQty,
+                      sellingPrice: 0,
+                      costPrice: 0,
+                      imageUrl: item.imageUrl || "",
+                      unit: item.unit,
+                      supplierId: item.lastSupplierId || "",
+                    })),
+                  });
+                  toast.success(`تم إنشاء الطلب ${order.id} بنجاح`);
+                  navigate(`/orders/${order.id}`);
+                } catch (e: any) {
+                  toast.error("خطأ في إنشاء الطلب: " + (e.message || ""));
+                } finally {
+                  setConverting(false);
+                }
               }}>
-                <ShoppingCart className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.createOrderFromSelection} ({selected.size})
+                {converting ? <Loader2 className="h-3.5 w-3.5 animate-spin ltr:mr-1.5 rtl:ml-1.5" /> : <ShoppingCart className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />}
+                تحويل لطلب ({selected.size})
               </Button>
             )}
           </div>
@@ -385,6 +428,7 @@ export default function RefillPage() {
                     <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.coverage}</th>
                     <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.reorderPoint}</th>
                     <th className="text-end py-3 px-3 text-xs font-medium text-muted-foreground">{t.suggestedQty}</th>
+                    <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">آخر مورد</th>
                     <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.priority}</th>
                     <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">الجرد</th>
                   </tr>
@@ -431,6 +475,13 @@ export default function RefillPage() {
                         {r.suggestedQty > 0
                           ? <span className={r.fromAudit ? "text-amber-700 dark:text-amber-400" : ""}>{r.suggestedQty}</span>
                           : "—"}
+                      </td>
+                      <td className="py-3 px-3">
+                        {r.lastSupplierName ? (
+                          <button className="inline-flex items-center gap-1 text-xs text-primary hover:underline" onClick={(e) => { e.stopPropagation(); navigate(`/suppliers/${r.lastSupplierId}`); }}>
+                            <Factory className="h-3 w-3" />{r.lastSupplierName}
+                          </button>
+                        ) : <span className="text-muted-foreground text-xs">—</span>}
                       </td>
                       <td className="py-3 px-3">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${priorityStyles[r.priority]}`}>

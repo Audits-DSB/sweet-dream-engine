@@ -369,6 +369,26 @@ router.delete("/suppliers/:id/materials/:code", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── MATERIAL LAST SUPPLIERS ──────────────────────────────────────────────────
+router.get("/material-last-suppliers", async (_req, res) => {
+  const { data: lines } = await supabaseAdmin
+    .from("order_lines")
+    .select("material_code, supplier_id, id")
+    .neq("supplier_id", "")
+    .order("id", { ascending: false });
+  if (!lines) return res.json({});
+  const { data: suppliers } = await supabaseAdmin.from("suppliers").select("id, name");
+  const supMap: Record<string, string> = {};
+  (suppliers || []).forEach((s: any) => { supMap[s.id] = s.name; });
+  const result: Record<string, { supplierId: string; supplierName: string }> = {};
+  for (const l of lines) {
+    if (!result[l.material_code] && l.supplier_id && supMap[l.supplier_id]) {
+      result[l.material_code] = { supplierId: l.supplier_id, supplierName: supMap[l.supplier_id] };
+    }
+  }
+  res.json(result);
+});
+
 // ─── FOUNDERS ─────────────────────────────────────────────────────────────────
 router.get("/founders", async (_req, res) => {
   sbOk(res, await supabaseAdmin.from("founders").select("*").order("name"));
