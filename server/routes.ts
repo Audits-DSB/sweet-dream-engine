@@ -397,9 +397,26 @@ router.post("/orders/:id/lines", async (req, res) => {
     cost_price: Number(item.costPrice) || 0,
     line_total: (Number(item.sellingPrice) || 0) * (Number(item.quantity) || 1),
     line_cost: (Number(item.costPrice) || 0) * (Number(item.quantity) || 1),
+    from_inventory: item.fromInventory === true,
+    inventory_lot_id: String(item.inventoryLotId || ""),
   }));
   const { data, error } = await supabaseAdmin.from("order_lines").insert(lineRows).select();
   if (error) return res.status(500).json({ error: error.message });
+
+  for (const item of items) {
+    if (item.fromInventory && item.inventoryLotId) {
+      const qty = Number(item.quantity) || 1;
+      const { data: lot } = await supabaseAdmin.from("company_inventory").select("remaining").eq("id", item.inventoryLotId).single();
+      if (lot) {
+        const newRemaining = Math.max(0, Number(lot.remaining) - qty);
+        await supabaseAdmin.from("company_inventory").update({
+          remaining: newRemaining,
+          status: newRemaining <= 0 ? "Depleted" : newRemaining <= 5 ? "Low Stock" : "In Stock",
+        }).eq("id", item.inventoryLotId);
+      }
+    }
+  }
+
   res.json(camelizeKeys(data));
 });
 router.delete("/order-lines/:id", async (req, res) => {

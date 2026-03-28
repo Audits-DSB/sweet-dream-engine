@@ -4,7 +4,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { quickProfit } from "@/lib/orderProfit";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, ClipboardCheck, CreditCard, ChevronLeft, ChevronDown, Plus, Trash2, Search } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, ClipboardCheck, CreditCard, ChevronLeft, ChevronDown, Plus, Trash2, Search, Warehouse } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -120,6 +120,9 @@ export default function OrderDetails() {
   const [editDeletedLineIds, setEditDeletedLineIds] = useState<number[]>([]);
   const [editMatSearch, setEditMatSearch] = useState("");
   const [extMaterials, setExtMaterials] = useState<ExtMaterial[]>([]);
+  const [companyLots, setCompanyLots] = useState<{ id: string; materialCode: string; materialName: string; unit: string; remaining: number; costPrice: number }[]>([]);
+  const [showEditInventoryPicker, setShowEditInventoryPicker] = useState(false);
+  const [editInventorySearch, setEditInventorySearch] = useState("");
 
   const loadOrder = () =>
     Promise.all([
@@ -131,7 +134,8 @@ export default function OrderDetails() {
       api.get<any[]>(`/client-inventory?sourceOrder=${id}`).catch(() => []),
       api.get<any[]>("/collections").catch(() => []),
       api.get<any[]>("/audits").catch(() => []),
-    ]).then(([all, fetchedLines, extData, deliveries, balances, inventory, collections, audits]) => {
+      api.get<any[]>("/company-inventory").catch(() => []),
+    ]).then(([all, fetchedLines, extData, deliveries, balances, inventory, collections, audits, compInv]) => {
       const found = (all || []).find((o: any) => o.id === id);
       if (found) setOrder(mapOrder(found));
       const map: Record<string, ExtMaterial> = {};
@@ -167,6 +171,11 @@ export default function OrderDetails() {
         if (b.founderId) balMap[b.founderId] = b.balance;
       });
       setFounderBalances(balMap);
+      const availableLots = (compInv || []).filter((l: any) => Number(l.remaining ?? 0) > 0).map((l: any) => ({
+        id: l.id, materialCode: l.materialCode || l.material_code || "", materialName: l.materialName || l.material_name || "",
+        unit: l.unit || "", remaining: Number(l.remaining ?? 0), costPrice: Number(l.costPrice ?? l.cost_price ?? 0),
+      }));
+      setCompanyLots(availableLots);
     });
 
   useEffect(() => {
@@ -738,6 +747,52 @@ export default function OrderDetails() {
                     </div>
                   ))}
                 </div>
+
+                {/* Pull from company inventory */}
+                {order && order.clientId !== "company-inventory" && companyLots.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <Button type="button" variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={() => { setShowEditInventoryPicker(!showEditInventoryPicker); setEditInventorySearch(""); }}>
+                      <Warehouse className="h-3.5 w-3.5" />سحب من مخزون الشركة ({companyLots.length} دُفعة متاحة)
+                    </Button>
+                    {showEditInventoryPicker && (
+                      <div className="border border-border rounded-md bg-background shadow-md">
+                        <div className="p-2 border-b border-border">
+                          <Input className="h-8 text-xs" placeholder="بحث في المخزون..." value={editInventorySearch} onChange={e => setEditInventorySearch(e.target.value)} />
+                        </div>
+                        <div className="max-h-48 overflow-y-auto">
+                          {companyLots.filter(l => {
+                            if (usedCodesInEdit.includes(l.materialCode) || editNewItems.some(ni => (ni as any).inventoryLotId === l.id)) return false;
+                            const q = editInventorySearch.toLowerCase();
+                            return !q || l.materialName.toLowerCase().includes(q) || l.materialCode.toLowerCase().includes(q);
+                          }).map(lot => (
+                            <div key={lot.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors border-b border-border/30" onClick={() => {
+                              setEditNewItems(prev => [...prev, {
+                                materialCode: lot.materialCode, materialName: lot.materialName, quantity: 1,
+                                sellingPrice: 0, costPrice: lot.costPrice, imageUrl: "", unit: lot.unit,
+                                fromInventory: true, inventoryLotId: lot.id,
+                              } as any]);
+                              setShowEditInventoryPicker(false);
+                              setEditInventorySearch("");
+                            }}>
+                              <div className="min-w-0">
+                                <span className="font-medium block">{lot.materialName}</span>
+                                <span className="text-muted-foreground">{lot.materialCode} · متبقي: {lot.remaining} {lot.unit} · سعر: {lot.costPrice.toLocaleString()}</span>
+                              </div>
+                              <Plus className="h-4 w-4 text-primary shrink-0" />
+                            </div>
+                          ))}
+                          {companyLots.filter(l => {
+                            if (usedCodesInEdit.includes(l.materialCode) || editNewItems.some(ni => (ni as any).inventoryLotId === l.id)) return false;
+                            const q = editInventorySearch.toLowerCase();
+                            return !q || l.materialName.toLowerCase().includes(q) || l.materialCode.toLowerCase().includes(q);
+                          }).length === 0 && (
+                            <div className="text-center py-3 text-muted-foreground text-xs">لا توجد نتائج</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Add material search */}
                 <div className="mt-4 space-y-2">
