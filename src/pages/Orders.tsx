@@ -278,7 +278,7 @@ export default function OrdersPage() {
             name: p.name, category: p.category || "General",
             unit: p.unit || "unit", sellingPrice: p.price_retail || 0,
             storeCost: p.price_wholesale || 0, active: true,
-            imageUrl: p.image_url || p.image || "",
+            imageUrl: (p.image_url || p.image || "").startsWith("http") ? (p.image_url || p.image || "") : "",
           })));
         }
       }).catch(() => {}).finally(() => setMaterialsLoading(false));

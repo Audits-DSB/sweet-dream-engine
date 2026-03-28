@@ -144,7 +144,9 @@ export default function OrderDetails() {
       const allMats: ExtMaterial[] = [];
       (extData?.products || []).forEach((p: any) => {
         const key = p.sku || "";
-        const mat: ExtMaterial = { sku: key, name: p.name || "", imageUrl: p.image_url || "", unit: p.unit || "unit", sellingPrice: p.price_retail || 0, costPrice: p.price_wholesale || 0 };
+        const rawImg = p.image_url || "";
+        const validImg = rawImg.startsWith("http") ? rawImg : "";
+        const mat: ExtMaterial = { sku: key, name: p.name || "", imageUrl: validImg, unit: p.unit || "unit", sellingPrice: p.price_retail || 0, costPrice: p.price_wholesale || 0 };
         if (key) map[key] = mat;
         allMats.push(mat);
       });
@@ -789,9 +791,12 @@ export default function OrderDetails() {
                               setShowEditInventoryPicker(false);
                               setEditInventorySearch("");
                             }}>
-                              <div className="min-w-0">
-                                <span className="font-medium block">{lot.materialName}</span>
-                                <span className="text-muted-foreground">{lot.materialCode} · متبقي: {lot.remaining} {lot.unit} · سعر: {lot.costPrice.toLocaleString()}</span>
+                              <div className="flex items-center gap-2 min-w-0">
+                                {(() => { const img = extMaterials.find(m => m.sku === lot.materialCode)?.imageUrl; return img ? <img src={img} alt="" className="w-8 h-8 rounded object-cover shrink-0" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /> : null; })()}
+                                <div className="min-w-0">
+                                  <span className="font-medium block">{lot.materialName}</span>
+                                  <span className="text-muted-foreground">{lot.materialCode} · متبقي: {lot.remaining} {lot.unit} · سعر: {lot.costPrice.toLocaleString()}</span>
+                                </div>
                               </div>
                               <Plus className="h-4 w-4 text-primary shrink-0" />
                             </div>
