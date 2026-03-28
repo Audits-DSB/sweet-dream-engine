@@ -723,7 +723,6 @@ export default function OrderDetails() {
                 : [t.totalAmount],
               rows: invoiceLines.length > 0 ? invoiceLines : [[`${linesTotal.toLocaleString()} ${t.currency}`]],
               totals: [
-                { label: t.totalSelling, value: `${linesTotal.toLocaleString()} ${t.currency}` },
                 { label: `${t.subscriptionLabel} (${subVal}%)`, value: `${subscriptionAmt.toLocaleString()} ${t.currency}` },
                 { label: t.operatingRevenue, value: `${operatingRevenue.toLocaleString()} ${t.currency}` },
               ],
