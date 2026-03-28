@@ -866,12 +866,18 @@ export default function OrderDetails() {
                           <Input type="number" min="0" value={el._cost} onChange={(e) => { const realIdx = editLines.findIndex(p => p.id === el.id); setEditLines(prev => prev.map((p, i) => i === realIdx ? { ...p, _cost: e.target.value } : p)); }} className={`h-8 text-sm ${el.fromInventory ? "opacity-50" : ""}`} disabled={!!el.fromInventory} />
                         </div>
                       </div>
-                      {el._supplierId && suppliers.find(s => s.id === el._supplierId) && (
-                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                          <Factory className="h-3 w-3" />
-                          <span>{suppliers.find(s => s.id === el._supplierId)?.name}</span>
-                        </div>
-                      )}
+                      <div className="space-y-1">
+                        <Label className="text-xs">المورد</Label>
+                        <Select value={el._supplierId || "__none__"} onValueChange={(v) => { const realIdx = editLines.findIndex(p => p.id === el.id); setEditLines(prev => prev.map((p, i) => i === realIdx ? { ...p, _supplierId: v === "__none__" ? "" : v } : p)); }}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر المورد" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">— بدون مورد —</SelectItem>
+                            {suppliers.map(s => (
+                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
                         <span>إجمالي البيع: <span className="font-semibold text-foreground">{((Number(el._qty) || 0) * (Number(el._sell) || 0)).toLocaleString()}</span></span>
                         <span>إجمالي التكلفة: <span className="font-semibold text-foreground">{((Number(el._qty) || 0) * (Number(el._cost) || 0)).toLocaleString()}</span></span>
@@ -910,10 +916,18 @@ export default function OrderDetails() {
                           <Input type="number" min="0" value={ni.costPrice} onChange={(e) => setEditNewItems(prev => prev.map((p, i) => i === idx ? { ...p, costPrice: Number(e.target.value) || 0 } : p))} className={`h-8 text-sm ${(ni as any).fromInventory ? "opacity-50" : ""}`} disabled={!!(ni as any).fromInventory} />
                         </div>
                       </div>
-                      {ni.supplierId && suppliers.find(s => s.id === ni.supplierId) && (
-                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                          <Factory className="h-3 w-3" />
-                          <span>{suppliers.find(s => s.id === ni.supplierId)?.name}</span>
+                      {!(ni as any).fromInventory && (
+                        <div className="space-y-1">
+                          <Label className="text-xs">المورد</Label>
+                          <Select value={ni.supplierId || "__none__"} onValueChange={(v) => setEditNewItems(prev => prev.map((p, i) => i === idx ? { ...p, supplierId: v === "__none__" ? "" : v } : p))}>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر المورد" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">— بدون مورد —</SelectItem>
+                              {suppliers.map(s => (
+                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       )}
                       {(ni as any).fromInventory && (
