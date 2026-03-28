@@ -93,6 +93,8 @@ export default function CompanyInventoryPage() {
 
   const totalValue = lots.reduce((s, l) => s + l.remaining * l.costPrice, 0);
   const totalItems = lots.reduce((s, l) => s + l.remaining, 0);
+  const totalConsumed = lots.reduce((s, l) => s + (l.quantity - l.remaining), 0);
+  const totalConsumedValue = lots.reduce((s, l) => s + (l.quantity - l.remaining) * l.costPrice, 0);
   const inStockCount = lots.filter(l => l.status === "In Stock").length;
   const lowStockCount = lots.filter(l => l.status === "Low Stock").length;
   const depletedCount = lots.filter(l => l.status === "Depleted").length;
@@ -128,13 +130,18 @@ export default function CompanyInventoryPage() {
         <p className="page-description">{lots.length} دُفعة · {materialGroups.length} مادة</p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="stat-card p-4 text-center">
-          <p className="text-xs text-muted-foreground">إجمالي القيمة</p>
+          <p className="text-xs text-muted-foreground">إجمالي القيمة المتبقية</p>
           <p className="text-lg font-bold text-primary">{totalValue.toLocaleString()} {t.currency}</p>
         </div>
         <div className="stat-card p-4 text-center">
-          <p className="text-xs text-muted-foreground">إجمالي الوحدات</p>
+          <p className="text-xs text-muted-foreground">إجمالي المستهلك</p>
+          <p className="text-lg font-bold text-amber-600">{totalConsumed.toLocaleString()}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">{totalConsumedValue.toLocaleString()} {t.currency}</p>
+        </div>
+        <div className="stat-card p-4 text-center">
+          <p className="text-xs text-muted-foreground">الوحدات المتبقية</p>
           <p className="text-lg font-bold">{totalItems.toLocaleString()}</p>
         </div>
         <div className="stat-card p-4 text-center">
