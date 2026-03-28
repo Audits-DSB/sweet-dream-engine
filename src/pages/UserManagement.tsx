@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Shield, ShieldCheck, Eye, Users, Pencil, Key, Trash2, Loader2 } from "lucide-react";
+import { Shield, ShieldCheck, Eye, Users, Pencil, Key, Trash2, Loader2, UserPlus } from "lucide-react";
 import { Navigate } from "react-router-dom";
 
 async function getAuthHeaders() {
@@ -43,6 +43,11 @@ export default function UserManagementPage() {
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteUser, setDeleteUser] = useState<UserWithRole | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createEmail, setCreateEmail] = useState("");
+  const [createPassword, setCreatePassword] = useState("");
+  const [createRole, setCreateRole] = useState<AppRole>("viewer");
 
   const canAccess = isSuperAdmin;
   const roleLabels: Record<AppRole, string> = { admin: t.admin, founder: t.founderRole, viewer: t.viewer };
@@ -125,19 +130,43 @@ export default function UserManagementPage() {
     setSaving(false);
   };
 
+  const handleCreateUser = async () => {
+    if (!createEmail || !createPassword) return;
+    setSaving(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch("/api/admin/users", {
+        method: "POST", headers,
+        body: JSON.stringify({ email: createEmail, password: createPassword, full_name: createName, role: createRole }),
+      });
+      if (!res.ok) { const d = await res.json(); toast.error(d.error || "Error"); setSaving(false); return; }
+      toast.success("تم إنشاء المستخدم بنجاح");
+      setShowCreate(false);
+      setCreateName(""); setCreateEmail(""); setCreatePassword(""); setCreateRole("viewer");
+      fetchUsers();
+    } catch { toast.error("فشل في إنشاء المستخدم"); }
+    setSaving(false);
+  };
+
   if (authLoading) return null;
   if (!canAccess) return <Navigate to="/" replace />;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center gap-3">
-        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Users className="h-5 w-5 text-primary" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Users className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="page-header">{t.userManagementTitle}</h1>
+            <p className="page-description">{users.length} {t.usersCount}</p>
+          </div>
         </div>
-        <div>
-          <h1 className="page-header">{t.userManagementTitle}</h1>
-          <p className="page-description">{users.length} {t.usersCount}</p>
-        </div>
+        <Button onClick={() => setShowCreate(true)} className="gap-2">
+          <UserPlus className="h-4 w-4" />
+          إضافة مستخدم
+        </Button>
       </div>
 
       <div className="stat-card overflow-x-auto">
@@ -283,6 +312,46 @@ export default function UserManagementPage() {
             <Button variant="destructive" onClick={handleDeleteUser} disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 animate-spin ltr:mr-2 rtl:ml-2" />}
               حذف نهائي
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCreate} onOpenChange={(open) => { if (!open) { setShowCreate(false); setCreateName(""); setCreateEmail(""); setCreatePassword(""); setCreateRole("viewer"); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>إضافة مستخدم جديد</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>الاسم الكامل</Label>
+              <Input value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="اسم المستخدم" />
+            </div>
+            <div className="space-y-2">
+              <Label>البريد الإلكتروني *</Label>
+              <Input type="email" value={createEmail} onChange={(e) => setCreateEmail(e.target.value)} placeholder="email@example.com" />
+            </div>
+            <div className="space-y-2">
+              <Label>كلمة المرور *</Label>
+              <Input type="password" value={createPassword} onChange={(e) => setCreatePassword(e.target.value)} placeholder="6 أحرف على الأقل" />
+            </div>
+            <div className="space-y-2">
+              <Label>الدور</Label>
+              <Select value={createRole} onValueChange={(val) => setCreateRole(val as AppRole)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">{t.admin}</SelectItem>
+                  <SelectItem value="founder">{t.founderRole}</SelectItem>
+                  <SelectItem value="viewer">{t.viewer}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowCreate(false); setCreateName(""); setCreateEmail(""); setCreatePassword(""); setCreateRole("viewer"); }}>إلغاء</Button>
+            <Button onClick={handleCreateUser} disabled={saving || !createEmail || createPassword.length < 6}>
+              {saving && <Loader2 className="h-4 w-4 animate-spin ltr:mr-2 rtl:ml-2" />}
+              إنشاء المستخدم
             </Button>
           </DialogFooter>
         </DialogContent>

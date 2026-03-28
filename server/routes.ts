@@ -2362,6 +2362,32 @@ router.patch("/admin/users/:userId/profile", async (req, res) => {
   res.json({ ok: true });
 });
 
+router.post("/admin/users", async (req, res) => {
+  const auth = await verifySuperAdmin(req);
+  if ("error" in auth) return res.status(403).json({ error: auth.error });
+  const { email, password, full_name, role } = req.body;
+  if (!email || !password) return res.status(400).json({ error: "Email and password are required" });
+  if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+  const validRole = ["admin", "founder", "viewer"].includes(role) ? role : "viewer";
+  const { data: newUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: full_name || "" },
+  });
+  if (createErr) return res.status(500).json({ error: createErr.message });
+  const userId = newUser.user.id;
+  await supabaseAdmin.from("profiles").upsert({
+    user_id: userId,
+    full_name: full_name || "",
+  }, { onConflict: "user_id" });
+  await supabaseAdmin.from("user_roles").upsert({
+    user_id: userId,
+    role: validRole,
+  }, { onConflict: "user_id,role" });
+  res.json({ ok: true, userId });
+});
+
 router.delete("/admin/users/:userId", async (req, res) => {
   const auth = await verifySuperAdmin(req);
   if ("error" in auth) return res.status(403).json({ error: auth.error });
