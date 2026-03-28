@@ -137,7 +137,7 @@ export default function OrderDetails() {
   const [editDeletedLineIds, setEditDeletedLineIds] = useState<number[]>([]);
   const [editMatSearch, setEditMatSearch] = useState("");
   const [extMaterials, setExtMaterials] = useState<ExtMaterial[]>([]);
-  const [companyLots, setCompanyLots] = useState<{ id: string; materialCode: string; materialName: string; unit: string; remaining: number; costPrice: number }[]>([]);
+  const [companyLots, setCompanyLots] = useState<{ id: string; materialCode: string; materialName: string; unit: string; remaining: number; costPrice: number; supplierId?: string; sourceOrder?: string }[]>([]);
   const [showEditInventoryPicker, setShowEditInventoryPicker] = useState(false);
   const [editInventorySearch, setEditInventorySearch] = useState("");
 
@@ -210,6 +210,7 @@ export default function OrderDetails() {
       const availableLots = (compInv || []).filter((l: any) => Number(l.remaining ?? 0) > 0).map((l: any) => ({
         id: l.id, materialCode: l.materialCode || l.material_code || "", materialName: l.materialName || l.material_name || "",
         unit: l.unit || "", remaining: Number(l.remaining ?? 0), costPrice: Number(l.costPrice ?? l.cost_price ?? 0),
+        supplierId: l.supplierId || l.supplier_id || "", sourceOrder: l.sourceOrder || l.source_order || "",
       }));
       setCompanyLots(availableLots);
     });
@@ -862,7 +863,7 @@ export default function OrderDetails() {
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">سعر الشراء</Label>
-                          <Input type="number" min="0" value={el._cost} onChange={(e) => { const realIdx = editLines.findIndex(p => p.id === el.id); setEditLines(prev => prev.map((p, i) => i === realIdx ? { ...p, _cost: e.target.value } : p)); }} className="h-8 text-sm" />
+                          <Input type="number" min="0" value={el._cost} onChange={(e) => { const realIdx = editLines.findIndex(p => p.id === el.id); setEditLines(prev => prev.map((p, i) => i === realIdx ? { ...p, _cost: e.target.value } : p)); }} className={`h-8 text-sm ${el.fromInventory ? "opacity-50" : ""}`} disabled={!!el.fromInventory} />
                         </div>
                       </div>
                       {el._supplierId && suppliers.find(s => s.id === el._supplierId) && (
@@ -906,7 +907,7 @@ export default function OrderDetails() {
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">سعر الشراء</Label>
-                          <Input type="number" min="0" value={ni.costPrice} onChange={(e) => setEditNewItems(prev => prev.map((p, i) => i === idx ? { ...p, costPrice: Number(e.target.value) || 0 } : p))} className="h-8 text-sm" />
+                          <Input type="number" min="0" value={ni.costPrice} onChange={(e) => setEditNewItems(prev => prev.map((p, i) => i === idx ? { ...p, costPrice: Number(e.target.value) || 0 } : p))} className={`h-8 text-sm ${(ni as any).fromInventory ? "opacity-50" : ""}`} disabled={!!(ni as any).fromInventory} />
                         </div>
                       </div>
                       {ni.supplierId && suppliers.find(s => s.id === ni.supplierId) && (
@@ -945,12 +946,12 @@ export default function OrderDetails() {
                               const lotImg = extMatch?.imageUrl || "";
                               return (
                             <div key={lot.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors border-b border-border/30" onClick={() => {
-                              setEditNewItems(prev => [...prev, {
+                              setEditNewItems(prev => [{
                                 materialCode: lot.materialCode, materialName: lot.materialName, quantity: 1,
                                 sellingPrice: 0, costPrice: lot.costPrice, imageUrl: lotImg, unit: lot.unit,
                                 fromInventory: true, inventoryLotId: lot.id,
-                                supplierId: editForm.supplierId || "",
-                              } as any]);
+                                supplierId: lot.supplierId || "",
+                              } as any, ...prev]);
                               setShowEditInventoryPicker(false);
                               setEditInventorySearch("");
                             }}>
@@ -963,6 +964,10 @@ export default function OrderDetails() {
                                 <div className="min-w-0">
                                   <span className="font-medium block">{lot.materialName}</span>
                                   <span className="text-muted-foreground">{lot.materialCode} · متبقي: {lot.remaining} {lot.unit} · سعر: {lot.costPrice.toLocaleString()}</span>
+                                  <span className="text-muted-foreground block">
+                                    {lot.sourceOrder && <>مصدر: {lot.sourceOrder}</>}
+                                    {lot.supplierId && suppliers.find((s: any) => s.id === lot.supplierId) && <>{lot.sourceOrder ? " · " : ""}مورد: {suppliers.find((s: any) => s.id === lot.supplierId)?.name}</>}
+                                  </span>
                                 </div>
                               </div>
                               <Plus className="h-4 w-4 text-primary shrink-0" />

@@ -48,6 +48,7 @@ type CompanyLot = {
   id: string; materialCode: string; materialName: string; unit: string;
   lotNumber: string; quantity: number; remaining: number; costPrice: number;
   sourceOrder: string; dateAdded: string; status: string;
+  supplierId?: string;
 };
 
 function mapOrder(raw: any): Order {
@@ -130,6 +131,7 @@ export default function OrdersPage() {
           costPrice: Number(l.costPrice ?? l.cost_price ?? 0),
           sourceOrder: l.sourceOrder || l.source_order || "",
           dateAdded: l.dateAdded || l.date_added || "", status: l.status || "In Stock",
+          supplierId: l.supplierId || l.supplier_id || "",
         })));
       }).catch(() => {});
     }
@@ -690,7 +692,7 @@ export default function OrdersPage() {
                           return (
                           <div key={lot.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors border-b border-border/30" onClick={() => {
                             if (orderItems.some(i => i.inventoryLotId === lot.id)) { toast.error("هذه الدُفعة مضافة بالفعل"); return; }
-                            setOrderItems(prev => [...prev, { materialCode: lot.materialCode, name: lot.materialName, quantity: 1, sellingPrice: 0, costPrice: lot.costPrice, imageUrl: lotImg, unit: lot.unit, fromInventory: true, inventoryLotId: lot.id, supplierId: selectedSupplier || "" }]);
+                            setOrderItems(prev => [{ materialCode: lot.materialCode, name: lot.materialName, quantity: 1, sellingPrice: 0, costPrice: lot.costPrice, imageUrl: lotImg, unit: lot.unit, fromInventory: true, inventoryLotId: lot.id, supplierId: lot.supplierId || "" }, ...prev]);
                             setShowInventoryPicker(false);
                             setInventorySearch("");
                           }}>
@@ -703,6 +705,10 @@ export default function OrdersPage() {
                               <div className="min-w-0">
                                 <span className="font-medium block">{lot.materialName}</span>
                                 <span className="text-muted-foreground">{lot.materialCode} · متبقي: {lot.remaining} {lot.unit} · سعر: {lot.costPrice.toLocaleString()}</span>
+                                <span className="text-muted-foreground block">
+                                  {lot.sourceOrder && <>مصدر: {lot.sourceOrder}</>}
+                                  {lot.supplierId && suppliers.find(s => s.id === lot.supplierId) && <>{lot.sourceOrder ? " · " : ""}مورد: {suppliers.find(s => s.id === lot.supplierId)?.name}</>}
+                                </span>
                               </div>
                             </div>
                             <Plus className="h-4 w-4 text-primary shrink-0" />
@@ -742,7 +748,7 @@ export default function OrdersPage() {
                       <div className="grid grid-cols-3 gap-2">
                         <div><Label className="text-[10px] text-muted-foreground">{t.quantity}</Label><Input className="h-7 text-xs mt-0.5" type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", parseInt(e.target.value) || 1)} /></div>
                         <div><Label className="text-[10px] text-muted-foreground">{t.sellingPrice}</Label><Input className={`h-7 text-xs mt-0.5 ${orderType === "inventory" ? "opacity-50" : ""}`} type="number" value={orderType === "inventory" ? 0 : item.sellingPrice} onChange={(e) => updateItem(idx, "sellingPrice", parseFloat(e.target.value) || 0)} disabled={orderType === "inventory"} /></div>
-                        <div><Label className="text-[10px] text-muted-foreground">{t.costPrice}</Label><Input className="h-7 text-xs mt-0.5" type="number" value={item.costPrice} onChange={(e) => updateItem(idx, "costPrice", parseFloat(e.target.value) || 0)} /></div>
+                        <div><Label className="text-[10px] text-muted-foreground">{t.costPrice}</Label><Input className={`h-7 text-xs mt-0.5 ${item.fromInventory ? "opacity-50" : ""}`} type="number" value={item.costPrice} onChange={(e) => updateItem(idx, "costPrice", parseFloat(e.target.value) || 0)} disabled={!!item.fromInventory} /></div>
                       </div>
                       {item.supplierId && suppliers.find(s => s.id === item.supplierId) && (
                         <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
