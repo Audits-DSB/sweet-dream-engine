@@ -4,7 +4,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { quickProfit } from "@/lib/orderProfit";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, ClipboardCheck, CreditCard, ChevronLeft, Plus, Trash2, Search } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, ClipboardCheck, CreditCard, ChevronLeft, ChevronDown, Plus, Trash2, Search } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { logAudit } from "@/lib/auditLog";
@@ -890,23 +891,30 @@ export default function OrderDetails() {
 
               {/* Inventory records */}
               {orderInventory.length > 0 && (
-                <div className="rounded-lg border bg-muted/20 overflow-hidden">
-                  <div className="px-3 py-2 bg-muted/40 border-b flex items-center gap-2 text-xs font-medium">
-                    <Package className="h-3.5 w-3.5 text-emerald-600" /> مخزون العميل ({orderInventory.length})
+                <Collapsible>
+                  <div className="rounded-lg border bg-muted/20 overflow-hidden">
+                    <CollapsibleTrigger className="w-full px-3 py-2 bg-muted/40 border-b flex items-center justify-between text-xs font-medium hover:bg-muted/60 transition-colors cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        <Package className="h-3.5 w-3.5 text-emerald-600" /> مخزون العميل ({orderInventory.length})
+                      </div>
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="divide-y">
+                        {orderInventory.map((inv: any) => (
+                          <button key={inv.id} className="flex items-center gap-3 px-3 py-2 text-xs w-full text-start hover:bg-muted/30 transition-colors" onClick={() => navigate(`/inventory?sourceOrder=${order.id}`)}>
+                            <span className="font-medium">{inv.material || inv.code}</span>
+                            <span className="text-muted-foreground">{inv.deliveryDate}</span>
+                            <span className="text-primary font-medium">متبقي: {inv.remaining}/{inv.delivered}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${inv.status === "Depleted" ? "bg-red-100 text-red-700" : inv.status === "Low Stock" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>{inv.status === "Depleted" ? "نفد" : inv.status === "Low Stock" ? "منخفض" : "متوفر"}</span>
+                            <span className="mr-auto" />
+                            <ChevronLeft className="h-3 w-3 text-muted-foreground" />
+                          </button>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
                   </div>
-                  <div className="divide-y">
-                    {orderInventory.map((inv: any) => (
-                      <button key={inv.id} className="flex items-center gap-3 px-3 py-2 text-xs w-full text-start hover:bg-muted/30 transition-colors" onClick={() => navigate(`/inventory?sourceOrder=${order.id}`)}>
-                        <span className="font-medium">{inv.material || inv.code}</span>
-                        <span className="text-muted-foreground">{inv.deliveryDate}</span>
-                        <span className="text-primary font-medium">متبقي: {inv.remaining}/{inv.delivered}</span>
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${inv.status === "Depleted" ? "bg-red-100 text-red-700" : inv.status === "Low Stock" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>{inv.status === "Depleted" ? "نفد" : inv.status === "Low Stock" ? "منخفض" : "متوفر"}</span>
-                        <span className="mr-auto" />
-                        <ChevronLeft className="h-3 w-3 text-muted-foreground" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                </Collapsible>
               )}
 
               {/* Audit records */}
