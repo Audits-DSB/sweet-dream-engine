@@ -775,7 +775,7 @@ export default function OrderDetails() {
                         </div>
                         <div className="max-h-48 overflow-y-auto">
                           {companyLots.filter(l => {
-                            if (usedCodesInEdit.includes(l.materialCode) || editNewItems.some(ni => (ni as any).inventoryLotId === l.id)) return false;
+                            if (editNewItems.some(ni => (ni as any).inventoryLotId === l.id)) return false;
                             const q = editInventorySearch.toLowerCase();
                             return !q || l.materialName.toLowerCase().includes(q) || l.materialCode.toLowerCase().includes(q);
                           }).map(lot => (
@@ -796,7 +796,7 @@ export default function OrderDetails() {
                             </div>
                           ))}
                           {companyLots.filter(l => {
-                            if (usedCodesInEdit.includes(l.materialCode) || editNewItems.some(ni => (ni as any).inventoryLotId === l.id)) return false;
+                            if (editNewItems.some(ni => (ni as any).inventoryLotId === l.id)) return false;
                             const q = editInventorySearch.toLowerCase();
                             return !q || l.materialName.toLowerCase().includes(q) || l.materialCode.toLowerCase().includes(q);
                           }).length === 0 && (
