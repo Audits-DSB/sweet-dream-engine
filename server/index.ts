@@ -26,9 +26,9 @@ const app = express();
 const PORT = Number(process.env.PORT || 5000);
 const VITE_PORT = 5001;
 const isProduction = process.env.NODE_ENV === "production";
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const distPath = path.resolve(__dirname, "../dist");
+const __filename = typeof __dirname !== "undefined" ? __dirname + "/index.ts" : fileURLToPath(import.meta.url);
+const __dirnameResolved = typeof __dirname !== "undefined" ? __dirname : path.dirname(__filename);
+const distPath = path.resolve(__dirnameResolved, "../dist");
 const indexPath = path.join(distPath, "index.html");
 
 app.use(cors());
