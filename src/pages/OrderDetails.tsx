@@ -948,18 +948,25 @@ export default function OrderDetails() {
                             const q = editInventorySearch.toLowerCase();
                             return !q || l.materialName.toLowerCase().includes(q) || l.materialCode.toLowerCase().includes(q);
                           }).map(lot => (
+                            (() => {
+                              const extMatch = extMaterials.find(m => m.sku.toLowerCase().trim() === lot.materialCode.toLowerCase().trim()) || extMaterials.find(m => m.name && lot.materialName && m.name.toLowerCase().trim() === lot.materialName.toLowerCase().trim());
+                              const lotImg = extMatch?.imageUrl || "";
+                              return (
                             <div key={lot.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors border-b border-border/30" onClick={() => {
-                              const extMatch = extMaterials.find(m => m.sku === lot.materialCode) || extMaterials.find(m => m.name && lot.materialName && m.name.toLowerCase().trim() === lot.materialName.toLowerCase().trim());
                               setEditNewItems(prev => [...prev, {
                                 materialCode: lot.materialCode, materialName: lot.materialName, quantity: 1,
-                                sellingPrice: 0, costPrice: lot.costPrice, imageUrl: extMatch?.imageUrl || "", unit: lot.unit,
+                                sellingPrice: 0, costPrice: lot.costPrice, imageUrl: lotImg, unit: lot.unit,
                                 fromInventory: true, inventoryLotId: lot.id,
                               } as any]);
                               setShowEditInventoryPicker(false);
                               setEditInventorySearch("");
                             }}>
                               <div className="flex items-center gap-2 min-w-0">
-                                {(() => { const match = extMaterials.find(m => m.sku === lot.materialCode) || extMaterials.find(m => m.name && lot.materialName && m.name.toLowerCase().trim() === lot.materialName.toLowerCase().trim()); const img = match?.imageUrl; return img ? <img src={img} alt="" className="w-8 h-8 rounded object-cover shrink-0" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /> : null; })()}
+                                {lotImg ? (
+                                  <img src={lotImg} alt={lot.materialName} className="h-8 w-8 rounded object-cover shrink-0 border border-border" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                ) : (
+                                  <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0"><Package className="h-3.5 w-3.5 text-muted-foreground" /></div>
+                                )}
                                 <div className="min-w-0">
                                   <span className="font-medium block">{lot.materialName}</span>
                                   <span className="text-muted-foreground">{lot.materialCode} · متبقي: {lot.remaining} {lot.unit} · سعر: {lot.costPrice.toLocaleString()}</span>
@@ -967,6 +974,8 @@ export default function OrderDetails() {
                               </div>
                               <Plus className="h-4 w-4 text-primary shrink-0" />
                             </div>
+                              );
+                            })()
                           ))}
                           {companyLots.filter(l => {
                             if (editNewItems.some(ni => (ni as any).inventoryLotId === l.id)) return false;

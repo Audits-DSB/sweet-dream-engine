@@ -682,21 +682,31 @@ export default function OrdersPage() {
                         {companyLots.filter(l => {
                           const q = inventorySearch.toLowerCase();
                           return !q || l.materialName.toLowerCase().includes(q) || l.materialCode.toLowerCase().includes(q);
-                        }).map(lot => (
+                        }).map(lot => {
+                          const matMatch = realMaterials.find(m => m.code.toLowerCase().trim() === lot.materialCode.toLowerCase().trim()) || realMaterials.find(m => m.name && lot.materialName && m.name.toLowerCase().trim() === lot.materialName.toLowerCase().trim());
+                          const lotImg = matMatch?.imageUrl || "";
+                          return (
                           <div key={lot.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors border-b border-border/30" onClick={() => {
                             if (orderItems.some(i => i.inventoryLotId === lot.id)) { toast.error("هذه الدُفعة مضافة بالفعل"); return; }
-                            const matMatch = realMaterials.find(m => m.code === lot.materialCode) || realMaterials.find(m => m.name && lot.materialName && m.name.toLowerCase().trim() === lot.materialName.toLowerCase().trim());
-                            setOrderItems(prev => [...prev, { materialCode: lot.materialCode, name: lot.materialName, quantity: 1, sellingPrice: 0, costPrice: lot.costPrice, imageUrl: matMatch?.imageUrl || "", unit: lot.unit, fromInventory: true, inventoryLotId: lot.id }]);
+                            setOrderItems(prev => [...prev, { materialCode: lot.materialCode, name: lot.materialName, quantity: 1, sellingPrice: 0, costPrice: lot.costPrice, imageUrl: lotImg, unit: lot.unit, fromInventory: true, inventoryLotId: lot.id }]);
                             setShowInventoryPicker(false);
                             setInventorySearch("");
                           }}>
-                            <div className="min-w-0">
-                              <span className="font-medium block">{lot.materialName}</span>
-                              <span className="text-muted-foreground">{lot.materialCode} · متبقي: {lot.remaining} {lot.unit} · سعر: {lot.costPrice.toLocaleString()}</span>
+                            <div className="flex items-center gap-2 min-w-0">
+                              {lotImg ? (
+                                <img src={lotImg} alt={lot.materialName} className="h-8 w-8 rounded object-cover shrink-0 border border-border" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                              ) : (
+                                <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0"><Package className="h-3.5 w-3.5 text-muted-foreground" /></div>
+                              )}
+                              <div className="min-w-0">
+                                <span className="font-medium block">{lot.materialName}</span>
+                                <span className="text-muted-foreground">{lot.materialCode} · متبقي: {lot.remaining} {lot.unit} · سعر: {lot.costPrice.toLocaleString()}</span>
+                              </div>
                             </div>
                             <Plus className="h-4 w-4 text-primary shrink-0" />
                           </div>
-                        ))}
+                          );
+                        })}
                         {companyLots.filter(l => { const q = inventorySearch.toLowerCase(); return !q || l.materialName.toLowerCase().includes(q) || l.materialCode.toLowerCase().includes(q); }).length === 0 && (
                           <div className="text-center py-3 text-muted-foreground text-xs">لا توجد نتائج</div>
                         )}
