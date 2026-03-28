@@ -916,6 +916,9 @@ export default function OrderDetails() {
                           <span>{suppliers.find(s => s.id === ni.supplierId)?.name}</span>
                         </div>
                       )}
+                      {(ni as any).fromInventory && (
+                        <div className="flex items-center gap-1 text-[10px] text-primary"><Warehouse className="h-3 w-3" />من المخزون — متاح: {(ni as any).inventoryRemaining} {ni.unit}</div>
+                      )}
                       <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
                         <span>إجمالي البيع: <span className="font-semibold text-foreground">{(ni.sellingPrice * ni.quantity).toLocaleString()}</span></span>
                         <span>إجمالي التكلفة: <span className="font-semibold text-foreground">{(ni.costPrice * ni.quantity).toLocaleString()}</span></span>
@@ -951,6 +954,7 @@ export default function OrderDetails() {
                                 sellingPrice: 0, costPrice: lot.costPrice, imageUrl: lotImg, unit: lot.unit,
                                 fromInventory: true, inventoryLotId: lot.id,
                                 supplierId: lot.supplierId || "",
+                                inventoryRemaining: lot.remaining,
                               } as any, ...prev]);
                               setShowEditInventoryPicker(false);
                               setEditInventorySearch("");

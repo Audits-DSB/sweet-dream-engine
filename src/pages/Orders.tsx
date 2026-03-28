@@ -42,6 +42,7 @@ interface OrderItem {
   sellingPrice: number; costPrice: number; imageUrl: string; unit: string;
   fromInventory?: boolean; inventoryLotId?: string;
   supplierId?: string;
+  inventoryRemaining?: number;
 }
 
 type CompanyLot = {
@@ -692,7 +693,7 @@ export default function OrdersPage() {
                           return (
                           <div key={lot.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors border-b border-border/30" onClick={() => {
                             if (orderItems.some(i => i.inventoryLotId === lot.id)) { toast.error("هذه الدُفعة مضافة بالفعل"); return; }
-                            setOrderItems(prev => [{ materialCode: lot.materialCode, name: lot.materialName, quantity: 1, sellingPrice: 0, costPrice: lot.costPrice, imageUrl: lotImg, unit: lot.unit, fromInventory: true, inventoryLotId: lot.id, supplierId: lot.supplierId || "" }, ...prev]);
+                            setOrderItems(prev => [{ materialCode: lot.materialCode, name: lot.materialName, quantity: 1, sellingPrice: 0, costPrice: lot.costPrice, imageUrl: lotImg, unit: lot.unit, fromInventory: true, inventoryLotId: lot.id, supplierId: lot.supplierId || "", inventoryRemaining: lot.remaining }, ...prev]);
                             setShowInventoryPicker(false);
                             setInventorySearch("");
                           }}>
@@ -757,7 +758,7 @@ export default function OrdersPage() {
                         </div>
                       )}
                       {item.fromInventory && (
-                        <div className="flex items-center gap-1 text-[10px] text-primary"><Warehouse className="h-3 w-3" />من المخزون — دُفعة: {item.inventoryLotId?.slice(0, 15)}</div>
+                        <div className="flex items-center gap-1 text-[10px] text-primary"><Warehouse className="h-3 w-3" />من المخزون — متاح: {item.inventoryRemaining} {item.unit}</div>
                       )}
                     </div>
                   ))}
