@@ -917,7 +917,7 @@ export default function OrderDetails() {
                         </div>
                       )}
                       {(ni as any).fromInventory && (
-                        <div className="flex items-center gap-1 text-[10px] text-primary"><Warehouse className="h-3 w-3" />من المخزون — متاح: {(ni as any).inventoryRemaining} {ni.unit}</div>
+                        <div className="flex items-center gap-1 text-[10px] text-primary"><Warehouse className="h-3 w-3" />من المخزون — متاح: {(ni as any).inventoryRemaining} {ni.unit} · مورد: {ni.supplierId && suppliers.find(s => s.id === ni.supplierId) ? suppliers.find(s => s.id === ni.supplierId)?.name : "بدون"}</div>
                       )}
                       <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
                         <span>إجمالي البيع: <span className="font-semibold text-foreground">{(ni.sellingPrice * ni.quantity).toLocaleString()}</span></span>

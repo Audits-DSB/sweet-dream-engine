@@ -758,7 +758,7 @@ export default function OrdersPage() {
                         </div>
                       )}
                       {item.fromInventory && (
-                        <div className="flex items-center gap-1 text-[10px] text-primary"><Warehouse className="h-3 w-3" />من المخزون — متاح: {item.inventoryRemaining} {item.unit}</div>
+                        <div className="flex items-center gap-1 text-[10px] text-primary"><Warehouse className="h-3 w-3" />من المخزون — متاح: {item.inventoryRemaining} {item.unit} · مورد: {item.supplierId && suppliers.find(s => s.id === item.supplierId) ? suppliers.find(s => s.id === item.supplierId)?.name : "بدون"}</div>
                       )}
                     </div>
                   ))}
