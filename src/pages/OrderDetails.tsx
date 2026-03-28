@@ -151,11 +151,15 @@ export default function OrderDetails() {
         allMats.push(mat);
       });
       setExtMaterials(allMats);
-      const enriched = (fetchedLines || []).map((l: any) => ({
-        ...l,
-        materialName: l.materialName || map[l.materialCode]?.name || l.materialCode,
-        imageUrl: l.imageUrl || map[l.materialCode]?.imageUrl || "",
-      }));
+      const enriched = (fetchedLines || []).map((l: any) => {
+        const savedImg = l.imageUrl && l.imageUrl.startsWith("http") ? l.imageUrl : "";
+        const catalogImg = map[l.materialCode]?.imageUrl || "";
+        return {
+          ...l,
+          materialName: l.materialName || map[l.materialCode]?.name || l.materialCode,
+          imageUrl: savedImg || catalogImg,
+        };
+      });
       setLines(enriched);
       setOrderDeliveries(deliveries || []);
       setOrderInventory(inventory || []);
