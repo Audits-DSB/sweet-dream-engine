@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Users, ShoppingCart, FileText, Receipt, TrendingUp, AlertTriangle, Clock, Package, CheckCircle2, Banknote, Truck, Wallet, ArrowUpRight, ArrowDownRight, BarChart3, Target, Warehouse, Boxes } from "lucide-react";
+import { Users, ShoppingCart, FileText, Receipt, TrendingUp, AlertTriangle, Clock, Package, CheckCircle2, Banknote, Truck, Wallet, ArrowUpRight, ArrowDownRight, BarChart3, Target, Warehouse, Boxes, ChevronDown, ChevronUp } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -61,6 +61,8 @@ export default function Dashboard() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const [activeSlice, setActiveSlice] = useState<number | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const toggleSection = (key: string) => setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
   const [clients, setClients] = useState<Client[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -342,17 +344,25 @@ export default function Dashboard() {
                   <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} أوردر`]} />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="space-y-1.5 mt-2">
-                {orderStatusDist.map((s, i) => (
-                  <div key={s.name} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/30 rounded px-2 py-1 transition-colors"
-                    style={{ opacity: activeSlice !== null && activeSlice !== i ? 0.5 : 1 }}
-                    onClick={() => setActiveSlice(p => p === i ? null : i)}>
-                    <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                    <span className="flex-1">{s.name}</span>
-                    <span className="font-semibold">{s.value}</span>
-                    <span className="text-muted-foreground">({clientOrders.length > 0 ? ((s.value / clientOrders.length) * 100).toFixed(0) : 0}%)</span>
+              <div className="mt-2">
+                <div className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer select-none mb-1 px-2" onClick={() => toggleSection("statusDist")}>
+                  {expandedSections.statusDist ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  <span>تفاصيل الحالات</span>
+                </div>
+                {expandedSections.statusDist && (
+                  <div className="space-y-1.5 animate-fade-in">
+                    {orderStatusDist.map((s, i) => (
+                      <div key={s.name} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/30 rounded px-2 py-1 transition-colors"
+                        style={{ opacity: activeSlice !== null && activeSlice !== i ? 0.5 : 1 }}
+                        onClick={() => setActiveSlice(p => p === i ? null : i)}>
+                        <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                        <span className="flex-1">{s.name}</span>
+                        <span className="font-semibold">{s.value}</span>
+                        <span className="text-muted-foreground">({clientOrders.length > 0 ? ((s.value / clientOrders.length) * 100).toFixed(0) : 0}%)</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             </>
           ) : (
@@ -458,12 +468,14 @@ export default function Dashboard() {
       {/* Company Inventory Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="stat-card lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm flex items-center gap-2"><Boxes className="h-4 w-4 text-primary" /> مخزون الشركة — استهلاك المواد</h3>
-            <button className="text-xs text-primary hover:underline" onClick={() => navigate("/company-inventory")}>عرض الكل ←</button>
+          <div className="flex items-center justify-between mb-4 cursor-pointer select-none" onClick={() => toggleSection("ciMaterial")}>
+            <h3 className="font-semibold text-sm flex items-center gap-2"><Boxes className="h-4 w-4 text-primary" /> مخزون الشركة — استهلاك المواد
+              {expandedSections.ciMaterial ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </h3>
+            <button className="text-xs text-primary hover:underline" onClick={(e) => { e.stopPropagation(); navigate("/company-inventory"); }}>عرض الكل ←</button>
           </div>
-          {ciByMaterial.length > 0 ? (
-            <div className="space-y-3">
+          {expandedSections.ciMaterial && (ciByMaterial.length > 0 ? (
+            <div className="space-y-3 animate-fade-in">
               {ciByMaterial.slice(0, 8).map((mat) => (
                 <div key={mat.code} className="group">
                   <div className="flex items-center justify-between mb-1">
@@ -484,7 +496,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">لا توجد بيانات في المخزون</div>
-          )}
+          ))}
         </div>
 
         <div className="stat-card">
@@ -560,12 +572,14 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="stat-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm">أعلى 5 عملاء — الإيرادات</h3>
-            <button className="text-xs text-primary hover:underline" onClick={() => navigate("/reports")}>التقارير ←</button>
+          <div className="flex items-center justify-between mb-4 cursor-pointer select-none" onClick={() => toggleSection("topClients")}>
+            <h3 className="font-semibold text-sm flex items-center gap-2">أعلى 5 عملاء — الإيرادات
+              {expandedSections.topClients ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </h3>
+            <button className="text-xs text-primary hover:underline" onClick={(e) => { e.stopPropagation(); navigate("/reports"); }}>التقارير ←</button>
           </div>
-          {topClients.length > 0 ? (
-            <div className="space-y-3">
+          {expandedSections.topClients && (topClients.length > 0 ? (
+            <div className="space-y-3 animate-fade-in">
               {topClients.map((c, i) => {
                 const maxRev = topClients[0]?.revenue || 1;
                 const pct = (c.revenue / maxRev) * 100;
@@ -599,37 +613,41 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">لا توجد بيانات</div>
-          )}
+          ))}
         </div>
 
         <div className="stat-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm">{t.recentOrders}</h3>
-            <button className="text-xs text-primary hover:underline" onClick={() => navigate("/orders")}>كل الأوردرات ←</button>
+          <div className="flex items-center justify-between mb-4 cursor-pointer select-none" onClick={() => toggleSection("recentOrders")}>
+            <h3 className="font-semibold text-sm flex items-center gap-2">{t.recentOrders}
+              {expandedSections.recentOrders ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </h3>
+            <button className="text-xs text-primary hover:underline" onClick={(e) => { e.stopPropagation(); navigate("/orders"); }}>كل الأوردرات ←</button>
           </div>
-          <div className="space-y-2">
-            {recentOrders.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground text-sm">لا توجد طلبات بعد</div>
-            ) : recentOrders.map(order => (
-              <div key={order.id} className="flex items-center gap-3 p-2.5 rounded-lg border border-border/50 hover:border-primary/30 cursor-pointer transition-colors" onClick={() => navigate(`/orders/${order.id}`)}>
-                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                  <ShoppingCart className="h-4 w-4 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold font-mono">{order.id}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                      STATUS_COLORS[order.status] ? "" : "bg-muted text-muted-foreground"
-                    }`} style={{ backgroundColor: `${STATUS_COLORS[order.status] || "#94a3b8"}20`, color: STATUS_COLORS[order.status] || "#94a3b8" }}>
-                      {order.status}
-                    </span>
+          {expandedSections.recentOrders && (
+            <div className="space-y-2 animate-fade-in">
+              {recentOrders.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">لا توجد طلبات بعد</div>
+              ) : recentOrders.map(order => (
+                <div key={order.id} className="flex items-center gap-3 p-2.5 rounded-lg border border-border/50 hover:border-primary/30 cursor-pointer transition-colors" onClick={() => navigate(`/orders/${order.id}`)}>
+                  <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <ShoppingCart className="h-4 w-4 text-primary" />
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">{order.client} · {order.date}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold font-mono">{order.id}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                        STATUS_COLORS[order.status] ? "" : "bg-muted text-muted-foreground"
+                      }`} style={{ backgroundColor: `${STATUS_COLORS[order.status] || "#94a3b8"}20`, color: STATUS_COLORS[order.status] || "#94a3b8" }}>
+                        {order.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">{order.client} · {order.date}</p>
+                  </div>
+                  <span className="text-sm font-bold shrink-0">{toNum(order.totalSelling).toLocaleString()}</span>
                 </div>
-                <span className="text-sm font-bold shrink-0">{toNum(order.totalSelling).toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
