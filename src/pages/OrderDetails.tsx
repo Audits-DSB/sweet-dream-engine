@@ -1,10 +1,11 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useRef, useState, useEffect, useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { quickProfit } from "@/lib/orderProfit";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, ClipboardCheck, CreditCard, ChevronLeft, ChevronDown, Plus, Trash2, Search, Warehouse } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, ClipboardCheck, CreditCard, ChevronLeft, ChevronDown, Plus, Trash2, Search, Warehouse, Undo2, UserPlus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -97,6 +98,7 @@ export default function OrderDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { profile } = useAuth();
   const { rules } = useBusinessRules();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
@@ -112,6 +114,12 @@ export default function OrderDetails() {
   const [orderCollections, setOrderCollections] = useState<any[]>([]);
   const [balanceDialog, setBalanceDialog] = useState<{ open: boolean; fp: any | null; available: number }>({ open: false, fp: null, available: 0 });
   const [useBalance, setUseBalance] = useState(false);
+  const [undoDialog, setUndoDialog] = useState<{ open: boolean; fp: FounderContrib | null }>({ open: false, fp: null });
+  const [undoing, setUndoing] = useState(false);
+  const [splitEditOpen, setSplitEditOpen] = useState(false);
+  const [splitEditing, setSplitEditing] = useState<{ founder: string; founderId: string; percentage: number }[]>([]);
+  const [splitSaving, setSplitSaving] = useState(false);
+  const [allFounders, setAllFounders] = useState<{ id: string; name: string }[]>([]);
 
   // Edit state
   const [editOpen, setEditOpen] = useState(false);
@@ -189,6 +197,10 @@ export default function OrderDetails() {
       }));
       setCompanyLots(availableLots);
     });
+
+  useEffect(() => {
+    api.get<{ id: string; name: string }[]>("/founders").then(f => setAllFounders((f || []).map(x => ({ id: x.id, name: x.name })))).catch(() => {});
+  }, []);
 
   useEffect(() => {
     loadOrder()
@@ -286,6 +298,98 @@ export default function OrderDetails() {
       toast.error(err?.message || "فشل تسجيل الدفع");
     } finally {
       setPayingFounder(null);
+    }
+  };
+
+  const userName = profile?.full_name || "مستخدم";
+
+  const handleUndoFunding = async () => {
+    const fp = undoDialog.fp;
+    if (!order || !fp) return;
+    setUndoing(true);
+    try {
+      const result = await api.post<any>("/founder-funding-undo", {
+        orderId: order.id,
+        founderName: fp.founder,
+        founderId: fp.founderId || "",
+        performedBy: userName,
+      });
+      await logAudit({
+        entity: "order", entityId: order.id, entityName: `${order.id} - ${order.client}`,
+        action: "update",
+        snapshot: {
+          type: "funding_undo",
+          founderName: fp.founder,
+          amount: fp.amount,
+          before: result.snapshotBefore,
+          after: { ...result.snapshotBefore, paid: false, paidAt: undefined },
+          deletedTxCount: result.deletedTxCount,
+        },
+        endpoint: `/founder-funding-undo`,
+        performedBy: userName,
+      });
+      const refreshed = await api.get<any>(`/orders/${order.id}`);
+      setOrder(mapOrder(refreshed));
+      setUndoDialog({ open: false, fp: null });
+      toast.success(`تم التراجع عن دفع ${fp.founder} بنجاح`);
+    } catch (err: any) {
+      toast.error(err?.message || "فشل التراجع");
+    } finally {
+      setUndoing(false);
+    }
+  };
+
+  const handleOpenSplitEdit = () => {
+    if (!order) return;
+    const hasPaid = order.founderContributions.some(f => f.paid);
+    if (hasPaid) {
+      toast.error("يجب التراجع عن جميع المدفوعات أولاً قبل تعديل التقسيم");
+      return;
+    }
+    setSplitEditing(order.founderContributions.map(f => ({
+      founder: f.founder, founderId: f.founderId || "", percentage: f.percentage || 0,
+    })));
+    setSplitEditOpen(true);
+  };
+
+  const handleSaveSplit = async () => {
+    if (!order) return;
+    const totalPctCheck = splitEditing.reduce((s, c) => s + c.percentage, 0);
+    if (Math.abs(totalPctCheck - 100) > 0.1) {
+      toast.error(`مجموع النسب يجب أن يكون 100% (حالياً ${totalPctCheck.toFixed(1)}%)`);
+      return;
+    }
+    if (splitEditing.some(c => !c.founder)) {
+      toast.error("يرجى اختيار المؤسس لكل سطر");
+      return;
+    }
+    setSplitSaving(true);
+    try {
+      const result = await api.post<any>("/founder-split-edit", {
+        orderId: order.id,
+        newContributions: splitEditing,
+        performedBy: userName,
+      });
+      await logAudit({
+        entity: "order", entityId: order.id, entityName: `${order.id} - ${order.client}`,
+        action: "update",
+        snapshot: {
+          type: "split_edit",
+          before: result.oldContributions,
+          after: result.newContributions,
+          totalCost: result.totalCost,
+        },
+        endpoint: `/founder-split-edit`,
+        performedBy: userName,
+      });
+      const refreshed = await api.get<any>(`/orders/${order.id}`);
+      setOrder(mapOrder(refreshed));
+      setSplitEditOpen(false);
+      toast.success("تم تعديل التقسيم بنجاح");
+    } catch (err: any) {
+      toast.error(err?.message || "فشل تعديل التقسيم");
+    } finally {
+      setSplitSaving(false);
     }
   };
 
@@ -1603,7 +1707,12 @@ export default function OrderDetails() {
             <div className="stat-card">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <h3 className="font-semibold text-sm flex items-center gap-2"><Users2 className="h-4 w-4 text-primary" />تمويل التكلفة قبل الشراء ({order.splitMode})</h3>
-                <span className="text-xs text-muted-foreground">إجمالي التكلفة: <span className="font-semibold text-foreground">{costTotal.toLocaleString()} {t.currency}</span></span>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleOpenSplitEdit}>
+                    <Pencil className="h-3 w-3" />تعديل التقسيم
+                  </Button>
+                  <span className="text-xs text-muted-foreground">إجمالي التكلفة: <span className="font-semibold text-foreground">{costTotal.toLocaleString()} {t.currency}</span></span>
+                </div>
               </div>
 
               {founderPayments.length > 0 ? (
@@ -1655,7 +1764,17 @@ export default function OrderDetails() {
                         <p className="text-xs text-muted-foreground">{fp.percentage?.toFixed(1)}% {t.sharePercent}</p>
                       </div>
 
-                      {/* Single pay button for all founders */}
+                      {fp.paid && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1 border-amber-400 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex-shrink-0"
+                          onClick={() => setUndoDialog({ open: true, fp })}
+                        >
+                          <Undo2 className="h-3 w-3" />تراجع
+                        </Button>
+                      )}
+
                       {!fp.paid && (
                         <Button
                           size="sm"
@@ -1817,6 +1936,131 @@ export default function OrderDetails() {
               onClick={handlePayWithBalance}
             >
               {payingFounder !== null ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Banknote className="h-3.5 w-3.5 me-1" />تأكيد التسديد</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Undo Funding Confirmation Dialog */}
+      <Dialog open={undoDialog.open} onOpenChange={(v) => !v && setUndoDialog({ open: false, fp: null })}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Undo2 className="h-5 w-5 text-amber-500" />تأكيد التراجع عن الدفع</DialogTitle>
+          </DialogHeader>
+          {undoDialog.fp && (
+            <div className="space-y-3">
+              <p className="text-sm">هل أنت متأكد من التراجع عن دفع <span className="font-bold">{undoDialog.fp.founder}</span>؟</p>
+              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-xs space-y-1">
+                <p>• سيتم إلغاء المعاملة المالية ({toNum(undoDialog.fp.amount).toLocaleString()} {t.currency})</p>
+                <p>• سيتم إرجاع المبلغ لرصيد المؤسس إن وجد</p>
+                <p>• سيتم تسجيل التراجع في سجل الأنشطة باسم: <span className="font-semibold">{userName}</span></p>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setUndoDialog({ open: false, fp: null })}>إلغاء</Button>
+            <Button size="sm" variant="destructive" disabled={undoing} onClick={handleUndoFunding}>
+              {undoing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Undo2 className="h-3.5 w-3.5 me-1" />تأكيد التراجع</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Split Edit Dialog */}
+      <Dialog open={splitEditOpen} onOpenChange={(v) => !v && setSplitEditOpen(false)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><UserPlus className="h-5 w-5 text-primary" />تعديل تقسيم التمويل — {order?.id}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">إجمالي التكلفة: <span className="font-semibold text-foreground">{costTotal.toLocaleString()} {t.currency}</span></span>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => {
+                  if (splitEditing.length === 0) return;
+                  const eq = Math.round(10000 / splitEditing.length) / 100;
+                  setSplitEditing(prev => prev.map(c => ({ ...c, percentage: eq })));
+                }}>
+                  توزيع بالتساوي
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => {
+                  setSplitEditing(prev => [...prev, { founder: "", founderId: "", percentage: 0 }]);
+                }}>
+                  <Plus className="h-3 w-3" />إضافة مؤسس
+                </Button>
+              </div>
+            </div>
+
+            {(() => {
+              const totalPctNow = splitEditing.reduce((s, c) => s + c.percentage, 0);
+              const isValid = Math.abs(totalPctNow - 100) <= 0.1;
+              return (
+                <>
+                  <div className="space-y-3">
+                    {splitEditing.map((entry, idx) => {
+                      const amount = Math.round(costTotal * entry.percentage / 100);
+                      return (
+                        <div key={idx} className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/20">
+                          <div className="flex-1 min-w-0">
+                            <Select value={entry.founderId || "__custom__"} onValueChange={(val) => {
+                              if (val === "__custom__") return;
+                              const f = allFounders.find(x => x.id === val);
+                              setSplitEditing(prev => prev.map((c, i) => i === idx ? { ...c, founder: f?.name || "", founderId: val } : c));
+                            }}>
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="اختر المؤسس" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {allFounders.filter(f => !splitEditing.some((s, si) => si !== idx && s.founderId === f.id)).map(f => (
+                                  <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="w-24">
+                            <div className="relative">
+                              <Input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={0.1}
+                                className="h-8 text-xs pe-6"
+                                value={entry.percentage || ""}
+                                onChange={(e) => {
+                                  const pct = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+                                  setSplitEditing(prev => prev.map((c, i) => i === idx ? { ...c, percentage: pct } : c));
+                                }}
+                              />
+                              <span className="absolute end-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                            </div>
+                          </div>
+                          <div className="w-28 text-end">
+                            <span className="text-sm font-semibold">{amount.toLocaleString()} {t.currency}</span>
+                          </div>
+                          {splitEditing.length > 1 && (
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => {
+                              setSplitEditing(prev => prev.filter((_, i) => i !== idx));
+                            }}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className={`flex items-center justify-between p-2 rounded-lg text-xs font-medium ${isValid ? "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400" : "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400"}`}>
+                    <span>المجموع: {totalPctNow.toFixed(1)}%</span>
+                    <span>{Math.round(costTotal * totalPctNow / 100).toLocaleString()} / {costTotal.toLocaleString()} {t.currency}</span>
+                    {!isValid && <AlertCircle className="h-4 w-4" />}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setSplitEditOpen(false)}>إلغاء</Button>
+            <Button size="sm" disabled={splitSaving || Math.abs(splitEditing.reduce((s, c) => s + c.percentage, 0) - 100) > 0.1} onClick={handleSaveSplit}>
+              {splitSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "حفظ التقسيم"}
             </Button>
           </DialogFooter>
         </DialogContent>

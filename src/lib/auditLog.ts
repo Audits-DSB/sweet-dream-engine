@@ -10,6 +10,7 @@ export interface AuditEntry {
   snapshot: Record<string, any>;
   endpoint: string;
   idField?: string;
+  performedBy?: string;
 }
 
 const entityLabels: Record<string, string> = {
@@ -53,6 +54,7 @@ export async function logAudit(entry: AuditEntry): Promise<void> {
         snapshot: entry.snapshot,
         endpoint: entry.endpoint,
         idField: entry.idField || "id",
+        ...(entry.performedBy ? { performedBy: entry.performedBy } : {}),
       }),
       date: now.toISOString().split("T")[0],
       time: now.toTimeString().slice(0, 5),

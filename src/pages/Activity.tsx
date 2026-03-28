@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   History, Trash2, Plus, Edit, RotateCcw, Search, Filter, Package, Users, ShoppingCart, Truck,
   Receipt, Boxes, Factory, UserCog, Wallet, ClipboardCheck, FileText, ChevronDown, ChevronUp,
-  X, AlertTriangle, Loader2, Eye,
+  X, AlertTriangle, Loader2, Eye, User,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -626,6 +626,11 @@ export default function ActivityPage() {
                                 )}
                               </div>
                               <div className="flex items-center gap-3 mt-0.5">
+                                {data?.performedBy && (
+                                  <span className="text-[10px] bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                    <User className="h-2.5 w-2.5" />{data.performedBy}
+                                  </span>
+                                )}
                                 {data?.entityId && (
                                   <span className="text-xs text-muted-foreground font-mono">{data.entityId}</span>
                                 )}
