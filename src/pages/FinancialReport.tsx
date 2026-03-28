@@ -162,6 +162,8 @@ export default function FinancialReportPage() {
     const ensure = (key: string) => { if (!monthlyData[key]) monthlyData[key] = { revenue: 0, cost: 0, orderCount: 0 }; };
 
     (orders || []).forEach((o) => {
+      const cid = o.clientId || o.client_id || "";
+      if (cid === "company-inventory") return;
       const dateStr = o.createdAt || o.created_at;
       if (!dateStr) return;
       try {
@@ -277,6 +279,8 @@ export default function FinancialReportPage() {
   const topClients = useMemo(() => {
     const clientMap: Record<string, { revenue: number; orders: number; name: string }> = {};
     (orders || []).forEach((o) => {
+      const cid = o.clientId || o.client_id || "";
+      if (cid === "company-inventory") return;
       const dateStr = o.createdAt || o.created_at;
       if (dateStr) {
         try { if (parseISO(dateStr) < cutoff) return; } catch { }

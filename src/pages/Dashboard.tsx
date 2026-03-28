@@ -95,7 +95,7 @@ export default function Dashboard() {
   const totalCollected = collections.reduce((s, c) => s + c.paidAmount, 0);
   const totalOutstanding = collections.reduce((s, c) => s + c.outstanding, 0);
   const overdueCollections = collections.filter(c => c.status === "Overdue").length;
-  const deliveredOrders = orders.filter(o => ["Delivered", "Closed", "Completed"].includes(o.status));
+  const deliveredOrders = orders.filter(o => ["Delivered", "Closed", "Completed"].includes(o.status) && o.clientId !== "company-inventory");
   const totalRevenue = deliveredOrders.reduce((s, o) => s + toNum(o.totalSelling), 0);
   const totalCostDelivered = deliveredOrders.reduce((s, o) => s + toNum(o.totalCost), 0);
   const profit = totalRevenue - totalCostDelivered;
@@ -149,7 +149,7 @@ export default function Dashboard() {
 
   const monthlyData = useMemo(() => {
     const map: Record<string, { revenue: number; cost: number; profit: number; orders: number }> = {};
-    orders.forEach(o => {
+    orders.filter(o => o.clientId !== "company-inventory").forEach(o => {
       const m = (o.date || "").slice(0, 7);
       if (!m) return;
       if (!map[m]) map[m] = { revenue: 0, cost: 0, profit: 0, orders: 0 };
@@ -188,7 +188,7 @@ export default function Dashboard() {
 
   const topClients = useMemo(() => {
     const map: Record<string, { client: string; clientId: string; revenue: number; orders: number; profit: number }> = {};
-    orders.forEach(o => {
+    orders.filter(o => o.clientId !== "company-inventory").forEach(o => {
       const cid = o.clientId || "";
       const name = o.client || cid;
       if (!map[cid]) map[cid] = { client: name, clientId: cid, revenue: 0, orders: 0, profit: 0 };

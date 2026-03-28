@@ -74,6 +74,7 @@ export default function ReportsPage() {
     const map: Record<string, { client: string; clientId: string; revenue: number; cost: number; orders: number }> = {};
     for (const o of orders) {
       const cid = o.client_id || o.clientId || "";
+      if (cid === "company-inventory") continue;
       const name = o.client || clientMap[cid] || cid || "غير محدد";
       const rev = parseFloat(String(o.total_selling || o.totalSelling || "0").replace(/,/g, "")) || 0;
       const cost = parseFloat(String(o.total_cost || o.totalCost || "0").replace(/,/g, "")) || 0;
@@ -88,6 +89,8 @@ export default function ReportsPage() {
   const monthlyData = useMemo(() => {
     const map: Record<string, { month: string; label: string; orders: number; revenue: number; cost: number; profit: number }> = {};
     for (const o of orders) {
+      const cid = o.client_id || o.clientId || "";
+      if (cid === "company-inventory") continue;
       const date = o.date || o.created_at || "";
       const ym = date.slice(0, 7);
       if (!ym) continue;
