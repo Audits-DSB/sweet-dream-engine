@@ -168,19 +168,27 @@ if (isProduction) {
 
 async function reloadSupabaseSchemaCache() {
   try {
-    const supabaseUrl = process.env.VITE_SUPABASE_URL!;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    await fetch(`${supabaseUrl}/rest/v1/`, {
-      method: "GET",
-      headers: {
-        "apikey": serviceKey,
-        "Authorization": `Bearer ${serviceKey}`,
-        "Accept": "application/json",
-        "Accept-Profile": "public",
-      },
-    });
-    console.log("✅ Supabase schema cache pinged.");
-  } catch { /* ignore */ }
+    await supabaseAdmin.rpc("exec_sql", { sql_text: "NOTIFY pgrst, 'reload schema'" });
+    console.log("✅ Supabase schema cache reloaded via NOTIFY.");
+  } catch (e1) {
+    try {
+      const supabaseUrl = process.env.VITE_SUPABASE_URL!;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+      const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
+        method: "POST",
+        headers: {
+          "apikey": serviceKey,
+          "Authorization": `Bearer ${serviceKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ sql_text: "NOTIFY pgrst, 'reload schema'" }),
+      });
+      if (resp.ok) console.log("✅ Supabase schema cache reloaded via fetch.");
+      else console.warn("⚠️ Schema cache reload returned:", resp.status);
+    } catch {
+      console.warn("⚠️ Could not reload Supabase schema cache. Run in SQL Editor: NOTIFY pgrst, 'reload schema';");
+    }
+  }
 }
 
 app.listen(PORT, "0.0.0.0", async () => {

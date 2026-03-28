@@ -313,7 +313,7 @@ router.get("/orders/:id", async (req, res) => {
   res.json(camelizeKeys({ ...orderRes.data, founderContributions: contribRes.data?.contributions || [] }));
 });
 router.post("/orders", async (req, res) => {
-  const { items, founderContributions, ...orderBody } = req.body;
+  const { items, founderContributions, client, ...orderBody } = req.body;
   const data = snakifyKeys(orderBody);
   const result = await supabaseAdmin.from("orders").insert(data).select().single();
   if (result.error) return res.status(400).json({ error: result.error.message });
@@ -413,7 +413,7 @@ router.patch("/order-lines/:id", async (req, res) => {
   res.json(camelizeKeys(data || {}));
 });
 router.patch("/orders/:id", async (req, res) => {
-  const { founderContributions, ...rest } = req.body;
+  const { founderContributions, client, ...rest } = req.body;
   // Update Supabase contributions if provided
   if (Array.isArray(founderContributions)) {
     try {
