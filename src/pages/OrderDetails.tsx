@@ -780,9 +780,10 @@ export default function OrderDetails() {
                             return !q || l.materialName.toLowerCase().includes(q) || l.materialCode.toLowerCase().includes(q);
                           }).map(lot => (
                             <div key={lot.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors border-b border-border/30" onClick={() => {
+                              const extMatch = extMaterials.find(m => m.sku === lot.materialCode);
                               setEditNewItems(prev => [...prev, {
                                 materialCode: lot.materialCode, materialName: lot.materialName, quantity: 1,
-                                sellingPrice: 0, costPrice: lot.costPrice, imageUrl: "", unit: lot.unit,
+                                sellingPrice: 0, costPrice: lot.costPrice, imageUrl: extMatch?.imageUrl || "", unit: lot.unit,
                                 fromInventory: true, inventoryLotId: lot.id,
                               } as any]);
                               setShowEditInventoryPicker(false);

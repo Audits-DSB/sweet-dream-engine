@@ -649,7 +649,8 @@ export default function OrdersPage() {
                         }).map(lot => (
                           <div key={lot.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors border-b border-border/30" onClick={() => {
                             if (orderItems.some(i => i.inventoryLotId === lot.id)) { toast.error("هذه الدُفعة مضافة بالفعل"); return; }
-                            setOrderItems(prev => [...prev, { materialCode: lot.materialCode, name: lot.materialName, quantity: 1, sellingPrice: 0, costPrice: lot.costPrice, imageUrl: "", unit: lot.unit, fromInventory: true, inventoryLotId: lot.id }]);
+                            const matMatch = realMaterials.find(m => m.code === lot.materialCode);
+                            setOrderItems(prev => [...prev, { materialCode: lot.materialCode, name: lot.materialName, quantity: 1, sellingPrice: 0, costPrice: lot.costPrice, imageUrl: matMatch?.imageUrl || "", unit: lot.unit, fromInventory: true, inventoryLotId: lot.id }]);
                             setShowInventoryPicker(false);
                             setInventorySearch("");
                           }}>
