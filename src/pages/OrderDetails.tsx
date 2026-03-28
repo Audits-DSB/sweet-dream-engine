@@ -342,19 +342,17 @@ export default function OrderDetails() {
 
       const linesChanged = linePatches.length > 0 || editDeletedLineIds.length > 0 || editNewItems.length > 0;
 
-      if (linesChanged) {
-        orderPatch.totalSelling = newTotalSelling;
-        orderPatch.totalCost = newTotalCost;
-        orderPatch.lines = activeEditLines.length + editNewItems.length;
+      orderPatch.totalSelling = newTotalSelling;
+      orderPatch.totalCost = newTotalCost;
+      orderPatch.lines = activeEditLines.length + editNewItems.length;
 
-        if (order.founderContributions && order.founderContributions.length > 0) {
-          const totalPctAll = order.founderContributions.reduce((s, f) => s + (f.percentage || 0), 0) || 100;
-          const updatedContributions = order.founderContributions.map(fc => ({
-            ...fc,
-            amount: Math.round(newTotalCost * (fc.percentage || 0) / totalPctAll * 100) / 100,
-          }));
-          orderPatch.founderContributions = updatedContributions;
-        }
+      if (order.founderContributions && order.founderContributions.length > 0) {
+        const totalPctAll = order.founderContributions.reduce((s, f) => s + (f.percentage || 0), 0) || 100;
+        const updatedContributions = order.founderContributions.map(fc => ({
+          ...fc,
+          amount: Math.round(newTotalCost * (fc.percentage || 0) / totalPctAll * 100) / 100,
+        }));
+        orderPatch.founderContributions = updatedContributions;
       }
 
       await Promise.all([...linePatches, ...deleteOps]);
