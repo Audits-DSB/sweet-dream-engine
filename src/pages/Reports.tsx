@@ -70,18 +70,21 @@ export default function ReportsPage() {
     return m;
   }, [clients]);
 
+  const deliveredStatuses = ["Delivered", "Closed", "Completed"];
   const clientRevenue = useMemo(() => {
     const map: Record<string, { client: string; clientId: string; revenue: number; cost: number; orders: number }> = {};
     for (const o of orders) {
       const cid = o.client_id || o.clientId || "";
       if (cid === "company-inventory") continue;
       const name = o.client || clientMap[cid] || cid || "غير محدد";
-      const rev = parseFloat(String(o.total_selling || o.totalSelling || "0").replace(/,/g, "")) || 0;
-      const cost = parseFloat(String(o.total_cost || o.totalCost || "0").replace(/,/g, "")) || 0;
       if (!map[cid]) map[cid] = { client: name, clientId: cid, revenue: 0, cost: 0, orders: 0 };
-      map[cid].revenue += rev;
-      map[cid].cost += cost;
       map[cid].orders += 1;
+      if (deliveredStatuses.includes(o.status)) {
+        const rev = parseFloat(String(o.total_selling || o.totalSelling || "0").replace(/,/g, "")) || 0;
+        const cost = parseFloat(String(o.total_cost || o.totalCost || "0").replace(/,/g, "")) || 0;
+        map[cid].revenue += rev;
+        map[cid].cost += cost;
+      }
     }
     return Object.values(map).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
   }, [orders, clientMap]);
@@ -94,25 +97,28 @@ export default function ReportsPage() {
       const date = o.date || o.created_at || "";
       const ym = date.slice(0, 7);
       if (!ym) continue;
-      const rev = parseFloat(String(o.total_selling || o.totalSelling || "0").replace(/,/g, "")) || 0;
-      const cost = parseFloat(String(o.total_cost || o.totalCost || "0").replace(/,/g, "")) || 0;
       if (!map[ym]) map[ym] = { month: ym, label: MONTH_LABELS[ym.slice(5)] || ym.slice(5), orders: 0, revenue: 0, cost: 0, profit: 0 };
       map[ym].orders += 1;
-      map[ym].revenue += rev;
-      map[ym].cost += cost;
-      map[ym].profit += (rev - cost);
+      if (deliveredStatuses.includes(o.status)) {
+        const rev = parseFloat(String(o.total_selling || o.totalSelling || "0").replace(/,/g, "")) || 0;
+        const cost = parseFloat(String(o.total_cost || o.totalCost || "0").replace(/,/g, "")) || 0;
+        map[ym].revenue += rev;
+        map[ym].cost += cost;
+        map[ym].profit += (rev - cost);
+      }
     }
     return Object.values(map).sort((a, b) => a.month.localeCompare(b.month)).slice(-12).map(m => ({ ...m, month: m.label }));
   }, [orders]);
 
+  const clientOnlyOrders = useMemo(() => orders.filter(o => (o.client_id || o.clientId) !== "company-inventory"), [orders]);
   const orderStatusDist = useMemo(() => {
     const map: Record<string, number> = {};
-    for (const o of orders) {
+    for (const o of clientOnlyOrders) {
       const s = o.status || "Draft";
       map[s] = (map[s] || 0) + 1;
     }
     return Object.entries(map).map(([name, value]) => ({ name, value, color: STATUS_COLORS[name] || "#94a3b8" }));
-  }, [orders]);
+  }, [clientOnlyOrders]);
 
   const deliveryStats = useMemo(() => {
     const confirmed = deliveries.filter((d: any) => d.status === "Delivered" || d.status === "مُسلَّم").length;
@@ -179,8 +185,8 @@ export default function ReportsPage() {
   const totalRevenue = clientRevenue.reduce((s, c) => s + c.revenue, 0);
   const totalCost = clientRevenue.reduce((s, c) => s + c.cost, 0);
   const totalProfit = totalRevenue - totalCost;
-  const totalOrdersCount = orders.length;
-  const activeClients = new Set(orders.map(o => o.client_id || o.clientId).filter(Boolean)).size;
+  const totalOrdersCount = clientOnlyOrders.length;
+  const activeClients = new Set(clientOnlyOrders.map(o => o.client_id || o.clientId).filter(Boolean)).size;
 
   const reports = [
     { name: t.clientRevenueReport, desc: t.clientRevenueDesc, icon: Users, action: () => exportToCsv("client_revenue", [t.client, t.revenue, t.totalOrders], clientRevenue.map(c => [c.client, c.revenue, c.orders])) },

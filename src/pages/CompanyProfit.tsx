@@ -127,7 +127,11 @@ export default function CompanyProfitPage() {
   // Build order map: orderId → full order data
   const orderMap = useMemo(() => {
     const map: Record<string, any> = {};
-    (rawOrders || []).forEach((o: any) => { map[o.id] = o; });
+    (rawOrders || []).forEach((o: any) => {
+      const cid = o.clientId || o.client_id || "";
+      if (cid === "company-inventory") return;
+      map[o.id] = o;
+    });
     return map;
   }, [rawOrders]);
 

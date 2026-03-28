@@ -161,9 +161,11 @@ export default function FinancialReportPage() {
     const monthlyData: Record<string, { revenue: number; cost: number; orderCount: number }> = {};
     const ensure = (key: string) => { if (!monthlyData[key]) monthlyData[key] = { revenue: 0, cost: 0, orderCount: 0 }; };
 
+    const deliveredStatuses = ["Delivered", "Closed", "Completed"];
     (orders || []).forEach((o) => {
       const cid = o.clientId || o.client_id || "";
       if (cid === "company-inventory") return;
+      if (!deliveredStatuses.includes(o.status)) return;
       const dateStr = o.createdAt || o.created_at;
       if (!dateStr) return;
       try {
@@ -266,6 +268,8 @@ export default function FinancialReportPage() {
   const orderStatusData = useMemo(() => {
     const statusMap: Record<string, number> = {};
     (orders || []).forEach((o) => {
+      const cid = o.clientId || o.client_id || "";
+      if (cid === "company-inventory") return;
       const dateStr = o.createdAt || o.created_at;
       if (dateStr) {
         try { if (parseISO(dateStr) < cutoff) return; } catch { }
@@ -281,6 +285,8 @@ export default function FinancialReportPage() {
     (orders || []).forEach((o) => {
       const cid = o.clientId || o.client_id || "";
       if (cid === "company-inventory") return;
+      const deliveredStatuses2 = ["Delivered", "Closed", "Completed"];
+      if (!deliveredStatuses2.includes(o.status)) return;
       const dateStr = o.createdAt || o.created_at;
       if (dateStr) {
         try { if (parseISO(dateStr) < cutoff) return; } catch { }

@@ -149,14 +149,17 @@ export default function Dashboard() {
 
   const monthlyData = useMemo(() => {
     const map: Record<string, { revenue: number; cost: number; profit: number; orders: number }> = {};
+    const deliveredStatuses = ["Delivered", "Closed", "Completed"];
     orders.filter(o => o.clientId !== "company-inventory").forEach(o => {
       const m = (o.date || "").slice(0, 7);
       if (!m) return;
       if (!map[m]) map[m] = { revenue: 0, cost: 0, profit: 0, orders: 0 };
-      map[m].revenue += toNum(o.totalSelling);
-      map[m].cost += toNum(o.totalCost);
-      map[m].profit += toNum(o.totalSelling) - toNum(o.totalCost);
       map[m].orders += 1;
+      if (deliveredStatuses.includes(o.status)) {
+        map[m].revenue += toNum(o.totalSelling);
+        map[m].cost += toNum(o.totalCost);
+        map[m].profit += toNum(o.totalSelling) - toNum(o.totalCost);
+      }
     });
     return Object.entries(map)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -164,11 +167,12 @@ export default function Dashboard() {
       .map(([ym, vals]) => ({ month: ARABIC_MONTHS[ym.slice(5, 7)] || ym, ...vals }));
   }, [orders]);
 
+  const clientOrders = useMemo(() => orders.filter(o => o.clientId !== "company-inventory"), [orders]);
   const orderStatusDist = useMemo(() => {
     const map: Record<string, number> = {};
-    orders.forEach(o => { const s = o.status || "Draft"; map[s] = (map[s] || 0) + 1; });
+    clientOrders.forEach(o => { const s = o.status || "Draft"; map[s] = (map[s] || 0) + 1; });
     return Object.entries(map).map(([name, value]) => ({ name, value, color: STATUS_COLORS[name] || "#94a3b8" }));
-  }, [orders]);
+  }, [clientOrders]);
 
   const collectionPieData = useMemo(() => {
     let paid = 0, partial = 0, overdue = 0, pending = 0;
@@ -187,14 +191,17 @@ export default function Dashboard() {
   }, [collections]);
 
   const topClients = useMemo(() => {
+    const deliveredStatuses = ["Delivered", "Closed", "Completed"];
     const map: Record<string, { client: string; clientId: string; revenue: number; orders: number; profit: number }> = {};
     orders.filter(o => o.clientId !== "company-inventory").forEach(o => {
       const cid = o.clientId || "";
       const name = o.client || cid;
       if (!map[cid]) map[cid] = { client: name, clientId: cid, revenue: 0, orders: 0, profit: 0 };
-      map[cid].revenue += toNum(o.totalSelling);
-      map[cid].profit += toNum(o.totalSelling) - toNum(o.totalCost);
       map[cid].orders += 1;
+      if (deliveredStatuses.includes(o.status)) {
+        map[cid].revenue += toNum(o.totalSelling);
+        map[cid].profit += toNum(o.totalSelling) - toNum(o.totalCost);
+      }
     });
     return Object.values(map).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
   }, [orders]);
@@ -343,7 +350,7 @@ export default function Dashboard() {
                     <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
                     <span className="flex-1">{s.name}</span>
                     <span className="font-semibold">{s.value}</span>
-                    <span className="text-muted-foreground">({orders.length > 0 ? ((s.value / orders.length) * 100).toFixed(0) : 0}%)</span>
+                    <span className="text-muted-foreground">({clientOrders.length > 0 ? ((s.value / clientOrders.length) * 100).toFixed(0) : 0}%)</span>
                   </div>
                 ))}
               </div>
