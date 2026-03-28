@@ -2304,26 +2304,73 @@ router.get("/admin/users", async (req, res) => {
   res.json(result);
 });
 
-router.patch("/admin/users/:userId/role", async (req, res) => {
+async function verifySuperAdmin(req: any): Promise<{ user: any } | { error: string }> {
   const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: "Unauthorized" });
+  if (!authHeader) return { error: "Unauthorized" };
   const token = authHeader.replace("Bearer ", "");
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user || user.email !== SUPER_ADMIN_EMAIL) {
-    return res.status(403).json({ error: "Only the super admin can manage users" });
+    return { error: "Only the super admin can manage users" };
   }
+  return { user };
+}
+
+router.patch("/admin/users/:userId/role", async (req, res) => {
+  const auth = await verifySuperAdmin(req);
+  if ("error" in auth) return res.status(403).json({ error: auth.error });
   const { userId } = req.params;
   const { role } = req.body;
   if (!["admin", "founder", "viewer"].includes(role)) {
     return res.status(400).json({ error: "Invalid role" });
   }
-  if (userId === user.id) {
-    return res.status(400).json({ error: "Cannot change your own role" });
-  }
   const { error: deleteError } = await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
   if (deleteError) return res.status(500).json({ error: deleteError.message });
   const { error: insertError } = await supabaseAdmin.from("user_roles").insert({ user_id: userId, role });
   if (insertError) return res.status(500).json({ error: insertError.message });
+  res.json({ ok: true });
+});
+
+router.patch("/admin/users/:userId/password", async (req, res) => {
+  const auth = await verifySuperAdmin(req);
+  if ("error" in auth) return res.status(403).json({ error: auth.error });
+  const { userId } = req.params;
+  const { password } = req.body;
+  if (!password || password.length < 6) {
+    return res.status(400).json({ error: "Password must be at least 6 characters" });
+  }
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
+});
+
+router.patch("/admin/users/:userId/profile", async (req, res) => {
+  const auth = await verifySuperAdmin(req);
+  if ("error" in auth) return res.status(403).json({ error: auth.error });
+  const { userId } = req.params;
+  const { full_name, phone, email } = req.body;
+  const profileUpdates: any = {};
+  if (full_name !== undefined) profileUpdates.full_name = full_name;
+  if (phone !== undefined) profileUpdates.phone = phone;
+  if (Object.keys(profileUpdates).length > 0) {
+    const { error } = await supabaseAdmin.from("profiles").update(profileUpdates).eq("user_id", userId);
+    if (error) return res.status(500).json({ error: error.message });
+  }
+  if (email) {
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { email });
+    if (error) return res.status(500).json({ error: error.message });
+  }
+  res.json({ ok: true });
+});
+
+router.delete("/admin/users/:userId", async (req, res) => {
+  const auth = await verifySuperAdmin(req);
+  if ("error" in auth) return res.status(403).json({ error: auth.error });
+  const { userId } = req.params;
+  if (userId === auth.user.id) {
+    return res.status(400).json({ error: "Cannot delete your own account" });
+  }
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
 });
 
