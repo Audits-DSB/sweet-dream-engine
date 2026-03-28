@@ -382,6 +382,49 @@ router.patch("/orders/:id", async (req, res) => {
   }
   const { data, error } = await supabaseAdmin.from("orders").update(snakifyKeys(rest)).eq("id", req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
+
+  if (rest.totalCost !== undefined) {
+    try {
+      const { data: fundingTxs } = await supabaseAdmin
+        .from("treasury_transactions")
+        .select("id,description,performed_by,reference_id,amount")
+        .eq("tx_type", "order_funding");
+      const orderId = req.params.id;
+      const linkedTxs = (fundingTxs || []).filter((tx: any) => {
+        const parsed = parseFounderDesc(tx.description);
+        return parsed.orderId === orderId;
+      });
+      if (linkedTxs.length > 0) {
+        const { data: contribRow } = await supabaseAdmin
+          .from("order_founder_contributions")
+          .select("contributions")
+          .eq("order_id", orderId)
+          .single();
+        const contribs: any[] = contribRow?.contributions || founderContributions || [];
+        for (const tx of linkedTxs) {
+          const founderName = tx.reference_id || "";
+          const founderId = tx.performed_by || "";
+          const match = contribs.find((c: any) =>
+            (c.founderId && c.founderId === founderId) ||
+            (c.founder && c.founder === founderName)
+          );
+          if (match) {
+            const oldAmt = Math.abs(Number(tx.amount));
+            const newAmt = Number(match.amount) || 0;
+            if (Math.abs(oldAmt - newAmt) > 0.01) {
+              const { data: fRow } = await supabaseAdmin.from("founders").select("total_contributed").eq("id", founderId || "___").single();
+              if (fRow) {
+                const newContrib = Math.max(0, Number(fRow.total_contributed || 0) - oldAmt + newAmt);
+                await supabaseAdmin.from("founders").update({ total_contributed: newContrib }).eq("id", founderId);
+              }
+              await supabaseAdmin.from("treasury_transactions").update({ amount: newAmt }).eq("id", tx.id);
+            }
+          }
+        }
+      }
+    } catch (e: any) { console.warn("[order-patch] sync funding txs error:", e.message); }
+  }
+
   // Enrich with contributions
   const { data: contribData } = await supabaseAdmin.from("order_founder_contributions").select("contributions").eq("order_id", req.params.id).single();
   return res.json({ ...camelizeKeys(data), founderContributions: contribData?.contributions || founderContributions || [] });
