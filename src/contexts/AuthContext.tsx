@@ -10,6 +10,8 @@ interface Profile {
   phone: string | null;
 }
 
+const SUPER_ADMIN_EMAIL = "drseifelshamy@gmail.com";
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
@@ -18,6 +20,7 @@ interface AuthContextType {
   loading: boolean;
   hasRole: (role: AppRole) => boolean;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -63,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasRole = (role: AppRole) => roles.includes(role);
   const isAdmin = hasRole("admin");
+  const isSuperAdmin = session?.user?.email === SUPER_ADMIN_EMAIL;
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -72,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, profile, roles, loading, hasRole, isAdmin, signOut }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, profile, roles, loading, hasRole, isAdmin, isSuperAdmin, signOut }}>
       {children}
     </AuthContext.Provider>
   );

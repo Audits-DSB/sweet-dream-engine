@@ -86,7 +86,7 @@ function NavGroup({ label, items, collapsed }: { label: string; items: NavItem[]
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, isSuperAdmin } = useAuth();
   const { t, dir } = useLanguage();
   const navigate = useNavigate();
   const { mainItems, inventoryItems, financeItems, systemItems } = useNavItems();
@@ -111,7 +111,7 @@ export function AppSidebar() {
         <NavGroup label={t.main} items={mainItems} collapsed={collapsed} />
         <NavGroup label={t.inventoryAudits} items={inventoryItems} collapsed={collapsed} />
         <NavGroup label={t.finance} items={financeItems} collapsed={collapsed} />
-        <NavGroup label={t.system} items={systemItems} collapsed={collapsed} />
+        <NavGroup label={t.system} items={isSuperAdmin ? systemItems : systemItems.filter(i => i.url !== "/user-management")} collapsed={collapsed} />
       </SidebarContent>
 
       <SidebarFooter className="p-3 border-t border-sidebar-border space-y-2">

@@ -2281,4 +2281,50 @@ router.delete("/trash", async (_req, res) => {
   }
 });
 
+const SUPER_ADMIN_EMAIL = "drseifelshamy@gmail.com";
+
+router.get("/admin/users", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: "Unauthorized" });
+  const token = authHeader.replace("Bearer ", "");
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user || user.email !== SUPER_ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Only the super admin can manage users" });
+  }
+  const { data: profiles } = await supabaseAdmin.from("profiles").select("user_id, full_name, avatar_url, created_at");
+  const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id, role");
+  const { data: { users: authUsers } } = await supabaseAdmin.auth.admin.listUsers();
+  const emailMap: Record<string, string> = {};
+  (authUsers || []).forEach((u: any) => { emailMap[u.id] = u.email || ""; });
+  const result = (profiles || []).map((p: any) => ({
+    ...p,
+    email: emailMap[p.user_id] || "",
+    roles: (roles || []).filter((r: any) => r.user_id === p.user_id).map((r: any) => r.role),
+  }));
+  res.json(result);
+});
+
+router.patch("/admin/users/:userId/role", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: "Unauthorized" });
+  const token = authHeader.replace("Bearer ", "");
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user || user.email !== SUPER_ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Only the super admin can manage users" });
+  }
+  const { userId } = req.params;
+  const { role } = req.body;
+  if (!["admin", "founder", "viewer"].includes(role)) {
+    return res.status(400).json({ error: "Invalid role" });
+  }
+  if (userId === user.id) {
+    return res.status(400).json({ error: "Cannot change your own role" });
+  }
+  const { error: deleteError } = await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+  if (deleteError) return res.status(500).json({ error: deleteError.message });
+  const { error: insertError } = await supabaseAdmin.from("user_roles").insert({ user_id: userId, role });
+  if (insertError) return res.status(500).json({ error: insertError.message });
+  res.json({ ok: true });
+});
+
 export default router;

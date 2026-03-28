@@ -8,10 +8,15 @@ import { toast } from "sonner";
 import { Shield, ShieldCheck, Eye, Users } from "lucide-react";
 import { Navigate } from "react-router-dom";
 
+async function getAuthHeaders() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return { Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" };
+}
+
 type AppRole = "admin" | "founder" | "viewer";
 
 interface UserWithRole {
-  user_id: string; full_name: string | null; avatar_url: string | null; created_at: string; roles: AppRole[];
+  user_id: string; full_name: string | null; avatar_url: string | null; created_at: string; roles: AppRole[]; email?: string;
 }
 
 const roleIcons: Record<AppRole, typeof Shield> = { admin: ShieldCheck, founder: Shield, viewer: Eye };
@@ -23,22 +28,26 @@ const roleColors: Record<AppRole, string> = {
 
 export default function UserManagementPage() {
   const { t } = useLanguage();
-  const { isAdmin, hasRole, loading: authLoading, user } = useAuth();
+  const { isSuperAdmin, loading: authLoading, user } = useAuth();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const canAccess = isAdmin || hasRole("founder");
+  const canAccess = isSuperAdmin;
 
   const roleLabels: Record<AppRole, string> = { admin: t.admin, founder: t.founderRole, viewer: t.viewer };
 
   const fetchUsers = async () => {
     setLoading(true);
-    const { data: profiles } = await supabase.from("profiles").select("user_id, full_name, avatar_url, created_at");
-    const { data: roles } = await supabase.from("user_roles").select("user_id, role");
-    if (profiles) {
-      setUsers(profiles.map((p) => ({
-        ...p, roles: (roles?.filter((r) => r.user_id === p.user_id).map((r) => r.role as AppRole)) || [],
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch("/api/admin/users", { headers });
+      if (!res.ok) { toast.error("Access denied"); setLoading(false); return; }
+      const data = await res.json();
+      setUsers(data.map((p: any) => ({
+        ...p, roles: (p.roles || []) as AppRole[],
       })));
+    } catch {
+      toast.error("Failed to load users");
     }
     setLoading(false);
   };
@@ -46,12 +55,23 @@ export default function UserManagementPage() {
   useEffect(() => { if (canAccess) fetchUsers(); }, [canAccess]);
 
   const updateRole = async (userId: string, newRole: AppRole) => {
-    const { error: deleteError } = await supabase.from("user_roles").delete().eq("user_id", userId);
-    if (deleteError) { toast.error(`${t.roleUpdateFailed}: ${deleteError.message}`); return; }
-    const { error: insertError } = await supabase.from("user_roles").insert({ user_id: userId, role: newRole });
-    if (insertError) { toast.error(`${t.roleUpdateFailed}: ${insertError.message}`); return; }
-    toast.success(t.roleUpdated);
-    fetchUsers();
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/admin/users/${userId}/role`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ role: newRole }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(`${t.roleUpdateFailed}: ${data.error || "Unknown error"}`);
+        return;
+      }
+      toast.success(t.roleUpdated);
+      fetchUsers();
+    } catch {
+      toast.error(t.roleUpdateFailed);
+    }
   };
 
   if (authLoading) return null;
@@ -98,7 +118,7 @@ export default function UserManagementPage() {
                         </div>
                         <div>
                           <p className="font-medium">{u.full_name || t.noNameUser}</p>
-                          <p className="text-xs text-muted-foreground font-mono">{u.user_id.slice(0, 8)}...</p>
+                          <p className="text-xs text-muted-foreground">{u.email || u.user_id.slice(0, 8) + "..."}</p>
                         </div>
                       </div>
                     </td>
