@@ -39,8 +39,9 @@ All business data in main Supabase project:
 - **Trash API Endpoints**: `GET /api/trash`, `GET /api/trash/count`, `POST /api/trash/:id/restore`, `DELETE /api/trash/:id`, `DELETE /api/trash`
 - **Cascade Restore**: Orders restore with all related records (order_lines, founder_contributions, deliveries, collections, client_inventory, audits). Suppliers restore with materials. Treasury accounts restore with transactions. Founders restore linked delivery actors.
 - **ConfirmDeleteDialog** (`src/components/ConfirmDeleteDialog.tsx`) — Reusable confirmation dialog before any delete
-- **auditLog utility** (`src/lib/auditLog.ts`) — Logs create/update/delete operations to `notifications` table for activity tracking
-- **Activity Page** (`src/pages/Activity.tsx`) — Displays audit history grouped by date
+- **auditLog utility** (`src/lib/auditLog.ts`) — Logs create/update/delete operations to `notifications` table for activity tracking. All pages pass `performedBy: profile?.full_name` to track who performed each action.
+- **Activity Page** (`src/pages/Activity.tsx`) — Displays audit history grouped by date. Supports `?highlight=<id>` query param to auto-scroll to and highlight a specific entry. Entity names are clickable links that navigate to the relevant page (order details, client profile, etc.).
+- **NotificationBell** (`src/components/NotificationBell.tsx`) — Clicking a notification navigates to `/activity?highlight=<id>` to show full details before navigating to the entity.
 - **Order Cascade Delete**: Deleting an order also deletes all related records. Full related data is saved in the trash snapshot.
 - **Order Cascade Restore**: `POST /orders/:id/cascade-restore` re-creates the order and all related records from the saved snapshot.
 

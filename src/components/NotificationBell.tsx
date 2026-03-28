@@ -275,13 +275,8 @@ export function NotificationBell() {
 
   const handleNotifClick = (n: any) => {
     if (!n.read) markAsRead(n.id);
-    const parsed = parseNotifMessage(n.message);
-    if (parsed?.entity && parsed?.entityId) {
-      const route = getEntityRoute(parsed.entity, parsed.entityId);
-      if (route) { setOpen(false); navigate(route); return; }
-    }
     setOpen(false);
-    navigate("/activity");
+    navigate(`/activity?highlight=${n.id}`);
   };
 
   return (

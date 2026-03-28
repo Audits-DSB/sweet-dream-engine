@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -324,9 +325,35 @@ function SnapshotDetails({ snapshot, skipKeys = [] }: { snapshot: Record<string,
   );
 }
 
+function getEntityRoute(entity: string, entityId: string): string | null {
+  if (!entity || !entityId) return null;
+  switch (entity) {
+    case "order": return `/orders/${entityId}`;
+    case "client": return `/clients/${entityId}`;
+    case "delivery": return `/deliveries`;
+    case "supplier": return `/suppliers`;
+    case "material": return `/materials`;
+    case "collection": return `/collections`;
+    case "founder": return `/founders`;
+    case "founder-transaction": return `/founder-funding`;
+    case "treasury-account": return `/treasury/accounts`;
+    case "treasury-transaction": return `/treasury/transactions`;
+    case "audits": return `/audits`;
+    case "client-inventory": return `/inventory`;
+    case "external-material": return `/materials`;
+    case "company-inventory": return `/company-inventory`;
+    case "request": return `/requests`;
+    default: return null;
+  }
+}
+
 export default function ActivityPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const highlightId = searchParams.get("highlight");
+  const highlightRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<"activity" | "trash">("activity");
 
   const [entries, setEntries] = useState<AuditNotification[]>([]);
@@ -337,7 +364,7 @@ export default function ActivityPage() {
   const [restoring, setRestoring] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AuditNotification | null>(null);
   const [deletingLog, setDeletingLog] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(highlightId);
 
   const [trashItems, setTrashItems] = useState<DeletedItem[]>([]);
   const [trashLoading, setTrashLoading] = useState(true);
@@ -383,6 +410,14 @@ export default function ActivityPage() {
   };
 
   useEffect(() => { loadActivity(); loadTrash(); }, []);
+
+  useEffect(() => {
+    if (highlightId && !loading && highlightRef.current) {
+      setTimeout(() => {
+        highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+    }
+  }, [highlightId, loading]);
 
   const parseAuditData = (message: string): AuditData | null => {
     try { return JSON.parse(message); } catch { return null; }
@@ -706,11 +741,14 @@ export default function ActivityPage() {
                       const isReverted = entry.title.startsWith("[مُرجَع]");
                       const isExpanded = expandedId === entry.id;
                       const hasSnapshot = data?.snapshot && Object.keys(data.snapshot).length > 0;
+                      const isHighlighted = highlightId === entry.id;
+                      const entityRoute = data?.entity && data?.entityId ? getEntityRoute(data.entity, data.entityId) : null;
 
                       return (
                         <div
                           key={entry.id}
-                          className={`stat-card overflow-hidden transition-colors ${isDelete && !isRestored ? "border-destructive/20" : ""} ${isExpanded ? "border-primary/30" : ""}`}
+                          ref={isHighlighted ? highlightRef : undefined}
+                          className={`stat-card overflow-hidden transition-all duration-500 ${isDelete && !isRestored ? "border-destructive/20" : ""} ${isExpanded ? "border-primary/30" : ""} ${isHighlighted ? "ring-2 ring-primary/40 shadow-lg shadow-primary/10 border-primary/40" : ""}`}
                         >
                           <div className="flex items-start gap-3 py-1 px-1">
                             <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${cfg.bgColor}`}>
@@ -718,7 +756,17 @@ export default function ActivityPage() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm font-medium truncate">{entry.title}</span>
+                                {entityRoute ? (
+                                  <button
+                                    className="text-sm font-medium truncate text-primary hover:underline cursor-pointer text-start"
+                                    onClick={() => navigate(entityRoute)}
+                                    title={`فتح ${entityLabels[data?.entity || ""] || data?.entity || ""}: ${data?.entityName || ""}`}
+                                  >
+                                    {entry.title}
+                                  </button>
+                                ) : (
+                                  <span className="text-sm font-medium truncate">{entry.title}</span>
+                                )}
                                 <Badge variant={cfg.badge} className="text-[10px] h-4 px-1.5 shrink-0">
                                   {cfg.label}
                                 </Badge>
