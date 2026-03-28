@@ -295,7 +295,7 @@ export default function SuppliersPage() {
           {filtered.map((sup) => {
             const st = supStats[sup.id];
             return (
-            <div key={sup.id} className="stat-card space-y-3 cursor-pointer hover:shadow-md transition-shadow" onClick={() => openDetail(sup)}>
+            <div key={sup.id} className="stat-card space-y-3 cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/suppliers/${sup.id}`)}>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <Link to={`/suppliers/${sup.id}`} onClick={e => e.stopPropagation()} className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors">
