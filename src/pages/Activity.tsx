@@ -133,6 +133,43 @@ const fieldLabels: Record<string, string> = {
   custodianName: "اسم الأمين",
   bankName: "اسم البنك",
   accountNumber: "رقم الحساب",
+  lines: "البنود",
+  items: "العناصر",
+  order: "الطلب",
+  changes: "التعديلات",
+  before: "القيم السابقة",
+  after: "القيم الجديدة",
+  materialCode: "كود المادة",
+  materialName: "اسم المادة",
+  material_code: "كود المادة",
+  material_name: "اسم المادة",
+  costPrice: "سعر التكلفة",
+  lineTotal: "إجمالي السطر",
+  lineCost: "تكلفة السطر",
+  total_selling: "إجمالي البيع",
+  total_cost: "إجمالي التكلفة",
+  delivery_fee: "رسوم التوصيل",
+  delivery_fee_bearer: "تحمل رسوم التوصيل",
+  order_type: "نوع الطلب",
+  orderType: "نوع الطلب",
+  split_mode: "نمط التقسيم",
+  subscription: "الاشتراك",
+  founder: "المؤسس",
+  percentage: "النسبة",
+  paid: "مدفوع",
+  balance: "الرصيد",
+  txType: "نوع المعاملة",
+  performedBy: "بواسطة",
+  referenceId: "المرجع",
+  linkedAccountId: "الحساب المرتبط",
+  scheduledDate: "تاريخ مجدول",
+  deliveredBy: "المندوب",
+  remaining: "المتبقي",
+  lot_number: "رقم الدُفعة",
+  source_order: "طلب المصدر",
+  cost_price: "سعر التكلفة",
+  address: "العنوان",
+  type: "النوع",
 };
 
 const actionConfig = {
@@ -180,32 +217,109 @@ function timeSince(dateStr: string) {
   return formatDate(dateStr);
 }
 
+const statusLabels: Record<string, string> = {
+  Processing: "قيد المعالجة", Delivered: "تم التسليم", Completed: "مكتمل",
+  "Partially Delivered": "تسليم جزئي", Pending: "معلق", Cancelled: "ملغي",
+  paid: "مدفوع", unpaid: "غير مدفوع", active: "نشط", inactive: "غير نشط",
+};
+
 function formatValue(val: any): string {
   if (val === null || val === undefined) return "—";
   if (typeof val === "boolean") return val ? "نعم" : "لا";
   if (typeof val === "number") return val.toLocaleString();
-  if (typeof val === "object") return JSON.stringify(val).slice(0, 80);
+  if (typeof val === "string") {
+    if (statusLabels[val]) return statusLabels[val];
+    return val.length > 120 ? val.slice(0, 120) + "…" : val;
+  }
+  if (Array.isArray(val)) {
+    if (val.length === 0) return "—";
+    return `${val.length} عنصر`;
+  }
+  if (typeof val === "object") {
+    const keys = Object.keys(val);
+    if (keys.length === 0) return "—";
+    const readable = keys.slice(0, 3).map(k => {
+      const label = fieldLabels[k] || k;
+      const v = val[k];
+      const display = v === null || v === undefined ? "—" : typeof v === "number" ? v.toLocaleString() : typeof v === "boolean" ? (v ? "نعم" : "لا") : String(v).slice(0, 30);
+      return `${label}: ${display}`;
+    }).join(" · ");
+    return keys.length > 3 ? readable + ` (+${keys.length - 3})` : readable;
+  }
   return String(val).slice(0, 100);
+}
+
+function ArrayDetails({ items, label }: { items: any[]; label: string }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="mt-2">
+      <span className="text-[10px] font-semibold text-muted-foreground block mb-1.5">{label} ({items.length})</span>
+      <div className="space-y-1.5">
+        {items.slice(0, 5).map((item, i) => {
+          if (typeof item !== "object" || item === null) return <span key={i} className="text-xs block">{String(item)}</span>;
+          const name = item.materialName || item.name || item.material_name || "";
+          const code = item.materialCode || item.code || item.material_code || item.sku || "";
+          const qty = item.quantity ?? item.qty;
+          const price = item.sellingPrice ?? item.selling_price ?? item.price ?? item.unitPrice;
+          const cost = item.costPrice ?? item.cost_price;
+          return (
+            <div key={i} className="flex items-center gap-2 text-xs rounded-md bg-muted/40 px-2.5 py-1.5 border border-border/20">
+              <span className="text-muted-foreground font-mono text-[10px] shrink-0">{code || `#${i + 1}`}</span>
+              {name && <span className="font-medium truncate">{name}</span>}
+              {qty !== undefined && <span className="text-muted-foreground shrink-0">×{Number(qty).toLocaleString()}</span>}
+              {price !== undefined && <span className="text-muted-foreground shrink-0">{Number(price).toLocaleString()} ج.م</span>}
+              {cost !== undefined && <span className="text-[10px] text-muted-foreground shrink-0">(تكلفة: {Number(cost).toLocaleString()})</span>}
+            </div>
+          );
+        })}
+        {items.length > 5 && <span className="text-[10px] text-muted-foreground block text-center">+{items.length - 5} عنصر إضافي</span>}
+      </div>
+    </div>
+  );
 }
 
 function SnapshotDetails({ snapshot, skipKeys = [] }: { snapshot: Record<string, any>; skipKeys?: string[] }) {
   const hiddenKeys = ["created_at", "updated_at", "createdAt", "updatedAt", "id", "_related", "images", "features", "variants", ...skipKeys];
-  const entries = Object.entries(snapshot || {}).filter(([k]) => !hiddenKeys.includes(k));
-  if (entries.length === 0) return null;
+  const allEntries = Object.entries(snapshot || {}).filter(([k]) => !hiddenKeys.includes(k));
+  if (allEntries.length === 0) return null;
+
+  const simpleEntries = allEntries.filter(([, v]) => !Array.isArray(v) && (typeof v !== "object" || v === null));
+  const arrayEntries = allEntries.filter(([, v]) => Array.isArray(v));
+  const objectEntries = allEntries.filter(([, v]) => typeof v === "object" && v !== null && !Array.isArray(v));
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
-      {entries.slice(0, 15).map(([key, val]) => (
-        <div key={key} className="rounded-lg bg-muted/50 px-2.5 py-1.5 border border-border/30">
-          <span className="text-[10px] text-muted-foreground block">{fieldLabels[key] || key}</span>
-          <span className="text-xs font-medium truncate block">{formatValue(val)}</span>
-        </div>
-      ))}
-      {entries.length > 15 && (
-        <div className="rounded-lg bg-muted/30 px-2.5 py-1.5 flex items-center justify-center text-[10px] text-muted-foreground">
-          +{entries.length - 15} حقل إضافي
+    <div className="space-y-2 mt-2">
+      {simpleEntries.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {simpleEntries.slice(0, 15).map(([key, val]) => (
+            <div key={key} className="rounded-lg bg-muted/50 px-2.5 py-1.5 border border-border/30">
+              <span className="text-[10px] text-muted-foreground block">{fieldLabels[key] || key}</span>
+              <span className="text-xs font-medium block" style={{ wordBreak: "break-word" }}>{formatValue(val)}</span>
+            </div>
+          ))}
+          {simpleEntries.length > 15 && (
+            <div className="rounded-lg bg-muted/30 px-2.5 py-1.5 flex items-center justify-center text-[10px] text-muted-foreground">
+              +{simpleEntries.length - 15} حقل إضافي
+            </div>
+          )}
         </div>
       )}
+      {objectEntries.map(([key, val]) => (
+        <div key={key} className="rounded-lg bg-muted/30 px-2.5 py-2 border border-border/20">
+          <span className="text-[10px] font-semibold text-muted-foreground block mb-1">{fieldLabels[key] || key}</span>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+            {Object.entries(val).filter(([k]) => !hiddenKeys.includes(k)).slice(0, 8).map(([k2, v2]) => (
+              <div key={k2} className="text-xs">
+                <span className="text-[10px] text-muted-foreground">{fieldLabels[k2] || k2}: </span>
+                <span className="font-medium">{formatValue(v2)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      {arrayEntries.map(([key, val]) => (
+        <ArrayDetails key={key} items={val} label={fieldLabels[key] || key} />
+      ))}
     </div>
   );
 }
