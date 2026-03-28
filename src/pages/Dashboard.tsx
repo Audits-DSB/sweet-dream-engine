@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Users, ShoppingCart, FileText, Receipt, TrendingUp, AlertTriangle, Clock, Package, CheckCircle2, Banknote, Truck, Wallet, ArrowUpRight, ArrowDownRight, BarChart3, Target } from "lucide-react";
+import { Users, ShoppingCart, FileText, Receipt, TrendingUp, AlertTriangle, Clock, Package, CheckCircle2, Banknote, Truck, Wallet, ArrowUpRight, ArrowDownRight, BarChart3, Target, Warehouse, Boxes } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -66,6 +66,7 @@ export default function Dashboard() {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
+  const [companyInventory, setCompanyInventory] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -77,13 +78,15 @@ export default function Dashboard() {
       api.get<any[]>("/deliveries").catch(() => []),
       api.get<any[]>("/client-inventory").catch(() => []),
       api.get<any[]>("/alerts").catch(() => []),
-    ]).then(([c, o, cols, del, inv, al]) => {
+      api.get<any[]>("/company-inventory").catch(() => []),
+    ]).then(([c, o, cols, del, inv, al, compInv]) => {
       setClients(c || []);
       setOrders(o || []);
       setCollections((cols || []).map(mapCollection));
       setDeliveries(del || []);
       setInventory(inv || []);
       setAlerts(al || []);
+      setCompanyInventory(compInv || []);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -104,6 +107,42 @@ export default function Dashboard() {
   const inventoryValue = inventory.reduce((s, i) => s + (Number(i.remaining || 0) * Number(i.sellingPrice || i.selling_price || 0)), 0);
   const inventoryItems = inventory.length;
   const lowStockItems = inventory.filter((i: any) => i.status === "Low Stock" || Number(i.remaining || 0) === 0).length;
+
+  const ciTotalLots = companyInventory.length;
+  const ciTotalValue = companyInventory.reduce((s, i) => s + (Number(i.remaining || 0) * Number(i.costPrice || i.cost_price || 0)), 0);
+  const ciTotalRemaining = companyInventory.reduce((s, i) => s + Number(i.remaining || 0), 0);
+  const ciTotalOriginal = companyInventory.reduce((s, i) => s + Number(i.quantity || 0), 0);
+  const ciLowStock = companyInventory.filter((i: any) => i.status === "Low Stock").length;
+  const ciDepleted = companyInventory.filter((i: any) => i.status === "Depleted" || Number(i.remaining || 0) === 0).length;
+  const ciUsagePct = ciTotalOriginal > 0 ? Math.round(((ciTotalOriginal - ciTotalRemaining) / ciTotalOriginal) * 100) : 0;
+  const ciUniqueMaterials = new Set(companyInventory.map((i: any) => i.materialCode || i.material_code)).size;
+
+  const ciByMaterial = useMemo(() => {
+    const map: Record<string, { name: string; remaining: number; total: number; value: number }> = {};
+    companyInventory.forEach((lot: any) => {
+      const code = lot.materialCode || lot.material_code || "";
+      const name = lot.materialName || lot.material_name || code;
+      if (!map[code]) map[code] = { name, remaining: 0, total: 0, value: 0 };
+      map[code].remaining += Number(lot.remaining || 0);
+      map[code].total += Number(lot.quantity || 0);
+      map[code].value += Number(lot.remaining || 0) * Number(lot.costPrice || lot.cost_price || 0);
+    });
+    return Object.entries(map).map(([code, v]) => ({
+      code, name: v.name, remaining: v.remaining, total: v.total, value: v.value,
+      usedPct: v.total > 0 ? Math.round(((v.total - v.remaining) / v.total) * 100) : 0,
+    })).sort((a, b) => b.value - a.value);
+  }, [companyInventory]);
+
+  const ciStatusData = useMemo(() => {
+    const inStock = companyInventory.filter(i => i.status === "In Stock").length;
+    const low = ciLowStock;
+    const depleted = ciDepleted;
+    return [
+      { name: "متوفر", value: inStock, color: "#22c55e" },
+      { name: "منخفض", value: low, color: "#f59e0b" },
+      { name: "نفد", value: depleted, color: "#ef4444" },
+    ].filter(d => d.value > 0);
+  }, [companyInventory, ciLowStock, ciDepleted]);
 
   const criticalAlerts = alerts.filter((a: any) => a.severity === "critical").length;
   const warningAlerts = alerts.filter((a: any) => a.severity === "warning").length;
@@ -239,7 +278,10 @@ export default function Dashboard() {
           <StatCard title="التحصيل" value={`${(totalCollected / 1000).toFixed(0)}k`} change={totalOutstanding > 0 ? `${(totalOutstanding / 1000).toFixed(0)}k متبقي` : "مكتمل"} changeType={totalOutstanding > 0 ? "negative" : "positive"} icon={Wallet} />
         </div>
         <div className="cursor-pointer" onClick={() => navigate("/inventory")}>
-          <StatCard title="المخزون" value={inventoryItems} change={lowStockItems > 0 ? `${lowStockItems} منخفض` : "مستقر"} changeType={lowStockItems > 0 ? "negative" : "positive"} icon={Package} />
+          <StatCard title="جرد العملاء" value={inventoryItems} change={lowStockItems > 0 ? `${lowStockItems} منخفض` : "مستقر"} changeType={lowStockItems > 0 ? "negative" : "positive"} icon={Package} />
+        </div>
+        <div className="cursor-pointer" onClick={() => navigate("/company-inventory")}>
+          <StatCard title="مخزون الشركة" value={ciTotalLots} change={ciDepleted > 0 ? `${ciDepleted} نفد` : ciLowStock > 0 ? `${ciLowStock} منخفض` : "مستقر"} changeType={ciDepleted > 0 || ciLowStock > 0 ? "negative" : "positive"} icon={Boxes} />
         </div>
         <div className="cursor-pointer" onClick={() => navigate("/alerts")}>
           <StatCard title="التنبيهات" value={alerts.length} change={criticalAlerts > 0 ? `${criticalAlerts} حرج` : "لا يوجد حرج"} changeType={criticalAlerts > 0 ? "negative" : "positive"} icon={AlertTriangle} />
@@ -373,7 +415,7 @@ export default function Dashboard() {
 
         <div className="stat-card">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm">ملخص المخزون</h3>
+            <h3 className="font-semibold text-sm">ملخص جرد العملاء</h3>
             <button className="text-xs text-primary hover:underline" onClick={() => navigate("/inventory")}>عرض الكل ←</button>
           </div>
           <div className="space-y-4">
@@ -400,6 +442,89 @@ export default function Dashboard() {
             {lowStockItems > 0 && (
               <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={() => navigate("/refill")}>
                 <Target className="h-3.5 w-3.5" /> إعادة طلب المواد المنخفضة ({lowStockItems})
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Company Inventory Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="stat-card lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-sm flex items-center gap-2"><Boxes className="h-4 w-4 text-primary" /> مخزون الشركة — استهلاك المواد</h3>
+            <button className="text-xs text-primary hover:underline" onClick={() => navigate("/company-inventory")}>عرض الكل ←</button>
+          </div>
+          {ciByMaterial.length > 0 ? (
+            <div className="space-y-3">
+              {ciByMaterial.slice(0, 8).map((mat) => (
+                <div key={mat.code} className="group">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium truncate max-w-[200px]">{mat.name}</span>
+                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                      <span>{mat.remaining} / {mat.total}</span>
+                      <span className="font-mono font-medium">{mat.value.toLocaleString()} ج.م</span>
+                    </div>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${mat.usedPct >= 80 ? "bg-red-500" : mat.usedPct >= 50 ? "bg-amber-500" : "bg-emerald-500"}`}
+                      style={{ width: `${100 - mat.usedPct}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">لا توجد بيانات في المخزون</div>
+          )}
+        </div>
+
+        <div className="stat-card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-sm">ملخص مخزون الشركة</h3>
+          </div>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg bg-blue-500/5 p-3 text-center">
+                <p className="text-2xl font-bold text-blue-600">{ciTotalLots}</p>
+                <p className="text-[11px] text-muted-foreground">دُفعة</p>
+              </div>
+              <div className="rounded-lg bg-emerald-500/5 p-3 text-center">
+                <p className="text-2xl font-bold text-emerald-600">{ciTotalValue >= 1000 ? `${(ciTotalValue / 1000).toFixed(1)}k` : ciTotalValue.toLocaleString()}</p>
+                <p className="text-[11px] text-muted-foreground">القيمة المتبقية</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg bg-purple-500/5 p-3 text-center">
+                <p className="text-2xl font-bold text-purple-600">{ciUniqueMaterials}</p>
+                <p className="text-[11px] text-muted-foreground">مادة مختلفة</p>
+              </div>
+              <div className="rounded-lg bg-amber-500/5 p-3 text-center">
+                <p className="text-2xl font-bold text-amber-600">{ciUsagePct}%</p>
+                <p className="text-[11px] text-muted-foreground">نسبة الاستهلاك</p>
+              </div>
+            </div>
+
+            {ciStatusData.length > 0 && (
+              <div className="pt-2">
+                <ResponsiveContainer width="100%" height={140}>
+                  <PieChart>
+                    <Pie data={ciStatusData} cx="50%" cy="50%" innerRadius={35} outerRadius={55} paddingAngle={3} dataKey="value">
+                      {ciStatusData.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number, name: string) => [`${v} دُفعة`, name]} />
+                    <Legend wrapperStyle={{ fontSize: "11px" }} formatter={(v) => v} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {(ciLowStock > 0 || ciDepleted > 0) && (
+              <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={() => navigate("/company-inventory")}>
+                <Warehouse className="h-3.5 w-3.5" /> {ciDepleted > 0 ? `${ciDepleted} دُفعة نفدت` : `${ciLowStock} منخفض`} — مراجعة المخزون
               </Button>
             )}
           </div>
