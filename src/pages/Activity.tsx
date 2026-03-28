@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   History, Trash2, Plus, Edit, RotateCcw, Search, Filter, Package, Users, ShoppingCart, Truck,
   Receipt, Boxes, Factory, UserCog, Wallet, ClipboardCheck, FileText, ChevronDown, ChevronUp,
-  X, AlertTriangle, Loader2,
+  X, AlertTriangle, Loader2, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -61,12 +61,84 @@ const entityLabels: Record<string, string> = {
   "founder-transaction": "معاملة مؤسس",
   "treasury-account": "حساب خزينة",
   "treasury-transaction": "معاملة خزينة",
+  "external-material": "مادة (كاتالوج)",
+};
+
+const entityIcons: Record<string, any> = {
+  client: Users,
+  order: ShoppingCart,
+  delivery: Truck,
+  supplier: Factory,
+  material: Boxes,
+  collection: Receipt,
+  request: FileText,
+  founder: UserCog,
+  "founder-transaction": UserCog,
+  "treasury-account": Wallet,
+  "treasury-transaction": Wallet,
+  "external-material": Boxes,
+  audit: ClipboardCheck,
+  "client-inventory": Package,
+  "delivery-actor": Truck,
+};
+
+const fieldLabels: Record<string, string> = {
+  name: "الاسم",
+  sku: "الكود",
+  code: "الكود",
+  category: "الفئة",
+  description: "الوصف",
+  price_retail: "سعر البيع",
+  price_wholesale: "سعر الجملة",
+  sellingPrice: "سعر البيع",
+  storeCost: "سعر التكلفة",
+  stock_quantity: "الكمية",
+  quantity: "الكمية",
+  barcode: "الباركود",
+  image_url: "رابط الصورة",
+  manufacturer: "الشركة المصنعة",
+  supplier: "المورّد",
+  supplierId: "كود المورّد",
+  unit: "الوحدة",
+  hasExpiry: "له تاريخ صلاحية",
+  active: "نشط",
+  phone: "الهاتف",
+  email: "البريد",
+  city: "المدينة",
+  contact: "جهة الاتصال",
+  status: "الحالة",
+  outstanding: "المتبقي",
+  country: "الدولة",
+  paymentTerms: "شروط الدفع",
+  alias: "الاسم المستعار",
+  totalContributed: "إجمالي المساهمة",
+  totalWithdrawn: "إجمالي السحب",
+  amount: "المبلغ",
+  method: "الطريقة",
+  notes: "ملاحظات",
+  date: "التاريخ",
+  totalSelling: "إجمالي البيع",
+  totalCost: "إجمالي التكلفة",
+  deliveryFee: "رسوم التوصيل",
+  splitMode: "نمط التقسيم",
+  clientId: "كود العميل",
+  orderId: "كود الطلب",
+  client: "العميل",
+  invoiceDate: "تاريخ الفاتورة",
+  dueDate: "تاريخ الاستحقاق",
+  totalAmount: "المبلغ الإجمالي",
+  paidAmount: "المبلغ المدفوع",
+  paymentMethod: "طريقة الدفع",
+  accountType: "نوع الحساب",
+  custodianName: "اسم الأمين",
+  bankName: "اسم البنك",
+  accountNumber: "رقم الحساب",
 };
 
 const actionConfig = {
-  create: { label: "إنشاء", icon: Plus, color: "text-success", badge: "default" as const },
-  update: { label: "تعديل", icon: Edit, color: "text-info", badge: "secondary" as const },
-  delete: { label: "حذف", icon: Trash2, color: "text-destructive", badge: "destructive" as const },
+  create: { label: "إنشاء", icon: Plus, color: "text-success", badge: "default" as const, bgColor: "bg-success/10" },
+  update: { label: "تعديل", icon: Edit, color: "text-info", badge: "secondary" as const, bgColor: "bg-info/10" },
+  delete: { label: "حذف", icon: Trash2, color: "text-destructive", badge: "destructive" as const, bgColor: "bg-destructive/10" },
 };
 
 const TRASH_ENTITY_LABELS: Record<string, { label: string; icon: any; color: string }> = {
@@ -84,6 +156,7 @@ const TRASH_ENTITY_LABELS: Record<string, { label: string; icon: any; color: str
   "treasury-account": { label: "حساب خزينة", icon: Wallet, color: "bg-yellow-500/10 text-yellow-600" },
   "treasury-transaction": { label: "معاملة خزينة", icon: Wallet, color: "bg-lime-500/10 text-lime-600" },
   "founder-transaction": { label: "معاملة مؤسس", icon: UserCog, color: "bg-cyan-500/10 text-cyan-600" },
+  "external-material": { label: "مادة (كاتالوج)", icon: Boxes, color: "bg-emerald-500/10 text-emerald-600" },
 };
 
 function formatDate(dateStr: string) {
@@ -107,6 +180,36 @@ function timeSince(dateStr: string) {
   return formatDate(dateStr);
 }
 
+function formatValue(val: any): string {
+  if (val === null || val === undefined) return "—";
+  if (typeof val === "boolean") return val ? "نعم" : "لا";
+  if (typeof val === "number") return val.toLocaleString();
+  if (typeof val === "object") return JSON.stringify(val).slice(0, 80);
+  return String(val).slice(0, 100);
+}
+
+function SnapshotDetails({ snapshot, skipKeys = [] }: { snapshot: Record<string, any>; skipKeys?: string[] }) {
+  const hiddenKeys = ["created_at", "updated_at", "createdAt", "updatedAt", "id", "_related", "images", "features", "variants", ...skipKeys];
+  const entries = Object.entries(snapshot || {}).filter(([k]) => !hiddenKeys.includes(k));
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+      {entries.slice(0, 15).map(([key, val]) => (
+        <div key={key} className="rounded-lg bg-muted/50 px-2.5 py-1.5 border border-border/30">
+          <span className="text-[10px] text-muted-foreground block">{fieldLabels[key] || key}</span>
+          <span className="text-xs font-medium truncate block">{formatValue(val)}</span>
+        </div>
+      ))}
+      {entries.length > 15 && (
+        <div className="rounded-lg bg-muted/30 px-2.5 py-1.5 flex items-center justify-center text-[10px] text-muted-foreground">
+          +{entries.length - 15} حقل إضافي
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ActivityPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -120,6 +223,7 @@ export default function ActivityPage() {
   const [restoring, setRestoring] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AuditNotification | null>(null);
   const [deletingLog, setDeletingLog] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [trashItems, setTrashItems] = useState<DeletedItem[]>([]);
   const [trashLoading, setTrashLoading] = useState(true);
@@ -201,6 +305,7 @@ export default function ActivityPage() {
     "founder-transaction": ["id", "founderId", "founderName", "type", "amount", "method", "orderId", "date", "notes"],
     "treasury-account": ["name", "accountType", "custodianName", "bankName", "accountNumber", "description"],
     "treasury-transaction": ["id", "accountId", "type", "amount", "date", "description"],
+    "external-material": ["sku", "name", "category", "description", "price_retail", "price_wholesale", "stock_quantity", "barcode", "image_url"],
   };
 
   const cleanSnapshot = (entity: string, snapshot: Record<string, any>): Record<string, any> => {
@@ -219,7 +324,11 @@ export default function ActivityPage() {
 
     setRestoring(entry.id);
     try {
-      if (data.entity === "order" && data.snapshot._related) {
+      if (data.entity === "external-material") {
+        const payload = cleanSnapshot("external-material", data.snapshot);
+        await api.post("/external-materials", payload);
+        toast.success(`تمت استعادة المادة: ${data.entityName}`);
+      } else if (data.entity === "order" && data.snapshot._related) {
         const related = data.snapshot._related;
         const { _related, collectionPaid, collectionTotal, client, founderContributions, ...orderFields } = data.snapshot;
         const cleanedOrder = cleanSnapshot("order", orderFields);
@@ -269,19 +378,25 @@ export default function ActivityPage() {
 
     setRestoring(entry.id);
     try {
-      if (before.order && Object.keys(before.order).length > 0) {
+      if (data.entity === "external-material" && data.entityId) {
+        await api.patch(`/external-materials/${data.entityId}`, before);
+        toast.success(`تم الرجوع عن التعديل: ${data.entityName}`);
+      } else if (before.order && Object.keys(before.order).length > 0) {
         await api.patch(data.endpoint, before.order);
+        if (Array.isArray(before.lines) && before.lines.length > 0) {
+          await Promise.all(before.lines.map((line: any) =>
+            api.patch(`/order-lines/${line.id}`, {
+              quantity: line.quantity,
+              sellingPrice: line.sellingPrice,
+              costPrice: line.costPrice,
+            })
+          ));
+        }
+        toast.success(`تم الرجوع عن التعديل: ${data.entityName}`);
+      } else {
+        await api.patch(data.endpoint, before);
+        toast.success(`تم الرجوع عن التعديل: ${data.entityName}`);
       }
-      if (Array.isArray(before.lines) && before.lines.length > 0) {
-        await Promise.all(before.lines.map((line: any) =>
-          api.patch(`/order-lines/${line.id}`, {
-            quantity: line.quantity,
-            sellingPrice: line.sellingPrice,
-            costPrice: line.costPrice,
-          })
-        ));
-      }
-      toast.success(`تم الرجوع عن التعديل: ${data.entityName}`);
       await api.patch(`/notifications/${entry.id}`, { title: `[مُرجَع] ${entry.title}`, read: true }).catch(() => {});
       setEntries(prev => prev.map(e => e.id === entry.id ? { ...e, title: `[مُرجَع] ${e.title}`, read: true } : e));
     } catch (err: any) {
@@ -420,11 +535,10 @@ export default function ActivityPage() {
                 placeholder="بحث في الأنشطة..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                data-testid="input-search-activity"
               />
             </div>
             <Select value={filterAction} onValueChange={setFilterAction}>
-              <SelectTrigger className="w-[140px] h-9" data-testid="select-filter-action">
+              <SelectTrigger className="w-[140px] h-9">
                 <Filter className="h-3.5 w-3.5 me-1.5" />
                 <SelectValue placeholder="الإجراء" />
               </SelectTrigger>
@@ -436,7 +550,7 @@ export default function ActivityPage() {
               </SelectContent>
             </Select>
             <Select value={filterEntity} onValueChange={setFilterEntity}>
-              <SelectTrigger className="w-[150px] h-9" data-testid="select-filter-entity">
+              <SelectTrigger className="w-[150px] h-9">
                 <SelectValue placeholder="النوع" />
               </SelectTrigger>
               <SelectContent>
@@ -471,78 +585,148 @@ export default function ActivityPage() {
                       const data = parseAuditData(entry.message);
                       const action = data?.action || "create";
                       const cfg = actionConfig[action] || actionConfig.create;
-                      const Icon = cfg.icon;
+                      const ActionIcon = cfg.icon;
+                      const EntityIcon = entityIcons[data?.entity || ""] || Package;
                       const isDelete = action === "delete";
                       const isRestored = entry.title.startsWith("[مُستعاد]");
+                      const isReverted = entry.title.startsWith("[مُرجَع]");
+                      const isExpanded = expandedId === entry.id;
+                      const hasSnapshot = data?.snapshot && Object.keys(data.snapshot).length > 0;
 
                       return (
                         <div
                           key={entry.id}
-                          className={`stat-card flex items-start gap-3 py-3 px-4 ${isDelete && !isRestored ? "border-destructive/20" : ""}`}
-                          data-testid={`activity-entry-${entry.id}`}
+                          className={`stat-card overflow-hidden transition-colors ${isDelete && !isRestored ? "border-destructive/20" : ""} ${isExpanded ? "border-primary/30" : ""}`}
                         >
-                          <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${isDelete ? "bg-destructive/10" : action === "create" ? "bg-success/10" : "bg-info/10"}`}>
-                            <Icon className={`h-4 w-4 ${cfg.color}`} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-medium truncate">{entry.title}</span>
-                              <Badge variant={cfg.badge} className="text-[10px] h-4 px-1.5 shrink-0">
-                                {cfg.label}
-                              </Badge>
-                              {isRestored && (
-                                <Badge variant="outline" className="text-[10px] h-4 px-1.5 text-success border-success/50 shrink-0">
-                                  مُستعاد
+                          <div className="flex items-start gap-3 py-1 px-1">
+                            <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${cfg.bgColor}`}>
+                              <ActionIcon className={`h-4 w-4 ${cfg.color}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-medium truncate">{entry.title}</span>
+                                <Badge variant={cfg.badge} className="text-[10px] h-4 px-1.5 shrink-0">
+                                  {cfg.label}
                                 </Badge>
-                              )}
+                                {data?.entity && (
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1.5 shrink-0 gap-1">
+                                    <EntityIcon className="h-2.5 w-2.5" />
+                                    {entityLabels[data.entity] || data.entity}
+                                  </Badge>
+                                )}
+                                {isRestored && (
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1.5 text-success border-success/50 shrink-0">
+                                    مُستعاد
+                                  </Badge>
+                                )}
+                                {isReverted && (
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1.5 text-amber-600 border-amber-400/50 shrink-0">
+                                    مُرجَع
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 mt-0.5">
+                                {data?.entityId && (
+                                  <span className="text-xs text-muted-foreground font-mono">{data.entityId}</span>
+                                )}
+                                <span className="text-xs text-muted-foreground">{entry.time}</span>
+                                {entry.createdAt && (
+                                  <span className="text-xs text-muted-foreground">{timeSince(entry.createdAt)}</span>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3 mt-0.5">
-                              {data && (
-                                <span className="text-xs text-muted-foreground">
-                                  {entityLabels[data.entity] || data.entity}
-                                  {data.entityId && ` · ${data.entityId}`}
-                                </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {isDelete && !isRestored && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1 text-success border-success/50 hover:bg-success/10"
+                                  onClick={() => handleRestore(entry)}
+                                  disabled={restoring === entry.id}
+                                >
+                                  <RotateCcw className={`h-3 w-3 ${restoring === entry.id ? "animate-spin" : ""}`} />
+                                  {restoring === entry.id ? "..." : "استعادة"}
+                                </Button>
                               )}
-                              <span className="text-xs text-muted-foreground">{entry.time}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {isDelete && !isRestored && (
+                              {action === "update" && data?.snapshot?.before && !isReverted && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1 text-amber-600 border-amber-400/50 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                                  onClick={() => handleRevert(entry)}
+                                  disabled={restoring === entry.id}
+                                >
+                                  <RotateCcw className={`h-3 w-3 ${restoring === entry.id ? "animate-spin" : ""}`} />
+                                  {restoring === entry.id ? "..." : "رجوع"}
+                                </Button>
+                              )}
+                              {hasSnapshot && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => setExpandedId(prev => prev === entry.id ? null : entry.id)}
+                                >
+                                  {isExpanded ? <ChevronUp className="h-4 w-4" /> : <Eye className="h-3.5 w-3.5 text-muted-foreground" />}
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
-                                variant="outline"
-                                className="h-7 text-xs gap-1.5 text-success border-success/50 hover:bg-success/10"
-                                onClick={() => handleRestore(entry)}
-                                disabled={restoring === entry.id}
-                                data-testid={`button-restore-${entry.id}`}
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                onClick={() => setDeleteTarget(entry)}
                               >
-                                <RotateCcw className={`h-3 w-3 ${restoring === entry.id ? "animate-spin" : ""}`} />
-                                {restoring === entry.id ? "..." : "استعادة"}
+                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
-                            )}
-                            {action === "update" && data?.snapshot?.before && !entry.title.startsWith("[مُرجَع]") && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-xs gap-1.5 text-amber-600 border-amber-400/50 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                                onClick={() => handleRevert(entry)}
-                                disabled={restoring === entry.id}
-                                data-testid={`button-revert-${entry.id}`}
-                              >
-                                <RotateCcw className={`h-3 w-3 ${restoring === entry.id ? "animate-spin" : ""}`} />
-                                {restoring === entry.id ? "..." : "رجوع"}
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                              onClick={() => setDeleteTarget(entry)}
-                              data-testid={`button-delete-log-${entry.id}`}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                            </div>
                           </div>
+
+                          {isExpanded && data?.snapshot && (
+                            <div className="mt-3 pt-3 border-t border-border/50 px-1 pb-1">
+                              {action === "create" && (
+                                <>
+                                  <h4 className="text-[11px] font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                                    <Plus className="h-3 w-3 text-success" />
+                                    البيانات المُنشأة
+                                  </h4>
+                                  <SnapshotDetails snapshot={data.snapshot} />
+                                </>
+                              )}
+                              {action === "update" && (
+                                <>
+                                  <h4 className="text-[11px] font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                                    <Edit className="h-3 w-3 text-info" />
+                                    التعديلات
+                                  </h4>
+                                  {data.snapshot.before ? (
+                                    <div className="space-y-2">
+                                      <div>
+                                        <span className="text-[10px] text-muted-foreground block mb-1">القيم الجديدة:</span>
+                                        <SnapshotDetails snapshot={Object.fromEntries(
+                                          Object.entries(data.snapshot).filter(([k]) => k !== "before")
+                                        )} />
+                                      </div>
+                                      <div>
+                                        <span className="text-[10px] text-muted-foreground block mb-1">القيم السابقة:</span>
+                                        <SnapshotDetails snapshot={data.snapshot.before} />
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <SnapshotDetails snapshot={data.snapshot} />
+                                  )}
+                                </>
+                              )}
+                              {action === "delete" && (
+                                <>
+                                  <h4 className="text-[11px] font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                                    <Trash2 className="h-3 w-3 text-destructive" />
+                                    البيانات المحذوفة
+                                  </h4>
+                                  <SnapshotDetails snapshot={data.snapshot} skipKeys={["_related"]} />
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -677,7 +861,7 @@ export default function ActivityPage() {
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setTrashExpandedId(prev => prev === item.id ? null : item.id)}>
-                          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <Eye className="h-3.5 w-3.5 text-muted-foreground" />}
                         </Button>
                       </div>
                     </div>
@@ -685,14 +869,7 @@ export default function ActivityPage() {
                     {isExpanded && (
                       <div className="mt-3 pt-3 border-t border-border">
                         <h4 className="text-xs font-semibold text-muted-foreground mb-2">البيانات المحفوظة</h4>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {Object.entries(snapshot || {}).filter(([k]) => !["created_at", "updated_at"].includes(k)).slice(0, 12).map(([key, val]) => (
-                            <div key={key} className="rounded bg-muted/50 px-2.5 py-1.5">
-                              <span className="text-[10px] text-muted-foreground block">{key}</span>
-                              <span className="text-xs font-medium truncate block">{val === null || val === undefined ? "—" : typeof val === "object" ? JSON.stringify(val).slice(0, 50) : String(val).slice(0, 60)}</span>
-                            </div>
-                          ))}
-                        </div>
+                        <SnapshotDetails snapshot={snapshot} />
                         {hasRelated && (
                           <div className="mt-3">
                             <h4 className="text-xs font-semibold text-muted-foreground mb-1">بيانات مرتبطة (ستُستعاد معها)</h4>
