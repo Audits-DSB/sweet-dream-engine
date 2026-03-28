@@ -1203,7 +1203,31 @@ router.patch("/inventory/:code", async (req, res) => {
 });
 
 // ─── COMPANY INVENTORY (Supabase) ────────────────────────────────────────────
+
+async function syncInventoryRemaining() {
+  const { data: lots } = await supabaseAdmin.from("company_inventory").select("id, quantity");
+  if (!lots || lots.length === 0) return;
+  const { data: pulledLines } = await supabaseAdmin.from("order_lines").select("inventory_lot_id, quantity").eq("from_inventory", true).neq("inventory_lot_id", "");
+  const usedMap: Record<string, number> = {};
+  for (const line of (pulledLines || [])) {
+    const lid = line.inventory_lot_id;
+    usedMap[lid] = (usedMap[lid] || 0) + Number(line.quantity);
+  }
+  const updates: Promise<any>[] = [];
+  for (const lot of lots) {
+    const totalQty = Number(lot.quantity) || 0;
+    const used = usedMap[lot.id] || 0;
+    const newRemaining = Math.max(0, totalQty - used);
+    const status = newRemaining <= 0 ? "Depleted" : newRemaining < totalQty * 0.2 ? "Low Stock" : "In Stock";
+    updates.push(
+      supabaseAdmin.from("company_inventory").update({ remaining: newRemaining, status }).eq("id", lot.id)
+    );
+  }
+  await Promise.all(updates);
+}
+
 router.get("/company-inventory", async (_req, res) => {
+  try { await syncInventoryRemaining(); } catch (e: any) { console.warn("[sync-inventory]", e.message); }
   const { data, error } = await supabaseAdmin.from("company_inventory").select("*").order("created_at", { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
   res.json(camelizeKeys(data || []));
