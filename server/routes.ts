@@ -417,6 +417,30 @@ router.post("/orders/:id/lines", async (req, res) => {
     }
   }
 
+  const { data: orderData } = await supabaseAdmin.from("orders").select("order_type").eq("id", orderId).single();
+  if (orderData?.order_type === "inventory") {
+    const { data: confirmedDeliveries } = await supabaseAdmin.from("deliveries").select("id").eq("order_id", orderId).in("status", ["Delivered", "تم التسليم", "مُسلَّم"]);
+    if (confirmedDeliveries && confirmedDeliveries.length > 0) {
+      const ts = Date.now();
+      const companyRows = (data || []).map((line: any) => ({
+        id: `CI-edit-${line.id}-${ts}`,
+        material_code: line.material_code || "",
+        material_name: line.material_name || "",
+        unit: line.unit || "unit",
+        lot_number: `LOT-edit-${orderId}-${ts}`,
+        quantity: Number(line.quantity) || 0,
+        remaining: Number(line.quantity) || 0,
+        cost_price: Number(line.cost_price) || 0,
+        source_order: orderId,
+        date_added: new Date().toISOString().split("T")[0],
+        status: "In Stock",
+      }));
+      if (companyRows.length > 0) {
+        await supabaseAdmin.from("company_inventory").insert(companyRows).then(r => r).catch(e => console.warn("[add-lines] company_inventory insert:", e.message));
+      }
+    }
+  }
+
   res.json(camelizeKeys(data));
 });
 router.delete("/order-lines/:id", async (req, res) => {
@@ -431,6 +455,15 @@ router.delete("/order-lines/:id", async (req, res) => {
       }
     } catch (e: any) { console.warn("[delete-line] inventory restore error:", e.message); }
   }
+  if (snap) {
+    const { data: orderData } = await supabaseAdmin.from("orders").select("order_type").eq("id", snap.order_id).single();
+    if (orderData?.order_type === "inventory") {
+      try {
+        await supabaseAdmin.from("company_inventory").delete().like("id", `CI-edit-${snap.id}-%`);
+        await supabaseAdmin.from("company_inventory").delete().like("id", `CI-%-${snap.material_code}-%`).eq("source_order", snap.order_id).eq("quantity", snap.quantity);
+      } catch (e: any) { console.warn("[delete-line] company_inventory cleanup:", e.message); }
+    }
+  }
   const { error } = await supabaseAdmin.from("order_lines").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true, deleted: snap ? camelizeKeys(snap) : null });
@@ -439,10 +472,32 @@ router.patch("/order-lines/:id", async (req, res) => {
   const { quantity, sellingPrice, costPrice } = req.body;
   const lineTotal = (quantity ?? 0) * (sellingPrice ?? 0);
   const lineCost = (quantity ?? 0) * (costPrice ?? 0);
+  const { data: oldLine } = await supabaseAdmin.from("order_lines").select("*").eq("id", req.params.id).single();
   const { data, error } = await supabaseAdmin.from("order_lines").update(
     { quantity, selling_price: sellingPrice, cost_price: costPrice, line_total: lineTotal, line_cost: lineCost }
   ).eq("id", req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
+
+  if (oldLine && data) {
+    const orderId = oldLine.order_id;
+    const { data: orderData } = await supabaseAdmin.from("orders").select("order_type").eq("id", orderId).single();
+    if (orderData?.order_type === "inventory") {
+      const oldQty = Number(oldLine.quantity) || 0;
+      const newQty = Number(quantity) || 0;
+      if (oldQty !== newQty) {
+        const { data: ciRows } = await supabaseAdmin.from("company_inventory").select("*").eq("source_order", orderId).or(`material_code.eq.${oldLine.material_code},id.like.CI-%-${oldLine.material_code}-%,id.like.CI-edit-${oldLine.id}-%`);
+        const matchRow = (ciRows || []).find((r: any) => r.material_code === oldLine.material_code && Number(r.quantity) === oldQty);
+        if (matchRow) {
+          const diff = newQty - oldQty;
+          const newRemaining = Math.max(0, Number(matchRow.remaining) + diff);
+          const newTotal = Math.max(0, Number(matchRow.quantity) + diff);
+          const newStatus = newRemaining <= 0 ? "Depleted" : newRemaining < newTotal * 0.2 ? "Low Stock" : "In Stock";
+          await supabaseAdmin.from("company_inventory").update({ quantity: newTotal, remaining: newRemaining, cost_price: Number(costPrice) || Number(matchRow.cost_price), status: newStatus }).eq("id", matchRow.id);
+        }
+      }
+    }
+  }
+
   res.json(camelizeKeys(data || {}));
 });
 router.patch("/orders/:id", async (req, res) => {
