@@ -406,12 +406,13 @@ router.post("/orders/:id/lines", async (req, res) => {
   for (const item of items) {
     if (item.fromInventory && item.inventoryLotId) {
       const qty = Number(item.quantity) || 1;
-      const { data: lot } = await supabaseAdmin.from("company_inventory").select("remaining").eq("id", item.inventoryLotId).single();
+      const { data: lot } = await supabaseAdmin.from("company_inventory").select("remaining, quantity").eq("id", item.inventoryLotId).single();
       if (lot) {
         const newRemaining = Math.max(0, Number(lot.remaining) - qty);
+        const totalQty = Number(lot.quantity) || 1;
+        const status = newRemaining <= 0 ? "Depleted" : newRemaining < totalQty * 0.2 ? "Low Stock" : "In Stock";
         await supabaseAdmin.from("company_inventory").update({
-          remaining: newRemaining,
-          status: newRemaining <= 0 ? "Depleted" : newRemaining <= 5 ? "Low Stock" : "In Stock",
+          remaining: newRemaining, status,
         }).eq("id", item.inventoryLotId);
       }
     }
@@ -481,6 +482,21 @@ router.patch("/order-lines/:id", async (req, res) => {
     { quantity, selling_price: sellingPrice, cost_price: costPrice, line_total: lineTotal, line_cost: lineCost }
   ).eq("id", req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
+
+  if (oldLine && data && oldLine.from_inventory && oldLine.inventory_lot_id) {
+    const oldQtyInv = Number(oldLine.quantity) || 0;
+    const newQtyInv = Number(quantity) || 0;
+    if (oldQtyInv !== newQtyInv) {
+      const diff = oldQtyInv - newQtyInv;
+      const { data: lotData } = await supabaseAdmin.from("company_inventory").select("remaining, quantity").eq("id", oldLine.inventory_lot_id).single();
+      if (lotData) {
+        const newRemaining = Math.max(0, Math.min(Number(lotData.quantity), Number(lotData.remaining) + diff));
+        const totalQty = Number(lotData.quantity) || 1;
+        const status = newRemaining <= 0 ? "Depleted" : newRemaining < totalQty * 0.2 ? "Low Stock" : "In Stock";
+        await supabaseAdmin.from("company_inventory").update({ remaining: newRemaining, status }).eq("id", oldLine.inventory_lot_id);
+      }
+    }
+  }
 
   if (oldLine && data) {
     const orderId = oldLine.order_id;
