@@ -108,7 +108,7 @@ function sbOk(res: any, { data, error }: { data: any; error: any }) {
 
 // ─── CLIENTS ─────────────────────────────────────────────────────────────────
 router.get("/clients", async (_req, res) => {
-  sbOk(res, await supabaseAdmin.from("clients").select("*").order("name"));
+  sbOk(res, await supabaseAdmin.from("clients").select("*").neq("id", "company-inventory").order("name"));
 });
 router.post("/clients", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("clients").insert(snakifyKeys(req.body)).select().single());
