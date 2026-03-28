@@ -56,11 +56,20 @@ export default function UserManagementPage() {
     setLoading(true);
     try {
       const headers = await getAuthHeaders();
+      console.log("[UserManagement] Fetching users, has token:", !!headers.Authorization && headers.Authorization !== "Bearer ");
       const res = await fetch("/api/admin/users", { headers });
-      if (!res.ok) { toast.error("Access denied"); setLoading(false); return; }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.log("[UserManagement] Error response:", res.status, errData);
+        toast.error(errData.error || "Access denied");
+        setLoading(false);
+        return;
+      }
       const data = await res.json();
+      console.log("[UserManagement] Loaded", data.length, "users");
       setUsers(data.map((p: any) => ({ ...p, roles: (p.roles || []) as AppRole[] })));
-    } catch {
+    } catch (err) {
+      console.error("[UserManagement] Fetch error:", err);
       toast.error("Failed to load users");
     }
     setLoading(false);
