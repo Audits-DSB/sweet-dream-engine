@@ -39,6 +39,38 @@ const emptyForm = {
   barcode: "", image_url: "",
 };
 
+type FormValues = typeof emptyForm;
+
+function MaterialFormFields({ values, onChange, categories }: { values: FormValues; onChange: (v: FormValues) => void; categories: string[] }) {
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label className="text-xs">كود المنتج (SKU)</Label><Input className="h-9 mt-1" placeholder="مثال: MAT-001" value={values.sku} onChange={(e) => onChange({ ...values, sku: e.target.value })} /></div>
+        <div><Label className="text-xs">الفئة</Label>
+          <Select value={values.category} onValueChange={(v) => onChange({ ...values, category: v })}>
+            <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="اختر الفئة" /></SelectTrigger>
+            <SelectContent>
+              {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              <SelectItem value="General">عام</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div><Label className="text-xs">اسم المنتج *</Label><Input className="h-9 mt-1" placeholder="اسم المنتج" value={values.name} onChange={(e) => onChange({ ...values, name: e.target.value })} /></div>
+      <div><Label className="text-xs">الوصف</Label><Textarea className="mt-1 min-h-[60px]" placeholder="وصف المنتج" value={values.description} onChange={(e) => onChange({ ...values, description: e.target.value })} /></div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label className="text-xs">سعر البيع *</Label><Input className="h-9 mt-1" type="number" placeholder="0" value={values.price_retail} onChange={(e) => onChange({ ...values, price_retail: e.target.value })} /></div>
+        <div><Label className="text-xs">سعر الجملة</Label><Input className="h-9 mt-1" type="number" placeholder="0" value={values.price_wholesale} onChange={(e) => onChange({ ...values, price_wholesale: e.target.value })} /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label className="text-xs">الكمية المتاحة</Label><Input className="h-9 mt-1" type="number" placeholder="0" value={values.stock_quantity} onChange={(e) => onChange({ ...values, stock_quantity: e.target.value })} /></div>
+        <div><Label className="text-xs">الباركود</Label><Input className="h-9 mt-1" placeholder="رقم الباركود" value={values.barcode} onChange={(e) => onChange({ ...values, barcode: e.target.value })} /></div>
+      </div>
+      <div><Label className="text-xs">رابط الصورة</Label><Input className="h-9 mt-1" placeholder="https://..." value={values.image_url} onChange={(e) => onChange({ ...values, image_url: e.target.value })} /></div>
+    </div>
+  );
+}
+
 function mapExternal(p: ExternalProduct): Material {
   const companyVariant = p.variants?.find((v: any) => v.name === "Company" || v.name === "Company()");
   return {
@@ -319,33 +351,6 @@ export default function MaterialsPage() {
     }
   };
 
-  const FormFields = ({ values, onChange, isEdit = false }: { values: typeof emptyForm; onChange: (v: typeof emptyForm) => void; isEdit?: boolean }) => (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <div><Label className="text-xs">كود المنتج (SKU)</Label><Input className="h-9 mt-1" placeholder="مثال: MAT-001" value={values.sku} onChange={(e) => onChange({ ...values, sku: e.target.value })} /></div>
-        <div><Label className="text-xs">الفئة</Label>
-          <Select value={values.category} onValueChange={(v) => onChange({ ...values, category: v })}>
-            <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="اختر الفئة" /></SelectTrigger>
-            <SelectContent>
-              {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              <SelectItem value="General">عام</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div><Label className="text-xs">اسم المنتج *</Label><Input className="h-9 mt-1" placeholder="اسم المنتج" value={values.name} onChange={(e) => onChange({ ...values, name: e.target.value })} /></div>
-      <div><Label className="text-xs">الوصف</Label><Textarea className="mt-1 min-h-[60px]" placeholder="وصف المنتج" value={values.description} onChange={(e) => onChange({ ...values, description: e.target.value })} /></div>
-      <div className="grid grid-cols-2 gap-3">
-        <div><Label className="text-xs">سعر البيع *</Label><Input className="h-9 mt-1" type="number" placeholder="0" value={values.price_retail} onChange={(e) => onChange({ ...values, price_retail: e.target.value })} /></div>
-        <div><Label className="text-xs">سعر الجملة</Label><Input className="h-9 mt-1" type="number" placeholder="0" value={values.price_wholesale} onChange={(e) => onChange({ ...values, price_wholesale: e.target.value })} /></div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div><Label className="text-xs">الكمية المتاحة</Label><Input className="h-9 mt-1" type="number" placeholder="0" value={values.stock_quantity} onChange={(e) => onChange({ ...values, stock_quantity: e.target.value })} /></div>
-        <div><Label className="text-xs">الباركود</Label><Input className="h-9 mt-1" placeholder="رقم الباركود" value={values.barcode} onChange={(e) => onChange({ ...values, barcode: e.target.value })} /></div>
-      </div>
-      <div><Label className="text-xs">رابط الصورة</Label><Input className="h-9 mt-1" placeholder="https://..." value={values.image_url} onChange={(e) => onChange({ ...values, image_url: e.target.value })} /></div>
-    </div>
-  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -526,7 +531,7 @@ export default function MaterialsPage() {
                 <h3 className="font-bold text-lg">تعديل المادة</h3>
                 <Button variant="ghost" size="sm" onClick={() => setEditing(false)}><X className="h-4 w-4" /></Button>
               </div>
-              <FormFields values={editForm} onChange={setEditForm} isEdit />
+              <MaterialFormFields values={editForm} onChange={setEditForm} categories={categories} />
               <div className="flex gap-2 pt-2">
                 <Button className="flex-1" onClick={handleEdit} disabled={saving}>
                   {saving ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : <Check className="h-4 w-4 me-2" />}
@@ -552,7 +557,7 @@ export default function MaterialsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>إضافة مادة جديدة</DialogTitle></DialogHeader>
-          <FormFields values={form} onChange={setForm} />
+          <MaterialFormFields values={form} onChange={setForm} categories={categories} />
           <Button className="w-full" onClick={handleAdd} disabled={saving}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : <Plus className="h-4 w-4 me-2" />}
             إضافة المادة
