@@ -141,6 +141,7 @@ export default function OrderDetails() {
       const found = (all || []).find((o: any) => o.id === id);
       if (found) setOrder(mapOrder(found));
       const map: Record<string, ExtMaterial> = {};
+      const nameMap: Record<string, ExtMaterial> = {};
       const allMats: ExtMaterial[] = [];
       (extData?.products || []).forEach((p: any) => {
         const key = p.sku || "";
@@ -148,15 +149,18 @@ export default function OrderDetails() {
         const validImg = rawImg.startsWith("http") ? rawImg : "";
         const mat: ExtMaterial = { sku: key, name: p.name || "", imageUrl: validImg, unit: p.unit || "unit", sellingPrice: p.price_retail || 0, costPrice: p.price_wholesale || 0 };
         if (key) map[key] = mat;
+        if (p.name) nameMap[p.name.toLowerCase().trim()] = mat;
         allMats.push(mat);
       });
       setExtMaterials(allMats);
       const enriched = (fetchedLines || []).map((l: any) => {
         const savedImg = l.imageUrl && l.imageUrl.startsWith("http") ? l.imageUrl : "";
-        const catalogImg = map[l.materialCode]?.imageUrl || "";
+        const skuMatch = map[l.materialCode];
+        const nameMatch = l.materialName ? nameMap[l.materialName.toLowerCase().trim()] : undefined;
+        const catalogImg = skuMatch?.imageUrl || nameMatch?.imageUrl || "";
         return {
           ...l,
-          materialName: l.materialName || map[l.materialCode]?.name || l.materialCode,
+          materialName: l.materialName || skuMatch?.name || nameMatch?.name || l.materialCode,
           imageUrl: savedImg || catalogImg,
         };
       });
@@ -786,7 +790,7 @@ export default function OrderDetails() {
                             return !q || l.materialName.toLowerCase().includes(q) || l.materialCode.toLowerCase().includes(q);
                           }).map(lot => (
                             <div key={lot.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors border-b border-border/30" onClick={() => {
-                              const extMatch = extMaterials.find(m => m.sku === lot.materialCode);
+                              const extMatch = extMaterials.find(m => m.sku === lot.materialCode) || extMaterials.find(m => m.name && lot.materialName && m.name.toLowerCase().trim() === lot.materialName.toLowerCase().trim());
                               setEditNewItems(prev => [...prev, {
                                 materialCode: lot.materialCode, materialName: lot.materialName, quantity: 1,
                                 sellingPrice: 0, costPrice: lot.costPrice, imageUrl: extMatch?.imageUrl || "", unit: lot.unit,
@@ -796,7 +800,7 @@ export default function OrderDetails() {
                               setEditInventorySearch("");
                             }}>
                               <div className="flex items-center gap-2 min-w-0">
-                                {(() => { const img = extMaterials.find(m => m.sku === lot.materialCode)?.imageUrl; return img ? <img src={img} alt="" className="w-8 h-8 rounded object-cover shrink-0" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /> : null; })()}
+                                {(() => { const match = extMaterials.find(m => m.sku === lot.materialCode) || extMaterials.find(m => m.name && lot.materialName && m.name.toLowerCase().trim() === lot.materialName.toLowerCase().trim()); const img = match?.imageUrl; return img ? <img src={img} alt="" className="w-8 h-8 rounded object-cover shrink-0" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /> : null; })()}
                                 <div className="min-w-0">
                                   <span className="font-medium block">{lot.materialName}</span>
                                   <span className="text-muted-foreground">{lot.materialCode} · متبقي: {lot.remaining} {lot.unit} · سعر: {lot.costPrice.toLocaleString()}</span>

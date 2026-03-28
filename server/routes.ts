@@ -1390,20 +1390,34 @@ router.get("/client-inventory", async (req, res) => {
   if (sourceOrder) q = q.eq("source_order", sourceOrder);
   const { data, error } = await q;
   if (error) return res.status(500).json({ error: error.message });
-  // Enrich with image_url from order_lines
   const items = data || [];
   const orderIds = [...new Set(items.map((r: any) => r.source_order).filter(Boolean))] as string[];
-  const imgMap: Record<string, string> = {};
+  const imgBySku: Record<string, string> = {};
+  const imgByName: Record<string, string> = {};
   if (orderIds.length > 0) {
     const { data: lines } = await supabaseAdmin
       .from("order_lines")
       .select("order_id, material_code, image_url")
       .in("order_id", orderIds);
     (lines || []).forEach((l: any) => {
-      if (l.material_code && l.image_url) imgMap[l.material_code] = l.image_url;
+      if (l.material_code && l.image_url) imgBySku[l.material_code] = l.image_url;
     });
   }
-  const enriched = items.map((r: any) => ({ ...r, image_url: imgMap[r.code] || "" }));
+  try {
+    const ext = getExtClient();
+    const { data: extProducts } = await ext.from("products").select("sku, name, image_url");
+    (extProducts || []).forEach((p: any) => {
+      const img = p.image_url || "";
+      if (!img.startsWith("http")) return;
+      if (p.sku && !imgBySku[p.sku]) imgBySku[p.sku] = img;
+      if (p.name) imgByName[p.name.toLowerCase().trim()] = img;
+    });
+  } catch {}
+  const enriched = items.map((r: any) => {
+    const code = r.code || "";
+    const matName = r.material || "";
+    return { ...r, image_url: imgBySku[code] || imgByName[matName.toLowerCase().trim()] || "" };
+  });
   res.json(camelizeKeys(enriched));
 });
 router.get("/client-inventory/:id", async (req, res) => {

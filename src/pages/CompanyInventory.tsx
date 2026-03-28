@@ -71,13 +71,17 @@ export default function CompanyInventoryPage() {
       api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] })),
       api.get<any[]>("/suppliers").catch(() => []),
     ]).then(([data, extData, supData]) => {
-      const imgMap: Record<string, string> = {};
+      const imgBySku: Record<string, string> = {};
+      const imgByName: Record<string, string> = {};
       (extData?.products || []).forEach((p: any) => {
-        if (p.sku && p.image_url) imgMap[p.sku] = p.image_url;
+        const img = p.image_url || "";
+        if (!img.startsWith("http")) return;
+        if (p.sku) imgBySku[p.sku] = img;
+        if (p.name) imgByName[p.name.toLowerCase().trim()] = img;
       });
       setLots((data || []).map(raw => {
         const lot = mapLot(raw);
-        lot.imageUrl = imgMap[lot.materialCode] || "";
+        lot.imageUrl = imgBySku[lot.materialCode] || imgByName[lot.materialName.toLowerCase().trim()] || "";
         return lot;
       }));
       setSuppliers((supData || []).map((s: any) => ({ id: s.id, name: s.name })));

@@ -667,7 +667,7 @@ export default function OrdersPage() {
                         }).map(lot => (
                           <div key={lot.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors border-b border-border/30" onClick={() => {
                             if (orderItems.some(i => i.inventoryLotId === lot.id)) { toast.error("هذه الدُفعة مضافة بالفعل"); return; }
-                            const matMatch = realMaterials.find(m => m.code === lot.materialCode);
+                            const matMatch = realMaterials.find(m => m.code === lot.materialCode) || realMaterials.find(m => m.name && lot.materialName && m.name.toLowerCase().trim() === lot.materialName.toLowerCase().trim());
                             setOrderItems(prev => [...prev, { materialCode: lot.materialCode, name: lot.materialName, quantity: 1, sellingPrice: 0, costPrice: lot.costPrice, imageUrl: matMatch?.imageUrl || "", unit: lot.unit, fromInventory: true, inventoryLotId: lot.id }]);
                             setShowInventoryPicker(false);
                             setInventorySearch("");

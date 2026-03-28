@@ -58,7 +58,8 @@ export default function InventoryLotDetail() {
       const mapped = mapLotDetail(lotData);
       setLot(mapped);
       const products = extData?.products || [];
-      const match = products.find((p: any) => p.sku === mapped.materialCode);
+      const match = products.find((p: any) => p.sku === mapped.materialCode)
+        || products.find((p: any) => p.name && mapped.materialName && p.name.toLowerCase().trim() === mapped.materialName.toLowerCase().trim());
       if (match) {
         const img = match.image_url || match.image || "";
         if (img.startsWith("http")) setImageUrl(img);
