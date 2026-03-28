@@ -192,7 +192,7 @@ export default function CompanyInventoryPage() {
             </thead>
             <tbody>
               {filtered.map(lot => (
-                <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                <tr key={lot.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/company-inventory/${encodeURIComponent(lot.id)}`)}>
                   <td className="py-2 px-3 text-center">
                     {lot.imageUrl ? (
                       <img src={lot.imageUrl} alt={lot.materialName} className="w-9 h-9 rounded-md object-cover border border-border mx-auto" />
@@ -208,13 +208,13 @@ export default function CompanyInventoryPage() {
                   <td className="py-3 px-3 text-end">{lot.costPrice.toLocaleString()} {t.currency}</td>
                   <td className="py-3 px-3 text-end font-medium text-primary">{(lot.remaining * lot.costPrice).toLocaleString()} {t.currency}</td>
                   <td className="py-3 px-3">
-                    <button className="text-xs text-primary hover:underline font-mono" onClick={() => navigate(`/orders/${lot.sourceOrder}`)}>{lot.sourceOrder}</button>
+                    <button className="text-xs text-primary hover:underline font-mono" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${lot.sourceOrder}`); }}>{lot.sourceOrder}</button>
                   </td>
                   <td className="py-3 px-3 text-xs text-muted-foreground">{lot.dateAdded}</td>
                   <td className="py-3 px-3">
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColor(lot.status)}`}>{statusLabel(lot.status)}</span>
                   </td>
-                  <td className="py-3 px-3 text-end">
+                  <td className="py-3 px-3 text-end" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
