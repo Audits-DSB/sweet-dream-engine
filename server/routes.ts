@@ -2289,16 +2289,23 @@ router.get("/admin/users", async (req, res) => {
     console.log("[admin/users] Access denied. Auth result:", JSON.stringify(auth));
     return res.status(403).json({ error: auth.error });
   }
-  const user = auth.user;
   const { data: profiles } = await supabaseAdmin.from("profiles").select("user_id, full_name, avatar_url, created_at");
   const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id, role");
   const { data: { users: authUsers } } = await supabaseAdmin.auth.admin.listUsers();
-  const emailMap: Record<string, string> = {};
-  (authUsers || []).forEach((u: any) => { emailMap[u.id] = u.email || ""; });
-  const result = (profiles || []).map((p: any) => ({
-    ...p,
-    email: emailMap[p.user_id] || "",
-    roles: (roles || []).filter((r: any) => r.user_id === p.user_id).map((r: any) => r.role),
+  const profileMap: Record<string, any> = {};
+  (profiles || []).forEach((p: any) => { profileMap[p.user_id] = p; });
+  const rolesMap: Record<string, string[]> = {};
+  (roles || []).forEach((r: any) => {
+    if (!rolesMap[r.user_id]) rolesMap[r.user_id] = [];
+    rolesMap[r.user_id].push(r.role);
+  });
+  const result = (authUsers || []).map((u: any) => ({
+    user_id: u.id,
+    full_name: profileMap[u.id]?.full_name || u.user_metadata?.full_name || null,
+    avatar_url: profileMap[u.id]?.avatar_url || null,
+    created_at: profileMap[u.id]?.created_at || u.created_at,
+    email: u.email || "",
+    roles: rolesMap[u.id] || [],
   }));
   res.json(result);
 });
