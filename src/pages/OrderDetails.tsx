@@ -360,10 +360,8 @@ export default function OrderDetails() {
       await Promise.all([...linePatches, ...deleteOps]);
       if (addOp) await addOp;
 
-      let refreshedOrder = order;
       if (Object.keys(orderPatch).length > 0) {
-        const updated = await api.patch<any>(`/orders/${order.id}`, orderPatch);
-        refreshedOrder = mapOrder(updated);
+        await api.patch<any>(`/orders/${order.id}`, orderPatch);
       }
 
       const changedFields = Object.keys(orderPatch);
@@ -390,9 +388,7 @@ export default function OrderDetails() {
         toast.info("لا توجد تغييرات للحفظ");
       }
 
-      setOrder(refreshedOrder);
-      const freshLines = await api.get<any[]>(`/orders/${order.id}/lines`);
-      setLines(freshLines || []);
+      await loadOrder();
       setEditOpen(false);
     } catch (err: any) {
       toast.error(err?.message || "فشل حفظ التعديلات");

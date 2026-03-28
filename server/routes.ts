@@ -310,7 +310,13 @@ router.get("/orders/:id", async (req, res) => {
     supabaseAdmin.from("order_founder_contributions").select("contributions").eq("order_id", req.params.id).maybeSingle(),
   ]);
   if (orderRes.error) return res.status(404).json({ error: orderRes.error.message });
-  res.json(camelizeKeys({ ...orderRes.data, founderContributions: contribRes.data?.contributions || [] }));
+  const clientId = orderRes.data.client_id;
+  let clientName = clientId;
+  if (clientId) {
+    const { data: cRow } = await supabaseAdmin.from("clients").select("name").eq("id", clientId).single();
+    if (cRow?.name) clientName = cRow.name;
+  }
+  res.json(camelizeKeys({ ...orderRes.data, client: clientName, founderContributions: contribRes.data?.contributions || [] }));
 });
 router.post("/orders", async (req, res) => {
   const { items, founderContributions, client, ...orderBody } = req.body;
@@ -429,7 +435,10 @@ router.patch("/orders/:id", async (req, res) => {
       supabaseAdmin.from("order_founder_contributions").select("contributions").eq("order_id", req.params.id).single(),
       supabaseAdmin.from("orders").select("*").eq("id", req.params.id).single(),
     ]);
-    return res.json({ ...camelizeKeys(orderRes.data || {}), id: req.params.id, founderContributions: contribRes.data?.contributions || [] });
+    const cid = orderRes.data?.client_id;
+    let cName = cid;
+    if (cid) { const { data: cr } = await supabaseAdmin.from("clients").select("name").eq("id", cid).single(); if (cr?.name) cName = cr.name; }
+    return res.json({ ...camelizeKeys(orderRes.data || {}), client: cName || "", id: req.params.id, founderContributions: contribRes.data?.contributions || [] });
   }
   const { data, error } = await supabaseAdmin.from("orders").update(snakifyKeys(rest)).eq("id", req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
@@ -476,9 +485,12 @@ router.patch("/orders/:id", async (req, res) => {
     } catch (e: any) { console.warn("[order-patch] sync funding txs error:", e.message); }
   }
 
-  // Enrich with contributions
-  const { data: contribData } = await supabaseAdmin.from("order_founder_contributions").select("contributions").eq("order_id", req.params.id).single();
-  return res.json({ ...camelizeKeys(data), founderContributions: contribData?.contributions || founderContributions || [] });
+  // Enrich with contributions + client name
+  const [contribData, clientData] = await Promise.all([
+    supabaseAdmin.from("order_founder_contributions").select("contributions").eq("order_id", req.params.id).single(),
+    supabaseAdmin.from("clients").select("name").eq("id", data.client_id).single(),
+  ]);
+  return res.json({ ...camelizeKeys(data), client: clientData.data?.name || data.client_id || "", founderContributions: contribData?.data?.contributions || founderContributions || [] });
 });
 router.delete("/orders/:id", async (req, res) => {
   const orderId = req.params.id;
