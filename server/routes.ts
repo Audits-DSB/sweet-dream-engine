@@ -144,6 +144,10 @@ router.delete("/external-materials/:id", async (req, res) => {
   try {
     const ext = getExtClient();
     if (!ext) return res.status(500).json({ error: "External Supabase not configured" });
+    const { data: existing } = await ext.from("products").select("*").eq("id", req.params.id).single();
+    if (existing) {
+      await softDelete("external-material", existing.id, existing.name || existing.sku || req.params.id, existing);
+    }
     const { error } = await ext.from("products").delete().eq("id", req.params.id);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
@@ -1914,6 +1918,7 @@ const ENTITY_TABLE_MAP: Record<string, { table: string; idField: string }> = {
   "treasury-account": { table: "treasury_accounts", idField: "id" },
   "treasury-transaction": { table: "treasury_transactions", idField: "id" },
   "founder-transaction": { table: "treasury_transactions", idField: "id" },
+  "external-material": { table: "products", idField: "id" },
 };
 
 router.get("/trash", async (_req, res) => {
@@ -1981,6 +1986,11 @@ router.post("/trash/:id/restore", async (req, res) => {
         { id: actorId, name: snapshot.name || "", type: "founder", phone: snapshot.phone || "", email: snapshot.email || "", active: true, founder_id: snapshot.id },
         { onConflict: "id", ignoreDuplicates: true }
       ).catch(() => {});
+    } else if (entityType === "external-material") {
+      const ext = getExtClient();
+      if (!ext) return res.status(500).json({ error: "External Supabase not configured" });
+      const { error: extErr } = await ext.from("products").upsert(snapshot, { onConflict: "id" });
+      if (extErr) return res.status(500).json({ error: `Restore failed: ${extErr.message}` });
     } else {
       const { error: restoreErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
       if (restoreErr) return res.status(500).json({ error: `Restore failed: ${restoreErr.message}` });

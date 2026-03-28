@@ -35,6 +35,7 @@ const ENTITY_LABELS: Record<string, { label: string; icon: any; color: string }>
   "treasury-account": { label: "حساب خزينة", icon: Wallet, color: "bg-yellow-500/10 text-yellow-600" },
   "treasury-transaction": { label: "معاملة خزينة", icon: Wallet, color: "bg-lime-500/10 text-lime-600" },
   "founder-transaction": { label: "معاملة مؤسس", icon: UserCog, color: "bg-cyan-500/10 text-cyan-600" },
+  "external-material": { label: "مادة (كاتالوج)", icon: Boxes, color: "bg-emerald-500/10 text-emerald-600" },
 };
 
 function formatDate(dateStr: string) {

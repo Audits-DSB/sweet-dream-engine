@@ -150,7 +150,7 @@ export default function MaterialsPage() {
       if (res?.products && res.products.length > 0) {
         setMaterials(prev => [...prev, ...res.products.map(mapExternal)]);
       }
-      await logAudit({ entity: "material", entityId: form.sku || form.name, entityName: form.name, action: "create", snapshot: payload as any, endpoint: "/external-materials", idField: "sku" });
+      await logAudit({ entity: "external-material", entityId: form.sku || form.name, entityName: form.name, action: "create", snapshot: payload as any, endpoint: "/external-materials", idField: "sku" });
       setForm({ ...emptyForm });
       setDialogOpen(false);
       toast.success("تمت إضافة المادة بنجاح");
@@ -178,7 +178,7 @@ export default function MaterialsPage() {
         image_url: editForm.image_url || null,
       };
       await api.patch(`/external-materials/${detailItem.id}`, payload);
-      await logAudit({ entity: "material", entityId: detailItem.id, entityName: editForm.name, action: "update", snapshot: payload as any, endpoint: "/external-materials", idField: "id" });
+      await logAudit({ entity: "external-material", entityId: detailItem.id, entityName: editForm.name, action: "update", snapshot: payload as any, endpoint: "/external-materials", idField: "id" });
       setMaterials(prev => prev.map(m => m.id === detailItem.id ? {
         ...m,
         code: editForm.sku || m.code,
@@ -234,7 +234,7 @@ export default function MaterialsPage() {
     try {
       if (deleteTarget.id) {
         await api.delete(`/external-materials/${deleteTarget.id}`);
-        await logAudit({ entity: "material", entityId: deleteTarget.id, entityName: deleteTarget.name, action: "delete", snapshot: deleteTarget as any, endpoint: "/external-materials", idField: "id" });
+        await logAudit({ entity: "external-material", entityId: deleteTarget.id!, entityName: deleteTarget.name, action: "delete", snapshot: deleteTarget as any, endpoint: "/external-materials", idField: "id" });
         setMaterials(prev => prev.filter(m => m.id !== deleteTarget.id));
       } else {
         await api.delete(`/materials/${deleteTarget.code}`);

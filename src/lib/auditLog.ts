@@ -26,6 +26,7 @@ const entityLabels: Record<string, string> = {
   "treasury-transaction": "معاملة خزينة",
   audits: "جرد",
   "client-inventory": "مخزون عميل",
+  "external-material": "مادة (كاتالوج)",
 };
 
 export async function logAudit(entry: AuditEntry): Promise<void> {
