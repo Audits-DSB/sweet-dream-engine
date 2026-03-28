@@ -7,7 +7,7 @@ A full-featured React + TypeScript operations management dashboard for a dental 
 - **Frontend**: React 18 + TypeScript + Vite (proxied via Express on port 5000)
 - **Backend**: Express.js API server (port 5000, Vite on 5001)
 - **Database**: Supabase PostgreSQL (project `nhmrwmseowokjiqccsjd`) — ALL business data
-- **Catalog DB**: Secondary Supabase project (`qelguwdtxlyhulrtfyyb`) — 306-product catalog (read-only via `/api/external-materials`)
+- **Catalog DB**: Secondary Supabase project (`qelguwdtxlyhulrtfyyb`) — product catalog (full CRUD via `/api/external-materials`)
 - **Auth**: Supabase Auth (email/password + OAuth via `@supabase/supabase-js`)
 - **UI**: Tailwind CSS + shadcn/ui + Radix UI components
 - **Routing**: React Router v6
@@ -55,7 +55,10 @@ All business data in main Supabase project:
 - `/api/founder-transactions` — Founder financial transactions (GET/POST/DELETE, uses treasury_transactions table)
 - `/api/founder-balances` — Computed founder capital balances (joins orders + order_founder_contributions + order_lines + treasury_transactions)
 - `/api/company-profit-summary` — Total company profit from collections minus expenses (handles line-item, sourceOrders, and single-order paths)
-- `/api/external-materials` — Proxy to catalog Supabase project
+- `/api/external-materials` — Full CRUD for catalog Supabase project (GET list, POST add one/many, PATCH update, DELETE)
+- `/api/external-materials/export` — Download all materials as CSV file
+- **CSV Import**: Materials page supports bulk import from CSV files with preview before inserting
+- **Dependencies**: `papaparse` for CSV parsing on frontend
 
 ## Monthly Detail Drill-Down
 - **Route**: `/monthly/:year/:month` — Detailed view of all activity for a specific month

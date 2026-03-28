@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { DataToolbar } from "@/components/DataToolbar";
@@ -7,14 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Package, ImageOff, Loader2, Trash2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Package, ImageOff, Loader2, Trash2, Pencil, Upload, Download, X, Check, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { api } from "@/lib/api";
 import { logAudit } from "@/lib/auditLog";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import Papa from "papaparse";
 
 type ExternalProduct = {
   id: string; sku: string; name: string; image_url: string | null;
@@ -24,6 +25,7 @@ type ExternalProduct = {
 };
 
 type Material = {
+  id?: string;
   code: string; name: string; category: string; unit: string;
   sellingPrice: number; storeCost: number; supplier: string;
   supplierId: string; manufacturer: string; hasExpiry: boolean; active: boolean;
@@ -31,9 +33,16 @@ type Material = {
   variants?: any[] | null; barcode?: string | null; description?: string | null;
 };
 
+const emptyForm = {
+  sku: "", name: "", category: "", description: "",
+  price_retail: "", price_wholesale: "", stock_quantity: "",
+  barcode: "", image_url: "",
+};
+
 function mapExternal(p: ExternalProduct): Material {
   const companyVariant = p.variants?.find((v: any) => v.name === "Company" || v.name === "Company()");
   return {
+    id: p.id,
     code: p.sku || p.id.slice(0, 8),
     name: p.name,
     category: p.category || "General",
@@ -76,18 +85,24 @@ export default function MaterialsPage() {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailItem, setDetailItem] = useState<Material | null>(null);
-  const [form, setForm] = useState({ name: "", category: "", unit: "unit", sellingPrice: "", storeCost: "", supplier: "", supplierId: "", manufacturer: "", hasExpiry: false, active: true });
+  const [form, setForm] = useState({ ...emptyForm });
   const [imgErrors, setImgErrors] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<Material | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({ ...emptyForm });
+  const [csvDialogOpen, setCsvDialogOpen] = useState(false);
+  const [csvData, setCsvData] = useState<any[]>([]);
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { fetchMaterials(); }, []);
 
   const fetchMaterials = async () => {
     setLoading(true);
     let loaded = false;
-
-    // 1. Try via backend proxy (no CORS issues) — has 306 products with images & stock
     try {
       const json = await api.get<{ products: ExternalProduct[] }>("/external-materials");
       if (json?.products && Array.isArray(json.products) && json.products.length > 0) {
@@ -97,8 +112,6 @@ export default function MaterialsPage() {
     } catch (err) {
       console.error("External materials failed, falling back to DB:", err);
     }
-
-    // 2. Fallback → load from local database
     if (!loaded) {
       try {
         const dbData = await api.get<any[]>("/materials");
@@ -107,7 +120,6 @@ export default function MaterialsPage() {
         toast.error(t.failedToLoadMaterials);
       }
     }
-
     setLoading(false);
   };
 
@@ -120,35 +132,115 @@ export default function MaterialsPage() {
   });
 
   const handleAdd = async () => {
-    if (!form.name || !form.sellingPrice) { toast.error(t.enterMaterialAndPrice); return; }
-    const num = materials.length + 1;
-    const newCode = `MAT-${String(num).padStart(3, "0")}`;
+    if (!form.name || !form.price_retail) { toast.error("يرجى إدخال الاسم وسعر البيع"); return; }
+    setSaving(true);
     try {
-      const matPayload = {
-        code: newCode, name: form.name, category: form.category || "General",
-        unit: form.unit, sellingPrice: String(form.sellingPrice),
-        storeCost: String(form.storeCost), supplier: form.supplier,
-        supplierId: form.supplierId, manufacturer: form.manufacturer,
-        hasExpiry: form.hasExpiry, active: form.active,
+      const payload = {
+        sku: form.sku,
+        name: form.name,
+        category: form.category || "General",
+        description: form.description,
+        price_retail: Number(form.price_retail) || 0,
+        price_wholesale: Number(form.price_wholesale) || 0,
+        stock_quantity: Number(form.stock_quantity) || 0,
+        barcode: form.barcode || null,
+        image_url: form.image_url || null,
       };
-      await api.post("/materials", matPayload);
-      await logAudit({ entity: "material", entityId: newCode, entityName: form.name, action: "create", snapshot: matPayload, endpoint: "/materials", idField: "code" });
-      setMaterials(prev => [...prev, { ...form, code: newCode, sellingPrice: Number(form.sellingPrice), storeCost: Number(form.storeCost) }]);
-      setForm({ name: "", category: "", unit: "unit", sellingPrice: "", storeCost: "", supplier: "", supplierId: "", manufacturer: "", hasExpiry: false, active: true });
+      const res = await api.post<{ products: ExternalProduct[] }>("/external-materials", payload);
+      if (res?.products && res.products.length > 0) {
+        setMaterials(prev => [...prev, ...res.products.map(mapExternal)]);
+      }
+      await logAudit({ entity: "material", entityId: form.sku || form.name, entityName: form.name, action: "create", snapshot: payload as any, endpoint: "/external-materials", idField: "sku" });
+      setForm({ ...emptyForm });
       setDialogOpen(false);
-      toast.success(t.materialAdded);
-    } catch {
-      toast.error(t.failedToAddMaterial);
+      toast.success("تمت إضافة المادة بنجاح");
+    } catch (err: any) {
+      toast.error(err?.message || "فشل إضافة المادة");
+    } finally {
+      setSaving(false);
     }
+  };
+
+  const handleEdit = async () => {
+    if (!detailItem?.id) { toast.error("لا يمكن تعديل هذا العنصر"); return; }
+    if (!editForm.name) { toast.error("يرجى إدخال الاسم"); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        sku: editForm.sku,
+        name: editForm.name,
+        category: editForm.category || "General",
+        description: editForm.description,
+        price_retail: Number(editForm.price_retail) || 0,
+        price_wholesale: Number(editForm.price_wholesale) || 0,
+        stock_quantity: Number(editForm.stock_quantity) || 0,
+        barcode: editForm.barcode || null,
+        image_url: editForm.image_url || null,
+      };
+      await api.patch(`/external-materials/${detailItem.id}`, payload);
+      await logAudit({ entity: "material", entityId: detailItem.id, entityName: editForm.name, action: "update", snapshot: payload as any, endpoint: "/external-materials", idField: "id" });
+      setMaterials(prev => prev.map(m => m.id === detailItem.id ? {
+        ...m,
+        code: editForm.sku || m.code,
+        name: editForm.name,
+        category: editForm.category || m.category,
+        description: editForm.description,
+        sellingPrice: Number(editForm.price_retail) || 0,
+        storeCost: Number(editForm.price_wholesale) || 0,
+        stock_quantity: Number(editForm.stock_quantity) || 0,
+        barcode: editForm.barcode || null,
+        image_url: editForm.image_url || null,
+      } : m));
+      setDetailItem(prev => prev ? {
+        ...prev,
+        code: editForm.sku || prev.code,
+        name: editForm.name,
+        category: editForm.category || prev.category,
+        description: editForm.description,
+        sellingPrice: Number(editForm.price_retail) || 0,
+        storeCost: Number(editForm.price_wholesale) || 0,
+        stock_quantity: Number(editForm.stock_quantity) || 0,
+        barcode: editForm.barcode || null,
+        image_url: editForm.image_url || null,
+      } : null);
+      setEditing(false);
+      toast.success("تم التعديل بنجاح");
+    } catch (err: any) {
+      toast.error(err?.message || "فشل التعديل");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startEditing = () => {
+    if (!detailItem) return;
+    setEditForm({
+      sku: detailItem.code || "",
+      name: detailItem.name || "",
+      category: detailItem.category || "",
+      description: detailItem.description || "",
+      price_retail: String(detailItem.sellingPrice || ""),
+      price_wholesale: String(detailItem.storeCost || ""),
+      stock_quantity: String(detailItem.stock_quantity ?? ""),
+      barcode: detailItem.barcode || "",
+      image_url: detailItem.image_url || "",
+    });
+    setEditing(true);
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await api.delete(`/materials/${deleteTarget.code}`);
-      await logAudit({ entity: "material", entityId: deleteTarget.code, entityName: deleteTarget.name, action: "delete", snapshot: deleteTarget as any, endpoint: "/materials", idField: "code" });
-      setMaterials(prev => prev.filter(m => m.code !== deleteTarget.code));
+      if (deleteTarget.id) {
+        await api.delete(`/external-materials/${deleteTarget.id}`);
+        await logAudit({ entity: "material", entityId: deleteTarget.id, entityName: deleteTarget.name, action: "delete", snapshot: deleteTarget as any, endpoint: "/external-materials", idField: "id" });
+        setMaterials(prev => prev.filter(m => m.id !== deleteTarget.id));
+      } else {
+        await api.delete(`/materials/${deleteTarget.code}`);
+        await logAudit({ entity: "material", entityId: deleteTarget.code, entityName: deleteTarget.name, action: "delete", snapshot: deleteTarget as any, endpoint: "/materials", idField: "code" });
+        setMaterials(prev => prev.filter(m => m.code !== deleteTarget.code));
+      }
       setDetailItem(null);
       setDeleteTarget(null);
       toast.success(`تم حذف المادة: ${deleteTarget.name}`);
@@ -158,6 +250,102 @@ export default function MaterialsPage() {
       setDeleting(false);
     }
   };
+
+  const handleCsvFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        if (results.data && results.data.length > 0) {
+          setCsvData(results.data);
+          setCsvDialogOpen(true);
+        } else {
+          toast.error("الملف فارغ أو غير صالح");
+        }
+      },
+      error: () => toast.error("فشل قراءة الملف"),
+    });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleCsvImport = async () => {
+    if (csvData.length === 0) return;
+    setCsvImporting(true);
+    try {
+      const items = csvData.map((row: any) => ({
+        sku: row.sku || row.SKU || row.code || row["كود"] || "",
+        name: row.name || row.Name || row["الاسم"] || row["اسم المنتج"] || "",
+        category: row.category || row.Category || row["الفئة"] || "General",
+        description: row.description || row.Description || row["الوصف"] || "",
+        price_retail: Number(row.price_retail || row["سعر البيع"] || row.price || 0),
+        price_wholesale: Number(row.price_wholesale || row["سعر الجملة"] || 0),
+        stock_quantity: Number(row.stock_quantity || row["الكمية"] || row.quantity || row.stock || 0),
+        barcode: row.barcode || row.Barcode || row["الباركود"] || null,
+        image_url: row.image_url || row["رابط الصورة"] || null,
+      }));
+      const res = await api.post<{ products: ExternalProduct[]; count: number }>("/external-materials", items);
+      if (res?.products) {
+        setMaterials(prev => [...prev, ...res.products.map(mapExternal)]);
+      }
+      setCsvDialogOpen(false);
+      setCsvData([]);
+      toast.success(`تمت إضافة ${res?.count || items.length} مادة بنجاح`);
+    } catch (err: any) {
+      toast.error(err?.message || "فشل استيراد البيانات");
+    } finally {
+      setCsvImporting(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const response = await fetch("/api/external-materials/export");
+      if (!response.ok) throw new Error("فشل التنزيل");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "materials_export.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("تم تنزيل الملف بنجاح");
+    } catch {
+      toast.error("فشل تنزيل الملف");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const FormFields = ({ values, onChange, isEdit = false }: { values: typeof emptyForm; onChange: (v: typeof emptyForm) => void; isEdit?: boolean }) => (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label className="text-xs">كود المنتج (SKU)</Label><Input className="h-9 mt-1" placeholder="مثال: MAT-001" value={values.sku} onChange={(e) => onChange({ ...values, sku: e.target.value })} /></div>
+        <div><Label className="text-xs">الفئة</Label>
+          <Select value={values.category} onValueChange={(v) => onChange({ ...values, category: v })}>
+            <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="اختر الفئة" /></SelectTrigger>
+            <SelectContent>
+              {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              <SelectItem value="General">عام</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div><Label className="text-xs">اسم المنتج *</Label><Input className="h-9 mt-1" placeholder="اسم المنتج" value={values.name} onChange={(e) => onChange({ ...values, name: e.target.value })} /></div>
+      <div><Label className="text-xs">الوصف</Label><Textarea className="mt-1 min-h-[60px]" placeholder="وصف المنتج" value={values.description} onChange={(e) => onChange({ ...values, description: e.target.value })} /></div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label className="text-xs">سعر البيع *</Label><Input className="h-9 mt-1" type="number" placeholder="0" value={values.price_retail} onChange={(e) => onChange({ ...values, price_retail: e.target.value })} /></div>
+        <div><Label className="text-xs">سعر الجملة</Label><Input className="h-9 mt-1" type="number" placeholder="0" value={values.price_wholesale} onChange={(e) => onChange({ ...values, price_wholesale: e.target.value })} /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label className="text-xs">الكمية المتاحة</Label><Input className="h-9 mt-1" type="number" placeholder="0" value={values.stock_quantity} onChange={(e) => onChange({ ...values, stock_quantity: e.target.value })} /></div>
+        <div><Label className="text-xs">الباركود</Label><Input className="h-9 mt-1" placeholder="رقم الباركود" value={values.barcode} onChange={(e) => onChange({ ...values, barcode: e.target.value })} /></div>
+      </div>
+      <div><Label className="text-xs">رابط الصورة</Label><Input className="h-9 mt-1" placeholder="https://..." value={values.image_url} onChange={(e) => onChange({ ...values, image_url: e.target.value })} /></div>
+    </div>
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -171,6 +359,8 @@ export default function MaterialsPage() {
         </div>
       </div>
 
+      <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
+
       <DataToolbar
         searchPlaceholder={t.searchMaterials}
         searchValue={search}
@@ -179,7 +369,20 @@ export default function MaterialsPage() {
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
         onExport={() => exportToCsv("materials", [t.materialCode, t.materialName, t.category, t.sellingPrice, t.storeCost, "Stock", t.manufacturer], filtered.map(m => [m.code, m.name, m.category, m.sellingPrice, m.storeCost, m.stock_quantity ?? 0, m.manufacturer]))}
-        actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addMaterial}</Button>}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}>
+              <Plus className="h-3.5 w-3.5 me-1.5" />إضافة مادة
+            </Button>
+            <Button size="sm" variant="outline" className="h-9" onClick={() => fileInputRef.current?.click()}>
+              <Upload className="h-3.5 w-3.5 me-1.5" />استيراد CSV
+            </Button>
+            <Button size="sm" variant="outline" className="h-9" onClick={handleExport} disabled={exporting}>
+              {exporting ? <Loader2 className="h-3.5 w-3.5 me-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 me-1.5" />}
+              تنزيل الكل
+            </Button>
+          </div>
+        }
       />
 
       <div className="stat-card overflow-x-auto">
@@ -206,7 +409,7 @@ export default function MaterialsPage() {
             </thead>
             <tbody>
               {filtered.map((mat) => (
-                <tr key={mat.code} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setDetailItem(mat)}>
+                <tr key={mat.id || mat.code} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => { setDetailItem(mat); setEditing(false); }}>
                   <td className="py-2 px-3">
                     {mat.image_url && !imgErrors.has(mat.code) ? (
                       <img src={mat.image_url} alt={mat.name} className="h-9 w-9 rounded-md object-cover border border-border" onError={() => setImgErrors(prev => new Set(prev).add(mat.code))} />
@@ -234,11 +437,11 @@ export default function MaterialsPage() {
         )}
       </div>
 
-      {/* Detail Dialog */}
-      <Dialog open={!!detailItem} onOpenChange={() => setDetailItem(null)}>
+      {/* Detail / Edit Dialog */}
+      <Dialog open={!!detailItem} onOpenChange={(open) => { if (!open) { setDetailItem(null); setEditing(false); } }}>
         <DialogContent className="max-w-lg p-0 overflow-hidden">
           <DialogHeader className="sr-only"><DialogTitle>{detailItem?.name}</DialogTitle></DialogHeader>
-          {detailItem && (
+          {detailItem && !editing && (
             <>
               <div className="relative bg-muted/30 p-6 pb-4 border-b border-border">
                 <div className="flex items-start gap-4">
@@ -305,12 +508,33 @@ export default function MaterialsPage() {
                   </div>
                 )}
               </div>
-              <div className="pt-2 border-t border-border/50">
-                <Button variant="outline" size="sm" className="w-full text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setDeleteTarget(detailItem)} data-testid={`button-delete-material-${detailItem?.code}`}>
-                  <Trash2 className="h-3.5 w-3.5 me-2" />حذف هذه المادة
+              <div className="p-4 pt-2 border-t border-border/50 flex gap-2">
+                {detailItem.id && (
+                  <Button variant="outline" size="sm" className="flex-1" onClick={startEditing}>
+                    <Pencil className="h-3.5 w-3.5 me-2" />تعديل
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" className="flex-1 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setDeleteTarget(detailItem)}>
+                  <Trash2 className="h-3.5 w-3.5 me-2" />حذف
                 </Button>
               </div>
             </>
+          )}
+          {detailItem && editing && (
+            <div className="p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-lg">تعديل المادة</h3>
+                <Button variant="ghost" size="sm" onClick={() => setEditing(false)}><X className="h-4 w-4" /></Button>
+              </div>
+              <FormFields values={editForm} onChange={setEditForm} isEdit />
+              <div className="flex gap-2 pt-2">
+                <Button className="flex-1" onClick={handleEdit} disabled={saving}>
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : <Check className="h-4 w-4 me-2" />}
+                  حفظ التعديلات
+                </Button>
+                <Button variant="outline" className="flex-1" onClick={() => setEditing(false)}>إلغاء</Button>
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>
@@ -327,29 +551,60 @@ export default function MaterialsPage() {
       {/* Add Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{t.addNewMaterial}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label className="text-xs">{t.materialName} *</Label><Input className="h-9 mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">{t.category}</Label>
-                <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                  <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>{categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div><Label className="text-xs">{t.unit}</Label><Input className="h-9 mt-1" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">{t.sellingPrice} *</Label><Input className="h-9 mt-1" type="number" value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} /></div>
-              <div><Label className="text-xs">{t.storeCost}</Label><Input className="h-9 mt-1" type="number" value={form.storeCost} onChange={(e) => setForm({ ...form, storeCost: e.target.value })} /></div>
-            </div>
-            <div><Label className="text-xs">{t.manufacturer}</Label><Input className="h-9 mt-1" value={form.manufacturer} onChange={(e) => setForm({ ...form, manufacturer: e.target.value })} /></div>
-            <div className="flex items-center gap-2">
-              <Switch checked={form.hasExpiry} onCheckedChange={(v) => setForm({ ...form, hasExpiry: v })} />
-              <Label className="text-xs">{t.hasExpiryDate}</Label>
-            </div>
-            <Button className="w-full" onClick={handleAdd}>{t.addMaterial}</Button>
+          <DialogHeader><DialogTitle>إضافة مادة جديدة</DialogTitle></DialogHeader>
+          <FormFields values={form} onChange={setForm} />
+          <Button className="w-full" onClick={handleAdd} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : <Plus className="h-4 w-4 me-2" />}
+            إضافة المادة
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* CSV Import Preview Dialog */}
+      <Dialog open={csvDialogOpen} onOpenChange={(open) => { if (!open) { setCsvDialogOpen(false); setCsvData([]); } }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="h-5 w-5 text-primary" />
+              معاينة البيانات المستوردة
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">تم العثور على {csvData.length} صف. تأكد من البيانات قبل الاستيراد.</p>
+          <div className="flex-1 overflow-auto border rounded-lg">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-muted">
+                <tr>
+                  <th className="py-2 px-3 text-start font-medium">#</th>
+                  <th className="py-2 px-3 text-start font-medium">الكود</th>
+                  <th className="py-2 px-3 text-start font-medium">الاسم</th>
+                  <th className="py-2 px-3 text-start font-medium">الفئة</th>
+                  <th className="py-2 px-3 text-end font-medium">سعر البيع</th>
+                  <th className="py-2 px-3 text-end font-medium">سعر الجملة</th>
+                  <th className="py-2 px-3 text-end font-medium">الكمية</th>
+                </tr>
+              </thead>
+              <tbody>
+                {csvData.slice(0, 50).map((row: any, i: number) => (
+                  <tr key={i} className="border-t border-border/30">
+                    <td className="py-1.5 px-3 text-muted-foreground">{i + 1}</td>
+                    <td className="py-1.5 px-3 font-mono">{row.sku || row.SKU || row.code || row["كود"] || "—"}</td>
+                    <td className="py-1.5 px-3">{row.name || row.Name || row["الاسم"] || row["اسم المنتج"] || "—"}</td>
+                    <td className="py-1.5 px-3">{row.category || row.Category || row["الفئة"] || "—"}</td>
+                    <td className="py-1.5 px-3 text-end">{row.price_retail || row["سعر البيع"] || row.price || "—"}</td>
+                    <td className="py-1.5 px-3 text-end">{row.price_wholesale || row["سعر الجملة"] || "—"}</td>
+                    <td className="py-1.5 px-3 text-end">{row.stock_quantity || row["الكمية"] || row.quantity || row.stock || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {csvData.length > 50 && <p className="text-center text-xs text-muted-foreground py-2">... و{csvData.length - 50} صف إضافي</p>}
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Button className="flex-1" onClick={handleCsvImport} disabled={csvImporting}>
+              {csvImporting ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : <Upload className="h-4 w-4 me-2" />}
+              استيراد {csvData.length} مادة
+            </Button>
+            <Button variant="outline" onClick={() => { setCsvDialogOpen(false); setCsvData([]); }}>إلغاء</Button>
           </div>
         </DialogContent>
       </Dialog>

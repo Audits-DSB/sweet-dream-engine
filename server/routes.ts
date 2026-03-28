@@ -70,26 +70,108 @@ async function softDelete(entityType: string, entityId: string, entityName: stri
 }
 
 // ─── EXTERNAL MATERIALS PROXY (queries the Lovable/catalog Supabase project) ──
+function getExtClient() {
+  const extUrl = process.env.EXTERNAL_SUPABASE_URL;
+  const extKey = process.env.EXTERNAL_SUPABASE_SERVICE_ROLE_KEY || process.env.EXTERNAL_SUPABASE_ANON_KEY;
+  if (!extUrl || !extKey) return null;
+  return createClient(extUrl, extKey, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
 router.get("/external-materials", async (_req, res) => {
   try {
-    const extUrl = process.env.EXTERNAL_SUPABASE_URL;
-    const extKey = process.env.EXTERNAL_SUPABASE_ANON_KEY;
-    if (!extUrl || !extKey) {
-      console.error("External Supabase credentials not configured");
-      return res.json({ products: [] });
-    }
-    const extClient = createClient(extUrl, extKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-    const { data, error } = await extClient.from("products").select("*").order("created_at");
-    if (error) {
-      console.error("External materials query error:", error.message);
-      return res.json({ products: [] });
-    }
+    const ext = getExtClient();
+    if (!ext) return res.json({ products: [] });
+    const { data, error } = await ext.from("products").select("*").order("created_at");
+    if (error) { console.error("External materials query error:", error.message); return res.json({ products: [] }); }
     res.json({ products: data ?? [], count: data?.length ?? 0 });
   } catch (err: any) {
     console.error("External materials fetch failed:", err.message);
     res.json({ products: [] });
+  }
+});
+
+router.post("/external-materials", async (req, res) => {
+  try {
+    const ext = getExtClient();
+    if (!ext) return res.status(500).json({ error: "External Supabase not configured" });
+    const items = Array.isArray(req.body) ? req.body : [req.body];
+    const rows = items.map((item: any) => ({
+      sku: item.sku || "",
+      name: item.name || "",
+      category: item.category || "",
+      description: item.description || "",
+      price_retail: Number(item.price_retail) || 0,
+      price_wholesale: Number(item.price_wholesale) || 0,
+      stock_quantity: Number(item.stock_quantity) || 0,
+      image_url: item.image_url || null,
+      barcode: item.barcode || null,
+    }));
+    const { data, error } = await ext.from("products").insert(rows).select();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ products: data, count: data?.length ?? 0 });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/external-materials/export", async (_req, res) => {
+  try {
+    const ext = getExtClient();
+    if (!ext) return res.status(500).json({ error: "External Supabase not configured" });
+    const { data, error } = await ext.from("products").select("*").order("created_at");
+    if (error) return res.status(500).json({ error: error.message });
+    const headers = ["sku", "name", "category", "description", "price_retail", "price_wholesale", "stock_quantity", "barcode", "image_url"];
+    const csvRows = [headers.join(",")];
+    for (const row of data || []) {
+      csvRows.push(headers.map(h => {
+        const val = (row as any)[h];
+        if (val === null || val === undefined) return "";
+        const str = String(val);
+        let safe = str;
+        if (/^[=+\-@\t\r]/.test(safe)) safe = "'" + safe;
+        return safe.includes(",") || safe.includes('"') || safe.includes("\n") ? `"${safe.replace(/"/g, '""')}"` : safe;
+      }).join(","));
+    }
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", "attachment; filename=materials_export.csv");
+    res.send("\uFEFF" + csvRows.join("\n"));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete("/external-materials/:id", async (req, res) => {
+  try {
+    const ext = getExtClient();
+    if (!ext) return res.status(500).json({ error: "External Supabase not configured" });
+    const { error } = await ext.from("products").delete().eq("id", req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch("/external-materials/:id", async (req, res) => {
+  try {
+    const ext = getExtClient();
+    if (!ext) return res.status(500).json({ error: "External Supabase not configured" });
+    const updates: any = {};
+    const allowed = ["sku", "name", "category", "description", "price_retail", "price_wholesale", "stock_quantity", "image_url", "barcode"];
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) {
+        if (["price_retail", "price_wholesale", "stock_quantity"].includes(key)) {
+          updates[key] = Number(req.body[key]) || 0;
+        } else {
+          updates[key] = req.body[key];
+        }
+      }
+    }
+    const { data, error } = await ext.from("products").update(updates).eq("id", req.params.id).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
