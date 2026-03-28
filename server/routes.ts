@@ -417,11 +417,15 @@ router.post("/orders/:id/lines", async (req, res) => {
     }
   }
 
-  const { data: orderData } = await supabaseAdmin.from("orders").select("order_type").eq("id", orderId).single();
+  const { data: orderData } = await supabaseAdmin.from("orders").select("order_type, date").eq("id", orderId).single();
   if (orderData?.order_type === "inventory") {
+    const { data: existingInv } = await supabaseAdmin.from("company_inventory").select("id").eq("source_order", orderId).limit(1);
     const { data: confirmedDeliveries } = await supabaseAdmin.from("deliveries").select("id").eq("order_id", orderId).in("status", ["Delivered", "تم التسليم", "مُسلَّم"]);
-    if (confirmedDeliveries && confirmedDeliveries.length > 0) {
+    const hasExistingInventory = existingInv && existingInv.length > 0;
+    const hasConfirmedDelivery = confirmedDeliveries && confirmedDeliveries.length > 0;
+    if (hasExistingInventory || hasConfirmedDelivery) {
       const ts = Date.now();
+      const orderDate = orderData.date || new Date().toISOString().split("T")[0];
       const companyRows = (data || []).map((line: any) => ({
         id: `CI-edit-${line.id}-${ts}`,
         material_code: line.material_code || "",
@@ -432,7 +436,7 @@ router.post("/orders/:id/lines", async (req, res) => {
         remaining: Number(line.quantity) || 0,
         cost_price: Number(line.cost_price) || 0,
         source_order: orderId,
-        date_added: new Date().toISOString().split("T")[0],
+        date_added: orderDate,
         status: "In Stock",
       }));
       if (companyRows.length > 0) {
