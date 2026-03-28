@@ -948,10 +948,86 @@ router.patch("/deliveries/:id", async (req, res) => {
   sbOk(res, result);
 });
 router.delete("/deliveries/:id", async (req, res) => {
-  const { data: snap } = await supabaseAdmin.from("deliveries").select("*").eq("id", req.params.id).single();
-  if (snap) await softDelete("delivery", req.params.id, `${req.params.id} — ${snap.client || ""}`, snap);
-  const { error } = await supabaseAdmin.from("deliveries").delete().eq("id", req.params.id);
+  const deliveryId = req.params.id;
+  const { data: snap } = await supabaseAdmin.from("deliveries").select("*").eq("id", deliveryId).single();
+  if (!snap) return res.status(404).json({ error: "Delivery not found" });
+
+  const orderId = snap.order_id || "";
+
+  if (snap) await softDelete("delivery", deliveryId, `${deliveryId} — ${snap.client || ""}`, snap);
+
+  // Remove client_inventory rows created by this delivery (IDs start with CI-<deliveryId>-)
+  try {
+    await supabaseAdmin.from("client_inventory").delete().like("id", `CI-${deliveryId}-%`);
+  } catch (e: any) { console.error("cleanup client_inventory on delivery delete:", e.message); }
+
+  // Remove company_inventory rows created by this delivery
+  try {
+    await supabaseAdmin.from("company_inventory").delete().like("id", `CI-${deliveryId}-%`);
+  } catch (e: any) { console.error("cleanup company_inventory on delivery delete:", e.message); }
+
+  // Delete the delivery itself
+  const { error } = await supabaseAdmin.from("deliveries").delete().eq("id", deliveryId);
   if (error) return res.status(500).json({ error: error.message });
+
+  // Re-sync order status after removing this delivery
+  if (orderId) {
+    try {
+      const { data: remainingDeliveries } = await supabaseAdmin
+        .from("deliveries").select("*").eq("order_id", orderId);
+      const { data: orderLines } = await supabaseAdmin
+        .from("order_lines").select("*").eq("order_id", orderId);
+
+      if (orderLines && orderLines.length > 0) {
+        const deliveredQtyMap: Record<string, number> = {};
+        orderLines.forEach((l: any) => { deliveredQtyMap[String(l.id)] = 0; });
+
+        if (remainingDeliveries && remainingDeliveries.length > 0) {
+          for (const d of remainingDeliveries.filter((d: any) => d.status === "Delivered")) {
+            let parsed: any = null;
+            try { parsed = typeof d.notes === "string" ? JSON.parse(d.notes) : null; } catch {}
+            if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
+              for (const item of parsed.items) {
+                const key = String(item.lineId);
+                if (deliveredQtyMap[key] !== undefined) {
+                  deliveredQtyMap[key] += Number(item.qty) || 0;
+                }
+              }
+            } else {
+              const noteStr = typeof d.notes === "string" ? d.notes.trim() : "";
+              let isFull = !noteStr || noteStr === "كامل" || noteStr.toLowerCase() === "full";
+              if (!isFull && parsed && Array.isArray(parsed.items) && parsed.items.length === 0) {
+                isFull = true;
+              }
+              if (isFull) {
+                orderLines.forEach((l: any) => {
+                  deliveredQtyMap[String(l.id)] = Number(l.quantity) || 0;
+                });
+              }
+            }
+          }
+        }
+
+        const allFullyDelivered = orderLines.every((l: any) =>
+          (deliveredQtyMap[String(l.id)] || 0) >= (Number(l.quantity) || 0)
+        );
+        const anyDelivered = Object.values(deliveredQtyMap).some(q => q > 0);
+
+        let newStatus: string;
+        if (allFullyDelivered && remainingDeliveries && remainingDeliveries.length > 0) {
+          newStatus = "Delivered";
+        } else if (anyDelivered) {
+          newStatus = "Partially Delivered";
+        } else {
+          newStatus = "Processing";
+        }
+        await supabaseAdmin.from("orders").update({ status: newStatus }).eq("id", orderId);
+      }
+    } catch (e: any) {
+      console.error("order status re-sync on delivery delete:", e.message);
+    }
+  }
+
   res.json({ ok: true });
 });
 
