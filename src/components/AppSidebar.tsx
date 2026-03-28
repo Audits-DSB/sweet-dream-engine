@@ -30,6 +30,7 @@ function useNavItems() {
   ];
 
   const inventoryItems = [
+    { title: "مخزون الشركة", url: "/company-inventory", icon: Boxes },
     { title: t.clientInventory, url: "/inventory", icon: Warehouse },
     { title: t.audits, url: "/audits", icon: ClipboardCheck },
     { title: t.refillPlanning, url: "/refill", icon: Package },

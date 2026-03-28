@@ -107,6 +107,18 @@ npx tsx server/index.ts   # starts Express on 5000, spawns Vite on 5001
 - **Invoice tab**: Shows delivery progress banner + per-line delivery badges with progress bars
 - **Deliveries tab**: Shows parsed partial items in cards (not raw JSON), delivery status per item
 
+## Company Inventory System
+- **Table**: `company_inventory` — lot-based tracking (id, material_code, material_name, unit, lot_number, quantity, remaining, cost_price, source_order, date_added, status)
+- **Order Types**: `orders.order_type` column — 'client' (default) or 'inventory' (for company stock purchases)
+- **Inventory Pull**: `order_lines.from_inventory` boolean + `inventory_lot_id` text — when pulling from company inventory for client orders
+- **API Endpoints**: GET/POST/PATCH/DELETE `/api/company-inventory`, POST `/api/company-inventory/withdraw`
+- **Page**: `src/pages/CompanyInventory.tsx` — displays all company inventory lots with filters, stats, value calculations
+- **Sidebar**: "مخزون الشركة" link under Inventory section
+- **Order Creation**: Toggle between "لعميل" (client order) and "للمخزون" (inventory purchase). Inventory orders set client="مخزون الشركة", selling price=0
+- **Inventory Pull in Orders**: "سحب من المخزون" button shows available company inventory lots; pulled items use original lot cost price for accurate profit calculations
+- **Delivery Logic**: When delivery confirmed for inventory-type orders, items go to `company_inventory` instead of `client_inventory`
+- **Migration**: POST `/api/migrate/company-inventory` checks and reports schema status
+
 ## Notes
 - API returns camelCase; Supabase stores snake_case. Helpers `camelizeKeys`/`snakifyKeys` handle conversion in routes.ts
 - Seed runs only once when `clients` table is empty

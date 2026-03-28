@@ -109,6 +109,21 @@ export const collections = pgTable("collections", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+export const companyInventory = pgTable("company_inventory", {
+  id: text("id").primaryKey(),
+  materialCode: text("material_code").notNull().default(""),
+  materialName: text("material_name").notNull().default(""),
+  unit: text("unit").notNull().default(""),
+  lotNumber: text("lot_number").notNull().default(""),
+  quantity: numeric("quantity", { precision: 14, scale: 2 }).notNull().default("0"),
+  remaining: numeric("remaining", { precision: 14, scale: 2 }).notNull().default("0"),
+  costPrice: numeric("cost_price", { precision: 14, scale: 2 }).notNull().default("0"),
+  sourceOrder: text("source_order").notNull().default(""),
+  dateAdded: text("date_added").notNull().default(""),
+  status: text("status").notNull().default("In Stock"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 export const inventory = pgTable("inventory", {
   materialCode: text("material_code").primaryKey(),
   materialName: text("material_name").notNull(),

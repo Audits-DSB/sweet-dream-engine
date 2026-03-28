@@ -166,7 +166,38 @@ if (isProduction) {
   );
 }
 
+async function ensureCompanyInventoryTable() {
+  try {
+    await supabaseAdmin.rpc("exec_sql", { sql_text: `
+      CREATE TABLE IF NOT EXISTS company_inventory (
+        id text PRIMARY KEY,
+        material_code text NOT NULL DEFAULT '',
+        material_name text NOT NULL DEFAULT '',
+        unit text NOT NULL DEFAULT '',
+        lot_number text NOT NULL DEFAULT '',
+        quantity numeric(14,2) NOT NULL DEFAULT 0,
+        remaining numeric(14,2) NOT NULL DEFAULT 0,
+        cost_price numeric(14,2) NOT NULL DEFAULT 0,
+        source_order text NOT NULL DEFAULT '',
+        date_added text NOT NULL DEFAULT '',
+        status text NOT NULL DEFAULT 'In Stock',
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_type text NOT NULL DEFAULT 'client';
+      ALTER TABLE order_lines ADD COLUMN IF NOT EXISTS from_inventory boolean NOT NULL DEFAULT false;
+      ALTER TABLE order_lines ADD COLUMN IF NOT EXISTS inventory_lot_id text DEFAULT '';
+    ` });
+  } catch {
+    try {
+      await supabaseAdmin.from("company_inventory").select("id").limit(1);
+    } catch {
+      console.warn("[startup] company_inventory table may not exist — create it in Supabase SQL editor.");
+    }
+  }
+}
+
 app.listen(PORT, "0.0.0.0", async () => {
   console.log(`🚀 Server running on port ${PORT}`);
+  await ensureCompanyInventoryTable();
   await seedIfEmpty();
 });

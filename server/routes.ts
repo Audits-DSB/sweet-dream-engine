@@ -4,6 +4,37 @@ import { quickProfit, founderSplit } from "../src/lib/orderProfit";
 
 const router = Router();
 
+router.post("/migrate/company-inventory", async (_req, res) => {
+  const results: string[] = [];
+
+  const { error: tableErr } = await supabaseAdmin.from("company_inventory").select("id").limit(1);
+  const tableExists = !tableErr;
+
+  const { error: colErr } = await supabaseAdmin.from("orders").select("order_type").limit(1);
+  const orderTypeExists = !colErr;
+
+  const { error: col2Err } = await supabaseAdmin.from("order_lines").select("from_inventory").limit(1);
+  const fromInvExists = !col2Err;
+
+  if (tableExists) results.push("✅ company_inventory table exists");
+  else results.push("❌ company_inventory table missing");
+
+  if (orderTypeExists) results.push("✅ order_type column exists on orders");
+  else results.push("❌ order_type column missing on orders");
+
+  if (fromInvExists) results.push("✅ from_inventory column exists on order_lines");
+  else results.push("❌ from_inventory column missing on order_lines");
+
+  if (!tableExists || !orderTypeExists || !fromInvExists) {
+    results.push("Run the following in your Supabase SQL Editor:");
+    if (!tableExists) results.push(`CREATE TABLE IF NOT EXISTS public.company_inventory (id text PRIMARY KEY, material_code text NOT NULL DEFAULT '', material_name text NOT NULL DEFAULT '', unit text NOT NULL DEFAULT '', lot_number text NOT NULL DEFAULT '', quantity numeric(14,2) NOT NULL DEFAULT 0, remaining numeric(14,2) NOT NULL DEFAULT 0, cost_price numeric(14,2) NOT NULL DEFAULT 0, source_order text NOT NULL DEFAULT '', date_added text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'In Stock', created_at timestamptz NOT NULL DEFAULT now()); ALTER TABLE public.company_inventory ENABLE ROW LEVEL SECURITY; CREATE POLICY "service_role_all" ON public.company_inventory FOR ALL TO service_role USING (true) WITH CHECK (true);`);
+    if (!orderTypeExists) results.push(`ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS order_type text NOT NULL DEFAULT 'client';`);
+    if (!fromInvExists) results.push(`ALTER TABLE public.order_lines ADD COLUMN IF NOT EXISTS from_inventory boolean NOT NULL DEFAULT false; ALTER TABLE public.order_lines ADD COLUMN IF NOT EXISTS inventory_lot_id text DEFAULT '';`);
+  }
+
+  res.json({ ok: tableExists && orderTypeExists && fromInvExists, allReady: tableExists && orderTypeExists && fromInvExists, results });
+});
+
 async function softDelete(entityType: string, entityId: string, entityName: string, snapshot: any, relatedData: any = {}) {
   const id = `DEL-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   try {
@@ -286,7 +317,7 @@ router.post("/orders", async (req, res) => {
   const data = snakifyKeys(orderBody);
   const result = await supabaseAdmin.from("orders").insert(data).select().single();
   if (result.error) return res.status(400).json({ error: result.error.message });
-  if (!result.error && data.client_id) {
+  if (!result.error && data.client_id && data.order_type !== "inventory") {
     try { await supabaseAdmin.rpc("increment_client_orders", { cid: data.client_id }); } catch { /* ignore */ }
   }
   const orderId = result.data.id;
@@ -302,6 +333,8 @@ router.post("/orders", async (req, res) => {
       cost_price: Number(item.costPrice) || 0,
       line_total: (Number(item.sellingPrice) || 0) * (Number(item.quantity) || 1),
       line_cost: (Number(item.costPrice) || 0) * (Number(item.quantity) || 1),
+      from_inventory: item.fromInventory === true,
+      inventory_lot_id: String(item.inventoryLotId || ""),
     }));
     const { error: linesErr } = await supabaseAdmin.from("order_lines").insert(lineRows);
     if (linesErr) {
@@ -318,6 +351,24 @@ router.post("/orders", async (req, res) => {
       );
     } catch (e: any) { console.error("founder_contributions insert error:", e.message); }
   }
+  if (Array.isArray(items)) {
+    const inventoryPulls = items.filter((item: any) => item.fromInventory && item.inventoryLotId);
+    for (const item of inventoryPulls) {
+      try {
+        const { data: lot } = await supabaseAdmin.from("company_inventory").select("*").eq("id", item.inventoryLotId).single();
+        if (lot) {
+          const remaining = Number(lot.remaining) || 0;
+          const qty = Number(item.quantity) || 0;
+          if (qty > 0 && qty <= remaining) {
+            const newRemaining = remaining - qty;
+            const newStatus = newRemaining <= 0 ? "Depleted" : newRemaining < Number(lot.quantity) * 0.2 ? "Low Stock" : "In Stock";
+            await supabaseAdmin.from("company_inventory").update({ remaining: newRemaining, status: newStatus }).eq("id", item.inventoryLotId);
+          }
+        }
+      } catch (e: any) { console.error("inventory withdraw error:", e.message); }
+    }
+  }
+
   res.json({ ...camelizeKeys(result.data), founderContributions: founderContributions || [] });
 });
 router.get("/orders/:id/lines", async (req, res) => {
@@ -433,13 +484,14 @@ router.delete("/orders/:id", async (req, res) => {
   const orderId = req.params.id;
 
   // ── Step 0: fetch all related data for the snapshot (before deleting) ──
-  const [orderRes, linesRes, contribRes, deliveriesRes, collectionsRes, inventoryRes, auditsRes] = await Promise.all([
+  const [orderRes, linesRes, contribRes, deliveriesRes, collectionsRes, inventoryRes, companyInvRes, auditsRes] = await Promise.all([
     supabaseAdmin.from("orders").select("*").eq("id", orderId).single(),
     supabaseAdmin.from("order_lines").select("*").eq("order_id", orderId),
     supabaseAdmin.from("order_founder_contributions").select("*").eq("order_id", orderId),
     supabaseAdmin.from("deliveries").select("*").eq("order_id", orderId),
     supabaseAdmin.from("collections").select("*").eq("order_id", orderId),
     supabaseAdmin.from("client_inventory").select("*").eq("source_order", orderId),
+    supabaseAdmin.from("company_inventory").select("*").eq("source_order", orderId).then(r => r).catch(() => ({ data: [], error: null })),
     supabaseAdmin.from("audits").select("*").eq("order_id", orderId),
   ]);
 
@@ -449,21 +501,22 @@ router.delete("/orders/:id", async (req, res) => {
     deliveries: deliveriesRes.data || [],
     collections: collectionsRes.data || [],
     clientInventory: inventoryRes.data || [],
+    companyInventory: (companyInvRes as any)?.data || [],
     audits: auditsRes.data || [],
   };
 
-  // ── Step 1: delete all child records that FK-reference orders ──
   const childDeletes = await Promise.allSettled([
     supabaseAdmin.from("order_lines").delete().eq("order_id", orderId),
     supabaseAdmin.from("order_founder_contributions").delete().eq("order_id", orderId),
     supabaseAdmin.from("deliveries").delete().eq("order_id", orderId),
     supabaseAdmin.from("collections").delete().eq("order_id", orderId),
     supabaseAdmin.from("client_inventory").delete().eq("source_order", orderId),
+    supabaseAdmin.from("company_inventory").delete().eq("source_order", orderId).then(r => r).catch(() => ({ data: null, error: null })),
     supabaseAdmin.from("audits").delete().eq("order_id", orderId),
   ]);
 
   childDeletes.forEach((r, i) => {
-    const names = ["order_lines", "order_founder_contributions", "deliveries", "collections", "client_inventory", "audits"];
+    const names = ["order_lines", "order_founder_contributions", "deliveries", "collections", "client_inventory", "company_inventory", "audits"];
     if (r.status === "fulfilled" && (r.value as any).error) {
       console.warn(`[delete-order] ${names[i]} error:`, (r.value as any).error.message);
     }
@@ -740,7 +793,10 @@ router.patch("/deliveries/:id", async (req, res) => {
     const deliveryId = del.id;
     const deliveryDate = del.date || new Date().toISOString().split("T")[0];
     try {
-      const { data: existingForDelivery } = await supabaseAdmin.from("client_inventory").select("id").like("id", `CI-${deliveryId}-%`).limit(1);
+      const { data: orderData } = await supabaseAdmin.from("orders").select("order_type").eq("id", orderId).single();
+      const orderType = orderData?.order_type || "client";
+
+      const { data: existingForDelivery } = await supabaseAdmin.from(orderType === "inventory" ? "company_inventory" : "client_inventory").select("id").like("id", `CI-${deliveryId}-%`).limit(1);
       if (!existingForDelivery || existingForDelivery.length === 0) {
         const { data: lines } = await supabaseAdmin.from("order_lines").select("*").eq("order_id", orderId);
         const { data: clientData } = await supabaseAdmin.from("clients").select("name").eq("id", clientId).single();
@@ -816,11 +872,28 @@ router.patch("/deliveries/:id", async (req, res) => {
         }
 
         if (ciRows.length > 0) {
-          await supabaseAdmin.from("client_inventory").insert(ciRows);
+          if (orderType === "inventory") {
+            const companyRows = ciRows.map(row => ({
+              id: row.id,
+              material_code: row.code,
+              material_name: row.material,
+              unit: row.unit,
+              lot_number: `LOT-${deliveryId}-${Date.now()}`,
+              quantity: row.delivered,
+              remaining: row.remaining,
+              cost_price: row.store_cost,
+              source_order: row.source_order,
+              date_added: row.delivery_date,
+              status: "In Stock",
+            }));
+            await supabaseAdmin.from("company_inventory").insert(companyRows);
+          } else {
+            await supabaseAdmin.from("client_inventory").insert(ciRows);
+          }
         }
       }
     } catch (e: any) {
-      console.error("client_inventory auto-insert error:", e.message);
+      console.error("inventory auto-insert error:", e.message);
     }
 
     // Auto-sync order status based on delivery progress
@@ -912,6 +985,49 @@ router.post("/inventory", async (req, res) => {
 router.patch("/inventory/:code", async (req, res) => {
   const body = { ...snakifyKeys(req.body), updated_at: new Date().toISOString() };
   sbOk(res, await supabaseAdmin.from("inventory").update(body).eq("material_code", req.params.code).select().single());
+});
+
+// ─── COMPANY INVENTORY (Supabase) ────────────────────────────────────────────
+router.get("/company-inventory", async (_req, res) => {
+  const { data, error } = await supabaseAdmin.from("company_inventory").select("*").order("created_at", { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(camelizeKeys(data || []));
+});
+
+router.post("/company-inventory", async (req, res) => {
+  const body = snakifyKeys(req.body);
+  const { data, error } = await supabaseAdmin.from("company_inventory").insert(body).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(camelizeKeys(data));
+});
+
+router.patch("/company-inventory/:id", async (req, res) => {
+  const { data, error } = await supabaseAdmin.from("company_inventory").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(camelizeKeys(data));
+});
+
+router.delete("/company-inventory/:id", async (req, res) => {
+  const { error } = await supabaseAdmin.from("company_inventory").delete().eq("id", req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
+});
+
+router.post("/company-inventory/withdraw", async (req, res) => {
+  const { lotId, quantity } = req.body;
+  if (!lotId || !quantity) return res.status(400).json({ error: "lotId and quantity required" });
+  const { data: lot, error: lotErr } = await supabaseAdmin.from("company_inventory").select("*").eq("id", lotId).single();
+  if (lotErr || !lot) return res.status(404).json({ error: "Lot not found" });
+  const remaining = Number(lot.remaining) || 0;
+  const withdrawQty = Number(quantity);
+  if (withdrawQty <= 0 || withdrawQty > remaining) return res.status(400).json({ error: `Cannot withdraw ${withdrawQty}. Available: ${remaining}` });
+  const newRemaining = remaining - withdrawQty;
+  const newStatus = newRemaining <= 0 ? "Depleted" : newRemaining < Number(lot.quantity) * 0.2 ? "Low Stock" : "In Stock";
+  const { data, error } = await supabaseAdmin.from("company_inventory")
+    .update({ remaining: newRemaining, status: newStatus })
+    .eq("id", lotId).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(camelizeKeys(data));
 });
 
 // ─── CLIENT INVENTORY (Supabase) ─────────────────────────────────────────────

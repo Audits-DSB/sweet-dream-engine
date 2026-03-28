@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2, Users, Package, CreditCard, CheckCircle2 } from "lucide-react";
+import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2, Users, Package, CreditCard, CheckCircle2, Warehouse } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -38,7 +38,14 @@ type MaterialItem = {
 interface OrderItem {
   materialCode: string; name: string; quantity: number;
   sellingPrice: number; costPrice: number; imageUrl: string; unit: string;
+  fromInventory?: boolean; inventoryLotId?: string;
 }
+
+type CompanyLot = {
+  id: string; materialCode: string; materialName: string; unit: string;
+  lotNumber: string; quantity: number; remaining: number; costPrice: number;
+  sourceOrder: string; dateAdded: string; status: string;
+};
 
 function mapOrder(raw: any): Order {
   return {
@@ -78,6 +85,10 @@ export default function OrdersPage() {
   const [deleteTarget, setDeleteTarget] = useState<Order | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [founders, setFounders] = useState<{ id: string; name: string }[]>([]);
+  const [orderType, setOrderType] = useState<"client" | "inventory">("client");
+  const [companyLots, setCompanyLots] = useState<CompanyLot[]>([]);
+  const [inventorySearch, setInventorySearch] = useState("");
+  const [showInventoryPicker, setShowInventoryPicker] = useState(false);
   const [selectedFounders, setSelectedFounders] = useState<string[]>([]);
   const [founderPcts, setFounderPcts] = useState<Record<string, number>>({});
   const [collectionsMap, setCollectionsMap] = useState<Record<string, { paid: number; total: number; collectionId: string; status: string; date: string }>>({});
@@ -101,6 +112,17 @@ export default function OrdersPage() {
         active.forEach((f: any, i: number) => { pcts[f.id] = i === active.length - 1 ? 100 - eqPct * (active.length - 1) : eqPct; });
         setFounderPcts(pcts);
       }).catch(() => {});
+      api.get<any[]>("/company-inventory").then(data => {
+        setCompanyLots((data || []).filter((l: any) => Number(l.remaining) > 0).map((l: any) => ({
+          id: l.id, materialCode: l.materialCode || l.material_code || "",
+          materialName: l.materialName || l.material_name || "",
+          unit: l.unit || "", lotNumber: l.lotNumber || l.lot_number || "",
+          quantity: Number(l.quantity ?? 0), remaining: Number(l.remaining ?? 0),
+          costPrice: Number(l.costPrice ?? l.cost_price ?? 0),
+          sourceOrder: l.sourceOrder || l.source_order || "",
+          dateAdded: l.dateAdded || l.date_added || "", status: l.status || "In Stock",
+        })));
+      }).catch(() => {});
     }
   }, [dialogOpen, rules.defaultSplitMode, rules.defaultDeliveryFee]);
 
@@ -121,7 +143,11 @@ export default function OrdersPage() {
       setClients(clientArr);
       setOrders((ordersData || []).map(raw => {
         const o = mapOrder(raw);
-        if (!o.client && o.clientId) o.client = clientMap[o.clientId] || o.clientId;
+        if (o.clientId === "company-inventory") {
+          o.client = "مخزون الشركة";
+        } else if (!o.client && o.clientId) {
+          o.client = clientMap[o.clientId] || o.clientId;
+        }
         return o;
       }));
       const cmap: Record<string, { paid: number; total: number; collectionId: string; status: string; date: string }> = {};
@@ -318,42 +344,60 @@ export default function OrdersPage() {
   const totalCost = orderItems.reduce((sum, i) => sum + i.costPrice * i.quantity, 0);
 
   const handleAdd = async () => {
-    if (!selectedClient || orderItems.length === 0) { toast.error(t.selectClientAndTotal); return; }
-    const client = clients.find(c => c.id === selectedClient);
-    if (!client) return;
+    if (orderType === "client" && !selectedClient) { toast.error(t.selectClientAndTotal); return; }
+    if (orderItems.length === 0) { toast.error(t.selectClientAndTotal); return; }
+    const client = orderType === "client" ? clients.find(c => c.id === selectedClient) : null;
+    if (orderType === "client" && !client) return;
     setSaving(true);
     try {
+      const inventoryItems = orderItems.filter(i => i.fromInventory && i.inventoryLotId);
+      for (const item of inventoryItems) {
+        const lot = companyLots.find(l => l.id === item.inventoryLotId);
+        if (lot && item.quantity > lot.remaining) {
+          toast.error(`الكمية المطلوبة (${item.quantity}) من "${item.name}" أكبر من المتبقي (${lot.remaining})`);
+          setSaving(false);
+          return;
+        }
+      }
+
       const { nextId: newId } = await api.get<{ nextId: string }>("/orders/next-id");
       const today = new Date().toISOString().split("T")[0];
       const splitLabel = form.splitMode === "equal" ? t.equal : t.byContribution;
       const participating = founders.filter(f => selectedFounders.includes(f.id));
+      const effectiveTotalCost = orderType === "inventory" ? totalCost : totalCost;
       const founderContributions = participating.map(f => {
         const pct = form.splitMode === "equal"
           ? (participating.length > 0 ? 100 / participating.length : 0)
           : (founderPcts[f.id] || 0);
-        const share = totalCost * pct / 100;
-        // embed snapshot of companyProfitPercentage in each entry (no extra column needed)
+        const share = effectiveTotalCost * pct / 100;
         return { founderId: f.id, founder: f.name, amount: Math.round(share * 100) / 100, percentage: Math.round(pct * 100) / 100, paid: false, companyProfitPercentage: rules.companyProfitPercentage };
       });
+
+      const effectiveSelling = orderType === "inventory" ? "0" : String(totalSelling);
+      const clientId = orderType === "inventory" ? "company-inventory" : client!.id;
+      const clientName = orderType === "inventory" ? "مخزون الشركة" : client!.name;
+
       const saved = await api.post<any>("/orders", {
-        id: newId, clientId: client.id, date: today,
+        id: newId, clientId, client: clientName, date: today,
         lines: orderItems.length,
-        totalSelling: String(totalSelling),
+        totalSelling: effectiveSelling,
         totalCost: String(totalCost),
         splitMode: splitLabel, deliveryFee: String(parseInt(form.deliveryFee) || 0),
         deliveryFeeBearer: form.deliveryFeeBearer,
         status: "Processing", source: t.manual,
+        orderType,
         founderContributions,
-        items: orderItems,
+        items: orderItems.map(i => ({ ...i, fromInventory: i.fromInventory || false, inventoryLotId: i.inventoryLotId || "" })),
       });
       if (saved._linesError) {
         toast.warning(`تم حفظ الطلب لكن فشل حفظ تفاصيل المواد: ${saved._linesError}`);
       }
-      await logAudit({ entity: "order", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${client.name}`, action: "create", snapshot: saved, endpoint: "/orders" });
+
+      await logAudit({ entity: "order", entityId: saved.id || newId, entityName: `${saved.id || newId} - ${clientName}`, action: "create", snapshot: saved, endpoint: "/orders" });
 
       setOrders(prev => [mapOrder(saved), ...prev]);
       setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client" });
-      setSelectedClient(""); setOrderItems([]); setDialogOpen(false);
+      setSelectedClient(""); setOrderItems([]); setDialogOpen(false); setOrderType("client");
       if (!saved._linesError) toast.success(t.orderCreated);
     } catch (err: any) {
       toast.error(err?.message || t.failedToSaveOrder);
@@ -519,22 +563,40 @@ export default function OrdersPage() {
         loading={deleting}
       />
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setOrderItems([]); setSelectedClient(""); setMaterialSearch(""); } }}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setOrderItems([]); setSelectedClient(""); setMaterialSearch(""); setOrderType("client"); setShowInventoryPicker(false); setInventorySearch(""); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader><DialogTitle>{t.newOrder}</DialogTitle></DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-2">
             <div className="space-y-4">
-              <div>
-                <Label className="text-xs">{t.client} *</Label>
-                <Select value={selectedClient} onValueChange={setSelectedClient}>
-                  <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t.selectClientPlaceholder} /></SelectTrigger>
-                  <SelectContent>
-                    {clients.filter(c => c.status === "Active").map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.name} — {c.city}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="flex gap-2 p-1 bg-muted rounded-lg">
+                <button className={`flex-1 py-2 px-3 rounded-md text-xs font-medium transition-colors ${orderType === "client" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`} onClick={() => setOrderType("client")}>
+                  لعميل
+                </button>
+                <button className={`flex-1 py-2 px-3 rounded-md text-xs font-medium transition-colors ${orderType === "inventory" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`} onClick={() => { setOrderType("inventory"); setSelectedClient(""); }}>
+                  <Warehouse className="h-3.5 w-3.5 inline-block ml-1" />للمخزون
+                </button>
               </div>
+
+              {orderType === "client" && (
+                <div>
+                  <Label className="text-xs">{t.client} *</Label>
+                  <Select value={selectedClient} onValueChange={setSelectedClient}>
+                    <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t.selectClientPlaceholder} /></SelectTrigger>
+                    <SelectContent>
+                      {clients.filter(c => c.status === "Active").map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.name} — {c.city}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {orderType === "inventory" && (
+                <div className="p-3 rounded-md border border-primary/20 bg-primary/5 text-xs text-muted-foreground">
+                  <Warehouse className="h-4 w-4 inline-block ml-1 text-primary" />
+                  طلب لمخزون الشركة — المواد ستضاف للمخزون عند التسليم
+                </div>
+              )}
 
               <div>
                 <Label className="text-xs font-medium mb-2 block">{t.orderItemsLabel} *</Label>
@@ -568,6 +630,43 @@ export default function OrdersPage() {
                 {!materialsLoading && materialSearch && filteredMaterials.length === 0 && <div className="text-center py-2 text-muted-foreground text-xs mt-1">{t.noResults}</div>}
               </div>
 
+              {orderType === "client" && companyLots.length > 0 && (
+                <div>
+                  <Button type="button" variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={() => setShowInventoryPicker(!showInventoryPicker)}>
+                    <Warehouse className="h-3.5 w-3.5" />سحب من مخزون الشركة ({companyLots.length} دُفعة متاحة)
+                  </Button>
+                  {showInventoryPicker && (
+                    <div className="border border-border rounded-md mt-2 bg-background shadow-md">
+                      <div className="p-2 border-b border-border">
+                        <Input className="h-8 text-xs" placeholder="بحث في المخزون..." value={inventorySearch} onChange={e => setInventorySearch(e.target.value)} />
+                      </div>
+                      <div className="max-h-48 overflow-y-auto">
+                        {companyLots.filter(l => {
+                          const q = inventorySearch.toLowerCase();
+                          return !q || l.materialName.toLowerCase().includes(q) || l.materialCode.toLowerCase().includes(q);
+                        }).map(lot => (
+                          <div key={lot.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer text-xs transition-colors border-b border-border/30" onClick={() => {
+                            if (orderItems.some(i => i.inventoryLotId === lot.id)) { toast.error("هذه الدُفعة مضافة بالفعل"); return; }
+                            setOrderItems(prev => [...prev, { materialCode: lot.materialCode, name: lot.materialName, quantity: 1, sellingPrice: 0, costPrice: lot.costPrice, imageUrl: "", unit: lot.unit, fromInventory: true, inventoryLotId: lot.id }]);
+                            setShowInventoryPicker(false);
+                            setInventorySearch("");
+                          }}>
+                            <div className="min-w-0">
+                              <span className="font-medium block">{lot.materialName}</span>
+                              <span className="text-muted-foreground">{lot.materialCode} · متبقي: {lot.remaining} {lot.unit} · سعر: {lot.costPrice.toLocaleString()}</span>
+                            </div>
+                            <Plus className="h-4 w-4 text-primary shrink-0" />
+                          </div>
+                        ))}
+                        {companyLots.filter(l => { const q = inventorySearch.toLowerCase(); return !q || l.materialName.toLowerCase().includes(q) || l.materialCode.toLowerCase().includes(q); }).length === 0 && (
+                          <div className="text-center py-3 text-muted-foreground text-xs">لا توجد نتائج</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {orderItems.length === 0 ? (
                 <div className="text-center py-6 border border-dashed border-border rounded-md text-muted-foreground text-xs">{t.noItemsAdded}</div>
               ) : (
@@ -583,9 +682,12 @@ export default function OrdersPage() {
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <div><Label className="text-[10px] text-muted-foreground">{t.quantity}</Label><Input className="h-7 text-xs mt-0.5" type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", parseInt(e.target.value) || 1)} /></div>
-                        <div><Label className="text-[10px] text-muted-foreground">{t.sellingPrice}</Label><Input className="h-7 text-xs mt-0.5" type="number" value={item.sellingPrice} onChange={(e) => updateItem(idx, "sellingPrice", parseFloat(e.target.value) || 0)} /></div>
+                        <div><Label className="text-[10px] text-muted-foreground">{t.sellingPrice}</Label><Input className={`h-7 text-xs mt-0.5 ${orderType === "inventory" ? "opacity-50" : ""}`} type="number" value={orderType === "inventory" ? 0 : item.sellingPrice} onChange={(e) => updateItem(idx, "sellingPrice", parseFloat(e.target.value) || 0)} disabled={orderType === "inventory"} /></div>
                         <div><Label className="text-[10px] text-muted-foreground">{t.costPrice}</Label><Input className="h-7 text-xs mt-0.5" type="number" value={item.costPrice} onChange={(e) => updateItem(idx, "costPrice", parseFloat(e.target.value) || 0)} /></div>
                       </div>
+                      {item.fromInventory && (
+                        <div className="flex items-center gap-1 text-[10px] text-primary"><Warehouse className="h-3 w-3" />من المخزون — دُفعة: {item.inventoryLotId?.slice(0, 15)}</div>
+                      )}
                     </div>
                   ))}
                 </div>
