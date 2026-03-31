@@ -1574,7 +1574,12 @@ export default function OrderDetails() {
                 </div>
                 {order.deliveryFee > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{t.deliveryFeeDisplay} ({order.deliveryFeeBearer === "company" ? t.deliveryFeeBearerCompany : t.deliveryFeeBearerClient})</span>
+                    <span className="text-muted-foreground">
+                      {t.deliveryFeeDisplay} ({order.deliveryFeeBearer === "company" ? t.deliveryFeeBearerCompany : t.deliveryFeeBearerClient})
+                      {order.deliveryFeeBearer === "company" && order.deliveryFeePaidByFounder && (
+                        <span className="text-[11px] text-amber-600 dark:text-amber-400 mr-1"> · دفعها: {allFounders.find(f => f.id === order.deliveryFeePaidByFounder)?.name || order.deliveryFeePaidByFounder}</span>
+                      )}
+                    </span>
                     <span className="font-medium">{order.deliveryFee.toLocaleString()} {t.currency}</span>
                   </div>
                 )}
