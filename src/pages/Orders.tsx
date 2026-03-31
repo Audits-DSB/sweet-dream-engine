@@ -1257,7 +1257,7 @@ export default function OrdersPage() {
                               ? (selectedFounders.length > 0 ? 100 / selectedFounders.length : 0)
                               : (founderPcts[nId] || 0);
                             const nShare = fundingCostDisplay * nPct2 / 100;
-                            const owedToMe = Math.min(excess, nShare) * (nShare / totalNonPayerShares);
+                            const owedToMe = excess >= totalNonPayerShares ? nShare : excess * (nShare / totalNonPayerShares);
                             if (owedToMe > 0.5) {
                               const nName = founders.find(pf => pf.id === nId)?.name || "";
                               debts.push({ name: nName, amount: Math.round(owedToMe) });
