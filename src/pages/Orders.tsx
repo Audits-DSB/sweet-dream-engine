@@ -537,8 +537,14 @@ export default function OrdersPage() {
       const nonInventoryCostPre = orderItems.filter(i => !i.fromInventory).reduce((sum, i) => sum + i.costPrice * i.quantity, 0);
       const fundingCostPre = orderType === "inventory" ? totalCost : nonInventoryCostPre;
       const activePayersPre = costPayers.filter(id => selectedFounders.includes(id));
+      const resolvedAmounts = { ...founderPaidAmounts };
       if (activePayersPre.length > 1 && fundingCostPre > 0) {
-        const totalPayerAmt = activePayersPre.reduce((s, id) => s + (founderPaidAmounts[id] || 0), 0);
+        const emptyPayers = activePayersPre.filter(id => !(resolvedAmounts[id] > 0));
+        const filledTotal = activePayersPre.reduce((s, id) => s + (resolvedAmounts[id] || 0), 0);
+        if (emptyPayers.length === 1) {
+          resolvedAmounts[emptyPayers[0]] = Math.round((fundingCostPre - filledTotal) * 100) / 100;
+        }
+        const totalPayerAmt = activePayersPre.reduce((s, id) => s + (resolvedAmounts[id] || 0), 0);
         if (Math.abs(totalPayerAmt - fundingCostPre) > 1) {
           toast.error(`إجمالي المبالغ المدفوعة (${totalPayerAmt.toLocaleString()}) لا يطابق تكلفة الأوردر (${fundingCostPre.toLocaleString()})`);
           setSaving(false);
@@ -561,7 +567,7 @@ export default function OrdersPage() {
         const isPayer = activePayers.includes(f.id);
         let paidAmt = 0;
         if (isPayer) {
-          paidAmt = activePayers.length === 1 ? fundingCost : (founderPaidAmounts[f.id] || 0);
+          paidAmt = activePayers.length === 1 ? fundingCost : (resolvedAmounts[f.id] || 0);
         }
         const fullyPaid = fundingCost === 0 || paidAmt >= share;
         return { founderId: f.id, founder: f.name, amount: Math.round(share * 100) / 100, percentage: Math.round(pct * 100) / 100, paid: fullyPaid, paidAmount: Math.round(paidAmt * 100) / 100, paidAt: paidAmt > 0 ? new Date().toISOString() : undefined, companyProfitPercentage: rules.companyProfitPercentage };
@@ -570,7 +576,7 @@ export default function OrdersPage() {
       participating.forEach(f => {
         const isPayer = activePayers.includes(f.id);
         if (isPayer) {
-          const amt = activePayers.length === 1 ? fundingCost : (founderPaidAmounts[f.id] || 0);
+          const amt = activePayers.length === 1 ? fundingCost : (resolvedAmounts[f.id] || 0);
           if (amt > 0) costPaymentsMap[f.id] = amt;
         }
       });
@@ -1168,17 +1174,7 @@ export default function OrdersPage() {
                                 value={founderPaidAmounts[f.id] || ""}
                                 onChange={e => {
                                   const val = Number(e.target.value) || 0;
-                                  const maxAllowed = fundingCostDisplay - costPayers.filter(id => id !== f.id).reduce((s, id) => s + (founderPaidAmounts[id] || 0), 0);
-                                  const clamped = Math.min(Math.max(0, val), Math.max(0, maxAllowed));
-                                  setFounderPaidAmounts(prev => {
-                                    const next = { ...prev, [f.id]: clamped };
-                                    const otherPayers = costPayers.filter(id => id !== f.id);
-                                    if (otherPayers.length === 1) {
-                                      const otherRemaining = fundingCostDisplay - clamped;
-                                      next[otherPayers[0]] = Math.max(0, otherRemaining);
-                                    }
-                                    return next;
-                                  });
+                                  setFounderPaidAmounts(prev => ({ ...prev, [f.id]: Math.max(0, val) }));
                                 }}
                               />
                               <span className="text-[11px] text-muted-foreground">{t.currency}</span>
