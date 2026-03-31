@@ -217,6 +217,32 @@ async function ensureDeliveryFeePaidByFounderColumn() {
   }
 }
 
+async function ensureOrderCostPaidByFounderColumn() {
+  const url = process.env.VITE_SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const headers = { apikey: key, Authorization: `Bearer ${key}`, Accept: "application/json" };
+  try {
+    const checkResp = await fetch(`${url}/rest/v1/orders?select=order_cost_paid_by_founder&limit=1`, { headers });
+    if (checkResp.ok) {
+      console.log("✅ order_cost_paid_by_founder column already exists on orders");
+    } else {
+      const sqlResp = await fetch(`${url}/rest/v1/rpc/exec_sql`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ sql_text: "ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS order_cost_paid_by_founder text DEFAULT NULL;" }),
+      });
+      if (sqlResp.ok) {
+        console.log("✅ Added order_cost_paid_by_founder column to orders via RPC");
+        await reloadSupabaseSchemaCache();
+      } else {
+        console.warn("⚠️ Could not add order_cost_paid_by_founder to orders automatically. Run in Supabase SQL Editor: ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS order_cost_paid_by_founder text DEFAULT NULL;");
+      }
+    }
+  } catch (e: any) {
+    console.warn("⚠️ order_cost_paid_by_founder column check failed:", e.message);
+  }
+}
+
 async function ensureSupplierIdColumn() {
   const url = process.env.VITE_SUPABASE_URL!;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -263,6 +289,7 @@ app.listen(PORT, "0.0.0.0", async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   await reloadSupabaseSchemaCache();
   await ensureDeliveryFeePaidByFounderColumn();
+  await ensureOrderCostPaidByFounderColumn();
   await ensureSupplierIdColumn();
   await seedIfEmpty();
 });

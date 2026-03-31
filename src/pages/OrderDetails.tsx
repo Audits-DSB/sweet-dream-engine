@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { quickProfit } from "@/lib/orderProfit";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, ClipboardCheck, CreditCard, ChevronLeft, ChevronDown, Plus, Trash2, Search, Warehouse, Undo2, UserPlus, Factory } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, ClipboardCheck, CreditCard, ChevronLeft, ChevronDown, Plus, Trash2, Search, Warehouse, Undo2, UserPlus, Factory, ArrowLeftRight, Clock } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -34,12 +34,13 @@ type OrderDelivery = {
 };
 type FounderContrib = {
   founder: string; founderId?: string; amount: number; percentage: number;
-  paid?: boolean; paidAt?: string;
+  paid?: boolean; paidAt?: string; paidAmount?: number;
 };
 
 type Order = {
   id: string; client: string; clientId: string; date: string; status: string;
   source: string; splitMode: string; deliveryFee: number; deliveryFeeBearer: string; deliveryFeePaidByFounder: string;
+  orderCostPaidByFounder: string;
   subscription: { type: string; value: number };
   cashback: { type: string; value: number };
   legacyLines: any[];
@@ -90,6 +91,7 @@ function mapOrder(raw: any): Order {
     orderType: raw.orderType || raw.order_type || "client",
     supplierId: raw.supplierId || raw.supplier_id || "",
     supplierName: "",
+    orderCostPaidByFounder: raw.orderCostPaidByFounder ?? raw.order_cost_paid_by_founder ?? "",
   };
 }
 
@@ -264,13 +266,15 @@ export default function OrderDetails() {
   const handlePayWithBalance = async () => {
     const { fp } = balanceDialog;
     if (!order || !fp) return;
-    const required = toNum(fp.amount);
+    const share = toNum(fp.amount);
+    const alreadyPaid = toNum(fp.paidAmount ?? 0);
+    const remaining = Math.max(0, share - alreadyPaid);
+    const required = remaining > 0 ? remaining : share;
     const walletUsed = useBalance ? Math.min(balanceDialog.available, required) : 0;
     const cashPortion = required - walletUsed;
     setPayingFounder(fp.founder);
     try {
       const today = new Date().toISOString().split("T")[0];
-      // 1. Deduct from wallet if any (capital_withdrawal)
       if (walletUsed > 0) {
         await api.post("/founder-transactions", {
           founderId: fp.founderId || undefined,
@@ -283,7 +287,6 @@ export default function OrderDetails() {
           date: today,
         });
       }
-      // 2. Record funding transaction
       await api.post("/founder-transactions", {
         founderId: fp.founderId || undefined,
         founderName: fp.founder,
@@ -298,9 +301,9 @@ export default function OrderDetails() {
           : `تمويل طلب ${order.id}`,
         date: today,
       });
-      // 3. Mark as paid in founderContributions
+      const newPaidAmount = alreadyPaid + required;
       const updatedContribs = order.founderContributions.map(f =>
-        f.founder === fp.founder ? { ...f, paid: true, paidAt: new Date().toISOString() } : f
+        f.founder === fp.founder ? { ...f, paid: newPaidAmount >= share, paidAmount: Math.round(newPaidAmount * 100) / 100, paidAt: new Date().toISOString() } : f
       );
       const patchedOrder = await api.patch<any>(`/orders/${order.id}`, { founderContributions: updatedContribs });
       setOrder(mapOrder(patchedOrder));
@@ -1848,16 +1851,14 @@ export default function OrderDetails() {
 
               {founderPayments.length > 0 ? (
                 <div className="space-y-3">
-                  {/* Progress bar */}
                   {(() => {
-                    const paidCount = founderPayments.filter(f => f.paid).length;
-                    const paidPct = founderPayments.length > 0 ? (paidCount / founderPayments.length) * 100 : 0;
-                    const paidAmount = founderPayments.filter(f => f.paid).reduce((s, f) => s + toNum(f.amount), 0);
+                    const totalPaidAmt = founderPayments.reduce((s, f) => s + toNum(f.paidAmount ?? (f.paid ? f.amount : 0)), 0);
+                    const paidPct = costTotal > 0 ? Math.min(100, (totalPaidAmt / costTotal) * 100) : 0;
                     return (
                       <div className="mb-4">
                         <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                          <span>تم الدفع: {paidCount}/{founderPayments.length} مؤسس</span>
-                          <span>{paidAmount.toLocaleString()} / {costTotal.toLocaleString()} {t.currency}</span>
+                          <span>تم الدفع: {totalPaidAmt.toLocaleString()} / {costTotal.toLocaleString()} {t.currency}</span>
+                          <span>{paidPct.toFixed(0)}%</span>
                         </div>
                         <div className="h-2 bg-muted rounded-full overflow-hidden">
                           <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${paidPct}%` }} />
@@ -1866,83 +1867,139 @@ export default function OrderDetails() {
                     );
                   })()}
 
-                  {founderPayments.map((fp) => (
-                    <div key={fp.founder} className={`flex items-center gap-4 p-4 rounded-xl border transition-colors ${fp.paid ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800" : "bg-muted/30 border-border"}`}>
-                      {/* Status icon */}
-                      <div className="flex-shrink-0">
-                        {fp.paid
-                          ? <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                          : <Circle className="h-5 w-5 text-muted-foreground" />}
-                      </div>
+                  {founderPayments.map((fp) => {
+                    const share = toNum(fp.amount);
+                    const paidAmt = toNum(fp.paidAmount ?? (fp.paid ? share : 0));
+                    const remainingAmt = Math.max(0, share - paidAmt);
+                    const overpaidAmt = paidAmt > share ? paidAmt - share : 0;
+                    const isFullyPaid = fp.paid || paidAmt >= share;
+                    const isPartial = paidAmt > 0 && paidAmt < share;
+                    return (
+                    <div key={fp.founder} className={`p-4 rounded-xl border transition-colors ${isFullyPaid ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800" : isPartial ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800" : "bg-muted/30 border-border"}`}>
+                      <div className="flex items-center gap-4">
+                        <div className="flex-shrink-0">
+                          {isFullyPaid
+                            ? <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                            : isPartial
+                            ? <Clock className="h-5 w-5 text-amber-500" />
+                            : <Circle className="h-5 w-5 text-muted-foreground" />}
+                        </div>
 
-                      {/* Founder name */}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm">{fp.founder}</p>
-                        {fp.paid && fp.paidAt && (
-                          <p className="text-xs text-muted-foreground">دفع في {new Date(fp.paidAt).toLocaleDateString("ar-SA")}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm">{fp.founder}</p>
+                          {fp.paidAt && (
+                            <p className="text-xs text-muted-foreground">دفع في {new Date(fp.paidAt).toLocaleDateString("ar-SA")}</p>
+                          )}
+                          {isPartial && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">دفع {paidAmt.toLocaleString()} — متبقي {remainingAmt.toLocaleString()} {t.currency}</p>
+                          )}
+                          {overpaidAmt > 0 && (
+                            <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">دفع زيادة {overpaidAmt.toLocaleString()} {t.currency} (يُسوّى مع الباقين)</p>
+                          )}
+                          {!isFullyPaid && !isPartial && (() => {
+                            const bal = founderBalances[fp.founder] || founderBalances[fp.founderId] || 0;
+                            return bal > 0
+                              ? <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5"><Wallet className="h-3 w-3" />رصيد متاح: {bal.toLocaleString("en-US")} {t.currency}</p>
+                              : <p className="text-xs text-muted-foreground">في انتظار الدفع</p>;
+                          })()}
+                        </div>
+
+                        <div className="text-end flex-shrink-0">
+                          <p className="font-bold text-base">{share.toLocaleString()} {t.currency}</p>
+                          <p className="text-xs text-muted-foreground">{fp.percentage?.toFixed(1)}% {t.sharePercent}</p>
+                          {paidAmt > 0 && paidAmt !== share && (
+                            <p className="text-xs font-medium text-amber-600">دفع: {paidAmt.toLocaleString()}</p>
+                          )}
+                        </div>
+
+                        {isFullyPaid && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs gap-1 border-amber-400 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex-shrink-0"
+                            onClick={() => setUndoDialog({ open: true, fp })}
+                          >
+                            <Undo2 className="h-3 w-3" />تراجع
+                          </Button>
                         )}
-                        {!fp.paid && (() => {
-                          const bal = founderBalances[fp.founder] || founderBalances[fp.founderId] || 0;
-                          return bal > 0
-                            ? <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5"><Wallet className="h-3 w-3" />رصيد متاح: {bal.toLocaleString("en-US")} {t.currency}</p>
-                            : <p className="text-xs text-muted-foreground">في انتظار الدفع</p>;
-                        })()}
+
+                        {!isFullyPaid && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs border-primary text-primary hover:bg-primary hover:text-primary-foreground gap-1 flex-shrink-0"
+                            disabled={payingFounder === fp.founder}
+                            onClick={async () => {
+                              setUseBalance(false);
+                              let bal = 0;
+                              try {
+                                const freshBalances = await api.get<{ founderId: string; founderName: string; balance: number }[]>("/founder-balances");
+                                const newMap: Record<string, number> = {};
+                                freshBalances.forEach(b => {
+                                  if (b.founderName) newMap[b.founderName] = b.balance;
+                                  if (b.founderName) newMap[b.founderName.trim().toLowerCase()] = b.balance;
+                                  if (b.founderId) newMap[b.founderId] = b.balance;
+                                });
+                                setFounderBalances(newMap);
+                                const fpId = fp.founderId || "";
+                                const fpName = (fp.founder || "").trim().toLowerCase();
+                                bal = (fpId && newMap[fpId] != null ? newMap[fpId] : null)
+                                  ?? newMap[fp.founder]
+                                  ?? newMap[fpName]
+                                  ?? 0;
+                              } catch {
+                                bal = founderBalances[fp.founderId] || founderBalances[fp.founder] || founderBalances[(fp.founder || "").trim().toLowerCase()] || 0;
+                              }
+                              setBalanceDialog({ open: true, fp, available: bal });
+                            }}
+                          >
+                            {payingFounder === fp.founder
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <><Banknote className="h-3 w-3" />{isPartial ? "سداد المتبقي" : "تسديد الحصة"}</>}
+                          </Button>
+                        )}
                       </div>
-
-                      {/* Amount + percentage */}
-                      <div className="text-end flex-shrink-0">
-                        <p className="font-bold text-base">{toNum(fp.amount).toLocaleString()} {t.currency}</p>
-                        <p className="text-xs text-muted-foreground">{fp.percentage?.toFixed(1)}% {t.sharePercent}</p>
-                      </div>
-
-                      {fp.paid && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs gap-1 border-amber-400 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex-shrink-0"
-                          onClick={() => setUndoDialog({ open: true, fp })}
-                        >
-                          <Undo2 className="h-3 w-3" />تراجع
-                        </Button>
-                      )}
-
-                      {!fp.paid && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-xs border-primary text-primary hover:bg-primary hover:text-primary-foreground gap-1 flex-shrink-0"
-                          disabled={payingFounder === fp.founder}
-                          onClick={async () => {
-                            setUseBalance(false);
-                            let bal = 0;
-                            try {
-                              const freshBalances = await api.get<{ founderId: string; founderName: string; balance: number }[]>("/founder-balances");
-                              const newMap: Record<string, number> = {};
-                              freshBalances.forEach(b => {
-                                if (b.founderName) newMap[b.founderName] = b.balance;
-                                if (b.founderName) newMap[b.founderName.trim().toLowerCase()] = b.balance;
-                                if (b.founderId) newMap[b.founderId] = b.balance;
-                              });
-                              setFounderBalances(newMap);
-                              const fpId = fp.founderId || "";
-                              const fpName = (fp.founder || "").trim().toLowerCase();
-                              bal = (fpId && newMap[fpId] != null ? newMap[fpId] : null)
-                                ?? newMap[fp.founder]
-                                ?? newMap[fpName]
-                                ?? 0;
-                            } catch {
-                              bal = founderBalances[fp.founderId] || founderBalances[fp.founder] || founderBalances[(fp.founder || "").trim().toLowerCase()] || 0;
-                            }
-                            setBalanceDialog({ open: true, fp, available: bal });
-                          }}
-                        >
-                          {payingFounder === fp.founder
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : <><Banknote className="h-3 w-3" />تسديد الحصة</>}
-                        </Button>
-                      )}
                     </div>
-                  ))}
+                    );
+                  })}
+
+                  {(() => {
+                    const settlements: { from: string; to: string; amount: number }[] = [];
+                    const entries = founderPayments.map(fp => {
+                      const share = toNum(fp.amount);
+                      const paidAmt = toNum(fp.paidAmount ?? (fp.paid ? share : 0));
+                      return { name: fp.founder, share, paidAmt, diff: paidAmt - share };
+                    });
+                    const overpayers = entries.filter(e => e.diff > 0).sort((a, b) => b.diff - a.diff);
+                    const underpayers = entries.filter(e => e.diff < 0).sort((a, b) => a.diff - b.diff);
+                    let oi = 0, ui = 0;
+                    const oRemain = overpayers.map(e => e.diff);
+                    const uRemain = underpayers.map(e => Math.abs(e.diff));
+                    while (oi < overpayers.length && ui < underpayers.length) {
+                      const transfer = Math.min(oRemain[oi], uRemain[ui]);
+                      if (transfer > 0) settlements.push({ from: underpayers[ui].name, to: overpayers[oi].name, amount: Math.round(transfer) });
+                      oRemain[oi] -= transfer;
+                      uRemain[ui] -= transfer;
+                      if (oRemain[oi] <= 0) oi++;
+                      if (uRemain[ui] <= 0) ui++;
+                    }
+                    if (settlements.length === 0) return null;
+                    return (
+                      <div className="mt-4 p-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
+                        <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-1.5">
+                          <ArrowLeftRight className="h-3.5 w-3.5" />تسويات بين المؤسسين
+                        </p>
+                        <div className="space-y-1.5">
+                          {settlements.map((s, i) => (
+                            <div key={i} className="flex items-center justify-between text-xs bg-white dark:bg-background/50 rounded-md px-3 py-1.5 border">
+                              <span><span className="font-medium text-red-600">{s.from}</span> → <span className="font-medium text-emerald-600">{s.to}</span></span>
+                              <span className="font-bold">{s.amount.toLocaleString()} {t.currency}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="py-8 text-center text-muted-foreground">
@@ -1991,21 +2048,24 @@ export default function OrderDetails() {
             </DialogTitle>
           </DialogHeader>
           {balanceDialog.fp && (() => {
-            const required = toNum(balanceDialog.fp.amount);
+            const share = toNum(balanceDialog.fp.amount);
+            const alreadyPaid = toNum(balanceDialog.fp.paidAmount ?? 0);
+            const remaining = Math.max(0, share - alreadyPaid);
+            const required = remaining > 0 ? remaining : share;
             const hasBalance = balanceDialog.available > 0;
             const walletUsed = (hasBalance && useBalance) ? Math.min(balanceDialog.available, required) : 0;
             const cashPortion = Math.max(required - walletUsed, 0);
             return (
               <div className="space-y-4 py-1">
-                {/* Info grid */}
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className={`p-2.5 rounded-lg border ${hasBalance ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800" : "bg-muted/30 border-border"}`}>
                     <p className={`text-xs mb-0.5 ${hasBalance ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>رصيد متاح</p>
                     <p className={`font-bold ${hasBalance ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>{balanceDialog.available.toLocaleString("en-US")} ج.م</p>
                   </div>
                   <div className="p-2.5 rounded-lg bg-muted/50 border border-border">
-                    <p className="text-xs text-muted-foreground mb-0.5">الحصة المطلوبة</p>
+                    <p className="text-xs text-muted-foreground mb-0.5">{alreadyPaid > 0 ? "المتبقي" : "الحصة المطلوبة"}</p>
                     <p className="font-bold">{required.toLocaleString("en-US")} ج.م</p>
+                    {alreadyPaid > 0 && <p className="text-[10px] text-muted-foreground">من أصل {share.toLocaleString()} — دفع {alreadyPaid.toLocaleString()}</p>}
                   </div>
                 </div>
 

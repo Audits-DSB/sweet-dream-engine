@@ -284,6 +284,63 @@ export default function FoundersPage() {
     return map;
   }, [orders]);
 
+  const orderCostPaymentsByFounder = useMemo(() => {
+    const map: Record<string, Array<{ orderId: string; clientName: string; date: string; paidAmount: number; share: number; diff: number }>> = {};
+    Object.values(orders).forEach((order: any) => {
+      const contribs = Array.isArray(order.founderContributions) ? order.founderContributions : [];
+      if (contribs.length === 0) return;
+      const clientName = order.client || order.clientName || order.client_name || "";
+      const date = (order.date || "").split("T")[0];
+      contribs.forEach((c: any) => {
+        const fId = c.founderId || c.founder_id;
+        if (!fId) return;
+        const paidAmt = toNum(c.paidAmount ?? c.paid_amount);
+        const share = toNum(c.amount);
+        if (paidAmt <= 0) return;
+        if (!map[fId]) map[fId] = [];
+        map[fId].push({ orderId: order.id, clientName, date, paidAmount: paidAmt, share, diff: paidAmt - share });
+      });
+    });
+    return map;
+  }, [orders]);
+
+  const orderCostSettlements = useMemo(() => {
+    const settlements: Array<{ orderId: string; clientName: string; date: string; from: string; fromId: string; to: string; toId: string; amount: number }> = [];
+    Object.values(orders).forEach((order: any) => {
+      const contribs = Array.isArray(order.founderContributions) ? order.founderContributions : [];
+      if (contribs.length === 0) return;
+      const entries = contribs.map((c: any) => {
+        const paidAmt = toNum(c.paidAmount ?? c.paid_amount);
+        const share = toNum(c.amount);
+        return { id: c.founderId || c.founder_id || "", name: c.founder || "", paidAmt, share, diff: paidAmt - share };
+      }).filter(e => e.id);
+      const overpayers = entries.filter(e => e.diff > 0);
+      const underpayers = entries.filter(e => e.diff < 0);
+      if (overpayers.length === 0 || underpayers.length === 0) return;
+      const oRemain = overpayers.map(e => e.diff);
+      const uRemain = underpayers.map(e => Math.abs(e.diff));
+      let oi = 0, ui = 0;
+      while (oi < overpayers.length && ui < underpayers.length) {
+        const transfer = Math.min(oRemain[oi], uRemain[ui]);
+        if (transfer > 0) {
+          settlements.push({
+            orderId: order.id,
+            clientName: order.client || order.clientName || order.client_name || "",
+            date: (order.date || "").split("T")[0],
+            from: underpayers[ui].name, fromId: underpayers[ui].id,
+            to: overpayers[oi].name, toId: overpayers[oi].id,
+            amount: Math.round(transfer),
+          });
+        }
+        oRemain[oi] -= transfer;
+        uRemain[ui] -= transfer;
+        if (oRemain[oi] <= 0) oi++;
+        if (uRemain[ui] <= 0) ui++;
+      }
+    });
+    return settlements;
+  }, [orders]);
+
   const orderFundingByFounder = useMemo(() => {
     const map: Record<string, OrderFundingEntry[]> = {};
     founders.forEach(f => { map[f.id] = []; });
@@ -506,9 +563,14 @@ export default function FoundersPage() {
 
   const globalStats = useMemo(() => {
     const allEntries = founders.flatMap(f => orderFundingByFounder[f.id] || []);
+    const totalPaidAmt = allEntries.reduce((s, e) => {
+      const pa = toNum((e as any).paidAmount ?? (e as any).paid_amount);
+      return s + (pa > 0 ? pa : (e.paid ? e.amount : 0));
+    }, 0);
+    const totalAmount = allEntries.reduce((s, e) => s + e.amount, 0);
     return {
-      totalOwed: allEntries.filter(e => !e.paid).reduce((s, e) => s + e.amount, 0),
-      totalPaid: allEntries.filter(e => e.paid).reduce((s, e) => s + e.amount, 0),
+      totalOwed: Math.max(0, totalAmount - totalPaidAmt),
+      totalPaid: totalPaidAmt,
       unpaidCount: allEntries.filter(e => !e.paid).length,
       paidCount: allEntries.filter(e => e.paid).length,
       totalEntries: allEntries.length,
@@ -747,8 +809,11 @@ export default function FoundersPage() {
                     {/* ── LEDGER: contributions + fundings + withdrawals ── */}
                     {section === "ledger" && (() => {
                       const myDeliveryPayments = (deliveryPaymentsByFounder[f.id] || []);
+                      const myCostPayments = (orderCostPaymentsByFounder[f.id] || []);
+                      const mySettlementsOwed = orderCostSettlements.filter(s => s.fromId === f.id);
+                      const mySettlementsOwing = orderCostSettlements.filter(s => s.toId === f.id);
                       const allLedgerItems = [...contributions, ...fundings, ...withdrawals];
-                      const hasEntries = allLedgerItems.length > 0 || myDeliveryPayments.length > 0;
+                      const hasEntries = allLedgerItems.length > 0 || myDeliveryPayments.length > 0 || myCostPayments.length > 0 || mySettlementsOwed.length > 0 || mySettlementsOwing.length > 0;
                       return (
                       <>
                         {!hasEntries ? (
@@ -780,6 +845,65 @@ export default function FoundersPage() {
                                     <div className="text-sm font-bold flex-shrink-0 text-orange-600 dark:text-orange-400">
                                       -{entry.amount.toLocaleString()}
                                       <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              {myCostPayments
+                                .sort((a, b) => b.date.localeCompare(a.date))
+                                .map(entry => (
+                                  <div key={`costpay-ledger-${entry.orderId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+                                      <Wallet className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-medium">دفع تكلفة أوردر</span>
+                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                        </button>
+                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                                        <Clock className="h-3 w-3 flex-shrink-0" />
+                                        <span>{entry.date}</span>
+                                      </div>
+                                    </div>
+                                    <div className="text-sm font-bold flex-shrink-0 text-violet-600 dark:text-violet-400">
+                                      -{entry.paidAmount.toLocaleString()}
+                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              {mySettlementsOwed
+                                .sort((a, b) => b.date.localeCompare(a.date))
+                                .map((entry, i) => (
+                                  <div key={`settle-owed-ledger-${entry.orderId}-${i}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                                      <ArrowUpRight className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <span className="text-sm font-medium text-red-600">عليك لـ {entry.to}: {entry.amount.toLocaleString()} {t.currency}</span>
+                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                                        <Clock className="h-3 w-3 flex-shrink-0" />
+                                        <span>{entry.date} · {entry.clientName}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              {mySettlementsOwing
+                                .sort((a, b) => b.date.localeCompare(a.date))
+                                .map((entry, i) => (
+                                  <div key={`settle-owing-ledger-${entry.orderId}-${i}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                                      <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <span className="text-sm font-medium text-emerald-600">ليك عند {entry.from}: {entry.amount.toLocaleString()} {t.currency}</span>
+                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                                        <Clock className="h-3 w-3 flex-shrink-0" />
+                                        <span>{entry.date} · {entry.clientName}</span>
+                                      </div>
                                     </div>
                                   </div>
                                 ))}
@@ -1087,6 +1211,90 @@ export default function FoundersPage() {
                                     </div>
                                     <div className="text-sm font-bold flex-shrink-0 text-orange-600 dark:text-orange-400">
                                       -{entry.amount.toLocaleString()}
+                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              {myCostPayments
+                                .sort((a, b) => b.date.localeCompare(a.date))
+                                .map(entry => (
+                                  <div key={`costpay-${entry.orderId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+                                      <Wallet className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-medium">دفع تكلفة أوردر</span>
+                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                        </button>
+                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                                        <Clock className="h-3 w-3 flex-shrink-0" />
+                                        <span>{entry.date}</span>
+                                        <span>· حصته: {entry.share.toLocaleString()} — دفع: {entry.paidAmount.toLocaleString()}</span>
+                                        {entry.diff > 0 && <span className="text-blue-600">+{entry.diff.toLocaleString()} زيادة</span>}
+                                        {entry.diff < 0 && <span className="text-red-500">{entry.diff.toLocaleString()} متبقي</span>}
+                                      </div>
+                                    </div>
+                                    <div className={`text-sm font-bold flex-shrink-0 ${entry.diff >= 0 ? "text-violet-600 dark:text-violet-400" : "text-amber-600"}`}>
+                                      -{entry.paidAmount.toLocaleString()}
+                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              {mySettlementsOwed
+                                .sort((a, b) => b.date.localeCompare(a.date))
+                                .map((entry, i) => (
+                                  <div key={`settle-owed-${entry.orderId}-${i}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                                      <ArrowUpRight className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-medium text-red-600">عليك لـ {entry.to}</span>
+                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                        </button>
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                                        <Clock className="h-3 w-3 flex-shrink-0" />
+                                        <span>{entry.date}</span>
+                                        <span>· {entry.clientName}</span>
+                                      </div>
+                                    </div>
+                                    <div className="text-sm font-bold flex-shrink-0 text-red-600">
+                                      -{entry.amount.toLocaleString()}
+                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              {mySettlementsOwing
+                                .sort((a, b) => b.date.localeCompare(a.date))
+                                .map((entry, i) => (
+                                  <div key={`settle-owing-${entry.orderId}-${i}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                                      <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-medium text-emerald-600">ليك عند {entry.from}</span>
+                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                        </button>
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                                        <Clock className="h-3 w-3 flex-shrink-0" />
+                                        <span>{entry.date}</span>
+                                        <span>· {entry.clientName}</span>
+                                      </div>
+                                    </div>
+                                    <div className="text-sm font-bold flex-shrink-0 text-emerald-600">
+                                      +{entry.amount.toLocaleString()}
                                       <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
                                     </div>
                                   </div>

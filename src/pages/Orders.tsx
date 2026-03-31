@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2, Users, Package, CreditCard, CheckCircle2, Warehouse, Factory, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, StickyNote, ChevronLeft, ChevronRight, TrendingUp, DollarSign, ShoppingCart, Clock } from "lucide-react";
+import { Plus, Eye, MoreHorizontal, Truck, FileText, Copy, Trash2, Search, Loader2, Users, Package, CreditCard, CheckCircle2, Warehouse, Factory, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, StickyNote, ChevronLeft, ChevronRight, TrendingUp, DollarSign, ShoppingCart, Clock, Wallet } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -90,6 +90,7 @@ export default function OrdersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState("");
   const [form, setForm] = useState({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client" as "client" | "company", deliveryFeePaidByFounder: "" });
+  const [founderPaidAmounts, setFounderPaidAmounts] = useState<Record<string, number>>({});
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [materialSearch, setMaterialSearch] = useState("");
   const [realMaterials, setRealMaterials] = useState<MaterialItem[]>([]);
@@ -125,6 +126,7 @@ export default function OrdersPage() {
       setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client", deliveryFeePaidByFounder: "" });
       setSelectedFounders([]);
       setFounderPcts({});
+      setFounderPaidAmounts({});
       api.get<any[]>("/founders").then((data) => {
         const active = (data || []).filter((f: any) => f.active !== false).map((f: any) => ({ id: f.id, name: f.name }));
         setFounders(active);
@@ -510,6 +512,8 @@ export default function OrdersPage() {
 
   const totalSelling = orderItems.reduce((sum, i) => sum + i.sellingPrice * i.quantity, 0);
   const totalCost = orderItems.reduce((sum, i) => sum + i.costPrice * i.quantity, 0);
+  const nonInventoryCostDisplay = orderItems.filter(i => !i.fromInventory).reduce((sum, i) => sum + i.costPrice * i.quantity, 0);
+  const fundingCostDisplay = orderType === "inventory" ? totalCost : nonInventoryCostDisplay;
 
   const handleAdd = async () => {
     if (orderType === "client" && !selectedClient) { toast.error(t.selectClientAndTotal); return; }
@@ -539,8 +543,12 @@ export default function OrdersPage() {
           ? (participating.length > 0 ? 100 / participating.length : 0)
           : (founderPcts[f.id] || 0);
         const share = fundingCost * pct / 100;
-        return { founderId: f.id, founder: f.name, amount: Math.round(share * 100) / 100, percentage: Math.round(pct * 100) / 100, paid: fundingCost === 0, companyProfitPercentage: rules.companyProfitPercentage };
+        const paidAmt = founderPaidAmounts[f.id] || 0;
+        const fullyPaid = fundingCost === 0 || paidAmt >= share;
+        return { founderId: f.id, founder: f.name, amount: Math.round(share * 100) / 100, percentage: Math.round(pct * 100) / 100, paid: fullyPaid, paidAmount: Math.round(paidAmt * 100) / 100, paidAt: paidAmt > 0 ? new Date().toISOString() : undefined, companyProfitPercentage: rules.companyProfitPercentage };
       });
+      const costPaymentsMap: Record<string, number> = {};
+      participating.forEach(f => { if (founderPaidAmounts[f.id] > 0) costPaymentsMap[f.id] = founderPaidAmounts[f.id]; });
 
       const effectiveSelling = orderType === "inventory" ? "0" : String(totalSelling);
       const clientId = orderType === "inventory" ? "company-inventory" : client!.id;
@@ -554,6 +562,7 @@ export default function OrdersPage() {
         splitMode: splitLabel, deliveryFee: String(parseInt(form.deliveryFee) || 0),
         deliveryFeeBearer: form.deliveryFeeBearer,
         deliveryFeePaidByFounder: form.deliveryFeeBearer === "company" ? form.deliveryFeePaidByFounder || null : null,
+        orderCostPaidByFounder: Object.keys(costPaymentsMap).length > 0 ? JSON.stringify(costPaymentsMap) : null,
         status: "Processing", source: t.manual,
         orderType,
         supplierId: selectedSupplier || "",
@@ -571,6 +580,7 @@ export default function OrdersPage() {
       newOrder.supplierName = supName;
       setOrders(prev => [newOrder, ...prev]);
       setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client", deliveryFeePaidByFounder: "" });
+      setFounderPaidAmounts({});
       setSelectedClient(""); setOrderItems([]); setDialogOpen(false); setOrderType("client"); setSelectedSupplier("");
       if (!saved._linesError) toast.success(t.orderCreated);
     } catch (err: any) {
@@ -1112,27 +1122,69 @@ export default function OrdersPage() {
                     const pct = form.splitMode === "equal"
                       ? (selectedFounders.length > 0 ? 100 / selectedFounders.length : 0)
                       : (founderPcts[f.id] || 0);
-                    const costShare = totalCost * pct / 100;
+                    const costShare = fundingCostDisplay * pct / 100;
+                    const paidAmt = founderPaidAmounts[f.id] || 0;
+                    const remaining = Math.max(0, costShare - paidAmt);
+                    const overpaid = paidAmt > costShare ? paidAmt - costShare : 0;
                     return (
-                      <div key={f.id} className={`flex items-center gap-3 p-2 rounded-md transition-colors ${isSelected ? "bg-primary/5 border border-primary/20" : "opacity-50"}`}>
-                        <Checkbox checked={isSelected} onCheckedChange={(checked) => {
-                          setSelectedFounders(prev => checked ? [...prev, f.id] : prev.filter(id => id !== f.id));
-                        }} />
-                        <span className="flex-1 text-sm font-medium">{f.name}</span>
-                        {form.splitMode === "contribution" && isSelected ? (
-                          <div className="flex items-center gap-1">
-                            <Input className="h-7 w-16 text-xs text-center" type="number" min={0} max={100} value={founderPcts[f.id] || 0} onChange={e => setFounderPcts(prev => ({ ...prev, [f.id]: Number(e.target.value) }))} />
-                            <span className="text-xs text-muted-foreground">%</span>
+                      <div key={f.id} className={`p-2 rounded-md transition-colors ${isSelected ? "bg-primary/5 border border-primary/20" : "opacity-50"}`}>
+                        <div className="flex items-center gap-3">
+                          <Checkbox checked={isSelected} onCheckedChange={(checked) => {
+                            setSelectedFounders(prev => checked ? [...prev, f.id] : prev.filter(id => id !== f.id));
+                            if (!checked) setFounderPaidAmounts(prev => { const n = { ...prev }; delete n[f.id]; return n; });
+                          }} />
+                          <span className="flex-1 text-sm font-medium">{f.name}</span>
+                          {form.splitMode === "contribution" && isSelected ? (
+                            <div className="flex items-center gap-1">
+                              <Input className="h-7 w-16 text-xs text-center" type="number" min={0} max={100} value={founderPcts[f.id] || 0} onChange={e => setFounderPcts(prev => ({ ...prev, [f.id]: Number(e.target.value) }))} />
+                              <span className="text-xs text-muted-foreground">%</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">{pct.toFixed(1)}%</span>
+                          )}
+                          {fundingCostDisplay > 0 && isSelected && (
+                            <span className="text-xs font-medium min-w-[70px] text-end text-primary">{costShare.toLocaleString("en-US", { maximumFractionDigits: 0 })} {t.currency}</span>
+                          )}
+                        </div>
+                        {fundingCostDisplay > 0 && isSelected && (
+                          <div className="flex items-center gap-2 mt-2 mr-8">
+                            <Wallet className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
+                            <span className="text-[11px] text-amber-700 dark:text-amber-400 flex-shrink-0">دفع:</span>
+                            <Input
+                              className="h-7 w-24 text-xs text-center border-amber-300"
+                              type="number"
+                              min={0}
+                              placeholder="0"
+                              value={founderPaidAmounts[f.id] || ""}
+                              onChange={e => setFounderPaidAmounts(prev => ({ ...prev, [f.id]: Number(e.target.value) || 0 }))}
+                            />
+                            <span className="text-[11px] text-muted-foreground">{t.currency}</span>
+                            {paidAmt > 0 && remaining > 0 && (
+                              <span className="text-[11px] text-red-500">متبقي: {remaining.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>
+                            )}
+                            {paidAmt > 0 && remaining === 0 && overpaid === 0 && (
+                              <span className="text-[11px] text-emerald-600">✓ تم السداد</span>
+                            )}
+                            {overpaid > 0 && (
+                              <span className="text-[11px] text-blue-600">زيادة: {overpaid.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>
+                            )}
                           </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">{pct.toFixed(1)}%</span>
-                        )}
-                        {totalCost > 0 && isSelected && (
-                          <span className="text-xs font-medium min-w-[70px] text-end text-primary">{costShare.toLocaleString("en-US", { maximumFractionDigits: 0 })} {t.currency}</span>
                         )}
                       </div>
                     );
                   })}
+                  {(() => {
+                    const totalPaid = Object.values(founderPaidAmounts).reduce((s, v) => s + (v || 0), 0);
+                    if (totalPaid > 0 && fundingCostDisplay > 0) {
+                      return (
+                        <div className="flex justify-between text-[11px] border-t border-border pt-2 mt-1 px-1">
+                          <span className="text-muted-foreground">إجمالي المدفوع: <span className="font-semibold text-foreground">{totalPaid.toLocaleString()} {t.currency}</span></span>
+                          <span className="text-muted-foreground">من أصل: <span className="font-semibold text-foreground">{fundingCostDisplay.toLocaleString()} {t.currency}</span></span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               )}
 
