@@ -90,6 +90,7 @@ export default function OrdersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState("");
   const [form, setForm] = useState({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client" as "client" | "company", deliveryFeePaidByFounder: "" });
+  const [costPayers, setCostPayers] = useState<string[]>([]);
   const [founderPaidAmounts, setFounderPaidAmounts] = useState<Record<string, number>>({});
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [materialSearch, setMaterialSearch] = useState("");
@@ -126,6 +127,7 @@ export default function OrdersPage() {
       setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client", deliveryFeePaidByFounder: "" });
       setSelectedFounders([]);
       setFounderPcts({});
+      setCostPayers([]);
       setFounderPaidAmounts({});
       api.get<any[]>("/founders").then((data) => {
         const active = (data || []).filter((f: any) => f.active !== false).map((f: any) => ({ id: f.id, name: f.name }));
@@ -532,23 +534,46 @@ export default function OrdersPage() {
         }
       }
 
+      const nonInventoryCostPre = orderItems.filter(i => !i.fromInventory).reduce((sum, i) => sum + i.costPrice * i.quantity, 0);
+      const fundingCostPre = orderType === "inventory" ? totalCost : nonInventoryCostPre;
+      const activePayersPre = costPayers.filter(id => selectedFounders.includes(id));
+      if (activePayersPre.length > 1 && fundingCostPre > 0) {
+        const totalPayerAmt = activePayersPre.reduce((s, id) => s + (founderPaidAmounts[id] || 0), 0);
+        if (Math.abs(totalPayerAmt - fundingCostPre) > 1) {
+          toast.error(`إجمالي المبالغ المدفوعة (${totalPayerAmt.toLocaleString()}) لا يطابق تكلفة الأوردر (${fundingCostPre.toLocaleString()})`);
+          setSaving(false);
+          return;
+        }
+      }
+
       const { nextId: newId } = await api.get<{ nextId: string }>("/orders/next-id");
       const today = new Date().toISOString().split("T")[0];
       const splitLabel = form.splitMode === "equal" ? t.equal : t.byContribution;
       const participating = founders.filter(f => selectedFounders.includes(f.id));
       const nonInventoryCost = orderItems.filter(i => !i.fromInventory).reduce((sum, i) => sum + i.costPrice * i.quantity, 0);
       const fundingCost = orderType === "inventory" ? totalCost : nonInventoryCost;
+      const activePayers = costPayers.filter(id => selectedFounders.includes(id));
       const founderContributions = participating.map(f => {
         const pct = form.splitMode === "equal"
           ? (participating.length > 0 ? 100 / participating.length : 0)
           : (founderPcts[f.id] || 0);
         const share = fundingCost * pct / 100;
-        const paidAmt = founderPaidAmounts[f.id] || 0;
+        const isPayer = activePayers.includes(f.id);
+        let paidAmt = 0;
+        if (isPayer) {
+          paidAmt = activePayers.length === 1 ? fundingCost : (founderPaidAmounts[f.id] || 0);
+        }
         const fullyPaid = fundingCost === 0 || paidAmt >= share;
         return { founderId: f.id, founder: f.name, amount: Math.round(share * 100) / 100, percentage: Math.round(pct * 100) / 100, paid: fullyPaid, paidAmount: Math.round(paidAmt * 100) / 100, paidAt: paidAmt > 0 ? new Date().toISOString() : undefined, companyProfitPercentage: rules.companyProfitPercentage };
       });
       const costPaymentsMap: Record<string, number> = {};
-      participating.forEach(f => { if (founderPaidAmounts[f.id] > 0) costPaymentsMap[f.id] = founderPaidAmounts[f.id]; });
+      participating.forEach(f => {
+        const isPayer = activePayers.includes(f.id);
+        if (isPayer) {
+          const amt = activePayers.length === 1 ? fundingCost : (founderPaidAmounts[f.id] || 0);
+          if (amt > 0) costPaymentsMap[f.id] = amt;
+        }
+      });
 
       const effectiveSelling = orderType === "inventory" ? "0" : String(totalSelling);
       const clientId = orderType === "inventory" ? "company-inventory" : client!.id;
@@ -580,6 +605,7 @@ export default function OrdersPage() {
       newOrder.supplierName = supName;
       setOrders(prev => [newOrder, ...prev]);
       setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client", deliveryFeePaidByFounder: "" });
+      setCostPayers([]);
       setFounderPaidAmounts({});
       setSelectedClient(""); setOrderItems([]); setDialogOpen(false); setOrderType("client"); setSelectedSupplier("");
       if (!saved._linesError) toast.success(t.orderCreated);
@@ -1110,6 +1136,61 @@ export default function OrdersPage() {
                 </div>
               )}
 
+              {founders.length > 0 && selectedFounders.length > 0 && fundingCostDisplay > 0 && (
+                <div className="space-y-2 border border-amber-200 dark:border-amber-800 rounded-lg p-3 bg-amber-50/30 dark:bg-amber-950/10">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Wallet className="h-4 w-4 text-amber-600" />
+                    <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">مين دفع تكلفة الأوردر؟</span>
+                    <span className="text-xs text-muted-foreground mr-auto">{fundingCostDisplay.toLocaleString()} {t.currency}</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {founders.filter(f => selectedFounders.includes(f.id)).map(f => {
+                      const isPayer = costPayers.includes(f.id);
+                      return (
+                        <div key={`payer-${f.id}`} className={`flex items-center gap-3 p-2 rounded-md transition-colors ${isPayer ? "bg-amber-100/60 dark:bg-amber-900/20 border border-amber-300/50" : "bg-white/50 dark:bg-background/30 border border-transparent"}`}>
+                          <Checkbox checked={isPayer} onCheckedChange={(checked) => {
+                            setCostPayers(prev => checked ? [...prev, f.id] : prev.filter(id => id !== f.id));
+                            if (!checked) setFounderPaidAmounts(prev => { const n = { ...prev }; delete n[f.id]; return n; });
+                          }} />
+                          <span className="text-sm font-medium flex-1">{f.name}</span>
+                          {isPayer && costPayers.length > 1 && (
+                            <>
+                              <Input
+                                className="h-7 w-24 text-xs text-center border-amber-300"
+                                type="number"
+                                min={0}
+                                placeholder="المبلغ"
+                                value={founderPaidAmounts[f.id] || ""}
+                                onChange={e => setFounderPaidAmounts(prev => ({ ...prev, [f.id]: Number(e.target.value) || 0 }))}
+                              />
+                              <span className="text-[11px] text-muted-foreground">{t.currency}</span>
+                            </>
+                          )}
+                          {isPayer && costPayers.length === 1 && (
+                            <span className="text-xs text-amber-600 font-medium">{fundingCostDisplay.toLocaleString()} {t.currency} (كاملة)</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {costPayers.length > 1 && (() => {
+                    const totalPaid = costPayers.reduce((s, id) => s + (founderPaidAmounts[id] || 0), 0);
+                    const diff = fundingCostDisplay - totalPaid;
+                    return (
+                      <div className="flex justify-between text-[11px] border-t border-amber-200 dark:border-amber-700 pt-2 mt-1 px-1">
+                        <span className="text-muted-foreground">إجمالي المدفوع: <span className={`font-semibold ${diff === 0 ? "text-emerald-600" : diff > 0 ? "text-amber-600" : "text-red-500"}`}>{totalPaid.toLocaleString()} {t.currency}</span></span>
+                        {diff > 0 && <span className="text-red-500 font-medium">ناقص: {diff.toLocaleString()} {t.currency}</span>}
+                        {diff < 0 && <span className="text-blue-600 font-medium">زيادة: {Math.abs(diff).toLocaleString()} {t.currency}</span>}
+                        {diff === 0 && <span className="text-emerald-600 font-medium">✓ مطابق</span>}
+                      </div>
+                    );
+                  })()}
+                  {costPayers.length === 1 && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400 px-1">سيتم تسجيل حصته كـ "تم الدفع" — وباقي المؤسسين مدينين ليه بنصيبهم</p>
+                  )}
+                </div>
+              )}
+
               {founders.length > 0 && (
                 <div className="space-y-2 border border-border rounded-lg p-3 bg-muted/10">
                   <div className="flex items-center gap-2 mb-2">
@@ -1123,68 +1204,42 @@ export default function OrdersPage() {
                       ? (selectedFounders.length > 0 ? 100 / selectedFounders.length : 0)
                       : (founderPcts[f.id] || 0);
                     const costShare = fundingCostDisplay * pct / 100;
-                    const paidAmt = founderPaidAmounts[f.id] || 0;
-                    const remaining = Math.max(0, costShare - paidAmt);
-                    const overpaid = paidAmt > costShare ? paidAmt - costShare : 0;
+                    const isPayer = costPayers.includes(f.id);
+                    const owesTo = !isPayer && costPayers.length === 1
+                      ? founders.find(pf => pf.id === costPayers[0])?.name
+                      : undefined;
                     return (
-                      <div key={f.id} className={`p-2 rounded-md transition-colors ${isSelected ? "bg-primary/5 border border-primary/20" : "opacity-50"}`}>
-                        <div className="flex items-center gap-3">
-                          <Checkbox checked={isSelected} onCheckedChange={(checked) => {
-                            setSelectedFounders(prev => checked ? [...prev, f.id] : prev.filter(id => id !== f.id));
-                            if (!checked) setFounderPaidAmounts(prev => { const n = { ...prev }; delete n[f.id]; return n; });
-                          }} />
-                          <span className="flex-1 text-sm font-medium">{f.name}</span>
-                          {form.splitMode === "contribution" && isSelected ? (
-                            <div className="flex items-center gap-1">
-                              <Input className="h-7 w-16 text-xs text-center" type="number" min={0} max={100} value={founderPcts[f.id] || 0} onChange={e => setFounderPcts(prev => ({ ...prev, [f.id]: Number(e.target.value) }))} />
-                              <span className="text-xs text-muted-foreground">%</span>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">{pct.toFixed(1)}%</span>
-                          )}
-                          {fundingCostDisplay > 0 && isSelected && (
-                            <span className="text-xs font-medium min-w-[70px] text-end text-primary">{costShare.toLocaleString("en-US", { maximumFractionDigits: 0 })} {t.currency}</span>
+                      <div key={f.id} className={`flex items-center gap-3 p-2 rounded-md transition-colors ${isPayer ? "bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800" : isSelected ? "bg-primary/5 border border-primary/20" : "opacity-50"}`}>
+                        <Checkbox checked={isSelected} onCheckedChange={(checked) => {
+                          setSelectedFounders(prev => checked ? [...prev, f.id] : prev.filter(id => id !== f.id));
+                          if (!checked) {
+                            setCostPayers(prev => prev.filter(id => id !== f.id));
+                            setFounderPaidAmounts(prev => { const n = { ...prev }; delete n[f.id]; return n; });
+                          }
+                        }} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-medium">{f.name}</span>
+                            {isPayer && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
+                          </div>
+                          {owesTo && isSelected && costShare > 0 && (
+                            <p className="text-[10px] text-red-500 mt-0.5">مدين لـ {owesTo} بـ {costShare.toLocaleString("en-US", { maximumFractionDigits: 0 })} {t.currency}</p>
                           )}
                         </div>
-                        {fundingCostDisplay > 0 && isSelected && (
-                          <div className="flex items-center gap-2 mt-2 mr-8">
-                            <Wallet className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
-                            <span className="text-[11px] text-amber-700 dark:text-amber-400 flex-shrink-0">دفع:</span>
-                            <Input
-                              className="h-7 w-24 text-xs text-center border-amber-300"
-                              type="number"
-                              min={0}
-                              placeholder="0"
-                              value={founderPaidAmounts[f.id] || ""}
-                              onChange={e => setFounderPaidAmounts(prev => ({ ...prev, [f.id]: Number(e.target.value) || 0 }))}
-                            />
-                            <span className="text-[11px] text-muted-foreground">{t.currency}</span>
-                            {paidAmt > 0 && remaining > 0 && (
-                              <span className="text-[11px] text-red-500">متبقي: {remaining.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>
-                            )}
-                            {paidAmt > 0 && remaining === 0 && overpaid === 0 && (
-                              <span className="text-[11px] text-emerald-600">✓ تم السداد</span>
-                            )}
-                            {overpaid > 0 && (
-                              <span className="text-[11px] text-blue-600">زيادة: {overpaid.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>
-                            )}
+                        {form.splitMode === "contribution" && isSelected ? (
+                          <div className="flex items-center gap-1">
+                            <Input className="h-7 w-16 text-xs text-center" type="number" min={0} max={100} value={founderPcts[f.id] || 0} onChange={e => setFounderPcts(prev => ({ ...prev, [f.id]: Number(e.target.value) }))} />
+                            <span className="text-xs text-muted-foreground">%</span>
                           </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">{pct.toFixed(1)}%</span>
+                        )}
+                        {fundingCostDisplay > 0 && isSelected && (
+                          <span className="text-xs font-medium min-w-[70px] text-end text-primary">{costShare.toLocaleString("en-US", { maximumFractionDigits: 0 })} {t.currency}</span>
                         )}
                       </div>
                     );
                   })}
-                  {(() => {
-                    const totalPaid = Object.values(founderPaidAmounts).reduce((s, v) => s + (v || 0), 0);
-                    if (totalPaid > 0 && fundingCostDisplay > 0) {
-                      return (
-                        <div className="flex justify-between text-[11px] border-t border-border pt-2 mt-1 px-1">
-                          <span className="text-muted-foreground">إجمالي المدفوع: <span className="font-semibold text-foreground">{totalPaid.toLocaleString()} {t.currency}</span></span>
-                          <span className="text-muted-foreground">من أصل: <span className="font-semibold text-foreground">{fundingCostDisplay.toLocaleString()} {t.currency}</span></span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
                 </div>
               )}
 
