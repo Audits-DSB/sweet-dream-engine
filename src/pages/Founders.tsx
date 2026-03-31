@@ -745,14 +745,45 @@ export default function FoundersPage() {
                     </div>
 
                     {/* ── LEDGER: contributions + fundings + withdrawals ── */}
-                    {section === "ledger" && (
+                    {section === "ledger" && (() => {
+                      const myDeliveryPayments = (deliveryPaymentsByFounder[f.id] || []);
+                      const allLedgerItems = [...contributions, ...fundings, ...withdrawals];
+                      const hasEntries = allLedgerItems.length > 0 || myDeliveryPayments.length > 0;
+                      return (
                       <>
-                        {[...contributions, ...fundings, ...withdrawals].length === 0 ? (
+                        {!hasEntries ? (
                           <div className="py-10 text-center text-sm text-muted-foreground">لا توجد معاملات بعد</div>
                         ) : (
                           <div className="max-h-[500px] overflow-y-auto">
                             <div className="divide-y divide-border/50">
-                              {[...contributions, ...fundings, ...withdrawals]
+                              {myDeliveryPayments
+                                .sort((a, b) => b.date.localeCompare(a.date))
+                                .map(entry => (
+                                  <div key={`delpay-ledger-${entry.orderId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                                      <Truck className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-medium">دفع مصاريف توصيل</span>
+                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                        </button>
+                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                                        <Clock className="h-3 w-3 flex-shrink-0" />
+                                        <span>{entry.date}</span>
+                                      </div>
+                                    </div>
+                                    <div className="text-sm font-bold flex-shrink-0 text-orange-600 dark:text-orange-400">
+                                      -{entry.amount.toLocaleString()}
+                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              {allLedgerItems
                                 .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime())
                                 .map(tx => (
                                   <div key={tx.id} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
@@ -796,7 +827,8 @@ export default function FoundersPage() {
                           <span className="font-bold text-foreground">{[...contributions, ...fundings].reduce((s, tx) => s + tx.amount, 0).toLocaleString()} {t.currency}</span>
                         </div>
                       </>
-                    )}
+                      );
+                    })()}
 
                     {/* ── ORDER FUNDING: aggregated from order contributions ── */}
                     {section === "order_funding" && (
