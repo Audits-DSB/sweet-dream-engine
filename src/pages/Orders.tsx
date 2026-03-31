@@ -1144,8 +1144,12 @@ export default function OrdersPage() {
                     <span className="text-xs text-muted-foreground mr-auto">{fundingCostDisplay.toLocaleString()} {t.currency}</span>
                   </div>
                   <div className="space-y-1.5">
-                    {founders.filter(f => selectedFounders.includes(f.id)).map(f => {
+                    {founders.filter(f => selectedFounders.includes(f.id)).map((f, _idx, arr) => {
                       const isPayer = costPayers.includes(f.id);
+                      const othersTotal = costPayers.filter(id => id !== f.id).reduce((s, id) => s + (founderPaidAmounts[id] || 0), 0);
+                      const remaining = Math.max(0, fundingCostDisplay - othersTotal);
+                      const payersWithAmounts = costPayers.filter(id => id !== f.id && (founderPaidAmounts[id] || 0) > 0);
+                      const isLastEmpty = isPayer && costPayers.length > 1 && payersWithAmounts.length === costPayers.length - 1 && !(founderPaidAmounts[f.id] > 0);
                       return (
                         <div key={`payer-${f.id}`} className={`flex items-center gap-3 p-2 rounded-md transition-colors ${isPayer ? "bg-amber-100/60 dark:bg-amber-900/20 border border-amber-300/50" : "bg-white/50 dark:bg-background/30 border border-transparent"}`}>
                           <Checkbox checked={isPayer} onCheckedChange={(checked) => {
@@ -1159,9 +1163,23 @@ export default function OrdersPage() {
                                 className="h-7 w-24 text-xs text-center border-amber-300"
                                 type="number"
                                 min={0}
-                                placeholder="المبلغ"
+                                max={remaining + (founderPaidAmounts[f.id] || 0)}
+                                placeholder={isLastEmpty ? remaining.toLocaleString() : "المبلغ"}
                                 value={founderPaidAmounts[f.id] || ""}
-                                onChange={e => setFounderPaidAmounts(prev => ({ ...prev, [f.id]: Number(e.target.value) || 0 }))}
+                                onChange={e => {
+                                  const val = Number(e.target.value) || 0;
+                                  const maxAllowed = fundingCostDisplay - costPayers.filter(id => id !== f.id).reduce((s, id) => s + (founderPaidAmounts[id] || 0), 0);
+                                  const clamped = Math.min(Math.max(0, val), Math.max(0, maxAllowed));
+                                  setFounderPaidAmounts(prev => {
+                                    const next = { ...prev, [f.id]: clamped };
+                                    const otherPayers = costPayers.filter(id => id !== f.id);
+                                    if (otherPayers.length === 1) {
+                                      const otherRemaining = fundingCostDisplay - clamped;
+                                      next[otherPayers[0]] = Math.max(0, otherRemaining);
+                                    }
+                                    return next;
+                                  });
+                                }}
                               />
                               <span className="text-[11px] text-muted-foreground">{t.currency}</span>
                             </>
@@ -1205,9 +1223,49 @@ export default function OrdersPage() {
                       : (founderPcts[f.id] || 0);
                     const costShare = fundingCostDisplay * pct / 100;
                     const isPayer = costPayers.includes(f.id);
-                    const owesTo = !isPayer && costPayers.length === 1
-                      ? founders.find(pf => pf.id === costPayers[0])?.name
-                      : undefined;
+                    const activePayers = costPayers.filter(id => selectedFounders.includes(id));
+                    const paidAmt = isPayer
+                      ? (activePayers.length === 1 ? fundingCostDisplay : (founderPaidAmounts[f.id] || 0))
+                      : 0;
+                    const debts: { name: string; amount: number }[] = [];
+                    if (isSelected && costShare > 0 && activePayers.length > 0) {
+                      if (!isPayer) {
+                        const totalPaidByAll = activePayers.reduce((s, id) => s + (activePayers.length === 1 ? fundingCostDisplay : (founderPaidAmounts[id] || 0)), 0);
+                        activePayers.forEach(payerId => {
+                          const payerAmt = activePayers.length === 1 ? fundingCostDisplay : (founderPaidAmounts[payerId] || 0);
+                          if (payerAmt > 0 && totalPaidByAll > 0) {
+                            const payerPct = payerAmt / totalPaidByAll;
+                            const debt = costShare * payerPct;
+                            if (debt > 0.5) {
+                              const payerName = founders.find(pf => pf.id === payerId)?.name || "";
+                              debts.push({ name: payerName, amount: Math.round(debt) });
+                            }
+                          }
+                        });
+                      } else if (paidAmt > costShare) {
+                        const excess = paidAmt - costShare;
+                        const nonPayers = selectedFounders.filter(id => !activePayers.includes(id));
+                        const totalNonPayerShares = nonPayers.reduce((s, id) => {
+                          const p = form.splitMode === "equal"
+                            ? (selectedFounders.length > 0 ? 100 / selectedFounders.length : 0)
+                            : (founderPcts[id] || 0);
+                          return s + fundingCostDisplay * p / 100;
+                        }, 0);
+                        if (totalNonPayerShares > 0) {
+                          nonPayers.forEach(nId => {
+                            const nPct2 = form.splitMode === "equal"
+                              ? (selectedFounders.length > 0 ? 100 / selectedFounders.length : 0)
+                              : (founderPcts[nId] || 0);
+                            const nShare = fundingCostDisplay * nPct2 / 100;
+                            const owedToMe = Math.min(excess, nShare) * (nShare / totalNonPayerShares);
+                            if (owedToMe > 0.5) {
+                              const nName = founders.find(pf => pf.id === nId)?.name || "";
+                              debts.push({ name: nName, amount: Math.round(owedToMe) });
+                            }
+                          });
+                        }
+                      }
+                    }
                     return (
                       <div key={f.id} className={`flex items-center gap-3 p-2 rounded-md transition-colors ${isPayer ? "bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800" : isSelected ? "bg-primary/5 border border-primary/20" : "opacity-50"}`}>
                         <Checkbox checked={isSelected} onCheckedChange={(checked) => {
@@ -1222,8 +1280,19 @@ export default function OrdersPage() {
                             <span className="text-sm font-medium">{f.name}</span>
                             {isPayer && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
                           </div>
-                          {owesTo && isSelected && costShare > 0 && (
-                            <p className="text-[10px] text-red-500 mt-0.5">مدين لـ {owesTo} بـ {costShare.toLocaleString("en-US", { maximumFractionDigits: 0 })} {t.currency}</p>
+                          {!isPayer && debts.length > 0 && (
+                            <div className="mt-0.5 space-y-0.5">
+                              {debts.map((d, i) => (
+                                <p key={i} className="text-[10px] text-red-500">مدين لـ {d.name} بـ {d.amount.toLocaleString()} {t.currency}</p>
+                              ))}
+                            </div>
+                          )}
+                          {isPayer && debts.length > 0 && (
+                            <div className="mt-0.5 space-y-0.5">
+                              {debts.map((d, i) => (
+                                <p key={i} className="text-[10px] text-emerald-600">ليك عند {d.name}: {d.amount.toLocaleString()} {t.currency}</p>
+                              ))}
+                            </div>
                           )}
                         </div>
                         {form.splitMode === "contribution" && isSelected ? (
