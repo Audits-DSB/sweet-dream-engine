@@ -140,6 +140,8 @@ export function quickProfit(input: QuickProfitInput): QuickProfitResult {
   const companyProfit = profitAfterDeduction * pct;
   const foundersProfit = profitAfterDeduction - companyProfit;
 
+  const deliveryFeeReimbursement = proportionalDeduction;
+
   return {
     capital: totalCost,
     expectedProfit,
@@ -149,6 +151,7 @@ export function quickProfit(input: QuickProfitInput): QuickProfitResult {
     recoveredCapital,
     companyProfit,
     foundersProfit,
+    deliveryFeeReimbursement,
   };
 }
 

@@ -39,7 +39,7 @@ type FounderContrib = {
 
 type Order = {
   id: string; client: string; clientId: string; date: string; status: string;
-  source: string; splitMode: string; deliveryFee: number; deliveryFeeBearer: string;
+  source: string; splitMode: string; deliveryFee: number; deliveryFeeBearer: string; deliveryFeePaidByFounder: string;
   subscription: { type: string; value: number };
   cashback: { type: string; value: number };
   legacyLines: any[];
@@ -78,6 +78,7 @@ function mapOrder(raw: any): Order {
     splitMode: raw.splitMode || raw.split_mode || "—",
     deliveryFee: toNum(raw.deliveryFee ?? raw.delivery_fee),
     deliveryFeeBearer: raw.deliveryFeeBearer ?? raw.delivery_fee_bearer ?? "client",
+    deliveryFeePaidByFounder: raw.deliveryFeePaidByFounder ?? raw.delivery_fee_paid_by_founder ?? "",
     subscription: raw.subscription || { type: "none", value: 0 },
     cashback: raw.cashback || { type: "none", value: 0 },
     legacyLines: parseJsonField(raw.lines),
@@ -129,7 +130,7 @@ export default function OrderDetails() {
 
   // Edit state
   const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ status: "", date: "", source: "", deliveryFee: "", deliveryFeeBearer: "client", supplierId: "" });
+  const [editForm, setEditForm] = useState({ status: "", date: "", source: "", deliveryFee: "", deliveryFeeBearer: "client", deliveryFeePaidByFounder: "", supplierId: "" });
   const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
   const [editLines, setEditLines] = useState<Array<OrderLine & { _qty: string; _sell: string; _cost: string; _supplierId: string }>>([]);
   const [editSaving, setEditSaving] = useState(false);
@@ -418,6 +419,7 @@ export default function OrderDetails() {
       source: order.source || "",
       deliveryFee: String(order.deliveryFee ?? ""),
       deliveryFeeBearer: order.deliveryFeeBearer || "client",
+      deliveryFeePaidByFounder: order.deliveryFeePaidByFounder || "",
       supplierId: order.supplierId || "",
     });
     setEditLines(lines.map(l => ({ ...l, _qty: String(l.quantity), _sell: String(l.sellingPrice), _cost: String(l.costPrice), _supplierId: l.supplierId || "" })));
@@ -453,6 +455,8 @@ export default function OrderDetails() {
       const newFee = Number(editForm.deliveryFee) || 0;
       if (newFee !== (order.deliveryFee || 0)) orderPatch.deliveryFee = newFee;
       if (editForm.deliveryFeeBearer !== (order.deliveryFeeBearer || "client")) orderPatch.deliveryFeeBearer = editForm.deliveryFeeBearer;
+      if (editForm.deliveryFeePaidByFounder !== (order.deliveryFeePaidByFounder || "")) orderPatch.deliveryFeePaidByFounder = editForm.deliveryFeePaidByFounder;
+      if (editForm.deliveryFeeBearer !== "company") orderPatch.deliveryFeePaidByFounder = null;
       if (editForm.supplierId !== (order.supplierId || "")) orderPatch.supplierId = editForm.supplierId;
 
       let newTotalSelling = 0;
@@ -813,6 +817,22 @@ export default function OrderDetails() {
                           <span className="text-sm">{t.deliveryFeeBearerCompany}</span>
                         </label>
                       </div>
+                      {editForm.deliveryFeeBearer === "company" && allFounders.length > 0 && (
+                        <div className="mt-2 p-2 rounded bg-amber-50 border border-amber-200 space-y-1.5">
+                          <Label className="text-amber-700 text-xs">مين دفع التوصيل؟</Label>
+                          <Select value={editForm.deliveryFeePaidByFounder || "__none__"} onValueChange={(v) => setEditForm(f => ({ ...f, deliveryFeePaidByFounder: v === "__none__" ? "" : v }))}>
+                            <SelectTrigger className="border-amber-300">
+                              <SelectValue placeholder="اختر المؤسس" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">— لم يُحدد —</SelectItem>
+                              {allFounders.map(f => (
+                                <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
                   )}
                   <div className="space-y-1.5">

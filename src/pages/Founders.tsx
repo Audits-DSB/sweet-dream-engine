@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Users, TrendingUp, Wallet, Pencil, Plus, Loader2, Trash2, ChevronDown, ChevronUp,
   ExternalLink, ShoppingBag, Clock, AlertTriangle, Building2, ArrowDownLeft,
-  ArrowUpRight, Coins, Receipt, CheckCircle2, XCircle,
+  ArrowUpRight, Coins, Receipt, CheckCircle2, XCircle, Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -34,7 +34,7 @@ type Collection = {
   status: string; totalAmount: number; paidAmount: number; outstanding: number;
   sourceOrders: string[];
 };
-type Order = { id: string; totalSelling: any; totalCost: any; splitMode: string; founderContributions?: any[]; deliveryFee?: any; deliveryFeeBearer?: string };
+type Order = { id: string; totalSelling: any; totalCost: any; splitMode: string; founderContributions?: any[]; deliveryFee?: any; deliveryFeeBearer?: string; deliveryFeePaidByFounder?: string };
 
 function toNum(v: any): number {
   if (!v) return 0;
@@ -156,7 +156,7 @@ export default function FoundersPage() {
   }, []);
 
   // ── Calculate profit AND capital distributions per founder from collections ──
-  const { profitsByFounder, capitalByFounder } = useMemo(() => {
+  const { profitsByFounder, capitalByFounder, deliveryReimbursementByFounder } = useMemo(() => {
     const profitMap: Record<string, Array<{
       collectionId: string; orderIds: string[]; clientName: string; date: string;
       paidAmount: number; founderShare: number; paidRatio: number; alreadyRegistered: boolean;
@@ -164,6 +164,10 @@ export default function FoundersPage() {
     const capitalMap: Record<string, Array<{
       collectionId: string; orderIds: string[]; clientName: string; date: string;
       paidAmount: number; capitalShare: number;
+    }>> = {};
+    const reimbursementMap: Record<string, Array<{
+      collectionId: string; orderId: string; clientName: string; date: string;
+      amount: number; deliveryFee: number; paidRatio: number;
     }>> = {};
 
     collections.forEach(col => {
@@ -197,6 +201,18 @@ export default function FoundersPage() {
         const capitalReturn = Math.round(qp.recoveredCapital);
         totalFoundersProfit += qp.foundersProfit;
         totalCapitalReturn += capitalReturn;
+
+        const paidByFounder = order.deliveryFeePaidByFounder || (order as any).delivery_fee_paid_by_founder || "";
+        if (paidByFounder && delFeeDeduction > 0 && qp.deliveryFeeReimbursement > 0) {
+          if (!reimbursementMap[paidByFounder]) reimbursementMap[paidByFounder] = [];
+          reimbursementMap[paidByFounder].push({
+            collectionId: col.id, orderId: oid, clientName: col.client,
+            date: col.invoiceDate.split("T")[0],
+            amount: Math.round(qp.deliveryFeeReimbursement),
+            deliveryFee: delFeeDeduction,
+            paidRatio: Math.min(oPaid / oSelling, 1),
+          });
+        }
 
         const splits = founderSplit(qp.foundersProfit, capitalReturn, contribs, isWeighted ? "weighted" : "equal");
         splits.forEach(s => {
@@ -245,7 +261,7 @@ export default function FoundersPage() {
         }
       });
     });
-    return { profitsByFounder: profitMap, capitalByFounder: capitalMap };
+    return { profitsByFounder: profitMap, capitalByFounder: capitalMap, deliveryReimbursementByFounder: reimbursementMap };
   }, [collections, orders, founders, founderTxs, rules.companyProfitPercentage]);
 
   const orderFundingByFounder = useMemo(() => {
@@ -290,13 +306,18 @@ export default function FoundersPage() {
 
   // Available capital per founder = auto capital (recovered) + auto profits + manual capital_returns - withdrawals
   // Profits are ALWAYS included automatically — no manual "تسجيل كرأس مال" step needed
+  function founderDeliveryReimbursementTotal(founderId: string): number {
+    return (deliveryReimbursementByFounder[founderId] || []).reduce((s, e) => s + e.amount, 0);
+  }
+
   function founderCapitalBalance(founderId: string): number {
     const myTxs = founderTxs.filter(tx => tx.founderId === founderId);
     const autoCapital = (capitalByFounder[founderId] || []).reduce((s, e) => s + e.capitalShare, 0);
     const autoProfit = (profitsByFounder[founderId] || []).reduce((s, e) => s + e.founderShare, 0);
+    const autoDeliveryReimbursement = founderDeliveryReimbursementTotal(founderId);
     const manualReturn = myTxs.filter(tx => tx.type === "capital_return").reduce((s, tx) => s + tx.amount, 0);
     const withdrawn = myTxs.filter(tx => tx.type === "capital_withdrawal").reduce((s, tx) => s + tx.amount, 0);
-    return autoCapital + autoProfit + manualReturn - withdrawn;
+    return autoCapital + autoProfit + autoDeliveryReimbursement + manualReturn - withdrawn;
   }
 
   const totalAvailableCapital = founders.reduce((s, f) => s + Math.max(0, founderCapitalBalance(f.id)), 0);
@@ -576,6 +597,7 @@ export default function FoundersPage() {
             const capitalBalance = founderCapitalBalance(f.id);
             const autoCapitalTotal = myCapital.reduce((s, e) => s + e.capitalShare, 0);
             const autoProfitTotal = (profitsByFounder[f.id] || []).reduce((s, e) => s + e.founderShare, 0);
+            const autoDeliveryReimbursement = founderDeliveryReimbursementTotal(f.id);
             const manualCapitalTotal = capitalReturns.reduce((s, tx) => s + tx.amount, 0);
             const capitalWithdrawnTotal = capitalWithdrawals.reduce((s, tx) => s + tx.amount, 0);
 
@@ -926,6 +948,7 @@ export default function FoundersPage() {
                           <div className="flex items-center justify-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
                             <span>رأس مال عائد: <span className="text-foreground font-medium">{autoCapitalTotal.toLocaleString()}</span></span>
                             {autoProfitTotal > 0 && <span>أرباح تلقائية: <span className="text-success font-medium">+{autoProfitTotal.toLocaleString()}</span></span>}
+                            {autoDeliveryReimbursement > 0 && <span>استرداد توصيل: <span className="text-amber-600 dark:text-amber-400 font-medium">+{autoDeliveryReimbursement.toLocaleString()}</span></span>}
                             {manualCapitalTotal > 0 && <span>يدوي: <span className="text-foreground font-medium">{manualCapitalTotal.toLocaleString()}</span></span>}
                             <span>مسحوب: <span className="text-destructive font-medium">−{capitalWithdrawnTotal.toLocaleString()}</span></span>
                           </div>
@@ -985,6 +1008,35 @@ export default function FoundersPage() {
                                     </div>
                                     <div className="text-sm font-bold flex-shrink-0 text-primary">
                                       +{entry.capitalShare.toLocaleString()}
+                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              {(deliveryReimbursementByFounder[f.id] || [])
+                                .sort((a, b) => b.date.localeCompare(a.date))
+                                .map(entry => (
+                                  <div key={`reimb-${entry.collectionId}-${entry.orderId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                                      <Truck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-medium">استرداد مصروفات توصيل</span>
+                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                        </button>
+                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                                        <Clock className="h-3 w-3 flex-shrink-0" />
+                                        <span>{entry.date}</span>
+                                        <span>· توصيل: {entry.deliveryFee.toLocaleString()} {t.currency}</span>
+                                        <span>· نسبة السداد: {Math.round(entry.paidRatio * 100)}%</span>
+                                      </div>
+                                    </div>
+                                    <div className="text-sm font-bold flex-shrink-0 text-amber-600 dark:text-amber-400">
+                                      +{entry.amount.toLocaleString()}
                                       <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
                                     </div>
                                   </div>

@@ -167,6 +167,7 @@ export default function CompanyProfitPage() {
       return Array.isArray(contribs) ? contribs : [];
     };
 
+    const globalOrderDeliveryApplied: Record<string, boolean> = {};
     (collections as any[]).forEach((col: any) => {
       const issueDate = col.invoiceDate || col.invoice_date || col.issueDate || col.issue_date || col.createdAt || col.created_at || "";
       let d: Date;
@@ -223,8 +224,15 @@ export default function CompanyProfitPage() {
           const pct = getOrderPct(oid);
           const normPct = pct >= 2 ? pct / 100 : pct;
 
+          let lineDeliveryDeduction = 0;
+          if (!globalOrderDeliveryApplied[oid] && (order.deliveryFeeBearer || (order as any).delivery_fee_bearer) === "company") {
+            const delFee = parseAmount(order.deliveryFee ?? (order as any).delivery_fee);
+            lineDeliveryDeduction = delFee * payRatio;
+            globalOrderDeliveryApplied[oid] = true;
+          }
+
           const lineGross = lineSelling - lineCost;
-          const lineRealized = lineGross * payRatio;
+          const lineRealized = lineGross * payRatio - lineDeliveryDeduction;
           const lineCompany = lineRealized * normPct;
           const lineFounders = lineRealized - lineCompany;
 
@@ -277,7 +285,11 @@ export default function CompanyProfitPage() {
           const pct = getOrderPct(oid);
           const normPct = pct >= 2 ? pct / 100 : pct;
 
-          const delFeeDeduction = (order.deliveryFeeBearer || (order as any).delivery_fee_bearer) === "company" ? parseAmount(order.deliveryFee ?? (order as any).delivery_fee) : 0;
+          let delFeeDeduction = 0;
+          if (!globalOrderDeliveryApplied[oid] && (order.deliveryFeeBearer || (order as any).delivery_fee_bearer) === "company") {
+            delFeeDeduction = parseAmount(order.deliveryFee ?? (order as any).delivery_fee);
+            globalOrderDeliveryApplied[oid] = true;
+          }
           const qp = quickProfit({ orderTotal: oSelling, totalCost: oCost, paidValue: oPaid, companyProfitPct: pct, deliveryFeeDeduction: delFeeDeduction });
           totalGrossProfit += qp.expectedProfit;
           totalRealizedProfit += qp.realizedProfit;

@@ -388,6 +388,7 @@ export default function AuditsPage() {
 
       // Fetch companyProfitPercentage snapshot per relevant order
       const orderPctMap: Record<string, number> = {};
+      const orderDeliveryInfoMap: Record<string, { deliveryFee: number; deliveryFeeBearer: string; deliveryFeePaidByFounder: string }> = {};
       await Promise.all(relevantOrderIds.map(async ordId => {
         try {
           const o = await api.get<any>(`/orders/${ordId}`);
@@ -397,12 +398,18 @@ export default function AuditsPage() {
           else if (typeof raw === "string") { try { contribs = JSON.parse(raw); } catch { contribs = []; } }
           const snapped = (contribs[0] as any)?.companyProfitPercentage;
           orderPctMap[ordId] = snapped ?? o?.companyProfitPercentage ?? o?.company_profit_percentage ?? 40;
+          orderDeliveryInfoMap[ordId] = {
+            deliveryFee: Number(o?.deliveryFee ?? o?.delivery_fee ?? 0),
+            deliveryFeeBearer: o?.deliveryFeeBearer ?? o?.delivery_fee_bearer ?? "client",
+            deliveryFeePaidByFounder: o?.deliveryFeePaidByFounder ?? o?.delivery_fee_paid_by_founder ?? "",
+          };
         } catch { orderPctMap[ordId] = 40; }
       }));
 
       const lineItems = shortages.map(r => {
         const srcOrd = codeToSourceOrder[r.code] || "";
         const companyProfitPct = orderPctMap[srcOrd] ?? 40;
+        const delInfo = orderDeliveryInfoMap[srcOrd];
         return {
           code: r.code, material: r.material,
           imageUrl: imgMap[r.code] || "",
@@ -412,6 +419,7 @@ export default function AuditsPage() {
           lineTotal: Math.abs(r.diff) * r.sellingPrice,
           sourceOrderId: srcOrd,
           companyProfitPct,
+          deliveryFeePaidByFounder: delInfo?.deliveryFeePaidByFounder || "",
         };
       });
 

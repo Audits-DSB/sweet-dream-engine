@@ -21,7 +21,7 @@ All business data in main Supabase project:
 - `suppliers` — Supplier records
 - `materials` — Product/material catalog
 - `founders` — Company founders (fields: id, name, alias, email, phone, totalContributed, totalWithdrawn, active)
-- `orders` — Customer orders (includes `delivery_fee_bearer` column: "client" or "company" — when "company", delivery fee is deducted from profit before company/founders split)
+- `orders` — Customer orders (includes `delivery_fee_bearer` column: "client" or "company" — when "company", delivery fee is deducted from profit before company/founders split; `delivery_fee_paid_by_founder` column tracks which founder paid the delivery fee for reimbursement at collection time)
 - `requests` — Client requests
 - `deliveries` — Delivery records (columns: id, orderId, clientId, date, scheduledDate, status, deliveredBy, deliveryFee, items, notes)
 - `collections` — Invoice/collection records

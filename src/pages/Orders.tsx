@@ -88,7 +88,7 @@ export default function OrdersPage() {
   const [filters, setFilters] = useState<Record<string, string>>(urlStatus ? { status: urlStatus } : {});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState("");
-  const [form, setForm] = useState({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client" as "client" | "company" });
+  const [form, setForm] = useState({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client" as "client" | "company", deliveryFeePaidByFounder: "" });
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [materialSearch, setMaterialSearch] = useState("");
   const [realMaterials, setRealMaterials] = useState<MaterialItem[]>([]);
@@ -121,7 +121,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (dialogOpen) {
-      setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client" });
+      setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client", deliveryFeePaidByFounder: "" });
       setSelectedFounders([]);
       setFounderPcts({});
       api.get<any[]>("/founders").then((data) => {
@@ -552,6 +552,7 @@ export default function OrdersPage() {
         totalCost: String(totalCost),
         splitMode: splitLabel, deliveryFee: String(parseInt(form.deliveryFee) || 0),
         deliveryFeeBearer: form.deliveryFeeBearer,
+        deliveryFeePaidByFounder: form.deliveryFeeBearer === "company" ? form.deliveryFeePaidByFounder || null : null,
         status: "Processing", source: t.manual,
         orderType,
         supplierId: selectedSupplier || "",
@@ -568,7 +569,7 @@ export default function OrdersPage() {
       const supName = suppliers.find(s => s.id === selectedSupplier)?.name || "";
       newOrder.supplierName = supName;
       setOrders(prev => [newOrder, ...prev]);
-      setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client" });
+      setForm({ splitMode: rules.defaultSplitMode, deliveryFee: String(rules.defaultDeliveryFee), deliveryFeeBearer: "client", deliveryFeePaidByFounder: "" });
       setSelectedClient(""); setOrderItems([]); setDialogOpen(false); setOrderType("client"); setSelectedSupplier("");
       if (!saved._linesError) toast.success(t.orderCreated);
     } catch (err: any) {
@@ -1060,18 +1061,36 @@ export default function OrdersPage() {
               </div>
 
               {(parseInt(form.deliveryFee) || 0) > 0 && (
-                <div className="flex items-center gap-3 p-3 rounded-md border border-border bg-muted/20">
-                  <Label className="text-xs font-medium flex-shrink-0">{t.deliveryFeeBearerLabel}</Label>
-                  <div className="flex items-center gap-4 mr-auto">
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <Checkbox checked={form.deliveryFeeBearer === "client"} onCheckedChange={() => setForm({ ...form, deliveryFeeBearer: "client" })} />
-                      <span className="text-xs">{t.deliveryFeeBearerClient}</span>
-                    </label>
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <Checkbox checked={form.deliveryFeeBearer === "company"} onCheckedChange={() => setForm({ ...form, deliveryFeeBearer: "company" })} />
-                      <span className="text-xs">{t.deliveryFeeBearerCompany}</span>
-                    </label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3 p-3 rounded-md border border-border bg-muted/20">
+                    <Label className="text-xs font-medium flex-shrink-0">{t.deliveryFeeBearerLabel}</Label>
+                    <div className="flex items-center gap-4 mr-auto">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <Checkbox checked={form.deliveryFeeBearer === "client"} onCheckedChange={() => setForm({ ...form, deliveryFeeBearer: "client", deliveryFeePaidByFounder: "" })} />
+                        <span className="text-xs">{t.deliveryFeeBearerClient}</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <Checkbox checked={form.deliveryFeeBearer === "company"} onCheckedChange={() => setForm({ ...form, deliveryFeeBearer: "company" })} />
+                        <span className="text-xs">{t.deliveryFeeBearerCompany}</span>
+                      </label>
+                    </div>
                   </div>
+                  {form.deliveryFeeBearer === "company" && founders.length > 0 && (
+                    <div className="flex items-center gap-3 p-3 rounded-md border border-amber-300/50 bg-amber-50/30 dark:bg-amber-950/10">
+                      <Truck className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                      <Label className="text-xs font-medium flex-shrink-0">مين دفع التوصيل؟</Label>
+                      <Select value={form.deliveryFeePaidByFounder} onValueChange={(v) => setForm({ ...form, deliveryFeePaidByFounder: v })}>
+                        <SelectTrigger className="h-8 flex-1 text-xs">
+                          <SelectValue placeholder="اختر المؤسس" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {founders.map(f => (
+                            <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
               )}
 
