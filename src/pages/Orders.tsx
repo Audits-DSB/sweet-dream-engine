@@ -26,7 +26,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 type Order = {
   id: string; client: string; clientId: string; date: string; lines: number;
   totalSelling: string; totalCost: string; splitMode: string;
-  deliveryFee: number; deliveryFeeBearer: string; status: string; source: string;
+  deliveryFee: number; deliveryFeeBearer: string; deliveryFeePaidByFounder: string; status: string; source: string;
   supplierId: string; supplierName: string;
   notes?: string;
 };
@@ -65,6 +65,7 @@ function mapOrder(raw: any): Order {
     splitMode: raw.splitMode ?? raw.split_mode ?? "",
     deliveryFee: Number(raw.deliveryFee ?? raw.delivery_fee ?? 0),
     deliveryFeeBearer: raw.deliveryFeeBearer ?? raw.delivery_fee_bearer ?? "client",
+    deliveryFeePaidByFounder: raw.deliveryFeePaidByFounder ?? raw.delivery_fee_paid_by_founder ?? "",
     status: raw.status || "Draft",
     source: raw.source || "",
     supplierId: raw.supplierId || raw.supplier_id || "",
@@ -761,11 +762,16 @@ export default function OrdersPage() {
                   </td>
                   <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                     {delInfo ? (
-                      <button className="inline-flex items-center gap-1 text-xs hover:underline" onClick={() => navigate(`/deliveries?orderId=${order.id}`)}>
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${delInfo.confirmed === delInfo.total && delInfo.total > 0 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
-                          <Truck className="h-3 w-3" /> {delInfo.confirmed}/{delInfo.total}
-                        </span>
-                      </button>
+                      <div className="inline-flex flex-col items-center gap-0.5">
+                        <button className="inline-flex items-center gap-1 text-xs hover:underline" onClick={() => navigate(`/deliveries?orderId=${order.id}`)}>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${delInfo.confirmed === delInfo.total && delInfo.total > 0 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
+                            <Truck className="h-3 w-3" /> {delInfo.confirmed}/{delInfo.total}
+                          </span>
+                        </button>
+                        {order.deliveryFee > 0 && order.deliveryFeeBearer === "company" && order.deliveryFeePaidByFounder && (
+                          <span className="text-[10px] text-amber-600 dark:text-amber-400">دفعها: {founders.find(f => f.id === order.deliveryFeePaidByFounder)?.name || "—"}</span>
+                        )}
+                      </div>
                     ) : <span className="text-xs text-muted-foreground">—</span>}
                   </td>
                   <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
