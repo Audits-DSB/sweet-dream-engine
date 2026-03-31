@@ -761,18 +761,18 @@ export default function OrdersPage() {
                     </DropdownMenu>
                   </td>
                   <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
-                    {delInfo ? (
-                      <div className="inline-flex flex-col items-center gap-0.5">
+                    <div className="inline-flex flex-col items-center gap-0.5">
+                      {delInfo ? (
                         <button className="inline-flex items-center gap-1 text-xs hover:underline" onClick={() => navigate(`/deliveries?orderId=${order.id}`)}>
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${delInfo.confirmed === delInfo.total && delInfo.total > 0 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
                             <Truck className="h-3 w-3" /> {delInfo.confirmed}/{delInfo.total}
                           </span>
                         </button>
-                        {order.deliveryFee > 0 && order.deliveryFeeBearer === "company" && order.deliveryFeePaidByFounder && (
-                          <span className="text-[10px] text-amber-600 dark:text-amber-400">دفعها: {founders.find(f => f.id === order.deliveryFeePaidByFounder)?.name || "—"}</span>
-                        )}
-                      </div>
-                    ) : <span className="text-xs text-muted-foreground">—</span>}
+                      ) : <span className="text-xs text-muted-foreground">—</span>}
+                      {order.deliveryFee > 0 && order.deliveryFeeBearer === "company" && order.deliveryFeePaidByFounder && (
+                        <span className="text-[10px] text-amber-600 dark:text-amber-400">دفعها: {founders.find(f => f.id === order.deliveryFeePaidByFounder)?.name || "—"}</span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                     {auditInfo ? (
