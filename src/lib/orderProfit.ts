@@ -120,6 +120,7 @@ export type QuickProfitResult = {
   recoveredCapital: number;
   companyProfit: number;
   foundersProfit: number;
+  deliveryFeeReimbursement: number;
 };
 
 export function quickProfit(input: QuickProfitInput): QuickProfitResult {
