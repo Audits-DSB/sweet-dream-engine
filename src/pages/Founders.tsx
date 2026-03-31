@@ -264,6 +264,26 @@ export default function FoundersPage() {
     return { profitsByFounder: profitMap, capitalByFounder: capitalMap, deliveryReimbursementByFounder: reimbursementMap };
   }, [collections, orders, founders, founderTxs, rules.companyProfitPercentage]);
 
+  const deliveryPaymentsByFounder = useMemo(() => {
+    const map: Record<string, Array<{ orderId: string; clientName: string; date: string; amount: number }>> = {};
+    Object.values(orders).forEach((order: any) => {
+      const paidBy = order.deliveryFeePaidByFounder || (order as any).delivery_fee_paid_by_founder || "";
+      if (!paidBy) return;
+      const bearer = order.deliveryFeeBearer || (order as any).delivery_fee_bearer;
+      if (bearer !== "company") return;
+      const fee = toNum(order.deliveryFee ?? (order as any).delivery_fee);
+      if (fee <= 0) return;
+      if (!map[paidBy]) map[paidBy] = [];
+      map[paidBy].push({
+        orderId: order.id,
+        clientName: order.client || order.clientName || order.client_name || "",
+        date: (order.date || "").split("T")[0],
+        amount: fee,
+      });
+    });
+    return map;
+  }, [orders]);
+
   const orderFundingByFounder = useMemo(() => {
     const map: Record<string, OrderFundingEntry[]> = {};
     founders.forEach(f => { map[f.id] = []; });
@@ -1008,6 +1028,33 @@ export default function FoundersPage() {
                                     </div>
                                     <div className="text-sm font-bold flex-shrink-0 text-primary">
                                       +{entry.capitalShare.toLocaleString()}
+                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              {(deliveryPaymentsByFounder[f.id] || [])
+                                .sort((a, b) => b.date.localeCompare(a.date))
+                                .map(entry => (
+                                  <div key={`delpay-${entry.orderId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                                      <Truck className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-medium">دفع مصاريف توصيل</span>
+                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                        </button>
+                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                                        <Clock className="h-3 w-3 flex-shrink-0" />
+                                        <span>{entry.date}</span>
+                                      </div>
+                                    </div>
+                                    <div className="text-sm font-bold flex-shrink-0 text-orange-600 dark:text-orange-400">
+                                      -{entry.amount.toLocaleString()}
                                       <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
                                     </div>
                                   </div>
