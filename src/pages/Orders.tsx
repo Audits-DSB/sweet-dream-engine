@@ -1223,47 +1223,75 @@ export default function OrdersPage() {
                     const paidAmt = isPayer
                       ? (activePayers.length === 1 ? fundingCostDisplay : (founderPaidAmounts[f.id] || 0))
                       : 0;
-                    const debts: { name: string; amount: number }[] = [];
+                    const isFullyPaid = isPayer && paidAmt >= costShare;
+                    const isPartialPayer = isPayer && paidAmt > 0 && paidAmt < costShare;
+                    const deficit = isPartialPayer ? costShare - paidAmt : 0;
+
+                    const totalPaidByAll = activePayers.reduce((s, id) => s + (activePayers.length === 1 ? fundingCostDisplay : (founderPaidAmounts[id] || 0)), 0);
+                    const payerExcesses: Record<string, number> = {};
+                    activePayers.forEach(id => {
+                      const pa = activePayers.length === 1 ? fundingCostDisplay : (founderPaidAmounts[id] || 0);
+                      const pp = form.splitMode === "equal"
+                        ? (selectedFounders.length > 0 ? 100 / selectedFounders.length : 0)
+                        : (founderPcts[id] || 0);
+                      const ps = fundingCostDisplay * pp / 100;
+                      if (pa > ps) payerExcesses[id] = pa - ps;
+                    });
+                    const totalExcess = Object.values(payerExcesses).reduce((s, v) => s + v, 0);
+
+                    const settlements: { name: string; amount: number; type: "owes" | "owed" | "remaining" }[] = [];
                     if (isSelected && costShare > 0 && activePayers.length > 0) {
                       if (!isPayer) {
-                        const totalPaidByAll = activePayers.reduce((s, id) => s + (activePayers.length === 1 ? fundingCostDisplay : (founderPaidAmounts[id] || 0)), 0);
                         activePayers.forEach(payerId => {
                           const payerAmt = activePayers.length === 1 ? fundingCostDisplay : (founderPaidAmounts[payerId] || 0);
                           if (payerAmt > 0 && totalPaidByAll > 0) {
-                            const payerPct = payerAmt / totalPaidByAll;
-                            const debt = costShare * payerPct;
+                            const debt = costShare * (payerAmt / totalPaidByAll);
                             if (debt > 0.5) {
                               const payerName = founders.find(pf => pf.id === payerId)?.name || "";
-                              debts.push({ name: payerName, amount: Math.round(debt) });
+                              settlements.push({ name: payerName, amount: Math.round(debt), type: "owes" });
                             }
                           }
                         });
-                      } else if (paidAmt > costShare) {
-                        const excess = paidAmt - costShare;
-                        const nonPayers = selectedFounders.filter(id => !activePayers.includes(id));
-                        const totalNonPayerShares = nonPayers.reduce((s, id) => {
-                          const p = form.splitMode === "equal"
+                      } else if (isPartialPayer && totalExcess > 0) {
+                        Object.entries(payerExcesses).forEach(([exId, exAmt]) => {
+                          if (exId === f.id) return;
+                          const coveredByThis = deficit * (exAmt / totalExcess);
+                          if (coveredByThis > 0.5) {
+                            const exName = founders.find(pf => pf.id === exId)?.name || "";
+                            settlements.push({ name: exName, amount: Math.round(coveredByThis), type: "remaining" });
+                          }
+                        });
+                      } else if (isFullyPaid && paidAmt > costShare) {
+                        selectedFounders.forEach(sId => {
+                          if (sId === f.id) return;
+                          const sIsPayer = activePayers.includes(sId);
+                          const sPaid = sIsPayer ? (activePayers.length === 1 ? fundingCostDisplay : (founderPaidAmounts[sId] || 0)) : 0;
+                          const sPct2 = form.splitMode === "equal"
                             ? (selectedFounders.length > 0 ? 100 / selectedFounders.length : 0)
-                            : (founderPcts[id] || 0);
-                          return s + fundingCostDisplay * p / 100;
-                        }, 0);
-                        if (totalNonPayerShares > 0) {
-                          nonPayers.forEach(nId => {
-                            const nPct2 = form.splitMode === "equal"
-                              ? (selectedFounders.length > 0 ? 100 / selectedFounders.length : 0)
-                              : (founderPcts[nId] || 0);
-                            const nShare = fundingCostDisplay * nPct2 / 100;
-                            const owedToMe = excess >= totalNonPayerShares ? nShare : excess * (nShare / totalNonPayerShares);
-                            if (owedToMe > 0.5) {
-                              const nName = founders.find(pf => pf.id === nId)?.name || "";
-                              debts.push({ name: nName, amount: Math.round(owedToMe) });
+                            : (founderPcts[sId] || 0);
+                          const sShare = fundingCostDisplay * sPct2 / 100;
+                          const sDeficit = Math.max(0, sShare - sPaid);
+                          if (sDeficit > 0 && totalExcess > 0) {
+                            const myExcess = payerExcesses[f.id] || 0;
+                            const iCover = sDeficit * (myExcess / totalExcess);
+                            if (iCover > 0.5) {
+                              const sName = founders.find(pf => pf.id === sId)?.name || "";
+                              settlements.push({ name: sName, amount: Math.round(iCover), type: "owed" });
                             }
-                          });
-                        }
+                          }
+                        });
                       }
                     }
+
+                    const cardColor = isFullyPaid
+                      ? "bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800"
+                      : isPartialPayer
+                        ? "bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800"
+                        : isSelected
+                          ? "bg-primary/5 border border-primary/20"
+                          : "opacity-50";
                     return (
-                      <div key={f.id} className={`flex items-center gap-3 p-2 rounded-md transition-colors ${isPayer ? "bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800" : isSelected ? "bg-primary/5 border border-primary/20" : "opacity-50"}`}>
+                      <div key={f.id} className={`flex items-center gap-3 p-2 rounded-md transition-colors ${cardColor}`}>
                         <Checkbox checked={isSelected} onCheckedChange={(checked) => {
                           setSelectedFounders(prev => checked ? [...prev, f.id] : prev.filter(id => id !== f.id));
                           if (!checked) {
@@ -1274,19 +1302,16 @@ export default function OrdersPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span className="text-sm font-medium">{f.name}</span>
-                            {isPayer && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
+                            {isFullyPaid && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
                           </div>
-                          {!isPayer && debts.length > 0 && (
+                          {settlements.length > 0 && (
                             <div className="mt-0.5 space-y-0.5">
-                              {debts.map((d, i) => (
-                                <p key={i} className="text-[10px] text-red-500">مدين لـ {d.name} بـ {d.amount.toLocaleString()} {t.currency}</p>
-                              ))}
-                            </div>
-                          )}
-                          {isPayer && debts.length > 0 && (
-                            <div className="mt-0.5 space-y-0.5">
-                              {debts.map((d, i) => (
-                                <p key={i} className="text-[10px] text-emerald-600">ليك عند {d.name}: {d.amount.toLocaleString()} {t.currency}</p>
+                              {settlements.map((s, i) => (
+                                <p key={i} className={`text-[10px] ${s.type === "owes" ? "text-red-500" : s.type === "remaining" ? "text-amber-600" : "text-emerald-600"}`}>
+                                  {s.type === "owes" && `مدين لـ ${s.name} بـ ${s.amount.toLocaleString()} ${t.currency}`}
+                                  {s.type === "remaining" && `باقي ${s.amount.toLocaleString()} ${t.currency} لـ ${s.name}`}
+                                  {s.type === "owed" && `ليك عند ${s.name}: ${s.amount.toLocaleString()} ${t.currency}`}
+                                </p>
                               ))}
                             </div>
                           )}
