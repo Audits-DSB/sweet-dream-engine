@@ -436,7 +436,8 @@ router.patch("/founders/:id", async (req, res) => {
 });
 router.delete("/founders/:id", async (req, res) => {
   const { data: snap } = await supabaseAdmin.from("founders").select("*").eq("id", req.params.id).single();
-  if (snap) await softDelete("founder", req.params.id, snap.name || req.params.id, snap);
+  const { data: actorSnap } = await supabaseAdmin.from("delivery_actors").select("*").eq("founder_id", req.params.id).maybeSingle();
+  if (snap) await softDelete("founder", req.params.id, snap.name || req.params.id, snap, { deliveryActor: actorSnap || null });
   const { error } = await supabaseAdmin.from("founders").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   await supabaseAdmin.from("delivery_actors").delete().eq("founder_id", req.params.id).then(() => {}).catch(() => {});
@@ -1459,14 +1460,19 @@ router.delete("/deliveries/:id", async (req, res) => {
 
   const orderId = snap.order_id || "";
 
-  if (snap) await softDelete("delivery", deliveryId, `${deliveryId} — ${snap.client || ""}`, snap);
+  const { data: relClientInv } = await supabaseAdmin.from("client_inventory").select("*").like("id", `CI-${deliveryId}-%`).then(r => r).catch(() => ({ data: [] }));
+  const { data: relCompanyInv } = await supabaseAdmin.from("company_inventory").select("*").like("id", `CI-${deliveryId}-%`).then(r => r).catch(() => ({ data: [] }));
 
-  // Remove client_inventory rows created by this delivery (IDs start with CI-<deliveryId>-)
+  if (snap) await softDelete("delivery", deliveryId, `${deliveryId} — ${snap.client || ""}`, snap, {
+    clientInventory: relClientInv || [],
+    companyInventory: relCompanyInv || [],
+    orderId,
+  });
+
   try {
     await supabaseAdmin.from("client_inventory").delete().like("id", `CI-${deliveryId}-%`);
   } catch (e: any) { console.error("cleanup client_inventory on delivery delete:", e.message); }
 
-  // Remove company_inventory rows created by this delivery
   try {
     await supabaseAdmin.from("company_inventory").delete().like("id", `CI-${deliveryId}-%`);
   } catch (e: any) { console.error("cleanup company_inventory on delivery delete:", e.message); }
@@ -1633,6 +1639,8 @@ router.patch("/company-inventory/:id", async (req, res) => {
 });
 
 router.delete("/company-inventory/:id", async (req, res) => {
+  const { data: snap } = await supabaseAdmin.from("company_inventory").select("*").eq("id", req.params.id).single();
+  if (snap) await softDelete("company-inventory", req.params.id, `${snap.name || snap.material_code || ""} — ${snap.source_order || ""}`, snap);
   const { error } = await supabaseAdmin.from("company_inventory").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
@@ -2439,6 +2447,7 @@ const ENTITY_TABLE_MAP: Record<string, { table: string; idField: string }> = {
   delivery: { table: "deliveries", idField: "id" },
   collection: { table: "collections", idField: "id" },
   "client-inventory": { table: "client_inventory", idField: "id" },
+  "company-inventory": { table: "company_inventory", idField: "id" },
   audit: { table: "audits", idField: "id" },
   "treasury-account": { table: "treasury_accounts", idField: "id" },
   "treasury-transaction": { table: "treasury_transactions", idField: "id" },
@@ -2548,6 +2557,71 @@ router.post("/trash/:id/restore", async (req, res) => {
       if (relatedData.supplierMaterials?.length) {
         await supabaseAdmin.from("supplier_materials").upsert(relatedData.supplierMaterials, { onConflict: "supplier_id,material_code" });
       }
+    } else if (entityType === "delivery") {
+      const { error: delErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
+      if (delErr) return res.status(500).json({ error: `Restore delivery failed: ${delErr.message}` });
+
+      if (relatedData.clientInventory?.length) {
+        await supabaseAdmin.from("client_inventory").upsert(relatedData.clientInventory, { onConflict: "id" }).catch(() => {});
+      }
+      if (relatedData.companyInventory?.length) {
+        await supabaseAdmin.from("company_inventory").upsert(relatedData.companyInventory, { onConflict: "id" }).catch(() => {});
+      }
+
+      const ordId = relatedData.orderId || snapshot.order_id;
+      if (ordId) {
+        try {
+          const { data: allDel } = await supabaseAdmin.from("deliveries").select("*").eq("order_id", ordId);
+          const { data: oLines } = await supabaseAdmin.from("order_lines").select("*").eq("order_id", ordId);
+          if (oLines && oLines.length > 0) {
+            const dqMap: Record<string, number> = {};
+            oLines.forEach((l: any) => { dqMap[String(l.id)] = 0; });
+            for (const d of (allDel || []).filter((d: any) => d.status === "Delivered")) {
+              let parsed: any = null;
+              try { parsed = typeof d.notes === "string" ? JSON.parse(d.notes) : null; } catch {}
+              if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
+                for (const it of parsed.items) { if (dqMap[String(it.lineId)] !== undefined) dqMap[String(it.lineId)] += Number(it.qty) || 0; }
+              } else {
+                oLines.forEach((l: any) => { dqMap[String(l.id)] = Number(l.quantity) || 0; });
+              }
+            }
+            const allFull = oLines.every((l: any) => (dqMap[String(l.id)] || 0) >= (Number(l.quantity) || 0));
+            const anyDel = Object.values(dqMap).some(q => q > 0);
+            const newSt = allFull && (allDel || []).length > 0 ? "Delivered" : anyDel ? "Partially Delivered" : "Processing";
+            await supabaseAdmin.from("orders").update({ status: newSt }).eq("id", ordId);
+          }
+        } catch (e: any) { console.warn("[trash/restore] delivery order status sync:", e.message); }
+      }
+    } else if (entityType === "audit") {
+      const { error: audErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
+      if (audErr) return res.status(500).json({ error: `Restore audit failed: ${audErr.message}` });
+
+      if (snapshot.status === "تم التحصيل" || snapshot.status === "Collected") {
+        const { data: colSnap } = await supabaseAdmin.from("deleted_items")
+          .select("*").eq("entity_type", "collection").order("deleted_at", { ascending: false });
+        const linkedCol = (colSnap || []).find((c: any) => {
+          try {
+            const s = typeof c.snapshot === "string" ? JSON.parse(c.snapshot) : c.snapshot;
+            const n = typeof s.notes === "string" ? JSON.parse(s.notes) : s.notes;
+            return n?.auditId === item.entity_id;
+          } catch { return false; }
+        });
+        if (linkedCol) {
+          const colSnapshot = typeof linkedCol.snapshot === "string" ? JSON.parse(linkedCol.snapshot) : linkedCol.snapshot;
+          await supabaseAdmin.from("collections").upsert(colSnapshot, { onConflict: "id" }).catch(() => {});
+          await supabaseAdmin.from("deleted_items").delete().eq("id", linkedCol.id).catch(() => {});
+        }
+      }
+    } else if (entityType === "collection") {
+      const { error: colErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
+      if (colErr) return res.status(500).json({ error: `Restore collection failed: ${colErr.message}` });
+
+      try {
+        const notes = typeof snapshot.notes === "object" ? snapshot.notes : JSON.parse(snapshot.notes || "{}");
+        if (notes.auditId) {
+          await supabaseAdmin.from("audits").update({ status: "تم التحصيل" }).eq("id", notes.auditId);
+        }
+      } catch {}
     } else if (entityType === "treasury-account") {
       const { error: accErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
       if (accErr) return res.status(500).json({ error: `Restore failed: ${accErr.message}` });
@@ -2557,16 +2631,50 @@ router.post("/trash/:id/restore", async (req, res) => {
     } else if (entityType === "founder") {
       const { error: fErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
       if (fErr) return res.status(500).json({ error: `Restore failed: ${fErr.message}` });
-      const actorId = `ACT-F-${snapshot.id}`;
-      await supabaseAdmin.from("delivery_actors").upsert(
-        { id: actorId, name: snapshot.name || "", type: "founder", phone: snapshot.phone || "", email: snapshot.email || "", active: true, founder_id: snapshot.id },
-        { onConflict: "id", ignoreDuplicates: true }
-      ).catch(() => {});
+      if (relatedData.deliveryActor) {
+        await supabaseAdmin.from("delivery_actors").upsert(relatedData.deliveryActor, { onConflict: "id" }).catch(() => {});
+      } else {
+        const actorId = `ACT-F-${snapshot.id}`;
+        await supabaseAdmin.from("delivery_actors").upsert(
+          { id: actorId, name: snapshot.name || "", type: "founder", phone: snapshot.phone || "", email: snapshot.email || "", active: true, founder_id: snapshot.id },
+          { onConflict: "id", ignoreDuplicates: true }
+        ).catch(() => {});
+      }
     } else if (entityType === "external-material") {
       const ext = getExtClient();
       if (!ext) return res.status(500).json({ error: "External Supabase not configured" });
       const { error: extErr } = await ext.from("products").upsert(snapshot, { onConflict: "id" });
       if (extErr) return res.status(500).json({ error: `Restore failed: ${extErr.message}` });
+    } else if (entityType === "treasury-transaction") {
+      const { data: existing } = await supabaseAdmin.from("treasury_transactions").select("id").eq("id", snapshot.id).maybeSingle();
+      const isNew = !existing;
+      const { error: txErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
+      if (txErr) return res.status(500).json({ error: `Restore failed: ${txErr.message}` });
+      if (isNew && snapshot.account_id && snapshot.amount != null) {
+        const { data: acc } = await supabaseAdmin.from("treasury_accounts").select("balance").eq("id", snapshot.account_id).single();
+        if (acc) {
+          const newBal = Number(acc.balance) + Number(snapshot.amount);
+          await supabaseAdmin.from("treasury_accounts").update({ balance: newBal, updated_at: new Date().toISOString() }).eq("id", snapshot.account_id);
+        }
+      }
+    } else if (entityType === "founder-transaction") {
+      const { data: existing } = await supabaseAdmin.from("treasury_transactions").select("id").eq("id", snapshot.id).maybeSingle();
+      const isNew = !existing;
+      const { error: ftErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
+      if (ftErr) return res.status(500).json({ error: `Restore failed: ${ftErr.message}` });
+      if (isNew && snapshot.performed_by) {
+        const absAmt = Math.abs(Number(snapshot.amount));
+        const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", snapshot.performed_by).single();
+        if (f) {
+          const patch: Record<string, number> = {};
+          if (snapshot.tx_type === "founder_contribution" || snapshot.tx_type === "order_funding") {
+            patch.total_contributed = Number(f.total_contributed || 0) + absAmt;
+          } else if (snapshot.tx_type === "founder_withdrawal") {
+            patch.total_withdrawn = Number(f.total_withdrawn || 0) + absAmt;
+          }
+          if (Object.keys(patch).length > 0) await supabaseAdmin.from("founders").update(patch).eq("id", snapshot.performed_by);
+        }
+      }
     } else {
       const { error: restoreErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
       if (restoreErr) return res.status(500).json({ error: `Restore failed: ${restoreErr.message}` });

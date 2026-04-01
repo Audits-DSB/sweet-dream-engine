@@ -598,9 +598,18 @@ export default function ActivityPage() {
           toast.success(`تمت استعادة الطلب وجميع البيانات المرتبطة: ${data.entityName}`);
         }
       } else {
-        const payload = cleanSnapshot(data.entity, data.snapshot);
-        await api.post(data.endpoint, payload);
-        toast.success(`تمت استعادة ${entityLabels[data.entity] || data.entity}: ${data.entityName}`);
+        const trashTypeMap: Record<string, string> = { audits: "audit", "founder-transactions": "founder-transaction", "treasury-transactions": "treasury-transaction" };
+        const entityTrashType = trashTypeMap[data.entity] || data.entity;
+        const trashMatch = trashItems.find(t => t.entity_id === data.entityId && t.entity_type === entityTrashType);
+        if (trashMatch) {
+          await api.post(`/trash/${trashMatch.id}/restore`, {});
+          setTrashItems(prev => prev.filter(t => t.id !== trashMatch.id));
+          toast.success(`تمت استعادة ${entityLabels[data.entity] || data.entity}: ${data.entityName}`);
+        } else {
+          const payload = cleanSnapshot(data.entity, data.snapshot);
+          await api.post(data.endpoint, payload);
+          toast.success(`تمت استعادة ${entityLabels[data.entity] || data.entity}: ${data.entityName}`);
+        }
       }
       await api.patch(`/notifications/${entry.id}`, { title: `[مُستعاد] ${entry.title}`, read: true }).catch(() => {});
       setEntries(prev => prev.map(e => e.id === entry.id ? { ...e, title: `[مُستعاد] ${e.title}`, read: true } : e));

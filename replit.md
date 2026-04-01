@@ -37,8 +37,17 @@ All business data in main Supabase project:
 - **`deleted_items` table**: Columns — id, entity_type, entity_id, entity_name, snapshot (jsonb), related_data (jsonb), deleted_at, deleted_by
 - **Trash Page** (`src/pages/Trash.tsx`) — Full trash management: type-filter badges, search, expand/collapse snapshot details, restore, permanent delete, clear-all
 - **Trash API Endpoints**: `GET /api/trash`, `GET /api/trash/count`, `POST /api/trash/:id/restore`, `DELETE /api/trash/:id`, `DELETE /api/trash`
-- **Cascade Restore**: Orders restore with all related records (order_lines, founder_contributions, deliveries, collections, client_inventory, company_inventory, audits, treasury_transactions, linked_collections). All original dates preserved. Founder balances (total_contributed/total_withdrawn) restored idempotently. Inventory lot quantities re-adjusted. Suppliers restore with materials. Treasury accounts restore with transactions. Founders restore linked delivery actors.
-- **Audit-Collection Cascade**: Deleting an audit that has a linked collection shows a warning and cascade-deletes the collection. Deleting a collection linked to an audit reverts the audit status to "Completed".
+- **Full Cascade Delete & Restore** (all entities):
+  - **Order**: cascade-deletes lines, contributions, deliveries, collections, client_inventory, company_inventory, audits, treasury_transactions, linked_collections. Restore brings back everything with original dates. Founder balances restored idempotently.
+  - **Delivery**: cascade-deletes client_inventory + company_inventory created by delivery, re-syncs order status. Restore re-creates inventory and re-syncs order status.
+  - **Audit ↔ Collection**: Deleting audit with linked collection shows warning and cascade-deletes collection. Restoring audit restores linked collection from trash. Deleting collection reverts audit status to "Completed". Restoring collection sets audit status to "تم التحصيل".
+  - **Supplier**: cascade-saves supplier_materials. Restore re-creates them.
+  - **Founder**: cascade-deletes delivery_actor. Saves original actor snapshot. Restore re-creates exact actor.
+  - **Treasury Transaction**: Delete reverses account balance. Restore re-applies balance.
+  - **Founder Transaction**: Delete reverses founder totals. Restore re-applies totals idempotently.
+  - **Treasury Account**: cascade-saves all transactions. Restore re-creates them.
+  - **Company Inventory**: now soft-deleted with snapshot for trash restore.
+  - **Activity.tsx restore**: prefers trash restore (with full cascade) over direct POST. Entity type normalization handles singular/plural mappings.
 - **ConfirmDeleteDialog** (`src/components/ConfirmDeleteDialog.tsx`) — Reusable confirmation dialog before any delete
 - **auditLog utility** (`src/lib/auditLog.ts`) — Logs create/update/delete operations to `notifications` table for activity tracking. All pages pass `performedBy: profile?.full_name` to track who performed each action.
 - **Activity Page** (`src/pages/Activity.tsx`) — Displays audit history grouped by date. Supports `?highlight=<id>` query param to auto-scroll to and highlight a specific entry. Entity names are clickable links that navigate to the relevant page (order details, client profile, etc.).
