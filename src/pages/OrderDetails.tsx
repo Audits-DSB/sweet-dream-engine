@@ -272,13 +272,23 @@ export default function OrderDetails() {
     try {
       const cleanMap: Record<string, number> = {};
       Object.entries(costPayerEditing).forEach(([id, amt]) => { if (amt > 0) cleanMap[id] = amt; });
+      let oldCostMap: Record<string, number> = {};
+      try { const raw = order.orderCostPaidByFounder; oldCostMap = typeof raw === "object" && raw !== null ? raw : JSON.parse(raw || "{}"); } catch {}
       const updatedContribs = order.founderContributions.map(fc => {
         const fId = fc.founderId || fc.founder;
-        const initialPaid = cleanMap[fId] || 0;
+        const newInitial = cleanMap[fId] || 0;
+        const oldInitial = oldCostMap[fId] || 0;
         const share = toNum(fc.amount);
-        const wasPaidBefore = toNum(fc.paidAmount ?? 0);
-        const newPaid = initialPaid > 0 ? Math.max(wasPaidBefore, initialPaid) : wasPaidBefore;
-        return { ...fc, paid: newPaid >= share, paidAmount: Math.round(newPaid * 100) / 100, paidAt: initialPaid > 0 && !fc.paidAt ? new Date().toISOString() : fc.paidAt };
+        const currentPaid = toNum(fc.paidAmount ?? 0);
+        const fundingPaid = Math.max(0, currentPaid - oldInitial);
+        const newPaid = Math.round((newInitial + fundingPaid) * 100) / 100;
+        const isPaid = newPaid >= share;
+        return {
+          ...fc,
+          paid: isPaid,
+          paidAmount: newPaid,
+          paidAt: newPaid > 0 && !fc.paidAt ? new Date().toISOString() : newPaid <= 0 ? undefined : fc.paidAt,
+        };
       });
       const patchedOrder = await api.patch<any>(`/orders/${order.id}`, {
         orderCostPaidByFounder: JSON.stringify(cleanMap),
