@@ -517,6 +517,18 @@ export default function OrdersPage() {
   const nonInventoryCostDisplay = orderItems.filter(i => !i.fromInventory).reduce((sum, i) => sum + i.costPrice * i.quantity, 0);
   const fundingCostDisplay = orderType === "inventory" ? totalCost : nonInventoryCostDisplay;
 
+  const costPayersValid = (() => {
+    const activePayers = costPayers.filter(id => selectedFounders.includes(id));
+    if (activePayers.length === 0 || fundingCostDisplay === 0) return true;
+    if (activePayers.length === 1) return true;
+    const filledSum = activePayers.reduce((s, id) => s + (founderPaidAmounts[id] || 0), 0);
+    const emptyPayers = activePayers.filter(id => !(founderPaidAmounts[id] > 0));
+    const effectiveTotal = emptyPayers.length === 1
+      ? filledSum + Math.max(0, fundingCostDisplay - filledSum)
+      : filledSum;
+    return Math.abs(fundingCostDisplay - effectiveTotal) <= 1;
+  })();
+
   const handleAdd = async () => {
     if (orderType === "client" && !selectedClient) { toast.error(t.selectClientAndTotal); return; }
     if (orderItems.length === 0) { toast.error(t.selectClientAndTotal); return; }
@@ -1169,12 +1181,12 @@ export default function OrdersPage() {
                                 className="h-7 w-24 text-xs text-center border-amber-300"
                                 type="number"
                                 min={0}
-                                max={remaining + (founderPaidAmounts[f.id] || 0)}
                                 placeholder={isLastEmpty ? remaining.toLocaleString() : "المبلغ"}
                                 value={founderPaidAmounts[f.id] || ""}
                                 onChange={e => {
                                   const val = Number(e.target.value) || 0;
-                                  setFounderPaidAmounts(prev => ({ ...prev, [f.id]: Math.max(0, val) }));
+                                  const maxAllowed = remaining + (founderPaidAmounts[f.id] || 0);
+                                  setFounderPaidAmounts(prev => ({ ...prev, [f.id]: Math.min(Math.max(0, val), maxAllowed) }));
                                 }}
                               />
                               <span className="text-[11px] text-muted-foreground">{t.currency}</span>
@@ -1187,25 +1199,30 @@ export default function OrdersPage() {
                       );
                     })}
                   </div>
-                  {costPayers.length > 1 && (() => {
+                  {costPayers.length > 0 && (() => {
                     const activePayersSum = costPayers.filter(id => selectedFounders.includes(id));
-                    const filledSum = activePayersSum.reduce((s, id) => s + (founderPaidAmounts[id] || 0), 0);
-                    const emptyPayers = activePayersSum.filter(id => !(founderPaidAmounts[id] > 0));
-                    const effectiveTotal = emptyPayers.length === 1
-                      ? filledSum + Math.max(0, fundingCostDisplay - filledSum)
-                      : filledSum;
+                    let effectiveTotal = 0;
+                    if (activePayersSum.length === 1) {
+                      effectiveTotal = fundingCostDisplay;
+                    } else {
+                      const filledSum = activePayersSum.reduce((s, id) => s + (founderPaidAmounts[id] || 0), 0);
+                      const emptyPayers = activePayersSum.filter(id => !(founderPaidAmounts[id] > 0));
+                      effectiveTotal = emptyPayers.length === 1
+                        ? filledSum + Math.max(0, fundingCostDisplay - filledSum)
+                        : filledSum;
+                    }
                     const diff = fundingCostDisplay - effectiveTotal;
                     return (
-                      <div className="flex justify-between text-[11px] border-t border-amber-200 dark:border-amber-700 pt-2 mt-1 px-1">
-                        <span className="text-muted-foreground">إجمالي المدفوع: <span className={`font-semibold ${diff === 0 ? "text-emerald-600" : diff > 0 ? "text-amber-600" : "text-red-500"}`}>{effectiveTotal.toLocaleString()} {t.currency}</span></span>
+                      <div className="flex justify-between items-center text-[11px] border-t border-amber-200 dark:border-amber-700 pt-2 mt-1 px-1">
+                        <span className="text-muted-foreground">إجمالي المدفوع: <span className={`font-bold ${diff === 0 ? "text-emerald-600" : "text-red-500"}`}>{effectiveTotal.toLocaleString()} {t.currency}</span></span>
+                        {diff === 0 && <span className="text-emerald-600 font-bold">✓ مطابق</span>}
                         {diff > 0 && <span className="text-red-500 font-medium">ناقص: {diff.toLocaleString()} {t.currency}</span>}
-                        {diff < 0 && <span className="text-blue-600 font-medium">زيادة: {Math.abs(diff).toLocaleString()} {t.currency}</span>}
-                        {diff === 0 && <span className="text-emerald-600 font-medium">✓ مطابق</span>}
+                        {diff < 0 && <span className="text-red-500 font-medium">زيادة: {Math.abs(diff).toLocaleString()} {t.currency}</span>}
                       </div>
                     );
                   })()}
                   {costPayers.length === 1 && (
-                    <p className="text-[11px] text-amber-600 dark:text-amber-400 px-1">سيتم تسجيل حصته كـ "تم الدفع" — وباقي المؤسسين مدينين ليه بنصيبهم</p>
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400 px-1 mt-1">سيتم تسجيل حصته كـ "تم الدفع" — وباقي المؤسسين مدينين ليه بنصيبهم</p>
                   )}
                 </div>
               )}
@@ -1332,9 +1349,12 @@ export default function OrdersPage() {
                 </div>
               )}
 
-              <Button className="w-full" onClick={handleAdd} disabled={saving}>
+              <Button className="w-full" onClick={handleAdd} disabled={saving || !costPayersValid}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t.createOrder}
               </Button>
+              {!costPayersValid && (
+                <p className="text-[11px] text-red-500 text-center mt-1">إجمالي المبالغ المدفوعة لا يطابق تكلفة الأوردر</p>
+              )}
             </div>
           </ScrollArea>
         </DialogContent>
