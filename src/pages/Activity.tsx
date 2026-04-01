@@ -588,7 +588,10 @@ export default function ActivityPage() {
           deliveries: related.deliveries || [],
           collections: related.collections || [],
           clientInventory: related.clientInventory || [],
+          companyInventory: related.companyInventory || [],
           audits: related.audits || [],
+          treasuryTransactions: related.treasuryTransactions || [],
+          linkedCollections: related.linkedCollections || [],
         });
         if (restoreResult?.errors?.length > 0) {
           toast.error(`استعادة جزئية — بعض البيانات لم تُستعاد: ${restoreResult.errors.join(", ")}`);

@@ -973,7 +973,7 @@ router.delete("/orders/:id", async (req, res) => {
 
 router.post("/orders/:id/cascade-restore", async (req, res) => {
   const orderId = req.params.id;
-  const { order, orderLines, founderContributions, deliveries, collections, clientInventory, audits } = req.body;
+  const { order, orderLines, founderContributions, deliveries, collections, clientInventory, companyInventory, audits, treasuryTransactions, linkedCollections } = req.body;
 
   if (!order) return res.status(400).json({ error: "No order data provided" });
 
@@ -1005,9 +1005,72 @@ router.post("/orders/:id/cascade-restore", async (req, res) => {
       const safe = clientInventory.map((r: any) => ({ ...r, source_order: orderId }));
       restoreOps.push({ name: "client_inventory", op: supabaseAdmin.from("client_inventory").upsert(safe, { onConflict: "id" }) });
     }
+    if (Array.isArray(companyInventory) && companyInventory.length > 0) {
+      const safe = companyInventory.map((r: any) => ({ ...r, source_order: orderId }));
+      restoreOps.push({ name: "company_inventory", op: supabaseAdmin.from("company_inventory").upsert(safe, { onConflict: "id" }) });
+    }
     if (Array.isArray(audits) && audits.length > 0) {
       const safe = audits.map((r: any) => ({ ...r, order_id: orderId }));
       restoreOps.push({ name: "audits", op: supabaseAdmin.from("audits").upsert(safe, { onConflict: "id" }) });
+    }
+
+    // Restore treasury transactions & update founder balances
+    if (Array.isArray(treasuryTransactions) && treasuryTransactions.length > 0) {
+      for (const tx of treasuryTransactions) {
+        const { error: txErr } = await supabaseAdmin.from("treasury_transactions").upsert(tx, { onConflict: "id" });
+        if (txErr) {
+          console.warn(`[cascade-restore] treasury tx ${tx.id} error:`, txErr.message);
+        } else if (tx.performed_by) {
+          const absAmt = Math.abs(Number(tx.amount));
+          const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", tx.performed_by).single();
+          if (f) {
+            const patch: Record<string, number> = {};
+            if (tx.tx_type === "order_funding") {
+              patch.total_contributed = Number(f.total_contributed || 0) + absAmt;
+            } else if (tx.tx_type === "capital_withdrawal") {
+              patch.total_withdrawn = Number(f.total_withdrawn || 0) + absAmt;
+            }
+            if (Object.keys(patch).length > 0) {
+              await supabaseAdmin.from("founders").update(patch).eq("id", tx.performed_by);
+            }
+          }
+        }
+      }
+    }
+
+    // Restore linked collections (from notes.sourceOrders)
+    if (Array.isArray(linkedCollections) && linkedCollections.length > 0) {
+      for (const col of linkedCollections) {
+        const { data: existing } = await supabaseAdmin.from("collections").select("id,notes").eq("id", col.id).single();
+        if (existing) {
+          try {
+            const notes = typeof existing.notes === "object" ? existing.notes : JSON.parse(existing.notes || "{}");
+            const srcOrders: string[] = notes.sourceOrders || [];
+            if (!srcOrders.includes(orderId)) {
+              srcOrders.push(orderId);
+              notes.sourceOrders = srcOrders;
+              await supabaseAdmin.from("collections").update({ notes: JSON.stringify(notes) }).eq("id", col.id);
+            }
+          } catch {}
+        } else {
+          await supabaseAdmin.from("collections").upsert(col, { onConflict: "id" }).catch(() => {});
+        }
+      }
+    }
+
+    // Restore inventory lot quantities (reverse the restore done during delete)
+    const inventoryLines = (orderLines || []).filter((l: any) => l.from_inventory && l.inventory_lot_id);
+    for (const line of inventoryLines) {
+      try {
+        const { data: lot } = await supabaseAdmin.from("company_inventory").select("remaining, quantity").eq("id", line.inventory_lot_id).single();
+        if (lot) {
+          const newRemaining = Math.max(0, Number(lot.remaining) - Number(line.quantity));
+          const newStatus = newRemaining <= 0 ? "Depleted" : newRemaining < Number(lot.quantity) * 0.2 ? "Low Stock" : "In Stock";
+          await supabaseAdmin.from("company_inventory").update({ remaining: newRemaining, status: newStatus }).eq("id", line.inventory_lot_id);
+        }
+      } catch (e: any) {
+        console.warn("[cascade-restore] inventory lot update error:", e.message);
+      }
     }
 
     const results = await Promise.allSettled(restoreOps.map(r => r.op));
@@ -2372,14 +2435,63 @@ router.post("/trash/:id/restore", async (req, res) => {
       const { error: orderErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
       if (orderErr) return res.status(500).json({ error: `Restore order failed: ${orderErr.message}` });
 
+      const orderId = item.entity_id;
       const restoreOps: Promise<any>[] = [];
       if (relatedData.orderLines?.length) restoreOps.push(supabaseAdmin.from("order_lines").upsert(relatedData.orderLines, { onConflict: "id" }));
       if (relatedData.founderContributions?.length) restoreOps.push(supabaseAdmin.from("order_founder_contributions").upsert(relatedData.founderContributions, { onConflict: "order_id" }));
       if (relatedData.deliveries?.length) restoreOps.push(supabaseAdmin.from("deliveries").upsert(relatedData.deliveries, { onConflict: "id" }));
       if (relatedData.collections?.length) restoreOps.push(supabaseAdmin.from("collections").upsert(relatedData.collections, { onConflict: "id" }));
       if (relatedData.clientInventory?.length) restoreOps.push(supabaseAdmin.from("client_inventory").upsert(relatedData.clientInventory, { onConflict: "id" }));
+      if (relatedData.companyInventory?.length) restoreOps.push(supabaseAdmin.from("company_inventory").upsert(relatedData.companyInventory, { onConflict: "id" }));
       if (relatedData.audits?.length) restoreOps.push(supabaseAdmin.from("audits").upsert(relatedData.audits, { onConflict: "id" }));
       await Promise.allSettled(restoreOps);
+
+      if (Array.isArray(relatedData.treasuryTransactions) && relatedData.treasuryTransactions.length > 0) {
+        for (const tx of relatedData.treasuryTransactions) {
+          const { error: txErr } = await supabaseAdmin.from("treasury_transactions").upsert(tx, { onConflict: "id" });
+          if (!txErr && tx.performed_by) {
+            const absAmt = Math.abs(Number(tx.amount));
+            const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", tx.performed_by).single();
+            if (f) {
+              const patch: Record<string, number> = {};
+              if (tx.tx_type === "order_funding") patch.total_contributed = Number(f.total_contributed || 0) + absAmt;
+              else if (tx.tx_type === "capital_withdrawal") patch.total_withdrawn = Number(f.total_withdrawn || 0) + absAmt;
+              if (Object.keys(patch).length > 0) await supabaseAdmin.from("founders").update(patch).eq("id", tx.performed_by);
+            }
+          }
+        }
+      }
+
+      if (Array.isArray(relatedData.linkedCollections) && relatedData.linkedCollections.length > 0) {
+        for (const col of relatedData.linkedCollections) {
+          const { data: existing } = await supabaseAdmin.from("collections").select("id,notes").eq("id", col.id).single();
+          if (existing) {
+            try {
+              const notes = typeof existing.notes === "object" ? existing.notes : JSON.parse(existing.notes || "{}");
+              const srcOrders: string[] = notes.sourceOrders || [];
+              if (!srcOrders.includes(orderId)) {
+                srcOrders.push(orderId);
+                notes.sourceOrders = srcOrders;
+                await supabaseAdmin.from("collections").update({ notes: JSON.stringify(notes) }).eq("id", col.id);
+              }
+            } catch {}
+          } else {
+            await supabaseAdmin.from("collections").upsert(col, { onConflict: "id" }).catch(() => {});
+          }
+        }
+      }
+
+      const inventoryLines = (relatedData.orderLines || []).filter((l: any) => l.from_inventory && l.inventory_lot_id);
+      for (const line of inventoryLines) {
+        try {
+          const { data: lot } = await supabaseAdmin.from("company_inventory").select("remaining, quantity").eq("id", line.inventory_lot_id).single();
+          if (lot) {
+            const newRemaining = Math.max(0, Number(lot.remaining) - Number(line.quantity));
+            const newStatus = newRemaining <= 0 ? "Depleted" : newRemaining < Number(lot.quantity) * 0.2 ? "Low Stock" : "In Stock";
+            await supabaseAdmin.from("company_inventory").update({ remaining: newRemaining, status: newStatus }).eq("id", line.inventory_lot_id);
+          }
+        } catch (e: any) { console.warn("[trash/restore] inventory lot update error:", e.message); }
+      }
     } else if (entityType === "supplier") {
       const { error: supErr } = await supabaseAdmin.from(mapping.table).upsert(snapshot, { onConflict: mapping.idField });
       if (supErr) return res.status(500).json({ error: `Restore failed: ${supErr.message}` });
