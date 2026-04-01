@@ -588,6 +588,17 @@ export default function OrderDetails() {
 
       await loadOrder();
       setEditOpen(false);
+
+      if (linesChanged && newTotalCost !== costTotal) {
+        let oldCostMap: Record<string, number> = {};
+        try { const raw = order.orderCostPaidByFounder; oldCostMap = typeof raw === "object" && raw !== null ? raw : JSON.parse(raw || "{}"); } catch {}
+        if (Object.keys(oldCostMap).length > 0) {
+          setCostPayerEditing(oldCostMap);
+          setCostPayerEditOpen(true);
+          toast.info("التكلفة تغيرت — يرجى مراجعة دافعي التكلفة المبدأية");
+        }
+      }
+
     } catch (err: any) {
       toast.error(err?.message || "فشل حفظ التعديلات");
     } finally {
@@ -2120,48 +2131,64 @@ export default function OrderDetails() {
       <Dialog open={costPayerEditOpen} onOpenChange={(o) => { if (!o) setCostPayerEditOpen(false); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>تعديل دافعي التكلفة المبدأية</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-primary" />
+              تعديل دافعي التكلفة المبدأية
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">إجمالي التكلفة: {costTotal.toLocaleString()} {t.currency}</p>
-            {founderPayments.map(fp => {
-              const fId = fp.founderId || fp.founder;
-              return (
-                <div key={fId} className="flex items-center gap-3">
-                  <span className="text-sm font-medium flex-1">{fp.founder}</span>
-                  <div className="relative w-32">
-                    <input
-                      type="number"
-                      min={0}
-                      max={costTotal}
-                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-                      value={costPayerEditing[fId] || ""}
-                      placeholder="0"
-                      onChange={e => {
-                        const val = Math.max(0, Math.min(costTotal, Number(e.target.value) || 0));
-                        setCostPayerEditing(prev => ({ ...prev, [fId]: val }));
-                      }}
-                    />
-                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{t.currency}</span>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between rounded-lg bg-muted/50 p-3">
+              <span className="text-sm text-muted-foreground">إجمالي التكلفة</span>
+              <span className="text-sm font-bold">{costTotal.toLocaleString()} {t.currency}</span>
+            </div>
+            <div className="space-y-2.5">
+              {founderPayments.map(fp => {
+                const fId = fp.founderId || fp.founder;
+                const val = costPayerEditing[fId] || 0;
+                const share = toNum(fp.amount);
+                return (
+                  <div key={fId} className="rounded-lg border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">{fp.founder}</span>
+                      <span className="text-[11px] text-muted-foreground">حصته: {share.toLocaleString()} {t.currency}</span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={0}
+                        step="any"
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-left [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        value={val || ""}
+                        placeholder="0"
+                        onChange={e => {
+                          const v = Math.max(0, Number(e.target.value) || 0);
+                          setCostPayerEditing(prev => ({ ...prev, [fId]: v }));
+                        }}
+                      />
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">{t.currency}</span>
+                    </div>
+                    {val > 0 && val >= share && <p className="text-[11px] text-emerald-600">✓ يغطي حصته بالكامل{val > share ? ` (+${(val - share).toLocaleString()} زيادة)` : ""}</p>}
+                    {val > 0 && val < share && <p className="text-[11px] text-amber-600">يغطي {((val / share) * 100).toFixed(0)}% من حصته</p>}
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
             {(() => {
               const total = Object.values(costPayerEditing).reduce((s, v) => s + (v || 0), 0);
               const diff = total - costTotal;
+              const isMatch = Math.abs(diff) < 0.01;
               return (
-                <div className={`text-xs font-medium pt-1 border-t ${Math.abs(diff) < 0.01 ? "text-emerald-600" : diff > 0 ? "text-red-600" : "text-amber-600"}`}>
-                  الإجمالي: {total.toLocaleString()} / {costTotal.toLocaleString()} {t.currency}
-                  {Math.abs(diff) >= 0.01 && <span className="mr-2">({diff > 0 ? `+${diff.toLocaleString()} زيادة` : `${Math.abs(diff).toLocaleString()} ناقص`})</span>}
+                <div className={`flex items-center justify-between rounded-lg p-3 text-sm font-medium ${isMatch ? "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400" : diff > 0 ? "bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400" : "bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400"}`}>
+                  <span>إجمالي المدفوع</span>
+                  <span>{total.toLocaleString()} / {costTotal.toLocaleString()} {t.currency}</span>
                 </div>
               );
             })()}
           </div>
-          <div className="flex gap-2 mt-2">
+          <div className="flex gap-2 pt-2">
             <Button variant="outline" className="flex-1" onClick={() => setCostPayerEditOpen(false)}>إلغاء</Button>
             <Button className="flex-1" disabled={costPayerSaving} onClick={handleSaveCostPayers}>
-              {costPayerSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "حفظ"}
+              {costPayerSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "حفظ التعديلات"}
             </Button>
           </div>
         </DialogContent>
