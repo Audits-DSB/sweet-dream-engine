@@ -2152,7 +2152,7 @@ export default function OrderDetails() {
               <span className="text-sm font-bold">{costTotal.toLocaleString()} {t.currency}</span>
             </div>
             <div className="space-y-2.5">
-              {founderPayments.map(fp => {
+              {founderPayments.map((fp, idx) => {
                 const fId = fp.founderId || fp.founder;
                 const val = costPayerEditing[fId] || 0;
                 const share = toNum(fp.amount);
@@ -2172,7 +2172,24 @@ export default function OrderDetails() {
                         placeholder="0"
                         onChange={e => {
                           const v = Math.max(0, Number(e.target.value) || 0);
-                          setCostPayerEditing(prev => ({ ...prev, [fId]: v }));
+                          const otherIds = founderPayments.filter((_, i) => i !== idx).map(f => f.founderId || f.founder);
+                          const remaining = Math.max(0, costTotal - v);
+                          if (otherIds.length === 1) {
+                            setCostPayerEditing(prev => ({ ...prev, [fId]: v, [otherIds[0]]: Math.round(remaining * 100) / 100 }));
+                          } else {
+                            setCostPayerEditing(prev => {
+                              const updated = { ...prev, [fId]: v };
+                              const othersTotal = otherIds.reduce((s, id) => s + (prev[id] || 0), 0);
+                              if (othersTotal === 0 && remaining > 0) {
+                                const each = Math.round(remaining / otherIds.length * 100) / 100;
+                                otherIds.forEach(id => { updated[id] = each; });
+                              } else if (othersTotal > 0) {
+                                const scale = remaining / othersTotal;
+                                otherIds.forEach(id => { updated[id] = Math.round((prev[id] || 0) * scale * 100) / 100; });
+                              }
+                              return updated;
+                            });
+                          }
                         }}
                       />
                       <span className="text-xs text-muted-foreground w-8 flex-shrink-0">{t.currency}</span>
@@ -2197,7 +2214,7 @@ export default function OrderDetails() {
           </div>
           <div className="flex gap-2 pt-2">
             <Button variant="outline" className="flex-1" onClick={() => setCostPayerEditOpen(false)}>إلغاء</Button>
-            <Button className="flex-1" disabled={costPayerSaving} onClick={handleSaveCostPayers}>
+            <Button className="flex-1" disabled={costPayerSaving || Math.abs(Object.values(costPayerEditing).reduce((s, v) => s + (v || 0), 0) - costTotal) >= 0.01} onClick={handleSaveCostPayers}>
               {costPayerSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "حفظ التعديلات"}
             </Button>
           </div>
