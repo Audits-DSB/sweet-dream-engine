@@ -1188,11 +1188,16 @@ export default function OrdersPage() {
                     })}
                   </div>
                   {costPayers.length > 1 && (() => {
-                    const totalPaid = costPayers.reduce((s, id) => s + (founderPaidAmounts[id] || 0), 0);
-                    const diff = fundingCostDisplay - totalPaid;
+                    const activePayersSum = costPayers.filter(id => selectedFounders.includes(id));
+                    const filledSum = activePayersSum.reduce((s, id) => s + (founderPaidAmounts[id] || 0), 0);
+                    const emptyPayers = activePayersSum.filter(id => !(founderPaidAmounts[id] > 0));
+                    const effectiveTotal = emptyPayers.length === 1
+                      ? filledSum + Math.max(0, fundingCostDisplay - filledSum)
+                      : filledSum;
+                    const diff = fundingCostDisplay - effectiveTotal;
                     return (
                       <div className="flex justify-between text-[11px] border-t border-amber-200 dark:border-amber-700 pt-2 mt-1 px-1">
-                        <span className="text-muted-foreground">إجمالي المدفوع: <span className={`font-semibold ${diff === 0 ? "text-emerald-600" : diff > 0 ? "text-amber-600" : "text-red-500"}`}>{totalPaid.toLocaleString()} {t.currency}</span></span>
+                        <span className="text-muted-foreground">إجمالي المدفوع: <span className={`font-semibold ${diff === 0 ? "text-emerald-600" : diff > 0 ? "text-amber-600" : "text-red-500"}`}>{effectiveTotal.toLocaleString()} {t.currency}</span></span>
                         {diff > 0 && <span className="text-red-500 font-medium">ناقص: {diff.toLocaleString()} {t.currency}</span>}
                         {diff < 0 && <span className="text-blue-600 font-medium">زيادة: {Math.abs(diff).toLocaleString()} {t.currency}</span>}
                         {diff === 0 && <span className="text-emerald-600 font-medium">✓ مطابق</span>}
@@ -1212,74 +1217,68 @@ export default function OrdersPage() {
                     <span className="text-xs font-semibold">المؤسسون المشاركون في هذا الطلب</span>
                     <span className="text-xs text-muted-foreground mr-auto">نسبة الشركة: {rules.companyProfitPercentage}%</span>
                   </div>
-                  {founders.map(f => {
+                  {(() => {
+                    const activePayers = costPayers.filter(id => selectedFounders.includes(id));
+                    const effectiveAmounts: Record<string, number> = {};
+                    if (activePayers.length === 1) {
+                      effectiveAmounts[activePayers[0]] = fundingCostDisplay;
+                    } else if (activePayers.length > 1) {
+                      activePayers.forEach(id => { effectiveAmounts[id] = founderPaidAmounts[id] || 0; });
+                      const emptyPayers = activePayers.filter(id => !(effectiveAmounts[id] > 0));
+                      if (emptyPayers.length === 1) {
+                        const filledTotal = activePayers.reduce((s, id) => s + (effectiveAmounts[id] || 0), 0);
+                        effectiveAmounts[emptyPayers[0]] = Math.max(0, fundingCostDisplay - filledTotal);
+                      }
+                    }
+                    return founders.map(f => ({ f, effectiveAmounts, activePayers }));
+                  })().map(({ f, effectiveAmounts, activePayers }) => {
                     const isSelected = selectedFounders.includes(f.id);
                     const pct = form.splitMode === "equal"
                       ? (selectedFounders.length > 0 ? 100 / selectedFounders.length : 0)
                       : (founderPcts[f.id] || 0);
                     const costShare = fundingCostDisplay * pct / 100;
                     const isPayer = costPayers.includes(f.id);
-                    const activePayers = costPayers.filter(id => selectedFounders.includes(id));
-                    const paidAmt = isPayer
-                      ? (activePayers.length === 1 ? fundingCostDisplay : (founderPaidAmounts[f.id] || 0))
-                      : 0;
-                    const isFullyPaid = isPayer && paidAmt >= costShare;
+                    const paidAmt = effectiveAmounts[f.id] || 0;
+                    const isFullyPaid = isPayer && paidAmt >= costShare && costShare > 0;
                     const isPartialPayer = isPayer && paidAmt > 0 && paidAmt < costShare;
-                    const deficit = isPartialPayer ? costShare - paidAmt : 0;
 
-                    const totalPaidByAll = activePayers.reduce((s, id) => s + (activePayers.length === 1 ? fundingCostDisplay : (founderPaidAmounts[id] || 0)), 0);
-                    const payerExcesses: Record<string, number> = {};
-                    activePayers.forEach(id => {
-                      const pa = activePayers.length === 1 ? fundingCostDisplay : (founderPaidAmounts[id] || 0);
-                      const pp = form.splitMode === "equal"
+                    const netBalances: Record<string, number> = {};
+                    selectedFounders.forEach(sId => {
+                      const sPct = form.splitMode === "equal"
                         ? (selectedFounders.length > 0 ? 100 / selectedFounders.length : 0)
-                        : (founderPcts[id] || 0);
-                      const ps = fundingCostDisplay * pp / 100;
-                      if (pa > ps) payerExcesses[id] = pa - ps;
+                        : (founderPcts[sId] || 0);
+                      const sShare = fundingCostDisplay * sPct / 100;
+                      const sPaid = effectiveAmounts[sId] || 0;
+                      netBalances[sId] = sPaid - sShare;
                     });
-                    const totalExcess = Object.values(payerExcesses).reduce((s, v) => s + v, 0);
 
                     const settlements: { name: string; amount: number; type: "owes" | "owed" | "remaining" }[] = [];
                     if (isSelected && costShare > 0 && activePayers.length > 0) {
-                      if (!isPayer) {
-                        activePayers.forEach(payerId => {
-                          const payerAmt = activePayers.length === 1 ? fundingCostDisplay : (founderPaidAmounts[payerId] || 0);
-                          if (payerAmt > 0 && totalPaidByAll > 0) {
-                            const debt = costShare * (payerAmt / totalPaidByAll);
+                      const myNet = netBalances[f.id] || 0;
+                      if (myNet < -0.5) {
+                        const totalOverpaid = Object.values(netBalances).filter(v => v > 0).reduce((s, v) => s + v, 0);
+                        if (totalOverpaid > 0) {
+                          Object.entries(netBalances).forEach(([oId, oNet]) => {
+                            if (oId === f.id || oNet <= 0) return;
+                            const debt = Math.abs(myNet) * (oNet / totalOverpaid);
                             if (debt > 0.5) {
-                              const payerName = founders.find(pf => pf.id === payerId)?.name || "";
-                              settlements.push({ name: payerName, amount: Math.round(debt), type: "owes" });
+                              const oName = founders.find(pf => pf.id === oId)?.name || "";
+                              settlements.push({ name: oName, amount: Math.round(debt), type: isPayer ? "remaining" : "owes" });
                             }
-                          }
-                        });
-                      } else if (isPartialPayer && totalExcess > 0) {
-                        Object.entries(payerExcesses).forEach(([exId, exAmt]) => {
-                          if (exId === f.id) return;
-                          const coveredByThis = deficit * (exAmt / totalExcess);
-                          if (coveredByThis > 0.5) {
-                            const exName = founders.find(pf => pf.id === exId)?.name || "";
-                            settlements.push({ name: exName, amount: Math.round(coveredByThis), type: "remaining" });
-                          }
-                        });
-                      } else if (isFullyPaid && paidAmt > costShare) {
-                        selectedFounders.forEach(sId => {
-                          if (sId === f.id) return;
-                          const sIsPayer = activePayers.includes(sId);
-                          const sPaid = sIsPayer ? (activePayers.length === 1 ? fundingCostDisplay : (founderPaidAmounts[sId] || 0)) : 0;
-                          const sPct2 = form.splitMode === "equal"
-                            ? (selectedFounders.length > 0 ? 100 / selectedFounders.length : 0)
-                            : (founderPcts[sId] || 0);
-                          const sShare = fundingCostDisplay * sPct2 / 100;
-                          const sDeficit = Math.max(0, sShare - sPaid);
-                          if (sDeficit > 0 && totalExcess > 0) {
-                            const myExcess = payerExcesses[f.id] || 0;
-                            const iCover = sDeficit * (myExcess / totalExcess);
-                            if (iCover > 0.5) {
-                              const sName = founders.find(pf => pf.id === sId)?.name || "";
-                              settlements.push({ name: sName, amount: Math.round(iCover), type: "owed" });
+                          });
+                        }
+                      } else if (myNet > 0.5) {
+                        const totalUnderpaid = Object.values(netBalances).filter(v => v < 0).reduce((s, v) => s + Math.abs(v), 0);
+                        if (totalUnderpaid > 0) {
+                          Object.entries(netBalances).forEach(([oId, oNet]) => {
+                            if (oId === f.id || oNet >= 0) return;
+                            const owed = myNet * (Math.abs(oNet) / totalUnderpaid);
+                            if (owed > 0.5) {
+                              const oName = founders.find(pf => pf.id === oId)?.name || "";
+                              settlements.push({ name: oName, amount: Math.round(owed), type: "owed" });
                             }
-                          }
-                        });
+                          });
+                        }
                       }
                     }
 
