@@ -129,6 +129,9 @@ export default function OrderDetails() {
   const [splitEditing, setSplitEditing] = useState<{ founder: string; founderId: string; percentage: number }[]>([]);
   const [splitSaving, setSplitSaving] = useState(false);
   const [allFounders, setAllFounders] = useState<{ id: string; name: string }[]>([]);
+  const [costPayerEditOpen, setCostPayerEditOpen] = useState(false);
+  const [costPayerEditing, setCostPayerEditing] = useState<Record<string, number>>({});
+  const [costPayerSaving, setCostPayerSaving] = useState(false);
 
   // Edit state
   const [editOpen, setEditOpen] = useState(false);
@@ -260,6 +263,34 @@ export default function OrderDetails() {
       toast.error(err?.message || "فشل تسجيل الدفع");
     } finally {
       setPayingFounder(null);
+    }
+  };
+
+  const handleSaveCostPayers = async () => {
+    if (!order) return;
+    setCostPayerSaving(true);
+    try {
+      const cleanMap: Record<string, number> = {};
+      Object.entries(costPayerEditing).forEach(([id, amt]) => { if (amt > 0) cleanMap[id] = amt; });
+      const updatedContribs = order.founderContributions.map(fc => {
+        const fId = fc.founderId || fc.founder;
+        const initialPaid = cleanMap[fId] || 0;
+        const share = toNum(fc.amount);
+        const wasPaidBefore = toNum(fc.paidAmount ?? 0);
+        const newPaid = initialPaid > 0 ? Math.max(wasPaidBefore, initialPaid) : wasPaidBefore;
+        return { ...fc, paid: newPaid >= share, paidAmount: Math.round(newPaid * 100) / 100, paidAt: initialPaid > 0 && !fc.paidAt ? new Date().toISOString() : fc.paidAt };
+      });
+      const patchedOrder = await api.patch<any>(`/orders/${order.id}`, {
+        orderCostPaidByFounder: JSON.stringify(cleanMap),
+        founderContributions: updatedContribs,
+      });
+      setOrder(mapOrder(patchedOrder));
+      setCostPayerEditOpen(false);
+      toast.success("تم تحديث دافعي التكلفة المبدأية");
+    } catch (err: any) {
+      toast.error(err?.message || "فشل التحديث");
+    } finally {
+      setCostPayerSaving(false);
     }
   };
 
@@ -1616,13 +1647,23 @@ export default function OrderDetails() {
                     let costPaidMap: Record<string, number> = {};
                     try { const raw = order.orderCostPaidByFounder; costPaidMap = typeof raw === "object" && raw !== null ? raw : JSON.parse(raw || "{}"); } catch {}
                     const payerEntries = Object.entries(costPaidMap).filter(([, v]) => v > 0);
-                    if (payerEntries.length === 0) return null;
                     const founderNameMap: Record<string, string> = {};
                     founderPayments.forEach(fp => { if (fp.founderId) founderNameMap[fp.founderId] = fp.founder; founderNameMap[fp.founder] = fp.founder; });
                     return (
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground pr-1">
                         <Wallet className="h-3 w-3 flex-shrink-0" />
-                        <span>دفع التكلفة المبدأية: {payerEntries.map(([id, amt]) => `${founderNameMap[id] || id} (${amt.toLocaleString()})`).join(" · ")}</span>
+                        <span>{payerEntries.length > 0 ? `دفع التكلفة المبدأية: ${payerEntries.map(([id, amt]) => `${founderNameMap[id] || id} (${amt.toLocaleString()})`).join(" · ")}` : "لم يتم تسجيل دفع التكلفة المبدأية"}</span>
+                        <button
+                          className="mr-1 text-primary hover:text-primary/80"
+                          onClick={() => {
+                            const map: Record<string, number> = {};
+                            try { const raw = order.orderCostPaidByFounder; Object.assign(map, typeof raw === "object" && raw !== null ? raw : JSON.parse(raw || "{}")); } catch {}
+                            setCostPayerEditing(map);
+                            setCostPayerEditOpen(true);
+                          }}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
                       </div>
                     );
                   })()}
@@ -2074,6 +2115,57 @@ export default function OrderDetails() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Edit Initial Cost Payers Dialog */}
+      <Dialog open={costPayerEditOpen} onOpenChange={(o) => { if (!o) setCostPayerEditOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>تعديل دافعي التكلفة المبدأية</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">إجمالي التكلفة: {costTotal.toLocaleString()} {t.currency}</p>
+            {founderPayments.map(fp => {
+              const fId = fp.founderId || fp.founder;
+              return (
+                <div key={fId} className="flex items-center gap-3">
+                  <span className="text-sm font-medium flex-1">{fp.founder}</span>
+                  <div className="relative w-32">
+                    <input
+                      type="number"
+                      min={0}
+                      max={costTotal}
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                      value={costPayerEditing[fId] || ""}
+                      placeholder="0"
+                      onChange={e => {
+                        const val = Math.max(0, Math.min(costTotal, Number(e.target.value) || 0));
+                        setCostPayerEditing(prev => ({ ...prev, [fId]: val }));
+                      }}
+                    />
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{t.currency}</span>
+                  </div>
+                </div>
+              );
+            })}
+            {(() => {
+              const total = Object.values(costPayerEditing).reduce((s, v) => s + (v || 0), 0);
+              const diff = total - costTotal;
+              return (
+                <div className={`text-xs font-medium pt-1 border-t ${Math.abs(diff) < 0.01 ? "text-emerald-600" : diff > 0 ? "text-red-600" : "text-amber-600"}`}>
+                  الإجمالي: {total.toLocaleString()} / {costTotal.toLocaleString()} {t.currency}
+                  {Math.abs(diff) >= 0.01 && <span className="mr-2">({diff > 0 ? `+${diff.toLocaleString()} زيادة` : `${Math.abs(diff).toLocaleString()} ناقص`})</span>}
+                </div>
+              );
+            })()}
+          </div>
+          <div className="flex gap-2 mt-2">
+            <Button variant="outline" className="flex-1" onClick={() => setCostPayerEditOpen(false)}>إلغاء</Button>
+            <Button className="flex-1" disabled={costPayerSaving} onClick={handleSaveCostPayers}>
+              {costPayerSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "حفظ"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Unified Payment Dialog */}
       <Dialog open={balanceDialog.open} onOpenChange={(o) => { if (!o) { setBalanceDialog({ open: false, fp: null, available: 0 }); setUseBalance(false); } }}>
