@@ -2152,12 +2152,12 @@ export default function OrderDetails() {
                       <span className="text-sm font-semibold">{fp.founder}</span>
                       <span className="text-[11px] text-muted-foreground">حصته: {share.toLocaleString()} {t.currency}</span>
                     </div>
-                    <div className="relative">
+                    <div className="flex items-center gap-2">
                       <input
                         type="number"
                         min={0}
                         step="any"
-                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-left [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm text-left [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         value={val || ""}
                         placeholder="0"
                         onChange={e => {
@@ -2165,7 +2165,7 @@ export default function OrderDetails() {
                           setCostPayerEditing(prev => ({ ...prev, [fId]: v }));
                         }}
                       />
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">{t.currency}</span>
+                      <span className="text-xs text-muted-foreground w-8 flex-shrink-0">{t.currency}</span>
                     </div>
                     {val > 0 && val >= share && <p className="text-[11px] text-emerald-600">✓ يغطي حصته بالكامل{val > share ? ` (+${(val - share).toLocaleString()} زيادة)` : ""}</p>}
                     {val > 0 && val < share && <p className="text-[11px] text-amber-600">يغطي {((val / share) * 100).toFixed(0)}% من حصته</p>}
