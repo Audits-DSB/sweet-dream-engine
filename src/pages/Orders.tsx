@@ -519,7 +519,8 @@ export default function OrdersPage() {
 
   const costPayersValid = (() => {
     const activePayers = costPayers.filter(id => selectedFounders.includes(id));
-    if (activePayers.length === 0 || fundingCostDisplay === 0) return true;
+    if (fundingCostDisplay === 0) return true;
+    if (selectedFounders.length > 0 && activePayers.length === 0) return false;
     if (activePayers.length === 1) return true;
     const filledSum = activePayers.reduce((s, id) => s + (founderPaidAmounts[id] || 0), 0);
     const emptyPayers = activePayers.filter(id => !(founderPaidAmounts[id] > 0));
@@ -1353,7 +1354,11 @@ export default function OrdersPage() {
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t.createOrder}
               </Button>
               {!costPayersValid && (
-                <p className="text-[11px] text-red-500 text-center mt-1">إجمالي المبالغ المدفوعة لا يطابق تكلفة الأوردر</p>
+                <p className="text-[11px] text-red-500 text-center mt-1">
+                  {costPayers.filter(id => selectedFounders.includes(id)).length === 0 && fundingCostDisplay > 0
+                    ? "يجب اختيار مين دفع تكلفة الأوردر"
+                    : "إجمالي المبالغ المدفوعة لا يطابق تكلفة الأوردر"}
+                </p>
               )}
             </div>
           </ScrollArea>
