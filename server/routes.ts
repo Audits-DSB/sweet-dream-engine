@@ -872,6 +872,78 @@ router.delete("/orders/:id", async (req, res) => {
     } catch (e: any) { console.warn("[delete-order] inventory restore error:", e.message); }
   }
 
+  // ── Step 1b: clean up treasury transactions & founder balances ──
+  try {
+    const { data: allTreasuryTxs } = await supabaseAdmin
+      .from("treasury_transactions")
+      .select("*")
+      .in("tx_type", ["order_funding", "capital_withdrawal"]);
+
+    const orderTreasuryTxs = (allTreasuryTxs || []).filter((tx: any) => {
+      const parsed = parseFounderDesc(tx.description);
+      return parsed.orderId === orderId;
+    });
+
+    for (const tx of orderTreasuryTxs) {
+      const absAmt = Math.abs(Number(tx.amount));
+      if (tx.performed_by) {
+        const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", tx.performed_by).single();
+        if (f) {
+          const patch: Record<string, number> = {};
+          if (tx.tx_type === "order_funding") {
+            patch.total_contributed = Math.max(0, Number(f.total_contributed || 0) - absAmt);
+          } else if (tx.tx_type === "capital_withdrawal") {
+            patch.total_withdrawn = Math.max(0, Number(f.total_withdrawn || 0) - absAmt);
+          }
+          if (Object.keys(patch).length > 0) {
+            await supabaseAdmin.from("founders").update(patch).eq("id", tx.performed_by);
+          }
+        }
+      }
+      await supabaseAdmin.from("treasury_transactions").delete().eq("id", tx.id);
+    }
+
+    if (orderTreasuryTxs.length > 0) {
+      relatedSnapshot.treasuryTransactions = orderTreasuryTxs;
+      console.log(`[delete-order] Cleaned up ${orderTreasuryTxs.length} treasury transactions for ${orderId}`);
+    }
+  } catch (e: any) {
+    console.warn("[delete-order] treasury cleanup error:", e.message);
+  }
+
+  // ── Step 1c: clean up collections linked via sourceOrders in notes ──
+  try {
+    const { data: allCollections } = await supabaseAdmin.from("collections").select("*");
+    const linkedCollections = (allCollections || []).filter((col: any) => {
+      try {
+        const notes = typeof col.notes === "object" ? col.notes : JSON.parse(col.notes || "{}");
+        const srcOrders: string[] = notes.sourceOrders || [];
+        return srcOrders.includes(orderId);
+      } catch { return false; }
+    });
+
+    for (const col of linkedCollections) {
+      try {
+        const notes = typeof col.notes === "object" ? col.notes : JSON.parse(col.notes || "{}");
+        const srcOrders: string[] = notes.sourceOrders || [];
+        const remaining = srcOrders.filter((id: string) => id !== orderId);
+        if (remaining.length === 0) {
+          await supabaseAdmin.from("collections").delete().eq("id", col.id);
+        } else {
+          notes.sourceOrders = remaining;
+          await supabaseAdmin.from("collections").update({ notes: JSON.stringify(notes) }).eq("id", col.id);
+        }
+      } catch {}
+    }
+
+    if (linkedCollections.length > 0) {
+      relatedSnapshot.linkedCollections = linkedCollections;
+      console.log(`[delete-order] Cleaned up ${linkedCollections.length} linked collections for ${orderId}`);
+    }
+  } catch (e: any) {
+    console.warn("[delete-order] collections cleanup error:", e.message);
+  }
+
   const childDeletes = await Promise.allSettled([
     supabaseAdmin.from("order_lines").delete().eq("order_id", orderId),
     supabaseAdmin.from("order_founder_contributions").delete().eq("order_id", orderId),
