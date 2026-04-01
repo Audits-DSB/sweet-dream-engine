@@ -1611,6 +1611,19 @@ export default function OrderDetails() {
                   {subVal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">{t.subscriptionLabel} ({subVal}%)</span><span className="font-medium">{subscriptionAmt.toLocaleString()} {t.currency}</span></div>}
                   <div className="border-t border-border pt-2 flex justify-between font-semibold"><span>الإيراد التشغيلي</span><span>{operatingRevenue.toLocaleString()} {t.currency}</span></div>
                   <div className="flex justify-between text-muted-foreground"><span>إجمالي التكلفة</span><span className="text-destructive">- {costTotal.toLocaleString()} {t.currency}</span></div>
+                  {costTotal > 0 && founderPayments.length > 0 && (() => {
+                    const payers = founderPayments.filter(fp => toNum(fp.paidAmount ?? (fp.paid ? toNum(fp.amount) : 0)) > 0);
+                    if (payers.length === 0) return null;
+                    return (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground pr-1">
+                        <Wallet className="h-3 w-3 flex-shrink-0" />
+                        <span>دفع التكلفة: {payers.map(p => {
+                          const amt = toNum(p.paidAmount ?? (p.paid ? toNum(p.amount) : 0));
+                          return `${p.founder} (${amt.toLocaleString()})`;
+                        }).join(" · ")}</span>
+                      </div>
+                    );
+                  })()}
                   <div className="flex justify-between font-bold text-base"><span>الربح الإجمالي</span><span className={grossProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}>{grossProfit.toLocaleString()} {t.currency}</span></div>
                 </div>
               </div>
@@ -1897,9 +1910,24 @@ export default function OrderDetails() {
                           {isPartial && (
                             <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">دفع {paidAmt.toLocaleString()} — متبقي {remainingAmt.toLocaleString()} {t.currency}</p>
                           )}
-                          {overpaidAmt > 0 && (
-                            <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">دفع زيادة {overpaidAmt.toLocaleString()} {t.currency} (يُسوّى مع الباقين)</p>
-                          )}
+                          {overpaidAmt > 0 && (() => {
+                            const allPaid = founderPayments.every(f2 => {
+                              const s = toNum(f2.amount);
+                              const p = toNum(f2.paidAmount ?? (f2.paid ? s : 0));
+                              return p >= s;
+                            });
+                            const settledWith = founderPayments
+                              .filter(f2 => {
+                                if (f2.founder === fp.founder) return false;
+                                const s2 = toNum(f2.amount);
+                                const p2 = toNum(f2.paidAmount ?? (f2.paid ? s2 : 0));
+                                return p2 < s2;
+                              })
+                              .map(f2 => f2.founder);
+                            return allPaid
+                              ? <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">✓ تم التسوية مع {founderPayments.filter(f2 => f2.founder !== fp.founder).map(f2 => f2.founder).join(" و ")}</p>
+                              : <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">دفع زيادة {overpaidAmt.toLocaleString()} {t.currency} — مطلوب من {settledWith.length > 0 ? settledWith.join(" و ") : "الباقين"}</p>;
+                          })()}
                           {!isFullyPaid && !isPartial && (() => {
                             const bal = founderBalances[fp.founder] || founderBalances[fp.founderId] || 0;
                             return bal > 0

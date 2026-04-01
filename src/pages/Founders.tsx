@@ -306,7 +306,7 @@ export default function FoundersPage() {
   }, [orders]);
 
   const orderCostSettlements = useMemo(() => {
-    const settlements: Array<{ orderId: string; clientName: string; date: string; paidAt: string; from: string; fromId: string; to: string; toId: string; amount: number; toPaidTotal: number; toShare: number }> = [];
+    const settlements: Array<{ orderId: string; clientName: string; date: string; paidAt: string; from: string; fromId: string; to: string; toId: string; amount: number; toPaidTotal: number; toShare: number; settled: boolean }> = [];
     Object.values(orders).forEach((order: any) => {
       const contribs = Array.isArray(order.founderContributions) ? order.founderContributions : [];
       if (contribs.length === 0) return;
@@ -316,6 +316,7 @@ export default function FoundersPage() {
         const paidAt = c.paidAt || c.paid_at || "";
         return { id: c.founderId || c.founder_id || "", name: c.founder || "", paidAmt, share, diff: paidAmt - share, paidAt };
       }).filter(e => e.id);
+      const allPaid = entries.every(e => e.paidAmt >= e.share);
       const overpayers = entries.filter(e => e.diff > 0);
       const underpayers = entries.filter(e => e.diff < 0);
       if (overpayers.length === 0 || underpayers.length === 0) return;
@@ -336,6 +337,7 @@ export default function FoundersPage() {
             amount: Math.round(transfer),
             toPaidTotal: overpayers[oi].paidAmt,
             toShare: overpayers[oi].share,
+            settled: allPaid,
           });
         }
         oRemain[oi] -= transfer;
@@ -885,13 +887,17 @@ export default function FoundersPage() {
                               {mySettlementsOwed
                                 .sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date))
                                 .map((entry, i) => (
-                                  <div key={`settle-owed-ledger-${entry.orderId}-${i}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                                      <ArrowUpRight className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                                  <div key={`settle-owed-ledger-${entry.orderId}-${i}`} className={`flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors ${entry.settled ? "opacity-60" : ""}`}>
+                                    <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${entry.settled ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-red-100 dark:bg-red-900/30"}`}>
+                                      {entry.settled
+                                        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                        : <ArrowUpRight className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium text-red-600">مطلوب منك لـ {entry.to}</span>
+                                        <span className={`text-sm font-medium ${entry.settled ? "text-emerald-600" : "text-red-600"}`}>
+                                          {entry.settled ? `تم التسوية مع ${entry.to}` : `مطلوب منك لـ ${entry.to}`}
+                                        </span>
                                         <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
                                           onClick={() => navigate(`/orders/${entry.orderId}`)}>
                                           {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
@@ -904,7 +910,7 @@ export default function FoundersPage() {
                                         <span>· {entry.to} دفع {entry.toPaidTotal.toLocaleString()} من أصل حصته {entry.toShare.toLocaleString()}</span>
                                       </div>
                                     </div>
-                                    <div className="text-sm font-bold flex-shrink-0 text-red-600 dark:text-red-400">
+                                    <div className={`text-sm font-bold flex-shrink-0 ${entry.settled ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                                       -{entry.amount.toLocaleString()}
                                       <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
                                     </div>
@@ -914,12 +920,16 @@ export default function FoundersPage() {
                                 .sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date))
                                 .map((entry, i) => (
                                   <div key={`settle-owing-ledger-${entry.orderId}-${i}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                                      <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${entry.settled ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-amber-100 dark:bg-amber-900/30"}`}>
+                                      {entry.settled
+                                        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                        : <ArrowDownLeft className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium text-emerald-600">استرداد من {entry.from}</span>
+                                        <span className="text-sm font-medium text-emerald-600">
+                                          {entry.settled ? `تم التسوية مع ${entry.from}` : `استرداد من ${entry.from}`}
+                                        </span>
                                         <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
                                           onClick={() => navigate(`/orders/${entry.orderId}`)}>
                                           {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
@@ -1277,15 +1287,19 @@ export default function FoundersPage() {
                                   </div>
                                 ))}
                               {mySettlementsOwed
-                                .sort((a, b) => b.date.localeCompare(a.date))
+                                .sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date))
                                 .map((entry, i) => (
-                                  <div key={`settle-owed-${entry.orderId}-${i}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                                      <ArrowUpRight className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                                  <div key={`settle-owed-${entry.orderId}-${i}`} className={`flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors ${entry.settled ? "opacity-60" : ""}`}>
+                                    <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${entry.settled ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-red-100 dark:bg-red-900/30"}`}>
+                                      {entry.settled
+                                        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                        : <ArrowUpRight className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium text-red-600">عليك لـ {entry.to}</span>
+                                        <span className={`text-sm font-medium ${entry.settled ? "text-emerald-600" : "text-red-600"}`}>
+                                          {entry.settled ? `تم التسوية مع ${entry.to}` : `عليك لـ ${entry.to}`}
+                                        </span>
                                         <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
                                           onClick={() => navigate(`/orders/${entry.orderId}`)}>
                                           {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
@@ -1293,26 +1307,30 @@ export default function FoundersPage() {
                                       </div>
                                       <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
                                         <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.date}</span>
+                                        <span>{entry.paidAt || entry.date}</span>
                                         <span>· {entry.clientName}</span>
                                       </div>
                                     </div>
-                                    <div className="text-sm font-bold flex-shrink-0 text-red-600">
+                                    <div className={`text-sm font-bold flex-shrink-0 ${entry.settled ? "text-emerald-600" : "text-red-600"}`}>
                                       -{entry.amount.toLocaleString()}
                                       <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
                                     </div>
                                   </div>
                                 ))}
                               {mySettlementsOwing
-                                .sort((a, b) => b.date.localeCompare(a.date))
+                                .sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date))
                                 .map((entry, i) => (
                                   <div key={`settle-owing-${entry.orderId}-${i}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                                      <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${entry.settled ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-amber-100 dark:bg-amber-900/30"}`}>
+                                      {entry.settled
+                                        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                        : <ArrowDownLeft className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium text-emerald-600">ليك عند {entry.from}</span>
+                                        <span className="text-sm font-medium text-emerald-600">
+                                          {entry.settled ? `تم التسوية مع ${entry.from}` : `ليك عند ${entry.from}`}
+                                        </span>
                                         <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
                                           onClick={() => navigate(`/orders/${entry.orderId}`)}>
                                           {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
@@ -1320,7 +1338,7 @@ export default function FoundersPage() {
                                       </div>
                                       <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
                                         <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.date}</span>
+                                        <span>{entry.paidAt || entry.date}</span>
                                         <span>· {entry.clientName}</span>
                                       </div>
                                     </div>
