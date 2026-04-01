@@ -573,7 +573,6 @@ export default function ActivityPage() {
       } else if (data.entity === "order" && data.snapshot._related) {
         const related = data.snapshot._related;
         const { _related, collectionPaid, collectionTotal, client, founderContributions, ...orderFields } = data.snapshot;
-        const cleanedOrder = cleanSnapshot("order", orderFields);
         const snakify = (obj: Record<string, any>) => {
           const out: Record<string, any> = {};
           for (const [k, v] of Object.entries(obj)) {
@@ -582,7 +581,7 @@ export default function ActivityPage() {
           return out;
         };
         const restoreResult: any = await api.post(`/orders/${data.snapshot.id}/cascade-restore`, {
-          order: snakify(cleanedOrder),
+          order: snakify(orderFields),
           orderLines: related.orderLines || [],
           founderContributions: related.founderContributions || [],
           deliveries: related.deliveries || [],

@@ -1014,13 +1014,14 @@ router.post("/orders/:id/cascade-restore", async (req, res) => {
       restoreOps.push({ name: "audits", op: supabaseAdmin.from("audits").upsert(safe, { onConflict: "id" }) });
     }
 
-    // Restore treasury transactions & update founder balances
     if (Array.isArray(treasuryTransactions) && treasuryTransactions.length > 0) {
       for (const tx of treasuryTransactions) {
+        const { data: existing } = await supabaseAdmin.from("treasury_transactions").select("id").eq("id", tx.id).maybeSingle();
+        const isNew = !existing;
         const { error: txErr } = await supabaseAdmin.from("treasury_transactions").upsert(tx, { onConflict: "id" });
         if (txErr) {
           console.warn(`[cascade-restore] treasury tx ${tx.id} error:`, txErr.message);
-        } else if (tx.performed_by) {
+        } else if (isNew && tx.performed_by) {
           const absAmt = Math.abs(Number(tx.amount));
           const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", tx.performed_by).single();
           if (f) {
@@ -1550,6 +1551,17 @@ router.patch("/collections/:id", async (req, res) => {
 router.delete("/collections/:id", async (req, res) => {
   const { data: snap } = await supabaseAdmin.from("collections").select("*").eq("id", req.params.id).single();
   if (snap) await softDelete("collection", req.params.id, `${req.params.id} — ${snap.client || ""}`, snap);
+
+  try {
+    const notes = snap ? (typeof snap.notes === "object" ? snap.notes : JSON.parse(snap.notes || "{}")) : {};
+    if (notes.auditId) {
+      await supabaseAdmin.from("audits").update({ status: "Completed" }).eq("id", notes.auditId);
+      console.log(`[delete-collection] reverted audit ${notes.auditId} status to Completed`);
+    }
+  } catch (e: any) {
+    console.warn("[delete-collection] audit status revert error:", e.message);
+  }
+
   const { error } = await supabaseAdmin.from("collections").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
@@ -1714,10 +1726,46 @@ router.post("/audits", async (req, res) => {
 router.patch("/audits/:id", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("audits").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
+router.get("/audits/:id/linked-collection", async (req, res) => {
+  try {
+    const auditId = req.params.id;
+    const { data: allCols } = await supabaseAdmin.from("collections").select("id, client, total_amount, paid_amount, status, notes");
+    const linked = (allCols || []).filter((c: any) => {
+      try {
+        const notes = typeof c.notes === "object" ? c.notes : JSON.parse(c.notes || "{}");
+        return notes.auditId === auditId;
+      } catch { return false; }
+    });
+    res.json(linked.length > 0 ? linked[0] : null);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.delete("/audits/:id", async (req, res) => {
-  const { data: snap } = await supabaseAdmin.from("audits").select("*").eq("id", req.params.id).single();
-  if (snap) await softDelete("audit", req.params.id, `${req.params.id} — ${snap.client_name || ""}`, snap);
-  sbOk(res, await supabaseAdmin.from("audits").delete().eq("id", req.params.id).select().single());
+  const auditId = req.params.id;
+  const { data: snap } = await supabaseAdmin.from("audits").select("*").eq("id", auditId).single();
+  if (snap) await softDelete("audit", auditId, `${auditId} — ${snap.client_name || ""}`, snap);
+
+  try {
+    const { data: allCols } = await supabaseAdmin.from("collections").select("id, notes");
+    const linkedCol = (allCols || []).find((c: any) => {
+      try {
+        const notes = typeof c.notes === "object" ? c.notes : JSON.parse(c.notes || "{}");
+        return notes.auditId === auditId;
+      } catch { return false; }
+    });
+    if (linkedCol) {
+      const { data: colSnap } = await supabaseAdmin.from("collections").select("*").eq("id", linkedCol.id).single();
+      if (colSnap) await softDelete("collection", linkedCol.id, `${linkedCol.id} — ${colSnap.client || ""}`, colSnap);
+      await supabaseAdmin.from("collections").delete().eq("id", linkedCol.id);
+      console.log(`[delete-audit] cascade-deleted linked collection ${linkedCol.id}`);
+    }
+  } catch (e: any) {
+    console.warn("[delete-audit] linked collection cleanup error:", e.message);
+  }
+
+  sbOk(res, await supabaseAdmin.from("audits").delete().eq("id", auditId).select().single());
 });
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
@@ -2448,8 +2496,10 @@ router.post("/trash/:id/restore", async (req, res) => {
 
       if (Array.isArray(relatedData.treasuryTransactions) && relatedData.treasuryTransactions.length > 0) {
         for (const tx of relatedData.treasuryTransactions) {
+          const { data: existing } = await supabaseAdmin.from("treasury_transactions").select("id").eq("id", tx.id).maybeSingle();
+          const isNew = !existing;
           const { error: txErr } = await supabaseAdmin.from("treasury_transactions").upsert(tx, { onConflict: "id" });
-          if (!txErr && tx.performed_by) {
+          if (!txErr && isNew && tx.performed_by) {
             const absAmt = Math.abs(Number(tx.amount));
             const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", tx.performed_by).single();
             if (f) {

@@ -104,6 +104,8 @@ export default function AuditsPage() {
   const [selectedAudit, setSelectedAudit] = useState<AuditRecord | null>(null);
   const [autoOpened, setAutoOpened] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AuditRecord | null>(null);
+  const [deleteLinkedCollection, setDeleteLinkedCollection] = useState<any>(null);
+  const [checkingLinkedCollection, setCheckingLinkedCollection] = useState(false);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState("");
@@ -161,6 +163,18 @@ export default function AuditsPage() {
     return map;
   }, [lots]);
 
+  const handleDeleteClick = async (audit: AuditRecord) => {
+    setCheckingLinkedCollection(true);
+    setDeleteTarget(audit);
+    try {
+      const linked = await api.get(`/audits/${audit.id}/linked-collection`);
+      setDeleteLinkedCollection(linked || null);
+    } catch {
+      setDeleteLinkedCollection(null);
+    }
+    setCheckingLinkedCollection(false);
+  };
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/audits/${id}`),
     onSuccess: async (_, id) => {
@@ -169,7 +183,9 @@ export default function AuditsPage() {
         await logAudit({ entity: "audits", entityId: id, entityName: `${target.id} — ${target.clientName}`, action: "delete", snapshot: target, endpoint: "/api/audits", idField: "id", performedBy: _userName });
       }
       qc.invalidateQueries({ queryKey: ["/api/audits"] });
+      qc.invalidateQueries({ queryKey: ["/api/collections"] });
       setDeleteTarget(null);
+      setDeleteLinkedCollection(null);
       toast.success("تم حذف الجرد");
     },
     onError: () => toast.error("فشل الحذف"),
@@ -628,7 +644,7 @@ export default function AuditsPage() {
                           {auditIdsWithCollection.has(audit.id) ? "تم إنشاء التحصيل ✓" : creatingCollection === audit.id ? "جارٍ الإنشاء..." : "إنشاء تحصيل"}
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(audit)}><Trash2 className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />حذف</DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteClick(audit)}><Trash2 className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />حذف</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>
@@ -911,11 +927,16 @@ export default function AuditsPage() {
       </Dialog>
 
       <ConfirmDeleteDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
-        itemName={deleteTarget ? `${deleteTarget.id} — ${deleteTarget.clientName}` : ""}
+        open={!!deleteTarget && !checkingLinkedCollection}
+        onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setDeleteLinkedCollection(null); } }}
+        title={deleteLinkedCollection ? "تحذير: حذف الجرد سيحذف التحصيل المرتبط" : "تأكيد حذف الجرد"}
+        description={
+          deleteLinkedCollection
+            ? `سيتم حذف الجرد "${deleteTarget?.id}" وكذلك التحصيل المرتبط به "${deleteLinkedCollection.id}" (${Number(deleteLinkedCollection.total_amount || 0).toLocaleString()} ج.م) لأنهم مبنيين على بعض. هل تريد المتابعة؟`
+            : `هل أنت متأكد من حذف الجرد "${deleteTarget?.id} — ${deleteTarget?.clientName}"؟ يمكنك استعادته لاحقاً من سجل الأنشطة.`
+        }
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
-        isPending={deleteMutation.isPending}
+        loading={deleteMutation.isPending}
       />
     </div>
   );
