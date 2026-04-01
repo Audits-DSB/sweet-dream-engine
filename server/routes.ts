@@ -2079,12 +2079,20 @@ router.post("/founder-funding-undo", async (req, res) => {
     }
 
     const updatedContribs = contribs.map((c: any) =>
-      c.founder === founderName ? { ...c, paid: false, paidAt: undefined } : c
+      c.founder === founderName ? { ...c, paid: false, paidAmount: 0, paidAt: undefined } : c
     );
     await supabaseAdmin.from("order_founder_contributions").upsert(
       { order_id: orderId, contributions: updatedContribs, updated_at: new Date().toISOString() },
       { onConflict: "order_id" }
     );
+
+    const fIdForMap = founderId || founderName;
+    const { data: orderRow } = await supabaseAdmin.from("orders").select("order_cost_paid_by_founder").eq("id", orderId).single();
+    let costPaidMap: Record<string, number> = {};
+    const rawMap = orderRow?.order_cost_paid_by_founder;
+    try { costPaidMap = typeof rawMap === "object" && rawMap !== null ? rawMap : JSON.parse(rawMap || "{}"); } catch {}
+    delete costPaidMap[fIdForMap];
+    await supabaseAdmin.from("orders").update({ order_cost_paid_by_founder: Object.keys(costPaidMap).length > 0 ? JSON.stringify(costPaidMap) : null }).eq("id", orderId);
 
     res.json({
       ok: true,

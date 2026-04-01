@@ -86,6 +86,7 @@ type OrderFundingEntry = {
   status: string;
   date: string;
   paid: boolean;
+  paidAmount?: number;
   paidAt?: string;
   founderName: string;
   founderId: string;
@@ -370,6 +371,7 @@ export default function FoundersPage() {
           status,
           date: typeof date === "string" ? date.split("T")[0] : "",
           paid: !!c.paid,
+          paidAmount: toNum(c.paidAmount ?? c.paid_amount),
           paidAt: c.paidAt || undefined,
           founderName: c.founder || "",
           founderId: fId,
@@ -564,7 +566,7 @@ export default function FoundersPage() {
   const globalStats = useMemo(() => {
     const allEntries = founders.flatMap(f => orderFundingByFounder[f.id] || []);
     const totalPaidAmt = allEntries.reduce((s, e) => {
-      const pa = toNum((e as any).paidAmount ?? (e as any).paid_amount);
+      const pa = e.paidAmount || 0;
       return s + (pa > 0 ? pa : (e.paid ? e.amount : 0));
     }, 0);
     const totalAmount = allEntries.reduce((s, e) => s + e.amount, 0);

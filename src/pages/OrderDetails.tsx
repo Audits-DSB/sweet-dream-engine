@@ -305,7 +305,11 @@ export default function OrderDetails() {
       const updatedContribs = order.founderContributions.map(f =>
         f.founder === fp.founder ? { ...f, paid: newPaidAmount >= share, paidAmount: Math.round(newPaidAmount * 100) / 100, paidAt: new Date().toISOString() } : f
       );
-      const patchedOrder = await api.patch<any>(`/orders/${order.id}`, { founderContributions: updatedContribs });
+      const costPaidMap: Record<string, number> = {};
+      try { Object.assign(costPaidMap, JSON.parse(order.orderCostPaidByFounder || "{}")); } catch {}
+      const fId = fp.founderId || fp.founder;
+      costPaidMap[fId] = Math.round(newPaidAmount * 100) / 100;
+      const patchedOrder = await api.patch<any>(`/orders/${order.id}`, { founderContributions: updatedContribs, orderCostPaidByFounder: JSON.stringify(costPaidMap) });
       setOrder(mapOrder(patchedOrder));
       if (walletUsed > 0) setFounderBalances(prev => ({ ...prev, [fp.founder]: (prev[fp.founder] || 0) - walletUsed }));
       setBalanceDialog({ open: false, fp: null, available: 0 });
