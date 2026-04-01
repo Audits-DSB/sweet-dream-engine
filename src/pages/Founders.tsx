@@ -885,11 +885,22 @@ export default function FoundersPage() {
                                       <ArrowUpRight className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <span className="text-sm font-medium text-red-600">عليك لـ {entry.to}: {entry.amount.toLocaleString()} {t.currency}</span>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-medium text-red-600">مطلوب منك لـ {entry.to}</span>
+                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                        </button>
+                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
+                                      </div>
                                       <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
                                         <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.date} · {entry.clientName}</span>
+                                        <span>{entry.date}</span>
                                       </div>
+                                    </div>
+                                    <div className="text-sm font-bold flex-shrink-0 text-red-600 dark:text-red-400">
+                                      -{entry.amount.toLocaleString()}
+                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
                                     </div>
                                   </div>
                                 ))}
@@ -901,11 +912,22 @@ export default function FoundersPage() {
                                       <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <span className="text-sm font-medium text-emerald-600">ليك عند {entry.from}: {entry.amount.toLocaleString()} {t.currency}</span>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-medium text-emerald-600">استرداد من {entry.from}</span>
+                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                        </button>
+                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
+                                      </div>
                                       <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
                                         <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.date} · {entry.clientName}</span>
+                                        <span>{entry.date}</span>
                                       </div>
+                                    </div>
+                                    <div className="text-sm font-bold flex-shrink-0 text-emerald-600 dark:text-emerald-400">
+                                      +{entry.amount.toLocaleString()}
+                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
                                     </div>
                                   </div>
                                 ))}
