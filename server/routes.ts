@@ -2124,7 +2124,7 @@ router.post("/founder-funding-reset", async (req, res) => {
     const { data: allTxs } = await supabaseAdmin
       .from("treasury_transactions")
       .select("*")
-      .eq("tx_type", "order_funding");
+      .in("tx_type", ["order_funding", "capital_withdrawal"]);
 
     const orderTxs = (allTxs || []).filter((tx: any) => {
       const parsed = parseFounderDesc(tx.description);
@@ -2136,9 +2136,15 @@ router.post("/founder-funding-reset", async (req, res) => {
       if (tx.performed_by) {
         const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", tx.performed_by).single();
         if (f) {
-          await supabaseAdmin.from("founders").update({
-            total_contributed: Math.max(0, Number(f.total_contributed || 0) - absAmt),
-          }).eq("id", tx.performed_by);
+          const patch: Record<string, number> = {};
+          if (tx.tx_type === "order_funding") {
+            patch.total_contributed = Math.max(0, Number(f.total_contributed || 0) - absAmt);
+          } else if (tx.tx_type === "capital_withdrawal") {
+            patch.total_withdrawn = Math.max(0, Number(f.total_withdrawn || 0) - absAmt);
+          }
+          if (Object.keys(patch).length > 0) {
+            await supabaseAdmin.from("founders").update(patch).eq("id", tx.performed_by);
+          }
         }
       }
       await softDelete("founder-transaction", tx.id, `إعادة تعيين: ${tx.description || tx.tx_type}`, tx);

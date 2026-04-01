@@ -74,7 +74,7 @@ function typeLabel(type: string) {
   return type;
 }
 
-type ExpandedSection = "ledger" | "order_funding" | "profits" | "capital";
+type ExpandedSection = "ledger" | "order_funding" | "profits" | "capital" | "delivery";
 
 type OrderFundingEntry = {
   orderId: string;
@@ -745,7 +745,14 @@ export default function FoundersPage() {
                   </div>
 
                   {/* ── Stats Mini Cards ── */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {(() => {
+                    const myDelPays = deliveryPaymentsByFounder[f.id] || [];
+                    const myDelReimb = deliveryReimbursementByFounder[f.id] || [];
+                    const delPaidTotal = myDelPays.reduce((s, e) => s + e.amount, 0);
+                    const delReimbTotal = myDelReimb.reduce((s, e) => s + e.amount, 0);
+                    const delNet = delPaidTotal - delReimbTotal;
+                    return (
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                     <div className={`rounded-xl p-3 ${totalOwed > 0 ? "bg-red-50 dark:bg-red-950/20 border border-red-200/50 dark:border-red-800/30" : "bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-800/30"}`}>
                       <p className="text-[10px] text-muted-foreground mb-1">عليه فلوس</p>
                       <p className={`text-sm font-bold ${totalOwed > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
@@ -757,6 +764,14 @@ export default function FoundersPage() {
                       <p className="text-[10px] text-muted-foreground mb-1">مساهمات مدفوعة</p>
                       <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{totalPaidFunding > 0 ? totalPaidFunding.toLocaleString() : "—"}</p>
                       {paidFunding.length > 0 && <p className="text-[10px] text-emerald-500 mt-0.5">{paidFunding.length} أوردر</p>}
+                    </div>
+                    <div className={`rounded-xl p-3 ${delPaidTotal > 0 ? "bg-orange-50 dark:bg-orange-950/20 border border-orange-200/50 dark:border-orange-800/30" : "bg-muted/50 border border-border/50"}`}>
+                      <p className="text-[10px] text-muted-foreground mb-1">مصاريف توصيل</p>
+                      <p className={`text-sm font-bold ${delPaidTotal > 0 ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground"}`}>
+                        {delPaidTotal > 0 ? delPaidTotal.toLocaleString() : "—"}
+                      </p>
+                      {delNet > 0 && <p className="text-[10px] text-orange-500 mt-0.5">صافي: {delNet.toLocaleString()}</p>}
+                      {delNet <= 0 && delPaidTotal > 0 && <p className="text-[10px] text-emerald-500 mt-0.5">تم الاسترداد</p>}
                     </div>
                     <div className="rounded-xl p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/30">
                       <p className="text-[10px] text-muted-foreground mb-1">أرباح محصّلة</p>
@@ -771,6 +786,8 @@ export default function FoundersPage() {
                       <p className="text-[10px] text-muted-foreground mt-0.5">{t.currency}</p>
                     </div>
                   </div>
+                    );
+                  })()}
 
                   {/* ── Payment Progress Bar ── */}
                   {totalOrderFunding > 0 && (
@@ -805,11 +822,14 @@ export default function FoundersPage() {
                   <div className="border-t border-border">
                     {/* Section Selector */}
                     <div className="flex border-b border-border bg-muted/20">
-                      {(["order_funding", "ledger", "profits", "capital"] as ExpandedSection[]).map(s => {
-                        const tabIcons: Record<ExpandedSection, typeof ShoppingBag> = { order_funding: ShoppingBag, ledger: Receipt, profits: TrendingUp, capital: Coins };
+                      {(["order_funding", "delivery", "ledger", "profits", "capital"] as ExpandedSection[]).map(s => {
+                        const tabIcons: Record<ExpandedSection, typeof ShoppingBag> = { order_funding: ShoppingBag, delivery: Truck, ledger: Receipt, profits: TrendingUp, capital: Coins };
                         const TabIcon = tabIcons[s];
+                        const myDeliveryPays = deliveryPaymentsByFounder[f.id] || [];
+                        const myDeliveryReimbs = deliveryReimbursementByFounder[f.id] || [];
                         const labels: Record<ExpandedSection, string> = {
                           order_funding: `الأوردرات (${myOrderFunding.length})`,
+                          delivery: `التوصيل (${myDeliveryPays.length + myDeliveryReimbs.length})`,
                           ledger: "السجل",
                           profits: `الأرباح (${myProfits.length})`,
                           capital: `رأس المال`,
@@ -828,12 +848,11 @@ export default function FoundersPage() {
 
                     {/* ── LEDGER: contributions + fundings + withdrawals ── */}
                     {section === "ledger" && (() => {
-                      const myDeliveryPayments = (deliveryPaymentsByFounder[f.id] || []);
                       const myCostPayments = (orderCostPaymentsByFounder[f.id] || []);
                       const mySettlementsOwed = orderCostSettlements.filter(s => s.fromId === f.id);
                       const mySettlementsOwing = orderCostSettlements.filter(s => s.toId === f.id);
                       const allLedgerItems = [...contributions, ...fundings, ...withdrawals];
-                      const hasEntries = allLedgerItems.length > 0 || myDeliveryPayments.length > 0 || myCostPayments.length > 0 || mySettlementsOwed.length > 0 || mySettlementsOwing.length > 0;
+                      const hasEntries = allLedgerItems.length > 0 || myCostPayments.length > 0 || mySettlementsOwed.length > 0 || mySettlementsOwing.length > 0;
                       return (
                       <>
                         {!hasEntries ? (
@@ -841,33 +860,6 @@ export default function FoundersPage() {
                         ) : (
                           <div className="max-h-[500px] overflow-y-auto">
                             <div className="divide-y divide-border/50">
-                              {myDeliveryPayments
-                                .sort((a, b) => b.date.localeCompare(a.date))
-                                .map(entry => (
-                                  <div key={`delpay-ledger-${entry.orderId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                                      <Truck className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium">دفع مصاريف توصيل</span>
-                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                        </button>
-                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
-                                      </div>
-                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                                        <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.date}</span>
-                                      </div>
-                                    </div>
-                                    <div className="text-sm font-bold flex-shrink-0 text-orange-600 dark:text-orange-400">
-                                      -{entry.amount.toLocaleString()}
-                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
-                                    </div>
-                                  </div>
-                                ))}
                               {myCostPayments
                                 .sort((a, b) => b.date.localeCompare(a.date))
                                 .map(entry => (
@@ -1003,6 +995,105 @@ export default function FoundersPage() {
                           <span className="font-bold text-foreground">{[...contributions, ...fundings].reduce((s, tx) => s + tx.amount, 0).toLocaleString()} {t.currency}</span>
                         </div>
                       </>
+                      );
+                    })()}
+
+                    {/* ── DELIVERY: delivery fee payments & reimbursements ── */}
+                    {section === "delivery" && (() => {
+                      const myDeliveryPayments = deliveryPaymentsByFounder[f.id] || [];
+                      const myReimbursements = deliveryReimbursementByFounder[f.id] || [];
+                      const totalPaid = myDeliveryPayments.reduce((s, e) => s + e.amount, 0);
+                      const totalReimbursed = myReimbursements.reduce((s, e) => s + e.amount, 0);
+                      const netDelivery = totalPaid - totalReimbursed;
+                      const hasEntries = myDeliveryPayments.length > 0 || myReimbursements.length > 0;
+                      return (
+                        <>
+                          {!hasEntries ? (
+                            <div className="py-10 text-center text-sm text-muted-foreground">
+                              <Truck className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                              <p>لا توجد مصاريف توصيل لهذا المؤسس</p>
+                            </div>
+                          ) : (
+                            <div className="max-h-[500px] overflow-y-auto">
+                              <div className="divide-y divide-border/50">
+                                {myDeliveryPayments
+                                  .sort((a, b) => b.date.localeCompare(a.date))
+                                  .map(entry => (
+                                    <div key={`del-${entry.orderId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                                      <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                                        <Truck className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-sm font-medium">دفع مصاريف توصيل</span>
+                                          <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                            onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                            {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                          </button>
+                                          {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                                          <Clock className="h-3 w-3 flex-shrink-0" />
+                                          <span>{entry.date}</span>
+                                        </div>
+                                      </div>
+                                      <div className="text-sm font-bold flex-shrink-0 text-orange-600 dark:text-orange-400">
+                                        -{entry.amount.toLocaleString()}
+                                        <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                {myReimbursements
+                                  .sort((a, b) => b.date.localeCompare(a.date))
+                                  .map(entry => (
+                                    <div key={`reimb-del-${entry.collectionId}-${entry.orderId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                                      <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                                        <Truck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-sm font-medium">استرداد مصروفات توصيل</span>
+                                          <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                            onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                            {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                          </button>
+                                          {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                                          <Clock className="h-3 w-3 flex-shrink-0" />
+                                          <span>{entry.date}</span>
+                                          <span>· توصيل: {entry.deliveryFee.toLocaleString()} {t.currency}</span>
+                                          <span>· نسبة السداد: {Math.round(entry.paidRatio * 100)}%</span>
+                                        </div>
+                                      </div>
+                                      <div className="text-sm font-bold flex-shrink-0 text-emerald-600 dark:text-emerald-400">
+                                        +{entry.amount.toLocaleString()}
+                                        <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                              </div>
+                              <div className="border-t border-border bg-muted/30 p-4 space-y-2">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-muted-foreground">إجمالي مدفوع للتوصيل</span>
+                                  <span className="font-bold text-orange-600 dark:text-orange-400">-{totalPaid.toLocaleString()} {t.currency}</span>
+                                </div>
+                                {totalReimbursed > 0 && (
+                                  <div className="flex items-center justify-between text-sm">
+                                    <span className="text-muted-foreground">إجمالي مسترد (بعد التحصيل)</span>
+                                    <span className="font-bold text-emerald-600 dark:text-emerald-400">+{totalReimbursed.toLocaleString()} {t.currency}</span>
+                                  </div>
+                                )}
+                                <div className="flex items-center justify-between text-sm pt-2 border-t border-border/50">
+                                  <span className="font-medium">الصافي (مستحق للمؤسس)</span>
+                                  <span className={`font-bold ${netDelivery > 0 ? "text-red-600 dark:text-red-400" : netDelivery < 0 ? "text-emerald-600" : "text-muted-foreground"}`}>
+                                    {netDelivery > 0 ? `-${netDelivery.toLocaleString()}` : netDelivery < 0 ? `+${Math.abs(netDelivery).toLocaleString()}` : "0"} {t.currency}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </>
                       );
                     })()}
 
@@ -1236,33 +1327,6 @@ export default function FoundersPage() {
                                     </div>
                                     <div className="text-sm font-bold flex-shrink-0 text-primary">
                                       +{entry.capitalShare.toLocaleString()}
-                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              {(deliveryPaymentsByFounder[f.id] || [])
-                                .sort((a, b) => b.date.localeCompare(a.date))
-                                .map(entry => (
-                                  <div key={`delpay-${entry.orderId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                                      <Truck className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium">دفع مصاريف توصيل</span>
-                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                        </button>
-                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
-                                      </div>
-                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                                        <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.date}</span>
-                                      </div>
-                                    </div>
-                                    <div className="text-sm font-bold flex-shrink-0 text-orange-600 dark:text-orange-400">
-                                      -{entry.amount.toLocaleString()}
                                       <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
                                     </div>
                                   </div>
