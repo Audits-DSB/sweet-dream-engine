@@ -306,14 +306,15 @@ export default function FoundersPage() {
   }, [orders]);
 
   const orderCostSettlements = useMemo(() => {
-    const settlements: Array<{ orderId: string; clientName: string; date: string; from: string; fromId: string; to: string; toId: string; amount: number }> = [];
+    const settlements: Array<{ orderId: string; clientName: string; date: string; paidAt: string; from: string; fromId: string; to: string; toId: string; amount: number; toPaidTotal: number; toShare: number }> = [];
     Object.values(orders).forEach((order: any) => {
       const contribs = Array.isArray(order.founderContributions) ? order.founderContributions : [];
       if (contribs.length === 0) return;
       const entries = contribs.map((c: any) => {
         const paidAmt = toNum(c.paidAmount ?? c.paid_amount);
         const share = toNum(c.amount);
-        return { id: c.founderId || c.founder_id || "", name: c.founder || "", paidAmt, share, diff: paidAmt - share };
+        const paidAt = c.paidAt || c.paid_at || "";
+        return { id: c.founderId || c.founder_id || "", name: c.founder || "", paidAmt, share, diff: paidAmt - share, paidAt };
       }).filter(e => e.id);
       const overpayers = entries.filter(e => e.diff > 0);
       const underpayers = entries.filter(e => e.diff < 0);
@@ -324,13 +325,17 @@ export default function FoundersPage() {
       while (oi < overpayers.length && ui < underpayers.length) {
         const transfer = Math.min(oRemain[oi], uRemain[ui]);
         if (transfer > 0) {
+          const paymentDate = overpayers[oi].paidAt ? overpayers[oi].paidAt.split("T")[0] : (order.date || "").split("T")[0];
           settlements.push({
             orderId: order.id,
             clientName: order.client || order.clientName || order.client_name || "",
             date: (order.date || "").split("T")[0],
+            paidAt: paymentDate,
             from: underpayers[ui].name, fromId: underpayers[ui].id,
             to: overpayers[oi].name, toId: overpayers[oi].id,
             amount: Math.round(transfer),
+            toPaidTotal: overpayers[oi].paidAmt,
+            toShare: overpayers[oi].share,
           });
         }
         oRemain[oi] -= transfer;
@@ -878,7 +883,7 @@ export default function FoundersPage() {
                                   </div>
                                 ))}
                               {mySettlementsOwed
-                                .sort((a, b) => b.date.localeCompare(a.date))
+                                .sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date))
                                 .map((entry, i) => (
                                   <div key={`settle-owed-ledger-${entry.orderId}-${i}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
                                     <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
@@ -895,7 +900,8 @@ export default function FoundersPage() {
                                       </div>
                                       <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
                                         <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.date}</span>
+                                        <span>{entry.paidAt || entry.date}</span>
+                                        <span>· {entry.to} دفع {entry.toPaidTotal.toLocaleString()} من أصل حصته {entry.toShare.toLocaleString()}</span>
                                       </div>
                                     </div>
                                     <div className="text-sm font-bold flex-shrink-0 text-red-600 dark:text-red-400">
@@ -905,7 +911,7 @@ export default function FoundersPage() {
                                   </div>
                                 ))}
                               {mySettlementsOwing
-                                .sort((a, b) => b.date.localeCompare(a.date))
+                                .sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date))
                                 .map((entry, i) => (
                                   <div key={`settle-owing-ledger-${entry.orderId}-${i}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
                                     <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
@@ -922,7 +928,8 @@ export default function FoundersPage() {
                                       </div>
                                       <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
                                         <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.date}</span>
+                                        <span>{entry.paidAt || entry.date}</span>
+                                        <span>· دفعت {entry.toPaidTotal.toLocaleString()} وحصتك {entry.toShare.toLocaleString()}</span>
                                       </div>
                                     </div>
                                     <div className="text-sm font-bold flex-shrink-0 text-emerald-600 dark:text-emerald-400">
