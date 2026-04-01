@@ -1611,16 +1611,17 @@ export default function OrderDetails() {
                   {subVal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">{t.subscriptionLabel} ({subVal}%)</span><span className="font-medium">{subscriptionAmt.toLocaleString()} {t.currency}</span></div>}
                   <div className="border-t border-border pt-2 flex justify-between font-semibold"><span>الإيراد التشغيلي</span><span>{operatingRevenue.toLocaleString()} {t.currency}</span></div>
                   <div className="flex justify-between text-muted-foreground"><span>إجمالي التكلفة</span><span className="text-destructive">- {costTotal.toLocaleString()} {t.currency}</span></div>
-                  {costTotal > 0 && founderPayments.length > 0 && (() => {
-                    const payers = founderPayments.filter(fp => toNum(fp.paidAmount ?? (fp.paid ? toNum(fp.amount) : 0)) > 0);
-                    if (payers.length === 0) return null;
+                  {costTotal > 0 && (() => {
+                    let costPaidMap: Record<string, number> = {};
+                    try { const raw = order.orderCostPaidByFounder; costPaidMap = typeof raw === "object" && raw !== null ? raw : JSON.parse(raw || "{}"); } catch {}
+                    const payerEntries = Object.entries(costPaidMap).filter(([, v]) => v > 0);
+                    if (payerEntries.length === 0) return null;
+                    const founderNameMap: Record<string, string> = {};
+                    founderPayments.forEach(fp => { if (fp.founderId) founderNameMap[fp.founderId] = fp.founder; founderNameMap[fp.founder] = fp.founder; });
                     return (
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground pr-1">
                         <Wallet className="h-3 w-3 flex-shrink-0" />
-                        <span>دفع التكلفة: {payers.map(p => {
-                          const amt = toNum(p.paidAmount ?? (p.paid ? toNum(p.amount) : 0));
-                          return `${p.founder} (${amt.toLocaleString()})`;
-                        }).join(" · ")}</span>
+                        <span>دفع التكلفة: {payerEntries.map(([id, amt]) => `${founderNameMap[id] || id} (${amt.toLocaleString()})`).join(" · ")}</span>
                       </div>
                     );
                   })()}
@@ -1869,7 +1870,7 @@ export default function OrderDetails() {
               {founderPayments.length > 0 ? (
                 <div className="space-y-3">
                   {(() => {
-                    const totalPaidAmt = founderPayments.reduce((s, f) => s + toNum(f.paidAmount ?? (f.paid ? f.amount : 0)), 0);
+                    const totalPaidAmt = founderPayments.reduce((s, f) => s + Math.min(toNum(f.paidAmount ?? (f.paid ? f.amount : 0)), toNum(f.amount)), 0);
                     const paidPct = costTotal > 0 ? Math.min(100, (totalPaidAmt / costTotal) * 100) : 0;
                     return (
                       <div className="mb-4">
@@ -1911,22 +1912,19 @@ export default function OrderDetails() {
                             <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">دفع {paidAmt.toLocaleString()} — متبقي {remainingAmt.toLocaleString()} {t.currency}</p>
                           )}
                           {overpaidAmt > 0 && (() => {
-                            const allPaid = founderPayments.every(f2 => {
-                              const s = toNum(f2.amount);
-                              const p = toNum(f2.paidAmount ?? (f2.paid ? s : 0));
-                              return p >= s;
+                            const entries = founderPayments.map(f2 => {
+                              const s2 = toNum(f2.amount);
+                              const p2 = toNum(f2.paidAmount ?? (f2.paid ? s2 : 0));
+                              return { name: f2.founder, share: s2, paid: p2, diff: p2 - s2 };
                             });
-                            const settledWith = founderPayments
-                              .filter(f2 => {
-                                if (f2.founder === fp.founder) return false;
-                                const s2 = toNum(f2.amount);
-                                const p2 = toNum(f2.paidAmount ?? (f2.paid ? s2 : 0));
-                                return p2 < s2;
-                              })
-                              .map(f2 => f2.founder);
-                            return allPaid
-                              ? <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">✓ تم التسوية مع {founderPayments.filter(f2 => f2.founder !== fp.founder).map(f2 => f2.founder).join(" و ")}</p>
-                              : <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">دفع زيادة {overpaidAmt.toLocaleString()} {t.currency} — مطلوب من {settledWith.length > 0 ? settledWith.join(" و ") : "الباقين"}</p>;
+                            const allPaid = entries.every(e => e.paid >= e.share);
+                            const underpayerNames = entries.filter(e => e.name !== fp.founder && e.diff < 0).map(e => e.name);
+                            const settledNames = entries.filter(e => e.name !== fp.founder && e.diff <= 0 && e.paid >= e.share).map(e => e.name);
+                            const pendingNames = entries.filter(e => e.name !== fp.founder && e.diff < 0 && e.paid < e.share).map(e => e.name);
+                            if (allPaid && settledNames.length > 0) {
+                              return <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">✓ تم التسوية مع {settledNames.join(" و ")}</p>;
+                            }
+                            return <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">دفع زيادة {overpaidAmt.toLocaleString()} {t.currency} — مطلوب من {pendingNames.length > 0 ? pendingNames.join(" و ") : underpayerNames.length > 0 ? underpayerNames.join(" و ") : "الباقين"}</p>;
                           })()}
                           {!isFullyPaid && !isPartial && (() => {
                             const bal = founderBalances[fp.founder] || founderBalances[fp.founderId] || 0;
