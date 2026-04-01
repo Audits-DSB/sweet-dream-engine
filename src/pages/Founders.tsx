@@ -290,14 +290,18 @@ export default function FoundersPage() {
     Object.values(orders).forEach((order: any) => {
       const contribs = Array.isArray(order.founderContributions) ? order.founderContributions : [];
       if (contribs.length === 0) return;
+      let costPaidMap: Record<string, number> = {};
+      try {
+        const raw = order.orderCostPaidByFounder ?? order.order_cost_paid_by_founder;
+        costPaidMap = typeof raw === "object" && raw !== null ? raw : JSON.parse(raw || "{}");
+      } catch {}
+      if (Object.keys(costPaidMap).length === 0) return;
       const clientName = order.client || order.clientName || order.client_name || "";
       const date = (order.date || "").split("T")[0];
-      contribs.forEach((c: any) => {
-        const fId = c.founderId || c.founder_id;
-        if (!fId) return;
-        const paidAmt = toNum(c.paidAmount ?? c.paid_amount);
-        const share = toNum(c.amount);
+      Object.entries(costPaidMap).forEach(([fId, paidAmt]) => {
         if (paidAmt <= 0) return;
+        const contrib = contribs.find((c: any) => (c.founderId || c.founder_id) === fId);
+        const share = contrib ? toNum(contrib.amount) : 0;
         if (!map[fId]) map[fId] = [];
         map[fId].push({ orderId: order.id, clientName, date, paidAmount: paidAmt, share, diff: paidAmt - share });
       });
@@ -310,11 +314,18 @@ export default function FoundersPage() {
     Object.values(orders).forEach((order: any) => {
       const contribs = Array.isArray(order.founderContributions) ? order.founderContributions : [];
       if (contribs.length === 0) return;
+      let costPaidMap: Record<string, number> = {};
+      try {
+        const raw = order.orderCostPaidByFounder ?? order.order_cost_paid_by_founder;
+        costPaidMap = typeof raw === "object" && raw !== null ? raw : JSON.parse(raw || "{}");
+      } catch {}
       const entries = contribs.map((c: any) => {
-        const paidAmt = toNum(c.paidAmount ?? c.paid_amount);
+        const fId = c.founderId || c.founder_id || "";
+        const initialPaid = costPaidMap[fId] || 0;
         const share = toNum(c.amount);
+        const paidAmt = toNum(c.paidAmount ?? c.paid_amount);
         const paidAt = c.paidAt || c.paid_at || "";
-        return { id: c.founderId || c.founder_id || "", name: c.founder || "", paidAmt, share, diff: paidAmt - share, paidAt };
+        return { id: fId, name: c.founder || "", paidAmt, share, diff: initialPaid - share, paidAt };
       }).filter(e => e.id);
       const allPaid = entries.every(e => e.paidAmt >= e.share);
       const overpayers = entries.filter(e => e.diff > 0);
@@ -866,7 +877,7 @@ export default function FoundersPage() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium">دفع تكلفة أوردر</span>
+                                        <span className="text-sm font-medium">دفع التكلفة المبدأية</span>
                                         <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
                                           onClick={() => navigate(`/orders/${entry.orderId}`)}>
                                           {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
@@ -1265,7 +1276,7 @@ export default function FoundersPage() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium">دفع تكلفة أوردر</span>
+                                        <span className="text-sm font-medium">دفع التكلفة المبدأية</span>
                                         <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
                                           onClick={() => navigate(`/orders/${entry.orderId}`)}>
                                           {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />

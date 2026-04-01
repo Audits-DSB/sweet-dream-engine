@@ -269,7 +269,12 @@ export default function OrderDetails() {
     const share = toNum(fp.amount);
     const alreadyPaid = toNum(fp.paidAmount ?? 0);
     const remaining = Math.max(0, share - alreadyPaid);
-    const required = remaining > 0 ? remaining : share;
+    if (remaining <= 0) {
+      toast.info(`${fp.founder} دفع حصته بالكامل بالفعل`);
+      setBalanceDialog({ open: false, fp: null, available: 0 });
+      return;
+    }
+    const required = remaining;
     const walletUsed = useBalance ? Math.min(balanceDialog.available, required) : 0;
     const cashPortion = required - walletUsed;
     setPayingFounder(fp.founder);
