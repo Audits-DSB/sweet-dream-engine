@@ -272,31 +272,14 @@ export default function OrderDetails() {
     try {
       const cleanMap: Record<string, number> = {};
       Object.entries(costPayerEditing).forEach(([id, amt]) => { if (amt > 0) cleanMap[id] = amt; });
-      let oldCostMap: Record<string, number> = {};
-      try { const raw = order.orderCostPaidByFounder; oldCostMap = typeof raw === "object" && raw !== null ? raw : JSON.parse(raw || "{}"); } catch {}
-      const updatedContribs = order.founderContributions.map(fc => {
-        const fId = fc.founderId || fc.founder;
-        const newInitial = cleanMap[fId] || 0;
-        const oldInitial = oldCostMap[fId] || 0;
-        const share = toNum(fc.amount);
-        const currentPaid = toNum(fc.paidAmount ?? 0);
-        const fundingPaid = Math.max(0, currentPaid - oldInitial);
-        const newPaid = Math.round((newInitial + fundingPaid) * 100) / 100;
-        const isPaid = newPaid >= share;
-        return {
-          ...fc,
-          paid: isPaid,
-          paidAmount: newPaid,
-          paidAt: newPaid > 0 && !fc.paidAt ? new Date().toISOString() : newPaid <= 0 ? undefined : fc.paidAt,
-        };
+      await api.post<any>("/founder-funding-reset", {
+        orderId: order.id,
+        newCostMap: cleanMap,
+        performedBy: userName,
       });
-      const patchedOrder = await api.patch<any>(`/orders/${order.id}`, {
-        orderCostPaidByFounder: JSON.stringify(cleanMap),
-        founderContributions: updatedContribs,
-      });
-      setOrder(mapOrder(patchedOrder));
+      await loadOrder();
       setCostPayerEditOpen(false);
-      toast.success("تم تحديث دافعي التكلفة المبدأية");
+      toast.success("تم إعادة تعيين التمويل وتحديث دافعي التكلفة المبدأية");
     } catch (err: any) {
       toast.error(err?.message || "فشل التحديث");
     } finally {
@@ -600,13 +583,19 @@ export default function OrderDetails() {
       setEditOpen(false);
 
       if (linesChanged && newTotalCost !== costTotal) {
-        let oldCostMap: Record<string, number> = {};
-        try { const raw = order.orderCostPaidByFounder; oldCostMap = typeof raw === "object" && raw !== null ? raw : JSON.parse(raw || "{}"); } catch {}
-        if (Object.keys(oldCostMap).length > 0) {
-          setCostPayerEditing(oldCostMap);
-          setCostPayerEditOpen(true);
-          toast.info("التكلفة تغيرت — يرجى مراجعة دافعي التكلفة المبدأية");
-        }
+        try {
+          await api.post<any>("/founder-funding-reset", {
+            orderId: order.id,
+            newCostMap: {},
+            performedBy: userName,
+          });
+        } catch {}
+        await loadOrder();
+        const emptyMap: Record<string, number> = {};
+        founderPayments.forEach(fp => { emptyMap[fp.founderId || fp.founder] = 0; });
+        setCostPayerEditing(emptyMap);
+        setCostPayerEditOpen(true);
+        toast.info("التكلفة تغيرت — تم إعادة تعيين التمويل. يرجى تحديد دافعي التكلفة المبدأية");
       }
 
     } catch (err: any) {

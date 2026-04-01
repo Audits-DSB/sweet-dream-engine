@@ -2106,6 +2106,79 @@ router.post("/founder-funding-undo", async (req, res) => {
   }
 });
 
+// ─── RESET ALL FOUNDER FUNDING FOR AN ORDER ──────────────────────────────────
+router.post("/founder-funding-reset", async (req, res) => {
+  const { orderId, newCostMap, performedBy } = req.body;
+  if (!orderId) return res.status(400).json({ error: "orderId required" });
+
+  try {
+    const { data: contribRow } = await supabaseAdmin
+      .from("order_founder_contributions")
+      .select("contributions")
+      .eq("order_id", orderId)
+      .single();
+    const contribs: any[] = contribRow?.contributions || [];
+
+    const founderIds = contribs.map((c: any) => c.founderId || c.founder).filter(Boolean);
+
+    const { data: allTxs } = await supabaseAdmin
+      .from("treasury_transactions")
+      .select("*")
+      .eq("tx_type", "order_funding");
+
+    const orderTxs = (allTxs || []).filter((tx: any) => {
+      const parsed = parseFounderDesc(tx.description);
+      return parsed.orderId === orderId;
+    });
+
+    for (const tx of orderTxs) {
+      const absAmt = Math.abs(Number(tx.amount));
+      if (tx.performed_by) {
+        const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", tx.performed_by).single();
+        if (f) {
+          await supabaseAdmin.from("founders").update({
+            total_contributed: Math.max(0, Number(f.total_contributed || 0) - absAmt),
+          }).eq("id", tx.performed_by);
+        }
+      }
+      await softDelete("founder-transaction", tx.id, `إعادة تعيين: ${tx.description || tx.tx_type}`, tx);
+      await supabaseAdmin.from("treasury_transactions").delete().eq("id", tx.id);
+    }
+
+    const cleanCostMap: Record<string, number> = newCostMap && typeof newCostMap === "object" ? newCostMap : {};
+
+    const updatedContribs = contribs.map((c: any) => {
+      const fId = c.founderId || c.founder;
+      const initialPaid = cleanCostMap[fId] || 0;
+      const share = Number(c.amount) || 0;
+      return {
+        ...c,
+        paid: initialPaid >= share && share > 0,
+        paidAmount: initialPaid,
+        paidAt: initialPaid > 0 ? new Date().toISOString() : undefined,
+      };
+    });
+
+    await supabaseAdmin.from("order_founder_contributions").upsert(
+      { order_id: orderId, contributions: updatedContribs, updated_at: new Date().toISOString() },
+      { onConflict: "order_id" }
+    );
+
+    await supabaseAdmin.from("orders").update({
+      order_cost_paid_by_founder: Object.keys(cleanCostMap).length > 0 ? JSON.stringify(cleanCostMap) : null,
+    }).eq("id", orderId);
+
+    res.json({
+      ok: true,
+      deletedTxCount: orderTxs.length,
+      updatedContributions: updatedContribs,
+    });
+  } catch (e: any) {
+    console.error("[founder-funding-reset] error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── FOUNDER SPLIT EDIT ────────────────────────────────────────────────────────
 router.post("/founder-split-edit", async (req, res) => {
   const { orderId, newContributions, performedBy } = req.body;
