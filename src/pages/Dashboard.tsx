@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
-import { WorkflowBanner } from "@/components/WorkflowBanner";
+import { WorkflowFab } from "@/components/WorkflowBanner";
 import { api } from "@/lib/api";
 import { Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -324,7 +324,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <WorkflowBanner />
+      <WorkflowFab />
 
       {/* ─── Header ─── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
