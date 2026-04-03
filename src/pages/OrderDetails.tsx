@@ -141,6 +141,7 @@ export default function OrderDetails() {
   const [returnNotes, setReturnNotes] = useState("");
   const [returnLoading, setReturnLoading] = useState(false);
   const [orderReturns, setOrderReturns] = useState<any[]>([]);
+  const [returnSheetOpen, setReturnSheetOpen] = useState(false);
 
   // Edit state
   const [editOpen, setEditOpen] = useState(false);
@@ -1510,11 +1511,21 @@ export default function OrderDetails() {
             {/* Items */}
             {hasDetailedLines ? (
               <div className="divide-y divide-border/50">
-                {lines.map((line) => {
+                {(() => {
+                const returnedQtyMap: Record<string, number> = {};
+                for (const ret of orderReturns) {
+                  if (ret.status === "rejected") continue;
+                  for (const it of (ret.items || [])) {
+                    const code = it.materialCode || it.material_code || "";
+                    returnedQtyMap[code] = (returnedQtyMap[code] || 0) + Number(it.quantity || 0);
+                  }
+                }
+                return lines.map((line) => {
                   const delInfo = lineDeliveryMap[line.id];
                   const hasDelivery = delInfo && delInfo.deliveryDetails.length > 0;
                   const isFullyDelivered = delInfo && delInfo.pct >= 100;
                   const isPartial = delInfo && delInfo.pct > 0 && delInfo.pct < 100;
+                  const returnedQty = returnedQtyMap[line.materialCode] || 0;
 
                   return (
                   <div key={line.id} className={`px-6 py-4 hover:bg-muted/20 transition-colors ${isFullyDelivered ? "bg-emerald-50/30 dark:bg-emerald-950/10" : ""}`}>
@@ -1561,6 +1572,16 @@ export default function OrderDetails() {
                             {line.inventoryLotId}
                           </Link>
                         </div>
+                      )}
+                      {returnedQty > 0 && (
+                        <button
+                          className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors cursor-pointer"
+                          onClick={(e) => { e.stopPropagation(); setReturnSheetOpen(true); }}
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          مرتجع: {returnedQty} {line.unit}
+                          {returnedQty >= Number(line.quantity) && " (كامل)"}
+                        </button>
                       )}
                     </div>
 
@@ -1649,7 +1670,8 @@ export default function OrderDetails() {
                     )}
                   </div>
                   );
-                })}
+                });
+              })()}
               </div>
             ) : hasLegacyLines ? (
               <div className="divide-y divide-border/50">
@@ -2577,46 +2599,147 @@ export default function OrderDetails() {
         </DialogContent>
       </Dialog>
 
-      {/* ── RETURNS SECTION ───────────────────────────────────────────── */}
+      {/* ── RETURNS SUMMARY ──────────────────────────────────────────── */}
       {orderReturns.length > 0 && (
-        <div className="mt-6 border rounded-lg p-4">
-          <h3 className="text-base font-bold mb-3 flex items-center gap-2">
-            <RotateCcw className="h-4 w-4 text-amber-600" />
-            المرتجعات ({orderReturns.length})
-          </h3>
-          <div className="space-y-2">
+        <div className="mt-6 border border-red-200 dark:border-red-800 rounded-lg p-4 bg-red-50/30 dark:bg-red-950/10">
+          <button
+            className="w-full flex items-center justify-between cursor-pointer"
+            onClick={() => setReturnSheetOpen(true)}
+          >
+            <h3 className="text-base font-bold flex items-center gap-2">
+              <RotateCcw className="h-4 w-4 text-red-600" />
+              المرتجعات ({orderReturns.length})
+            </h3>
+            <span className="text-xs text-primary hover:underline">عرض التفاصيل ←</span>
+          </button>
+          <div className="mt-2 flex flex-wrap gap-2">
             {orderReturns.map(ret => (
-              <div key={ret.id} className="border rounded-md p-3 bg-amber-50 dark:bg-amber-950/20">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs">{ret.id}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      ret.status === "accepted" ? "bg-green-100 text-green-700" :
-                      ret.status === "rejected" ? "bg-red-100 text-red-700" :
-                      "bg-yellow-100 text-yellow-700"
-                    }`}>{
-                      ret.status === "accepted" ? "مقبول" :
-                      ret.status === "rejected" ? "مرفوض" : "قيد المراجعة"
-                    }</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>{ret.returnDate || ret.return_date}</span>
-                    <span>القيمة: {Number(ret.totalValue || ret.total_value || 0).toLocaleString()} ج.م</span>
-                  </div>
-                </div>
-                <div className="mt-2 text-xs text-muted-foreground">
-                  {(ret.items || []).map((item: any, i: number) => (
-                    <span key={i}>{i > 0 && " ، "}{item.materialName} ×{item.quantity}</span>
-                  ))}
-                </div>
-                <div className="mt-1">
-                  <Link to="/returns" className="text-xs text-primary hover:underline">عرض التفاصيل ←</Link>
-                </div>
-              </div>
+              <span key={ret.id} className={`text-xs px-2 py-1 rounded-full ${
+                ret.status === "accepted" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+                ret.status === "rejected" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+              }`}>
+                {ret.id} — {ret.status === "accepted" ? "مقبول" : ret.status === "rejected" ? "مرفوض" : "قيد المراجعة"}
+              </span>
             ))}
           </div>
         </div>
       )}
+
+      {/* ── RETURN DETAILS SHEET ──────────────────────────────────────── */}
+      <Sheet open={returnSheetOpen} onOpenChange={setReturnSheetOpen}>
+        <SheetContent side="left" className="w-full sm:max-w-xl p-0 flex flex-col" dir="rtl">
+          <SheetHeader className="px-6 py-4 border-b border-border shrink-0">
+            <SheetTitle className="text-start flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-red-600" />
+              مرتجعات الطلب {id}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            {orderReturns.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">لا توجد مرتجعات لهذا الطلب</p>
+            ) : (
+              orderReturns.map(ret => {
+                const reasonLabels: Record<string, string> = {
+                  defective: "عيب في المنتج", wrong_item: "صنف خاطئ",
+                  excess: "كمية زائدة", client_request: "طلب العميل", other: "أخرى",
+                };
+                const dispositionLabels: Record<string, string> = {
+                  company_inventory: "مخزون الشركة", return_to_supplier: "إعادة للمورد",
+                };
+                return (
+                  <div key={ret.id} className="border rounded-lg overflow-hidden">
+                    <div className={`px-4 py-3 flex items-center justify-between gap-2 ${
+                      ret.status === "accepted" ? "bg-green-50 dark:bg-green-950/20 border-b border-green-200 dark:border-green-800" :
+                      ret.status === "rejected" ? "bg-red-50 dark:bg-red-950/20 border-b border-red-200 dark:border-red-800" :
+                      "bg-yellow-50 dark:bg-yellow-950/20 border-b border-yellow-200 dark:border-yellow-800"
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-bold">{ret.id}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          ret.status === "accepted" ? "bg-green-200 text-green-800" :
+                          ret.status === "rejected" ? "bg-red-200 text-red-800" :
+                          "bg-yellow-200 text-yellow-800"
+                        }`}>{
+                          ret.status === "accepted" ? "مقبول" :
+                          ret.status === "rejected" ? "مرفوض" : "قيد المراجعة"
+                        }</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">{ret.returnDate || ret.return_date}</span>
+                    </div>
+                    <div className="px-4 py-3 space-y-3">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">السبب: </span>
+                          <span className="font-medium">{reasonLabels[ret.reason] || ret.reason}</span>
+                        </div>
+                        {ret.disposition && (
+                          <div>
+                            <span className="text-muted-foreground">الوجهة: </span>
+                            <span className="font-medium">{dispositionLabels[ret.disposition] || ret.disposition}</span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-muted-foreground">القيمة: </span>
+                          <span className="font-bold text-red-600">{Number(ret.totalValue || ret.total_value || 0).toLocaleString()} {t.currency}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">التكلفة: </span>
+                          <span className="font-medium">{Number(ret.totalCost || ret.total_cost || 0).toLocaleString()} {t.currency}</span>
+                        </div>
+                        {ret.refundStatus && ret.refundStatus !== "none" && (
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">حالة الاسترداد: </span>
+                            <span className="font-medium">{ret.refundStatus === "refunded" ? "تم الاسترداد" : ret.refundStatus === "pending" ? "قيد الاسترداد" : ret.refundStatus}</span>
+                            {Number(ret.refundAmount || ret.refund_amount || 0) > 0 && (
+                              <span className="text-green-600 font-bold mr-1">({Number(ret.refundAmount || ret.refund_amount || 0).toLocaleString()} {t.currency})</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {ret.notes && (
+                        <p className="text-xs text-muted-foreground bg-muted/30 rounded p-2">{ret.notes}</p>
+                      )}
+                      <div className="divide-y divide-border/50">
+                        {(ret.items || []).map((item: any, i: number) => (
+                          <div key={i} className="flex items-center gap-3 py-2">
+                            {item.imageUrl ? (
+                              <img src={item.imageUrl} alt={item.materialName} className="w-10 h-10 rounded border object-cover shrink-0" />
+                            ) : (
+                              <div className="w-10 h-10 rounded bg-muted flex items-center justify-center shrink-0 border">
+                                <Package className="h-5 w-5 text-muted-foreground" />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{item.materialName}</p>
+                              <p className="text-xs text-muted-foreground">{item.materialCode} · {item.unit || "قطعة"}</p>
+                            </div>
+                            <div className="text-end shrink-0">
+                              <span className="text-sm font-bold text-red-600">×{item.quantity}</span>
+                              <p className="text-[10px] text-muted-foreground">{Number(item.sellingPrice || 0).toLocaleString()} {t.currency}</p>
+                            </div>
+                            {item.condition && ret.disposition === "company_inventory" && (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                item.condition === "damaged" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                              }`}>{item.condition === "damaged" ? "تالف" : "صالح"}</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            <div className="pt-2 border-t">
+              <Link to="/returns" className="text-sm text-primary hover:underline flex items-center gap-1">
+                <ExternalLink className="h-3.5 w-3.5" />
+                الذهاب لصفحة المرتجعات
+              </Link>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
