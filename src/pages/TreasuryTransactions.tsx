@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRightLeft, Plus, ArrowRight, Filter, Trash2, AlertTriangle } from "lucide-react";
+import { ArrowRightLeft, Plus, ArrowRight, Filter, Trash2, AlertTriangle, ArrowDownLeft, ArrowUpRight, ExternalLink, Clock, Wallet, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -23,6 +23,26 @@ type Tx = {
 
 const TX_TYPES = ["inflow", "withdrawal", "expense", "transfer_in", "transfer_out", "adjustment"] as const;
 const CATEGORIES = ["marketing", "operations", "salaries", "supplies", "rent", "utilities", "logistics", "maintenance", "other"] as const;
+
+function extractLinks(desc: string | null): { orderId?: string; collectionId?: string; text: string } {
+  if (!desc) return { text: "" };
+  let orderId: string | undefined;
+  let collectionId: string | undefined;
+  let text = desc;
+
+  const orderMatch = desc.match(/\[orderId:(ORD-\d+)\]/i) || desc.match(/(ORD-\d+)/i);
+  if (orderMatch) {
+    orderId = orderMatch[1] || orderMatch[0];
+    text = text.replace(orderMatch[0], "").trim();
+  }
+
+  const colMatch = desc.match(/(?:تحصيل|COL)[:.]?\s*(COL-[\w]+)/i) || desc.match(/(COL-[\w]+)/i);
+  if (colMatch) {
+    collectionId = colMatch[1] || colMatch[0];
+  }
+
+  return { orderId, collectionId, text: text.replace(/\s+/g, " ").trim() };
+}
 
 export default function TreasuryTransactionsPage() {
   const { t, lang } = useLanguage();
@@ -173,20 +193,37 @@ export default function TreasuryTransactionsPage() {
   const catLabel = (cat: string) => t[("treasury_cat_" + cat) as keyof typeof t] as string || cat;
   const fmtMoney = (n: number) => n.toLocaleString(lang === "ar" ? "ar-EG" : "en-US", { minimumFractionDigits: 2 });
 
+  const isOutflow = (type: string) => ["withdrawal", "expense", "transfer_out"].includes(type);
+
+  const txIcon = (type: string) => {
+    if (type === "transfer_in" || type === "transfer_out") return <RefreshCw className="h-4 w-4" />;
+    if (isOutflow(type)) return <ArrowUpRight className="h-4 w-4" />;
+    return <ArrowDownLeft className="h-4 w-4" />;
+  };
+
+  const txColor = (type: string) => {
+    if (type === "transfer_in" || type === "transfer_out") return { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-600 dark:text-blue-400" };
+    if (isOutflow(type)) return { bg: "bg-red-100 dark:bg-red-900/30", text: "text-destructive" };
+    return { bg: "bg-emerald-100 dark:bg-emerald-900/30", text: "text-success" };
+  };
+
+  const totalIn = filtered.filter(tx => !isOutflow(tx.txType)).reduce((s, tx) => s + Number(tx.amount), 0);
+  const totalOut = filtered.filter(tx => isOutflow(tx.txType)).reduce((s, tx) => s + Number(tx.amount), 0);
+
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate("/treasury")}><ArrowRight className="h-4 w-4 rtl:rotate-180" /></Button>
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center"><ArrowRightLeft className="h-5 w-5 text-primary" /></div>
           <div>
             <h1 className="page-header">{t.treasuryTransactions}</h1>
-            <p className="page-description">{filtered.length} {t.treasuryTxCount}</p>
+            <p className="page-description">{filtered.length} معاملة</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-[160px] h-9"><Filter className="h-3.5 w-3.5 me-1" /><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[140px] h-9"><Filter className="h-3.5 w-3.5 me-1" /><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t.all}</SelectItem>
               {TX_TYPES.map(tt => <SelectItem key={tt} value={tt}>{txTypeLabel(tt)}</SelectItem>)}
@@ -201,58 +238,102 @@ export default function TreasuryTransactionsPage() {
         </div>
       </div>
 
-      <div className="stat-card overflow-x-auto">
+      {!loading && filtered.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="stat-card p-3 text-center">
+            <p className="text-xs text-muted-foreground mb-1">إجمالي الوارد</p>
+            <p className="text-lg font-bold text-success">+{fmtMoney(totalIn)}</p>
+          </div>
+          <div className="stat-card p-3 text-center">
+            <p className="text-xs text-muted-foreground mb-1">إجمالي الصادر</p>
+            <p className="text-lg font-bold text-destructive">-{fmtMoney(totalOut)}</p>
+          </div>
+          <div className="stat-card p-3 text-center col-span-2 sm:col-span-1">
+            <p className="text-xs text-muted-foreground mb-1">الصافي</p>
+            <p className={`text-lg font-bold ${totalIn - totalOut >= 0 ? "text-primary" : "text-destructive"}`}>
+              {totalIn - totalOut >= 0 ? "+" : ""}{fmtMoney(totalIn - totalOut)}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="stat-card">
         {loading ? (
           <div className="text-center py-12 text-muted-foreground text-sm">{t.loadingUsers}</div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground text-sm">{t.treasuryNoTx}</div>
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            <Wallet className="h-10 w-10 mx-auto mb-3 opacity-30" />
+            <p>{t.treasuryNoTx}</p>
+          </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.date}</th>
-                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.treasuryType}</th>
-                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.treasuryAccountName}</th>
-                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.amount}</th>
-                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.treasuryBalanceAfter}</th>
-                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.treasuryCategory}</th>
-                <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.description}</th>
-                {canManage && <th className="py-3 px-3 w-10" />}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(tx => {
-                const isOut = ["withdrawal", "expense", "transfer_out"].includes(tx.txType);
-                return (
-                  <tr key={tx.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors group" data-testid={`row-tx-${tx.id}`}>
-                    <td className="py-3 px-3 text-muted-foreground whitespace-nowrap">{new Date(tx.createdAt).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US")}</td>
-                    <td className="py-3 px-3"><Badge variant={isOut ? "destructive" : "default"}>{txTypeLabel(tx.txType)}</Badge></td>
-                    <td className="py-3 px-3">{accountName(tx.accountId)}</td>
-                    <td className={`py-3 px-3 font-semibold ${isOut ? "text-destructive" : "text-success"}`}>{isOut ? "-" : "+"}{fmtMoney(Number(tx.amount))}</td>
-                    <td className="py-3 px-3 text-muted-foreground">{fmtMoney(Number(tx.balanceAfter))}</td>
-                    <td className="py-3 px-3">{tx.category ? <Badge variant="outline">{catLabel(tx.category)}</Badge> : "—"}</td>
-                    <td className="py-3 px-3 text-muted-foreground max-w-[200px] truncate">{tx.description || "—"}</td>
-                    {canManage && (
-                      <td className="py-3 px-3">
-                        <Button
-                          variant="ghost" size="icon"
-                          className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10 transition-opacity"
-                          onClick={() => setDeleteTarget(tx)}
-                          data-testid={`button-delete-tx-${tx.id}`}
+          <div className="divide-y divide-border/50">
+            {filtered.map(tx => {
+              const out = isOutflow(tx.txType);
+              const color = txColor(tx.txType);
+              const links = extractLinks(tx.description);
+              return (
+                <div key={tx.id} className="flex items-start gap-3 px-4 py-3 hover:bg-muted/20 transition-colors group" data-testid={`row-tx-${tx.id}`}>
+                  <div className={`mt-0.5 flex-shrink-0 h-9 w-9 rounded-full ${color.bg} flex items-center justify-center`}>
+                    <span className={color.text}>{txIcon(tx.txType)}</span>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold">{txTypeLabel(tx.txType)}</span>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">{accountName(tx.accountId)}</Badge>
+                      {tx.category && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{catLabel(tx.category)}</Badge>}
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {links.collectionId && (
+                        <button
+                          className="inline-flex items-center gap-1 font-mono text-xs bg-success/10 text-success px-1.5 py-0.5 rounded hover:bg-success/20 transition-colors"
+                          onClick={() => navigate(`/collections?search=${links.collectionId}`)}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </td>
+                          {links.collectionId} <ExternalLink className="h-2.5 w-2.5" />
+                        </button>
+                      )}
+                      {links.orderId && (
+                        <button
+                          className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20 transition-colors"
+                          onClick={() => navigate(`/orders/${links.orderId}`)}
+                        >
+                          {links.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                        </button>
+                      )}
+                      {links.text && <span className="text-xs text-muted-foreground truncate max-w-[250px]">{links.text}</span>}
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3 flex-shrink-0" />
+                      <span>{new Date(tx.createdAt).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US")}</span>
+                      <span className="opacity-60">·</span>
+                      <span>الرصيد: {fmtMoney(Number(tx.balanceAfter))}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className={`text-sm font-bold ${out ? "text-destructive" : "text-success"}`}>
+                      {out ? "-" : "+"}{fmtMoney(Number(tx.amount))}
+                      <span className="text-[10px] font-normal text-muted-foreground mr-0.5">{t.currency}</span>
+                    </span>
+                    {canManage && (
+                      <button
+                        className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
+                        onClick={() => setDeleteTarget(tx)}
+                        data-testid={`button-delete-tx-${tx.id}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
-      {/* Add Transaction Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{t.treasuryNewTx}</DialogTitle></DialogHeader>
@@ -310,7 +391,6 @@ export default function TreasuryTransactionsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Single Transaction Dialog */}
       <Dialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -324,7 +404,7 @@ export default function TreasuryTransactionsPage() {
               <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">النوع:</span>
-                  <Badge variant={["withdrawal","expense","transfer_out"].includes(deleteTarget.txType) ? "destructive" : "default"}>{txTypeLabel(deleteTarget.txType)}</Badge>
+                  <Badge variant={isOutflow(deleteTarget.txType) ? "destructive" : "default"}>{txTypeLabel(deleteTarget.txType)}</Badge>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">الحساب:</span>
@@ -352,7 +432,6 @@ export default function TreasuryTransactionsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete All Dialog */}
       <Dialog open={deleteAllOpen} onOpenChange={setDeleteAllOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
