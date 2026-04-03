@@ -55,7 +55,7 @@ All financial pages and server endpoints account for returns:
 - **Trash Page** (`src/pages/Trash.tsx`) — Full trash management: type-filter badges, search, expand/collapse snapshot details, restore, permanent delete, clear-all
 - **Trash API Endpoints**: `GET /api/trash`, `GET /api/trash/count`, `POST /api/trash/:id/restore`, `DELETE /api/trash/:id`, `DELETE /api/trash`
 - **Full Cascade Delete & Restore** (all entities):
-  - **Order**: cascade-deletes lines, contributions, deliveries, collections, client_inventory, company_inventory, audits, treasury_transactions, linked_collections. Restore brings back everything with original dates. Founder balances restored idempotently.
+  - **Order**: cascade-deletes lines, contributions, deliveries, collections, client_inventory, company_inventory, audits, returns, ALL treasury_transactions (order_funding, capital_return, capital_withdrawal, founder_contribution, inflow, expense — matched by orderId in description or text match), linked_collections. Reverses founder total_contributed/total_withdrawn. Restores inventory lots. Restore brings back everything with original dates. Founder balances restored idempotently.
   - **Delivery**: cascade-deletes client_inventory + company_inventory created by delivery, re-syncs order status. Restore re-creates inventory and re-syncs order status.
   - **Audit ↔ Collection**: Deleting audit with linked collection shows warning and cascade-deletes collection. Restoring audit restores linked collection from trash. Deleting collection reverts audit status to "Completed". Restoring collection sets audit status to "تم التحصيل".
   - **Supplier**: cascade-saves supplier_materials. Restore re-creates them.

@@ -890,16 +890,19 @@ router.delete("/orders/:id", async (req, res) => {
     } catch (e: any) { console.warn("[delete-order] inventory restore error:", e.message); }
   }
 
-  // ── Step 1b: clean up treasury transactions & founder balances ──
+  // ── Step 1b: clean up ALL treasury transactions linked to this order ──
   try {
     const { data: allTreasuryTxs } = await supabaseAdmin
       .from("treasury_transactions")
       .select("*")
-      .in("tx_type", ["order_funding", "capital_withdrawal"]);
+      .in("tx_type", [...FOUNDER_TX_TYPES, "inflow", "expense", "withdrawal"]);
 
     const orderTreasuryTxs = (allTreasuryTxs || []).filter((tx: any) => {
       const parsed = parseFounderDesc(tx.description);
-      return parsed.orderId === orderId;
+      if (parsed.orderId === orderId) return true;
+      const d = tx.description || "";
+      if (d.includes(orderId)) return true;
+      return false;
     });
 
     for (const tx of orderTreasuryTxs) {
@@ -908,9 +911,9 @@ router.delete("/orders/:id", async (req, res) => {
         const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", tx.performed_by).single();
         if (f) {
           const patch: Record<string, number> = {};
-          if (tx.tx_type === "order_funding") {
+          if (tx.tx_type === "order_funding" || tx.tx_type === "founder_contribution") {
             patch.total_contributed = Math.max(0, Number(f.total_contributed || 0) - absAmt);
-          } else if (tx.tx_type === "capital_withdrawal") {
+          } else if (tx.tx_type === "capital_withdrawal" || tx.tx_type === "founder_withdrawal") {
             patch.total_withdrawn = Math.max(0, Number(f.total_withdrawn || 0) - absAmt);
           }
           if (Object.keys(patch).length > 0) {
