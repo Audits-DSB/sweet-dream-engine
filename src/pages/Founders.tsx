@@ -69,7 +69,7 @@ function typeLabel(type: string) {
   if (type === "funding") return "تمويل طلب";
   if (type === "contribution") return "مساهمة رأس مال";
   if (type === "withdrawal") return "سحب";
-  if (type === "capital_return") return "رأس مال عائد";
+  if (type === "capital_return") return "استرداد رأس مال";
   if (type === "capital_withdrawal") return "سحب رأس مال";
   return type;
 }
@@ -1603,7 +1603,10 @@ export default function FoundersPage() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium">{typeLabel(tx.type)}</span>
+                                        <span className="text-sm font-medium">{tx.method === "return_refund" ? "استرداد مرتجع" : typeLabel(tx.type)}</span>
+                                        {tx.method === "return_refund" && (
+                                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">مرتجع</span>
+                                        )}
                                         {tx.collectionId && (
                                           <button className="inline-flex items-center gap-1 font-mono text-xs bg-success/10 text-success px-1.5 py-0.5 rounded hover:bg-success/20"
                                             onClick={() => navigate(`/collections?search=${tx.collectionId}`)}>

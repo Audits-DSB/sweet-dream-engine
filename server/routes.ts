@@ -3040,7 +3040,23 @@ router.post("/returns/:id/accept", async (req, res) => {
       }
     }
 
-    // 6. Update the return record
+    // 6. Save founder refund transactions
+    if (founderRefunds.length > 0) {
+      for (const fr of founderRefunds) {
+        await supabaseAdmin.from("treasury_transactions").insert({
+          tx_type: "capital_return",
+          amount: Math.abs(fr.amount),
+          balance_after: 0,
+          performed_by: fr.founderId,
+          reference_id: fr.founderName,
+          category: "return_refund",
+          description: encodeFounderDesc(orderId, `استرداد مرتجع ${retId}`, {}),
+          date: new Date().toISOString().split("T")[0],
+        });
+      }
+    }
+
+    // 7. Update the return record
     const { data: updated, error: updErr } = await supabaseAdmin.from("returns").update({
       status: "accepted",
       disposition: disposition || "",
@@ -3095,6 +3111,19 @@ router.post("/returns/:id/confirm-refund", async (req, res) => {
         const refundAmt = Math.round(totalReturnCost / numFounders * 100) / 100;
         founderRefunds.push({ founderId: f.id, founderName: f.name, amount: refundAmt });
       }
+    }
+
+    for (const fr of founderRefunds) {
+      await supabaseAdmin.from("treasury_transactions").insert({
+        tx_type: "capital_return",
+        amount: Math.abs(fr.amount),
+        balance_after: 0,
+        performed_by: fr.founderId,
+        reference_id: fr.founderName,
+        category: "return_refund",
+        description: encodeFounderDesc(orderId, `استرداد مرتجع ${retId}`, {}),
+        date: new Date().toISOString().split("T")[0],
+      });
     }
 
     const { data: updated, error: updErr } = await supabaseAdmin.from("returns").update({
