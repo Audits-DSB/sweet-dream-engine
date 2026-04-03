@@ -7,7 +7,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Eye, MoreHorizontal, Mail, Phone, Loader2, Trash2, Pencil } from "lucide-react";
+import { Plus, Eye, MoreHorizontal, Mail, Phone, Loader2, Trash2, Pencil, X } from "lucide-react";
+import { parsePhones, serializePhones, getPrimaryPhone, getPhoneDisplay, type PhoneEntry } from "@/lib/phoneUtils";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -43,6 +44,7 @@ function mapClient(raw: any): Client {
 }
 
 const emptyForm = { name: "", contact: "", email: "", phone: "", city: "", status: "Active" };
+const emptyPhone: PhoneEntry = { name: "", number: "" };
 
 export default function ClientsPage() {
   const { t } = useLanguage();
@@ -57,6 +59,7 @@ export default function ClientsPage() {
   const [filters, setFilters] = useState<Record<string, string>>(initialStatus ? { status: initialStatus } : {});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [phones, setPhones] = useState<PhoneEntry[]>([{ ...emptyPhone }]);
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
   const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
@@ -83,12 +86,13 @@ export default function ClientsPage() {
       const today = new Date().toISOString().split("T")[0];
       const saved = await api.post<any>("/clients", {
         id: newId, name: form.name, contact: form.contact,
-        email: form.email, phone: form.phone, city: form.city,
+        email: form.email, phone: serializePhones(phones), city: form.city,
         status: form.status,
       });
       await logAudit({ entity: "client", entityId: saved.id || newId, entityName: form.name, action: "create", snapshot: saved, endpoint: "/clients" , performedBy: _userName });
       setClients(prev => [...prev, mapClient(saved)]);
       setForm(emptyForm);
+      setPhones([{ ...emptyPhone }]);
       setDialogOpen(false);
       toast.success(t.clientAdded);
     } catch (err: any) {
@@ -131,7 +135,7 @@ export default function ClientsPage() {
         ]}
         filterValues={filters}
         onFilterChange={(key, val) => setFilters({ ...filters, [key]: val })}
-        onExport={() => exportToCsv("clients", [t.code, t.clientName, t.contactPerson, t.email, t.phone, t.city, t.status, t.joinDate, t.totalOrders, t.outstanding], filtered.map(c => [c.id, c.name, c.contact, c.email, c.phone, c.city, c.status, c.joinDate, c.totalOrders, c.outstanding]))}
+        onExport={() => exportToCsv("clients", [t.code, t.clientName, t.contactPerson, t.email, t.phone, t.city, t.status, t.joinDate, t.totalOrders, t.outstanding], filtered.map(c => [c.id, c.name, c.contact, c.email, getPhoneDisplay(c.phone), c.city, c.status, c.joinDate, c.totalOrders, c.outstanding]))}
         actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addClient}</Button>}
       />
 
@@ -185,7 +189,7 @@ export default function ClientsPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => navigate(`/clients/${client.id}`)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewProfile}</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => { if (client.email) { window.open(`mailto:${client.email}`); } else { toast.info(t.noEmail); } }}><Mail className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.sendEmail}</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => { if (client.phone) { window.open(`tel:${client.phone}`); } else { toast.info(t.noPhone); } }}><Phone className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.call}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { const p = getPrimaryPhone(client.phone); if (p) { window.open(`tel:${p}`); } else { toast.info(t.noPhone); } }}><Phone className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.call}</DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(client)} data-testid={`button-delete-client-${client.id}`}>
                           <Trash2 className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />حذف
@@ -210,15 +214,33 @@ export default function ClientsPage() {
         loading={deleting}
       />
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setForm(emptyForm); setPhones([{ ...emptyPhone }]); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{t.addNewClient}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><Label className="text-xs">{t.clientName} *</Label><Input className="h-9 mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t.example} /></div>
             <div><Label className="text-xs">{t.contactPerson} *</Label><Input className="h-9 mt-1" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} placeholder={t.fullName} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-              <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+            <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <Label className="text-xs">أرقام الهاتف</Label>
+                <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px] gap-1 px-2" onClick={() => setPhones([...phones, { ...emptyPhone }])}>
+                  <Plus className="h-3 w-3" />إضافة رقم
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {phones.map((p, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input className="h-9 flex-1" placeholder="الاسم (اختياري)" value={p.name} onChange={(e) => { const u = [...phones]; u[i] = { ...u[i], name: e.target.value }; setPhones(u); }} />
+                    <Input className="h-9 flex-1" placeholder="رقم الهاتف" value={p.number} onChange={(e) => { const u = [...phones]; u[i] = { ...u[i], number: e.target.value }; setPhones(u); }} dir="ltr" />
+                    {phones.length > 1 && (
+                      <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => setPhones(phones.filter((_, j) => j !== i))}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">{t.city}</Label><Input className="h-9 mt-1" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>

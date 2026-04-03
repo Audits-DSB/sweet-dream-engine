@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, Package, Receipt, TrendingUp, ClipboardCheck, Loader2, ExternalLink, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, Package, Receipt, TrendingUp, ClipboardCheck, Loader2, ExternalLink, AlertTriangle, Plus, X } from "lucide-react";
+import { parsePhones, serializePhones, type PhoneEntry } from "@/lib/phoneUtils";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -17,6 +18,7 @@ import { toast } from "sonner";
 
 type Client = {
   id: string; name: string; contact: string; email: string; phone: string;
+
   city: string; status: string; joinDate: string; totalOrders: number;
   outstanding: number;
 };
@@ -77,6 +79,7 @@ export default function ClientProfile() {
   const [editOpen, setEditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", contact: "", email: "", phone: "", city: "", status: "Active" });
+  const [editPhones, setEditPhones] = useState<PhoneEntry[]>([{ name: "", number: "" }]);
 
   useEffect(() => {
     if (!id) return;
@@ -91,6 +94,8 @@ export default function ClientProfile() {
         const c = mapClient(found);
         setClient(c);
         setEditForm({ name: c.name, contact: c.contact, email: c.email, phone: c.phone, city: c.city, status: c.status });
+        const parsed = parsePhones(c.phone);
+        setEditPhones(parsed.length > 0 ? parsed : [{ name: "", number: "" }]);
       }
       const clientOrders = (ordersData || [])
         .filter((o: any) => (o.clientId || o.client_id) === id)
@@ -122,9 +127,11 @@ export default function ClientProfile() {
     if (!client) return;
     setSaving(true);
     try {
-      await api.patch(`/clients/${client.id}`, editForm);
-      await logAudit({ entity: "client", entityId: client.id, entityName: editForm.name || client.name, action: "update", snapshot: { ...client, ...editForm }, endpoint: "/clients", performedBy: _userName });
-      setClient({ ...client, ...editForm });
+      const phoneSerialized = serializePhones(editPhones);
+      const patchData = { ...editForm, phone: phoneSerialized };
+      await api.patch(`/clients/${client.id}`, patchData);
+      await logAudit({ entity: "client", entityId: client.id, entityName: editForm.name || client.name, action: "update", snapshot: { ...client, ...patchData }, endpoint: "/clients", performedBy: _userName });
+      setClient({ ...client, ...patchData });
       setEditOpen(false);
       toast.success(t.clientUpdated);
     } catch {
@@ -175,7 +182,16 @@ export default function ClientProfile() {
       <div className="stat-card">
         <div className="flex flex-wrap gap-6 text-sm">
           {client.email && <div className="flex items-center gap-2 text-muted-foreground"><Mail className="h-4 w-4" />{client.email}</div>}
-          {client.phone && <div className="flex items-center gap-2 text-muted-foreground"><Phone className="h-4 w-4" />{client.phone}</div>}
+          {client.phone && (() => {
+            const phonesArr = parsePhones(client.phone);
+            return phonesArr.map((p, i) => (
+              <div key={i} className="flex items-center gap-2 text-muted-foreground">
+                <Phone className="h-4 w-4" />
+                <a href={`tel:${p.number}`} className="hover:text-primary" dir="ltr">{p.number}</a>
+                {p.name && <span className="text-xs text-muted-foreground/70">({p.name})</span>}
+              </div>
+            ));
+          })()}
           {client.city && <div className="flex items-center gap-2 text-muted-foreground"><MapPin className="h-4 w-4" />{client.city}</div>}
           {client.joinDate && <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4" />{t.clientProfileJoined} {client.joinDate}</div>}
         </div>
@@ -317,15 +333,39 @@ export default function ClientProfile() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+      <Dialog open={editOpen} onOpenChange={(open) => {
+        setEditOpen(open);
+        if (open && client) {
+          const parsed = parsePhones(client.phone);
+          setEditPhones(parsed.length > 0 ? parsed : [{ name: "", number: "" }]);
+        }
+      }}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{t.editClient}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><Label className="text-xs">{t.clientName} *</Label><Input className="h-9 mt-1" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} /></div>
             <div><Label className="text-xs">{t.contactPerson}</Label><Input className="h-9 mt-1" value={editForm.contact} onChange={e => setEditForm({ ...editForm, contact: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} /></div>
-              <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} /></div>
+            <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} /></div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <Label className="text-xs">أرقام الهاتف</Label>
+                <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px] gap-1 px-2" onClick={() => setEditPhones([...editPhones, { name: "", number: "" }])}>
+                  <Plus className="h-3 w-3" />إضافة رقم
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {editPhones.map((p, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input className="h-9 flex-1" placeholder="الاسم (اختياري)" value={p.name} onChange={(e) => { const u = [...editPhones]; u[i] = { ...u[i], name: e.target.value }; setEditPhones(u); }} />
+                    <Input className="h-9 flex-1" placeholder="رقم الهاتف" value={p.number} onChange={(e) => { const u = [...editPhones]; u[i] = { ...u[i], number: e.target.value }; setEditPhones(u); }} dir="ltr" />
+                    {editPhones.length > 1 && (
+                      <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => setEditPhones(editPhones.filter((_, j) => j !== i))}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">{t.city}</Label><Input className="h-9 mt-1" value={editForm.city} onChange={e => setEditForm({ ...editForm, city: e.target.value })} /></div>
