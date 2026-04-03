@@ -65,6 +65,7 @@ const entityLabels: Record<string, string> = {
   "founder-transaction": "معاملة مؤسس",
   "treasury-account": "حساب خزينة",
   "treasury-transaction": "معاملة خزينة",
+  "company-inventory": "مخزون الشركة",
   "external-material": "مادة (كاتالوج)",
 };
 
@@ -83,6 +84,7 @@ const entityIcons: Record<string, any> = {
   "external-material": Boxes,
   audit: ClipboardCheck,
   "client-inventory": Package,
+  "company-inventory": Boxes,
   "delivery-actor": Truck,
 };
 
@@ -135,6 +137,7 @@ const TRASH_ENTITY_LABELS: Record<string, { label: string; icon: any; color: str
   "treasury-account": { label: "حساب خزينة", icon: Wallet, color: "bg-yellow-500/10 text-yellow-600" },
   "treasury-transaction": { label: "معاملة خزينة", icon: Wallet, color: "bg-lime-500/10 text-lime-600" },
   "founder-transaction": { label: "معاملة مؤسس", icon: UserCog, color: "bg-cyan-500/10 text-cyan-600" },
+  "company-inventory": { label: "مخزون الشركة", icon: Boxes, color: "bg-purple-500/10 text-purple-600" },
   "external-material": { label: "مادة (كاتالوج)", icon: Boxes, color: "bg-emerald-500/10 text-emerald-600" },
 };
 
@@ -355,6 +358,7 @@ function getEntityRoute(entity: string, entityId: string): string | null {
     case "founder-transaction": return `/founder-funding`;
     case "treasury-account": return `/treasury/accounts`;
     case "treasury-transaction": return `/treasury/transactions`;
+    case "audit":
     case "audits": return `/audits`;
     case "client-inventory": return `/inventory`;
     case "external-material": return `/materials`;
