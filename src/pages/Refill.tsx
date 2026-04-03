@@ -514,11 +514,11 @@ export default function RefillPage() {
                 )}
               </div>
 
-              <table className="w-full text-sm mb-6">
+              <table className="w-full text-sm mb-6" style={{ minWidth: "1000px" }}>
                 <thead>
                   <tr className="border-b border-border">
                     <th className="py-3 px-3 w-10"><input type="checkbox" className="rounded" onChange={(e) => e.target.checked ? selectAllNeedRefill() : setSelected(new Set())} /></th>
-                    <th className="py-3 px-3 w-14"></th>
+                    <th className="py-3 px-3 min-w-[60px] w-16"></th>
                     {groupBy === "material" && <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.client}</th>}
                     {groupBy === "client" && <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>}
                     <th className="text-start py-3 px-3 text-xs font-medium text-muted-foreground">الطلب</th>
@@ -538,11 +538,11 @@ export default function RefillPage() {
                   {items.map((r) => (
                     <tr key={r.id} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${selected.has(r.id) ? "bg-primary/5" : ""} ${r.fromAudit ? "bg-amber-50/40 dark:bg-amber-950/10" : ""}`}>
                       <td className="py-3 px-3">{r.suggestedQty > 0 && <input type="checkbox" className="rounded" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} />}</td>
-                      <td className="py-2 px-3">
+                      <td className="py-2 px-3 min-w-[60px]">
                         {r.imageUrl ? (
-                          <img src={r.imageUrl} alt={r.material} className="h-10 w-10 rounded-lg object-contain bg-white border border-border shadow-sm p-0.5" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                          <img src={r.imageUrl} alt={r.material} className="h-12 w-12 rounded-lg object-cover bg-white border border-border shadow-sm p-0.5 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         ) : (
-                          <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center border border-border"><Package className="h-4 w-4 text-muted-foreground" /></div>
+                          <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center border border-border shrink-0"><Package className="h-5 w-5 text-muted-foreground" /></div>
                         )}
                       </td>
                       {groupBy === "material" && (
