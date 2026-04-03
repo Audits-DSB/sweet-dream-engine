@@ -1084,32 +1084,56 @@ export default function FoundersPage() {
             </div>
 
             {/* Order selector (only in fund_order mode) */}
-            {withdrawMode === "fund_order" && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">اختر الطلب المراد تمويله *</Label>
-                <select
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                  value={withdrawOrderId}
-                  onChange={(e) => setWithdrawOrderId(e.target.value)}
-                >
-                  <option value="">— اختر طلباً —</option>
-                  {Object.values(orders)
-                    .sort((a: any, b: any) => (b.date || "").localeCompare(a.date || ""))
-                    .slice(0, 50)
-                    .map((o: any) => (
-                      <option key={o.id} value={o.id}>
-                        {o.id} — {o.client || "بدون عميل"} ({o.status || ""})
-                      </option>
-                    ))}
-                </select>
-                {withdrawOrderId && orders[withdrawOrderId] && (
-                  <p className="text-xs text-muted-foreground">
-                    التكلفة الكلية: <span className="font-medium text-foreground">{Number(orders[withdrawOrderId].totalCost || 0).toLocaleString()} {t.currency}</span>
-                    {" · "}العميل: <span className="font-medium text-foreground">{(orders[withdrawOrderId] as any).client || "—"}</span>
-                  </p>
-                )}
-              </div>
-            )}
+            {withdrawMode === "fund_order" && (() => {
+              const fId = withdrawFounderId;
+              const fundingEntries = orderFundingByFounder[fId] || [];
+              const unpaidEntries = fundingEntries.filter(e => !e.paid);
+
+              return (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">اختر الطلب المراد تمويله * <span className="text-muted-foreground">({unpaidEntries.length} طلب بانتظار التمويل)</span></Label>
+                  {unpaidEntries.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-3 text-center text-xs text-muted-foreground">
+                      لا توجد طلبات تحتاج تمويل من هذا المؤسس
+                    </div>
+                  ) : (
+                    <div className="max-h-48 overflow-y-auto rounded-lg border divide-y">
+                      {unpaidEntries.map((entry) => {
+                        const remaining = Math.max(entry.amount - entry.paidAmount, 0);
+                        return (
+                          <button
+                            key={entry.orderId}
+                            type="button"
+                            onClick={() => { setWithdrawOrderId(entry.orderId); setWithdrawAmount(String(remaining)); }}
+                            className={`w-full flex items-center justify-between px-3 py-2.5 text-xs text-start transition-colors hover:bg-muted/40 ${withdrawOrderId === entry.orderId ? "bg-primary/5 border-r-2 border-r-primary" : ""}`}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-semibold">{entry.orderId}</span>
+                                <span className="text-muted-foreground truncate">{entry.clientName || ""}</span>
+                              </div>
+                              <div className="text-[10px] text-muted-foreground mt-0.5">
+                                التكلفة: {entry.totalCost.toLocaleString()} · حصتك: {entry.amount.toLocaleString()} · دفعت: {entry.paidAmount.toLocaleString()}
+                              </div>
+                            </div>
+                            <div className="text-left shrink-0 ms-2">
+                              <span className="font-bold text-destructive">{remaining.toLocaleString()}</span>
+                              <span className="text-[10px] text-muted-foreground block">متبقي</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {withdrawOrderId && orders[withdrawOrderId] && (
+                    <p className="text-xs text-muted-foreground">
+                      الطلب المحدد: <span className="font-medium text-foreground">{withdrawOrderId}</span>
+                      {" · "}العميل: <span className="font-medium text-foreground">{(orders[withdrawOrderId] as any).client || "—"}</span>
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Amount */}
             <div className="space-y-1.5">
