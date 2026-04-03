@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { api } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
-import { Landmark, Building, TrendingUp, TrendingDown, ArrowRightLeft, Plus, DollarSign } from "lucide-react";
+import { Landmark, Building, TrendingUp, TrendingDown, ArrowRightLeft, Plus, DollarSign, ExternalLink, Clock, ArrowDownLeft, ArrowUpRight, RotateCcw, ShoppingBag, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -203,32 +203,91 @@ export default function TreasuryDashboard() {
         {transactions.length === 0 ? (
           <p className="text-center py-8 text-muted-foreground text-sm">{t.treasuryNoTx}</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.date}</th>
-                  <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.treasuryType}</th>
-                  <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.treasuryAccountName}</th>
-                  <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.amount}</th>
-                  <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.description}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.slice(0, 10).map(tx => {
-                  const isOut = ["withdrawal", "expense", "transfer_out"].includes(tx.txType);
-                  return (
-                    <tr key={tx.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                      <td className="py-2 px-3 text-muted-foreground">{new Date(tx.createdAt).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US")}</td>
-                      <td className="py-2 px-3"><Badge variant={isOut ? "destructive" : "default"}>{txTypeLabel(tx.txType)}</Badge></td>
-                      <td className="py-2 px-3">{accountName(tx.accountId)}</td>
-                      <td className={`py-2 px-3 font-semibold ${isOut ? "text-destructive" : "text-success"}`}>{isOut ? "-" : "+"}{fmtMoney(Number(tx.amount))}</td>
-                      <td className="py-2 px-3 text-muted-foreground max-w-[200px] truncate">{tx.description || "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="divide-y divide-border/50">
+            {transactions.slice(0, 10).map(tx => {
+              const isOut = ["withdrawal", "expense", "transfer_out"].includes(tx.txType);
+              const isReturn = tx.category === "return_refund" || (tx.description || "").includes("مرتجع");
+              const isFunding = tx.txType === "order_funding";
+              const isContrib = tx.txType === "founder_contribution";
+
+              const txIcon = isReturn ? RotateCcw
+                : isFunding ? ShoppingBag
+                : isContrib ? Receipt
+                : isOut ? ArrowUpRight : ArrowDownLeft;
+              const iconBg = isReturn ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400"
+                : isFunding ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                : isContrib ? "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"
+                : isOut ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                : "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400";
+
+              const desc = tx.description || "";
+              const orderMatch = desc.match(/\[orderId:(ORD-[^\]]+)\]/);
+              const colMatch = desc.match(/COL-[A-Za-z0-9]+/);
+              const retMatch = desc.match(/RET-[A-Za-z0-9]+/);
+              const clientMatch = desc.match(/\[clientName:([^\]]+)\]/);
+              let cleanDesc = desc
+                .replace(/\[orderId:[^\]]*\]\s*/g, "")
+                .replace(/\[collectionId:[^\]]*\]\s*/g, "")
+                .replace(/\[clientName:[^\]]*\]\s*/g, "")
+                .trim();
+              if (!cleanDesc) cleanDesc = txTypeLabel(tx.txType);
+
+              const TxIcon = txIcon;
+              return (
+                <div key={tx.id} className="flex items-start gap-3 py-3 px-1 hover:bg-muted/20 rounded-lg transition-colors">
+                  <div className={`mt-0.5 flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center ${iconBg}`}>
+                    <TxIcon className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium">{cleanDesc}</span>
+                      <Badge variant={isOut ? "destructive" : "default"} className="text-[10px] h-5">{txTypeLabel(tx.txType)}</Badge>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {orderMatch && (
+                        <button
+                          className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20 transition-colors"
+                          onClick={() => navigate(`/orders/${orderMatch[1]}`)}
+                        >
+                          {orderMatch[1]} <ExternalLink className="h-2.5 w-2.5" />
+                        </button>
+                      )}
+                      {retMatch && (
+                        <button
+                          className="inline-flex items-center gap-1 font-mono text-xs bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 px-1.5 py-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                          onClick={() => navigate(`/returns/${retMatch[0]}`)}
+                        >
+                          {retMatch[0]} <ExternalLink className="h-2.5 w-2.5" />
+                        </button>
+                      )}
+                      {colMatch && (
+                        <button
+                          className="inline-flex items-center gap-1 font-mono text-xs bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 px-1.5 py-0.5 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+                          onClick={() => navigate(`/collections`)}
+                        >
+                          {colMatch[0]} <ExternalLink className="h-2.5 w-2.5" />
+                        </button>
+                      )}
+                      {clientMatch && (
+                        <span className="text-xs text-muted-foreground">· {clientMatch[1]}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      <span>{new Date(tx.createdAt).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US")}</span>
+                      <span>·</span>
+                      <span>{accountName(tx.accountId)}</span>
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0 text-end">
+                    <span className={`text-sm font-bold ${isOut ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                      {isOut ? "-" : "+"}{fmtMoney(Number(tx.amount))}
+                    </span>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{t.currency}</p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
