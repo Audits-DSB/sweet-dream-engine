@@ -118,7 +118,6 @@ export default function RefillPage() {
     queryFn: () => api.get("/material-last-suppliers").catch(() => ({ materials: {}, pending: {} })),
   });
 
-  const [converting, setConverting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [editQty, setEditQty] = useState<Record<string, number>>({});
   const [supplierFilter, setSupplierFilter] = useState("");
@@ -425,50 +424,33 @@ export default function RefillPage() {
             </div>
             <div className="flex gap-2 justify-end">
               <Button size="sm" variant="outline" onClick={() => { setShowConfirm(false); setEditQty({}); }}>إلغاء</Button>
-              <Button size="sm" disabled={converting} onClick={async () => {
+              <Button size="sm" onClick={() => {
                 if (refillable.length === 0) return;
-                setConverting(true);
-                try {
-                  const uniqueClients = [...new Set(refillable.map(i => i.clientId))];
-                  const clientId = uniqueClients[0];
-                  const clientName = refillable[0].client;
-                  const today = new Date().toISOString().slice(0, 10);
-                  const items = refillable.map(item => ({
-                    materialCode: item.code,
-                    name: item.material,
-                    quantity: editQty[item.id] ?? item.suggestedQty,
-                    sellingPrice: 0,
-                    costPrice: item.lastCostPrice || 0,
-                    imageUrl: item.imageUrl || "",
-                    unit: item.unit,
-                    supplierId: item.lastSupplierId || "",
-                  }));
-                  const totalCost = items.reduce((s, i) => s + i.costPrice * i.quantity, 0);
-                  const order = await api.post("/orders", {
-                    id: `ORD-${Date.now()}`,
-                    clientId,
-                    client: clientName,
-                    date: today,
-                    status: "Draft",
-                    source: "Refill",
-                    orderType: "client",
-                    totalSelling: "0",
-                    totalCost: String(totalCost),
-                    splitMode: "equal",
-                    items,
-                  });
-                  toast.success(`تم إنشاء الطلب ${order.id} بنجاح`);
-                  setShowConfirm(false);
-                  setEditQty({});
-                  navigate(`/orders/${order.id}`);
-                } catch (e: any) {
-                  toast.error("خطأ في إنشاء الطلب: " + (e.message || ""));
-                } finally {
-                  setConverting(false);
-                }
+                const uniqueClients = [...new Set(refillable.map(i => i.clientId))];
+                const clientId = uniqueClients[0];
+                const clientName = refillable[0].client;
+                const items = refillable.map(item => ({
+                  materialCode: item.code,
+                  name: item.material,
+                  quantity: editQty[item.id] ?? item.suggestedQty,
+                  sellingPrice: 0,
+                  costPrice: item.lastCostPrice || 0,
+                  imageUrl: item.imageUrl || "",
+                  unit: item.unit,
+                  supplierId: item.lastSupplierId || "",
+                }));
+                sessionStorage.setItem("refill_order_prefill", JSON.stringify({
+                  clientId,
+                  clientName,
+                  items,
+                  source: "Refill",
+                }));
+                setShowConfirm(false);
+                setEditQty({});
+                navigate("/orders?from=refill");
               }}>
-                {converting ? <Loader2 className="h-3.5 w-3.5 animate-spin ltr:mr-1.5 rtl:ml-1.5" /> : <ShoppingCart className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />}
-                تأكيد وإنشاء الطلب
+                <ShoppingCart className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />
+                متابعة لإنشاء الطلب
               </Button>
             </div>
           </div>

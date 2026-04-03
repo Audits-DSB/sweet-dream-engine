@@ -304,6 +304,33 @@ export default function OrdersPage() {
   }, []);
 
   useEffect(() => {
+    if (loading) return;
+    const fromRefill = searchParams.get("from") === "refill";
+    if (fromRefill) {
+      try {
+        const raw = sessionStorage.getItem("refill_order_prefill");
+        if (raw) {
+          const prefill = JSON.parse(raw);
+          sessionStorage.removeItem("refill_order_prefill");
+          setSelectedClient(prefill.clientId || "");
+          setOrderType("client");
+          setOrderItems((prefill.items || []).map((item: any) => ({
+            materialCode: item.materialCode || "",
+            name: item.name || "",
+            quantity: Number(item.quantity || 1),
+            sellingPrice: Number(item.sellingPrice || 0),
+            costPrice: Number(item.costPrice || 0),
+            imageUrl: item.imageUrl || "",
+            unit: item.unit || "unit",
+            supplierId: item.supplierId || "",
+          })));
+          setDialogOpen(true);
+        }
+      } catch {}
+    }
+  }, [loading]);
+
+  useEffect(() => {
     setMaterialsLoading(true);
     api.get<{ products: any[] }>("/external-materials")
       .then(json => {
