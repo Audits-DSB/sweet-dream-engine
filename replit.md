@@ -47,6 +47,7 @@ All financial pages and server endpoints account for returns:
 - **Return deduction pattern**: Each page builds a `returnDeductions` map: `{ orderId → { returnedSelling, returnedCost } }` from accepted returns' item quantities × prices.
 - **OrderDetails.tsx**: Post-return financials shown inline when accepted returns exist. Invoice tab shows return deduction + net total. Financials tab shows net revenue/cost/profit after returns, adjusted profit distribution (company/founders), and per-founder net profit share. Uses `quickProfit()` with return-adjusted inputs.
 - **Founder refund on return accept**: When a return is accepted, the purchase cost is split among the founders who funded the order. This works for BOTH dispositions: `company_inventory` (immediate refund) and `return_to_supplier` + `refunded` (immediate refund). For `return_to_supplier` + `pending_refund`, refund happens via the separate `/returns/:id/confirm-refund` endpoint. Founder refunds create `capital_return` treasury transactions with category `return_refund`.
+- **Repair endpoint**: `POST /api/returns/:id/repair-refund` — Retroactively creates missing founder refund transactions for accepted returns that were processed before the refund logic was fixed. Handles both camelCase and snake_case item keys. Deletes zero-amount transactions and recreates them with correct amounts.
 
 ## Soft-Delete & Trash System
 - **Soft-Delete**: All DELETE routes snapshot the entity BEFORE physical deletion and save to `deleted_items` table in **Supabase** (via `supabaseAdmin`)

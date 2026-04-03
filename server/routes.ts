@@ -3137,7 +3137,7 @@ router.post("/returns/:id/accept", async (req, res) => {
       disposition === "company_inventory" ||
       (disposition === "return_to_supplier" && refundStatus === "refunded");
     if (shouldRefundFounders) {
-      const totalReturnCost = items.reduce((s: number, it: any) => s + (Number(it.costPrice || 0) * Number(it.quantity || 0)), 0);
+      const totalReturnCost = items.reduce((s: number, it: any) => s + (Number(it.costPrice ?? it.cost_price ?? 0) * Number(it.quantity || 0)), 0);
       const { data: contribRow } = await supabaseAdmin.from("order_founder_contributions")
         .select("contributions")
         .eq("order_id", orderId)
@@ -3189,7 +3189,7 @@ router.post("/returns/:id/accept", async (req, res) => {
       disposition: disposition || "",
       refund_status: disposition === "company_inventory" ? "refunded" : (refundStatus || "none"),
       refund_amount: shouldRefundFounders
-        ? items.reduce((s: number, it: any) => s + (Number(it.costPrice || 0) * Number(it.quantity || 0)), 0)
+        ? items.reduce((s: number, it: any) => s + (Number(it.costPrice ?? it.cost_price ?? 0) * Number(it.quantity || 0)), 0)
         : 0,
       processed_by: req.body.processedBy || "",
     }).eq("id", retId).select().single();
@@ -3214,7 +3214,7 @@ router.post("/returns/:id/confirm-refund", async (req, res) => {
 
     const items: any[] = ret.items || [];
     const orderId = ret.order_id;
-    const totalReturnCost = items.reduce((s: number, it: any) => s + (Number(it.costPrice || 0) * Number(it.quantity || 0)), 0);
+    const totalReturnCost = items.reduce((s: number, it: any) => s + (Number(it.costPrice ?? it.cost_price ?? 0) * Number(it.quantity || 0)), 0);
 
     const { data: contribRow } = await supabaseAdmin.from("order_founder_contributions")
       .select("contributions")
@@ -3267,6 +3267,95 @@ router.post("/returns/:id/confirm-refund", async (req, res) => {
     res.json(camelizeKeys({ ...updated, founderRefunds }));
   } catch (e: any) {
     console.error("[Returns Confirm Refund Error]", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/returns/:id/repair-refund", async (req, res) => {
+  try {
+    const retId = req.params.id;
+    const { data: ret, error: retErr } = await supabaseAdmin.from("returns").select("*").eq("id", retId).single();
+    if (retErr || !ret) return res.status(404).json({ error: "Return not found" });
+    if (ret.status !== "accepted") return res.status(400).json({ error: "Return must be accepted" });
+
+    const rawItems: any[] = ret.items || [];
+    const items = rawItems.map((it: any) => ({
+      costPrice: Number(it.costPrice ?? it.cost_price ?? 0),
+      sellingPrice: Number(it.sellingPrice ?? it.selling_price ?? 0),
+      quantity: Number(it.quantity ?? 0),
+    }));
+    const orderId = ret.order_id;
+    const totalReturnCost = items.reduce((s: number, it: any) => s + it.costPrice * it.quantity, 0);
+
+    const shouldRefund =
+      ret.disposition === "company_inventory" ||
+      (ret.disposition === "return_to_supplier" && ret.refund_status === "refunded");
+    if (!shouldRefund) return res.status(400).json({ error: "This return disposition/refund_status does not qualify for founder refund" });
+
+    const { data: existingTxs } = await supabaseAdmin.from("treasury_transactions")
+      .select("id, amount")
+      .eq("category", "return_refund")
+      .like("description", `%${retId}%`);
+    const existingHasValues = existingTxs && existingTxs.length > 0 && existingTxs.some((tx: any) => Number(tx.amount) > 0);
+    if (existingHasValues) {
+      if (ret.refund_amount !== totalReturnCost) {
+        await supabaseAdmin.from("returns").update({ refund_amount: totalReturnCost }).eq("id", retId);
+      }
+      return res.json({ message: "Refund transactions already exist", existing: existingTxs!.length });
+    }
+    if (existingTxs && existingTxs.length > 0) {
+      for (const tx of existingTxs) {
+        await supabaseAdmin.from("treasury_transactions").delete().eq("id", tx.id);
+      }
+    }
+
+    const { data: contribRow } = await supabaseAdmin.from("order_founder_contributions")
+      .select("contributions")
+      .eq("order_id", orderId)
+      .maybeSingle();
+    const contributions: any[] = contribRow?.contributions || [];
+    const { data: foundersList } = await supabaseAdmin.from("founders").select("*");
+
+    let founderRefunds: any[] = [];
+    if (contributions.length > 0) {
+      const totalPct = contributions.reduce((s: number, c: any) => s + (Number(c.percentage) || 0), 0) || 100;
+      for (const c of contributions) {
+        const pct = (Number(c.percentage) || 0) / totalPct;
+        const refundAmt = Math.round(totalReturnCost * pct * 100) / 100;
+        const founderName = (foundersList || []).find((f: any) => f.id === c.founderId)?.name || c.founderId;
+        founderRefunds.push({ founderId: c.founderId, founderName, amount: refundAmt });
+      }
+    } else {
+      const numFounders = (foundersList || []).length || 1;
+      for (const f of (foundersList || [])) {
+        const refundAmt = Math.round(totalReturnCost / numFounders * 100) / 100;
+        founderRefunds.push({ founderId: f.id, founderName: f.name, amount: refundAmt });
+      }
+    }
+
+    let clientName2 = "";
+    if (ret.client_id) {
+      const { data: cRow } = await supabaseAdmin.from("clients").select("name").eq("id", ret.client_id).maybeSingle();
+      clientName2 = cRow?.name || "";
+    }
+    for (const fr of founderRefunds) {
+      await supabaseAdmin.from("treasury_transactions").insert({
+        tx_type: "capital_return",
+        amount: Math.abs(fr.amount),
+        balance_after: 0,
+        performed_by: fr.founderId,
+        reference_id: fr.founderName,
+        category: "return_refund",
+        description: encodeFounderDesc(orderId, `استرداد مرتجع ${retId}`, { clientName: clientName2 }),
+        date: ret.return_date || new Date().toISOString().split("T")[0],
+      });
+    }
+
+    await supabaseAdmin.from("returns").update({ refund_amount: totalReturnCost }).eq("id", retId);
+
+    res.json(camelizeKeys({ message: "Refund transactions created", founderRefunds, totalReturnCost }));
+  } catch (e: any) {
+    console.error("[Returns Repair Refund Error]", e);
     res.status(500).json({ error: e.message });
   }
 });
