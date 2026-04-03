@@ -209,7 +209,20 @@ function sbOk(res: any, { data, error }: { data: any; error: any }) {
 
 // ─── CLIENTS ─────────────────────────────────────────────────────────────────
 router.get("/clients", async (_req, res) => {
-  sbOk(res, await supabaseAdmin.from("clients").select("*").neq("id", "company-inventory").order("name"));
+  const [clientsRes, ordersRes] = await Promise.all([
+    supabaseAdmin.from("clients").select("*").neq("id", "company-inventory").order("name"),
+    supabaseAdmin.from("orders").select("client_id"),
+  ]);
+  if (clientsRes.error) return res.status(500).json({ error: clientsRes.error.message });
+  const orderCounts: Record<string, number> = {};
+  (ordersRes.data || []).forEach((o: any) => {
+    if (o.client_id) orderCounts[o.client_id] = (orderCounts[o.client_id] || 0) + 1;
+  });
+  const clients = (clientsRes.data || []).map((c: any) => ({
+    ...c,
+    total_orders: orderCounts[c.id] || 0,
+  }));
+  res.json(camelizeKeys(clients));
 });
 router.post("/clients", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("clients").insert(snakifyKeys(req.body)).select().single());
