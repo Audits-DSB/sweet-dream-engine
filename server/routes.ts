@@ -840,7 +840,7 @@ router.delete("/orders/:id", async (req, res) => {
   const orderId = req.params.id;
 
   // ── Step 0: fetch all related data for the snapshot (before deleting) ──
-  const [orderRes, linesRes, contribRes, deliveriesRes, collectionsRes, inventoryRes, companyInvRes, auditsRes] = await Promise.all([
+  const [orderRes, linesRes, contribRes, deliveriesRes, collectionsRes, inventoryRes, companyInvRes, auditsRes, returnsRes] = await Promise.all([
     supabaseAdmin.from("orders").select("*").eq("id", orderId).single(),
     supabaseAdmin.from("order_lines").select("*").eq("order_id", orderId),
     supabaseAdmin.from("order_founder_contributions").select("*").eq("order_id", orderId),
@@ -849,6 +849,7 @@ router.delete("/orders/:id", async (req, res) => {
     supabaseAdmin.from("client_inventory").select("*").eq("source_order", orderId),
     supabaseAdmin.from("company_inventory").select("*").eq("source_order", orderId).then(r => r).catch(() => ({ data: [], error: null })),
     supabaseAdmin.from("audits").select("*").eq("order_id", orderId),
+    supabaseAdmin.from("returns").select("*").eq("order_id", orderId).then(r => r).catch(() => ({ data: [], error: null })),
   ]);
 
   const relatedSnapshot: Record<string, any> = {
@@ -859,6 +860,7 @@ router.delete("/orders/:id", async (req, res) => {
     clientInventory: inventoryRes.data || [],
     companyInventory: (companyInvRes as any)?.data || [],
     audits: auditsRes.data || [],
+    returns: (returnsRes as any)?.data || [],
     treasuryTransactions: [],
     linkedCollections: [],
   };
@@ -955,6 +957,7 @@ router.delete("/orders/:id", async (req, res) => {
     supabaseAdmin.from("client_inventory").delete().eq("source_order", orderId),
     supabaseAdmin.from("company_inventory").delete().eq("source_order", orderId).then(r => r).catch(() => ({ data: null, error: null })),
     supabaseAdmin.from("audits").delete().eq("order_id", orderId),
+    supabaseAdmin.from("returns").delete().eq("order_id", orderId).then(r => r).catch(() => ({ data: null, error: null })),
   ]);
 
   childDeletes.forEach((r, i) => {
@@ -976,7 +979,7 @@ router.delete("/orders/:id", async (req, res) => {
 
 router.post("/orders/:id/cascade-restore", async (req, res) => {
   const orderId = req.params.id;
-  const { order, orderLines, founderContributions, deliveries, collections, clientInventory, companyInventory, audits, treasuryTransactions, linkedCollections } = req.body;
+  const { order, orderLines, founderContributions, deliveries, collections, clientInventory, companyInventory, audits, returns, treasuryTransactions, linkedCollections } = req.body;
 
   if (!order) return res.status(400).json({ error: "No order data provided" });
 
@@ -1015,6 +1018,10 @@ router.post("/orders/:id/cascade-restore", async (req, res) => {
     if (Array.isArray(audits) && audits.length > 0) {
       const safe = audits.map((r: any) => ({ ...r, order_id: orderId }));
       restoreOps.push({ name: "audits", op: supabaseAdmin.from("audits").upsert(safe, { onConflict: "id" }) });
+    }
+    if (Array.isArray(returns) && returns.length > 0) {
+      const safe = returns.map((r: any) => ({ ...r, order_id: orderId }));
+      restoreOps.push({ name: "returns", op: supabaseAdmin.from("returns").upsert(safe, { onConflict: "id" }) });
     }
 
     if (Array.isArray(treasuryTransactions) && treasuryTransactions.length > 0) {
@@ -2504,6 +2511,7 @@ router.post("/trash/:id/restore", async (req, res) => {
       if (relatedData.clientInventory?.length) restoreOps.push(supabaseAdmin.from("client_inventory").upsert(relatedData.clientInventory, { onConflict: "id" }));
       if (relatedData.companyInventory?.length) restoreOps.push(supabaseAdmin.from("company_inventory").upsert(relatedData.companyInventory, { onConflict: "id" }));
       if (relatedData.audits?.length) restoreOps.push(supabaseAdmin.from("audits").upsert(relatedData.audits, { onConflict: "id" }));
+      if (relatedData.returns?.length) restoreOps.push(supabaseAdmin.from("returns").upsert(relatedData.returns, { onConflict: "id" }));
       await Promise.allSettled(restoreOps);
 
       if (Array.isArray(relatedData.treasuryTransactions) && relatedData.treasuryTransactions.length > 0) {
