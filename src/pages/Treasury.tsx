@@ -221,15 +221,34 @@ export default function TreasuryDashboard() {
                 : "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400";
 
               const desc = tx.description || "";
-              const orderMatch = desc.match(/\[orderId:(ORD-[^\]]+)\]/);
-              const colMatch = desc.match(/COL-[A-Za-z0-9]+/);
-              const retMatch = desc.match(/RET-[A-Za-z0-9]+/);
-              const clientMatch = desc.match(/\[clientName:([^\]]+)\]/);
-              let cleanDesc = desc
-                .replace(/\[orderId:[^\]]*\]\s*/g, "")
-                .replace(/\[collectionId:[^\]]*\]\s*/g, "")
-                .replace(/\[clientName:[^\]]*\]\s*/g, "")
-                .trim();
+              let parsedOrderId = "";
+              let parsedColId = "";
+              let parsedRetId = "";
+              let parsedClient = "";
+              let cleanDesc = "";
+
+              try {
+                const j = JSON.parse(desc);
+                parsedOrderId = j.orderId || "";
+                parsedColId = j.collectionId || "";
+                parsedClient = j.clientName || "";
+                cleanDesc = j.notes || "";
+              } catch {
+                const orderM = desc.match(/\[orderId:(ORD-[^\]]+)\]/);
+                if (orderM) parsedOrderId = orderM[1];
+                const clientM = desc.match(/\[clientName:([^\]]+)\]/);
+                if (clientM) parsedClient = clientM[1];
+                const colM = desc.match(/(COL-[A-Za-z0-9]+)/);
+                if (colM) parsedColId = colM[1];
+                cleanDesc = desc
+                  .replace(/\[orderId:[^\]]*\]\s*/g, "")
+                  .replace(/\[collectionId:[^\]]*\]\s*/g, "")
+                  .replace(/\[clientName:[^\]]*\]\s*/g, "")
+                  .trim();
+              }
+              const retM = cleanDesc.match(/(RET-[A-Za-z0-9]+)/);
+              if (retM) parsedRetId = retM[1];
+              if (!parsedColId) { const c = desc.match(/(COL-[A-Za-z0-9]+)/); if (c) parsedColId = c[1]; }
               if (!cleanDesc) cleanDesc = txTypeLabel(tx.txType);
 
               const TxIcon = txIcon;
@@ -244,32 +263,32 @@ export default function TreasuryDashboard() {
                       <Badge variant={isOut ? "destructive" : "default"} className="text-[10px] h-5">{txTypeLabel(tx.txType)}</Badge>
                     </div>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      {orderMatch && (
+                      {parsedOrderId && (
                         <button
                           className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20 transition-colors"
-                          onClick={() => navigate(`/orders/${orderMatch[1]}`)}
+                          onClick={() => navigate(`/orders/${parsedOrderId}`)}
                         >
-                          {orderMatch[1]} <ExternalLink className="h-2.5 w-2.5" />
+                          {parsedOrderId} <ExternalLink className="h-2.5 w-2.5" />
                         </button>
                       )}
-                      {retMatch && (
+                      {parsedRetId && (
                         <button
                           className="inline-flex items-center gap-1 font-mono text-xs bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 px-1.5 py-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
-                          onClick={() => navigate(`/returns/${retMatch[0]}`)}
+                          onClick={() => navigate(`/returns/${parsedRetId}`)}
                         >
-                          {retMatch[0]} <ExternalLink className="h-2.5 w-2.5" />
+                          {parsedRetId} <ExternalLink className="h-2.5 w-2.5" />
                         </button>
                       )}
-                      {colMatch && (
+                      {parsedColId && (
                         <button
                           className="inline-flex items-center gap-1 font-mono text-xs bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 px-1.5 py-0.5 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
                           onClick={() => navigate(`/collections`)}
                         >
-                          {colMatch[0]} <ExternalLink className="h-2.5 w-2.5" />
+                          {parsedColId} <ExternalLink className="h-2.5 w-2.5" />
                         </button>
                       )}
-                      {clientMatch && (
-                        <span className="text-xs text-muted-foreground">· {clientMatch[1]}</span>
+                      {parsedClient && (
+                        <span className="text-xs text-muted-foreground">· {parsedClient}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
