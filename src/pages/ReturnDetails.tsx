@@ -84,12 +84,16 @@ export default function ReturnDetailsPage() {
         condition: disposition === "company_inventory" ? (itemConditions[i] || "good") : "good",
       }));
       await api.patch(`/returns/${ret.id}`, { items: updatedItems });
-      await api.post(`/returns/${ret.id}/accept`, {
+      const result = await api.post<any>(`/returns/${ret.id}/accept`, {
         disposition,
         refundStatus: disposition === "return_to_supplier" ? refundStatus : "none",
       });
       setAcceptDialogOpen(false);
       toast.success("تم قبول المرتجع بنجاح");
+      if (result.founderRefunds && result.founderRefunds.length > 0) {
+        const names = result.founderRefunds.map((r: any) => `${r.founderName}: ${fmtNum(r.amount)} ${t.currency}`).join("، ");
+        toast.info(`تم إرجاع التكلفة للمؤسسين: ${names}`, { duration: 6000 });
+      }
       await loadReturn();
     } catch (e: any) {
       toast.error(e.message || "خطأ في قبول المرتجع");
@@ -291,11 +295,10 @@ export default function ReturnDetailsPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">استرداد الأموال</p>
-              {ret.disposition === "return_to_supplier" ? (
-                <p className={`font-medium ${ret.refundStatus === "refunded" ? "text-green-600" : ret.refundStatus === "pending_refund" ? "text-amber-600" : "text-muted-foreground"}`}>
-                  {ret.refundStatus === "refunded" ? "✅ تم الاسترداد" :
-                   ret.refundStatus === "pending_refund" ? "⏳ بانتظار الاسترداد" : "—"}
-                </p>
+              {ret.refundStatus === "refunded" ? (
+                <p className="font-medium text-green-600">✅ تم الاسترداد</p>
+              ) : ret.disposition === "return_to_supplier" && ret.refundStatus === "pending_refund" ? (
+                <p className="font-medium text-amber-600">⏳ بانتظار الاسترداد</p>
               ) : <p className="text-muted-foreground">—</p>}
             </div>
             <div>
@@ -443,32 +446,38 @@ export default function ReturnDetailsPage() {
             </div>
 
             {disposition === "company_inventory" && (
-              <div>
-                <label className="text-sm font-medium mb-2 block">حالة كل صنف</label>
-                <div className="space-y-2">
-                  {ret.items.map((item, i) => (
-                    <div key={i} className="flex items-center justify-between bg-muted/20 rounded p-2">
-                      <div className="flex items-center gap-2">
-                        {item.imageUrl ? (
-                          <img src={item.imageUrl} alt={item.materialName} className="w-7 h-7 rounded object-cover shrink-0 border" />
-                        ) : (
-                          <div className="w-7 h-7 rounded bg-muted flex items-center justify-center shrink-0 border">
-                            <Package className="h-3.5 w-3.5 text-muted-foreground" />
-                          </div>
-                        )}
-                        <span className="text-sm">{item.materialName} ({item.quantity})</span>
+              <>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">حالة كل صنف</label>
+                  <div className="space-y-2">
+                    {ret.items.map((item, i) => (
+                      <div key={i} className="flex items-center justify-between bg-muted/20 rounded p-2">
+                        <div className="flex items-center gap-2">
+                          {item.imageUrl ? (
+                            <img src={item.imageUrl} alt={item.materialName} className="w-7 h-7 rounded object-cover shrink-0 border" />
+                          ) : (
+                            <div className="w-7 h-7 rounded bg-muted flex items-center justify-center shrink-0 border">
+                              <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <span className="text-sm">{item.materialName} ({item.quantity})</span>
+                        </div>
+                        <Select value={itemConditions[i] || "good"} onValueChange={v => setItemConditions(prev => ({ ...prev, [i]: v }))}>
+                          <SelectTrigger className="w-24 h-7 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="good">صالح</SelectItem>
+                            <SelectItem value="damaged">تالف</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
-                      <Select value={itemConditions[i] || "good"} onValueChange={v => setItemConditions(prev => ({ ...prev, [i]: v }))}>
-                        <SelectTrigger className="w-24 h-7 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="good">صالح</SelectItem>
-                          <SelectItem value="damaged">تالف</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+                <div className="bg-green-50 border border-green-200 rounded p-2 text-xs text-green-700">
+                  <DollarSign className="h-3.5 w-3.5 inline ml-1" />
+                  سيتم إرجاع تكلفة الشراء ({fmtNum(Number(ret.totalCost))} {t.currency}) للمؤسسين حسب نسبة مساهمتهم
+                </div>
+              </>
             )}
 
             {disposition === "return_to_supplier" && (

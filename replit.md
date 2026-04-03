@@ -45,6 +45,7 @@ All financial pages and server endpoints account for returns:
 - **Server `/company-profit-summary`**: Fetches returns table, excludes fully-returned orders, adjusts partial returns.
 - **Server `/founder-balances`**: Fetches returns table, excludes "مرتجع كلي" orders, adjusts selling/cost for partial returns, includes `autoDeliveryReimbursement` in balance calculation.
 - **Return deduction pattern**: Each page builds a `returnDeductions` map: `{ orderId → { returnedSelling, returnedCost } }` from accepted returns' item quantities × prices.
+- **Founder refund on return accept**: When a return is accepted, the purchase cost is split among the founders who funded the order. This works for BOTH dispositions: `company_inventory` (immediate refund) and `return_to_supplier` + `refunded` (immediate refund). For `return_to_supplier` + `pending_refund`, refund happens via the separate `/returns/:id/confirm-refund` endpoint. Founder refunds create `capital_return` treasury transactions with category `return_refund`.
 
 ## Soft-Delete & Trash System
 - **Soft-Delete**: All DELETE routes snapshot the entity BEFORE physical deletion and save to `deleted_items` table in **Supabase** (via `supabaseAdmin`)

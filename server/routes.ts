@@ -3128,9 +3128,15 @@ router.post("/returns/:id/accept", async (req, res) => {
       await supabaseAdmin.from("orders").update({ status: newOrderStatus }).eq("id", orderId);
     }
 
-    // 5. If supplier return with refund, handle founder refunds
+    // 5. Handle founder refunds — always refund founders when return is accepted
+    //    For company_inventory: refund immediately (goods returned to company)
+    //    For return_to_supplier + refunded: refund immediately
+    //    For return_to_supplier + pending_refund: handled later via confirm-refund endpoint
     let founderRefunds: any[] = [];
-    if (disposition === "return_to_supplier" && refundStatus === "refunded") {
+    const shouldRefundFounders =
+      disposition === "company_inventory" ||
+      (disposition === "return_to_supplier" && refundStatus === "refunded");
+    if (shouldRefundFounders) {
       const totalReturnCost = items.reduce((s: number, it: any) => s + (Number(it.costPrice || 0) * Number(it.quantity || 0)), 0);
       const { data: contribRow } = await supabaseAdmin.from("order_founder_contributions")
         .select("contributions")
@@ -3181,8 +3187,8 @@ router.post("/returns/:id/accept", async (req, res) => {
     const { data: updated, error: updErr } = await supabaseAdmin.from("returns").update({
       status: "accepted",
       disposition: disposition || "",
-      refund_status: refundStatus || "none",
-      refund_amount: disposition === "return_to_supplier" && refundStatus === "refunded"
+      refund_status: disposition === "company_inventory" ? "refunded" : (refundStatus || "none"),
+      refund_amount: shouldRefundFounders
         ? items.reduce((s: number, it: any) => s + (Number(it.costPrice || 0) * Number(it.quantity || 0)), 0)
         : 0,
       processed_by: req.body.processedBy || "",
