@@ -209,18 +209,24 @@ function sbOk(res: any, { data, error }: { data: any; error: any }) {
 
 // ─── CLIENTS ─────────────────────────────────────────────────────────────────
 router.get("/clients", async (_req, res) => {
-  const [clientsRes, ordersRes] = await Promise.all([
+  const [clientsRes, ordersRes, auditsRes] = await Promise.all([
     supabaseAdmin.from("clients").select("*").neq("id", "company-inventory").order("name"),
     supabaseAdmin.from("orders").select("client_id"),
+    supabaseAdmin.from("audits").select("client_id,date").order("date", { ascending: false }),
   ]);
   if (clientsRes.error) return res.status(500).json({ error: clientsRes.error.message });
   const orderCounts: Record<string, number> = {};
   (ordersRes.data || []).forEach((o: any) => {
     if (o.client_id) orderCounts[o.client_id] = (orderCounts[o.client_id] || 0) + 1;
   });
+  const lastAuditMap: Record<string, string> = {};
+  (auditsRes.data || []).forEach((a: any) => {
+    if (a.client_id && !lastAuditMap[a.client_id]) lastAuditMap[a.client_id] = a.date;
+  });
   const clients = (clientsRes.data || []).map((c: any) => ({
     ...c,
     total_orders: orderCounts[c.id] || 0,
+    last_audit: lastAuditMap[c.id] || c.last_audit || "",
   }));
   res.json(camelizeKeys(clients));
 });

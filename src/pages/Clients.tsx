@@ -39,7 +39,7 @@ function mapClient(raw: any): Client {
     joinDate: raw.joinDate || raw.join_date || "",
     totalOrders: Number(raw.totalOrders ?? raw.total_orders ?? 0),
     outstanding: Number(raw.outstanding ?? 0),
-    lastAudit: raw.lastAudit || raw.last_audit || "—",
+    lastAudit: raw.lastAudit || raw.last_audit || "",
   };
 }
 
@@ -180,7 +180,7 @@ export default function ClientsPage() {
                       <span className="text-success">{t.settled}</span>
                     )}
                   </td>
-                  <td className="py-3 px-3 text-muted-foreground text-xs">{client.lastAudit}</td>
+                  <td className="py-3 px-3 text-muted-foreground text-xs">{client.lastAudit ? new Date(client.lastAudit).toLocaleDateString("ar-EG", { year: "numeric", month: "short", day: "numeric" }) : "—"}</td>
                   <td className="py-3 px-3 text-end" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
