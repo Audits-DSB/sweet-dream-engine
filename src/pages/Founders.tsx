@@ -868,7 +868,7 @@ export default function FoundersPage() {
             onEdit={() => { setEditingFounder(f); setEditForm({ name: f.name, alias: f.alias, email: f.email, phone: f.phone }); setEditOpen(true); }}
             onWithdraw={() => { setWithdrawFounderId(f.id); setWithdrawAmount(""); setWithdrawOpen(true); }}
             onPayFunding={handlePayOrderFunding}
-            onDeleteTx={(tx) => { setDeletingTx(tx); setDeleteTxOpen(true); }}
+            onDeleteTx={() => {}}
             payingEntry={payingEntry}
           />
         );

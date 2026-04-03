@@ -650,9 +650,6 @@ export default function FounderProfile({
                         <span className={`text-sm font-bold flex-shrink-0 ${tx.type === "capital_return" ? "text-primary" : "text-destructive"}`}>
                           {tx.type === "capital_return" ? "+" : "-"}{tx.amount.toLocaleString()} {t.currency}
                         </span>
-                        <button className="flex-shrink-0 h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => onDeleteTx(tx)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
                       </div>
                     ))}
                 </div>
@@ -889,9 +886,6 @@ export default function FounderProfile({
                           <span className={`text-sm font-bold flex-shrink-0 ${(tx.type === "withdrawal" || tx.type === "funding") ? "text-destructive" : "text-success"}`}>
                             {(tx.type === "withdrawal" || tx.type === "funding") ? "-" : "+"}{tx.amount.toLocaleString()} {t.currency}
                           </span>
-                          <button className="flex-shrink-0 h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => onDeleteTx(tx)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
                         </div>
                       ))}
                     </div>
