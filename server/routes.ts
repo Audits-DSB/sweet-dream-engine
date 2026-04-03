@@ -961,7 +961,7 @@ router.delete("/orders/:id", async (req, res) => {
   ]);
 
   childDeletes.forEach((r, i) => {
-    const names = ["order_lines", "order_founder_contributions", "deliveries", "collections", "client_inventory", "company_inventory", "audits"];
+    const names = ["order_lines", "order_founder_contributions", "deliveries", "collections", "client_inventory", "company_inventory", "audits", "returns"];
     if (r.status === "fulfilled" && (r.value as any).error) {
       console.warn(`[delete-order] ${names[i]} error:`, (r.value as any).error.message);
     }
