@@ -28,6 +28,12 @@ function toYMLabel(ym: string) {
   return `${MONTH_NAMES[parseInt(m) - 1] || m} ${y}`;
 }
 
+function toFullMonthLabel(ym: string) {
+  const [y, m] = ym.split("-");
+  const monthName = MONTH_NAMES[parseInt(m) - 1] || m;
+  return `شهر ${monthName} ${y}`;
+}
+
 function statusAr(s: string) {
   const map: Record<string, string> = {
     Delivered: "مُسلَّم", Processing: "قيد المعالجة", Draft: "مسودة", Confirmed: "مؤكد",
@@ -48,6 +54,7 @@ export default function ClientReport() {
   const [audits, setAudits] = useState<any[]>([]);
   const [collections, setCollections] = useState<any[]>([]);
   const [returns, setReturns] = useState<any[]>([]);
+  const [orderLines, setOrderLines] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"full" | "monthly">("full");
   const [selectedMonth, setSelectedMonth] = useState("");
@@ -62,7 +69,8 @@ export default function ClientReport() {
       api.get<any[]>("/audits").catch(() => []),
       api.get<any[]>("/collections").catch(() => []),
       api.get<any[]>("/returns").catch(() => []),
-    ]).then(([cl, inv, ord, del, aud, col, ret]) => {
+      api.get<any[]>("/order-lines").catch(() => []),
+    ]).then(([cl, inv, ord, del, aud, col, ret, oLines]) => {
       const found = (cl || []).find((c: any) => c.id === id);
       if (found) {
         setClient({
@@ -88,6 +96,7 @@ export default function ClientReport() {
       setDeliveries((del || []).filter((d: any) => (d.clientId || d.client_id) === id).map((d: any) => ({
         id: d.id, date: d.date || d.deliveryDate || d.delivery_date || "",
         status: d.status || "", items: Number(d.items || d.totalItems || d.total_items || 0),
+        orderId: d.orderId || d.order_id || "",
       })).sort((a: any, b: any) => b.date.localeCompare(a.date)));
       setAudits((aud || []).filter((a: any) => (a.clientId || a.client_id) === id).sort((a: any, b: any) =>
         (b.date || b.createdAt || b.created_at || "").localeCompare(a.date || a.createdAt || a.created_at || "")
@@ -102,6 +111,15 @@ export default function ClientReport() {
         id: r.id, date: r.date || r.createdAt || r.created_at || "",
         status: r.status || "",
         itemCount: Array.isArray(r.items) ? r.items.length : Number(r.itemsCount || r.items_count || 1),
+      })));
+
+      const clientOrderIds = new Set(clientOrders.map((o: any) => o.id));
+      setOrderLines((oLines || []).filter((l: any) => clientOrderIds.has(l.orderId || l.order_id)).map((l: any) => ({
+        orderId: l.orderId || l.order_id || "",
+        materialCode: l.materialCode || l.material_code || "",
+        materialName: l.materialName || l.material_name || "",
+        quantity: Number(l.quantity || 0),
+        unit: l.unit || "unit",
       })));
 
       const allDates = [
@@ -271,6 +289,23 @@ export default function ClientReport() {
     }));
   }, [mInventoryDelivered]);
 
+  const mMaterialConsumption = useMemo(() => {
+    const mOrderIds = new Set(mOrders.map(o => o.id));
+    const lines = orderLines.filter(l => mOrderIds.has(l.orderId));
+    const map = new Map<string, { materialName: string; materialCode: string; unit: string; totalQty: number; orderIds: Set<string> }>();
+    for (const l of lines) {
+      const key = l.materialCode || l.materialName;
+      const existing = map.get(key);
+      if (existing) {
+        existing.totalQty += l.quantity;
+        existing.orderIds.add(l.orderId);
+      } else {
+        map.set(key, { materialName: l.materialName, materialCode: l.materialCode, unit: l.unit, totalQty: l.quantity, orderIds: new Set([l.orderId]) });
+      }
+    }
+    return [...map.values()].map(v => ({ materialName: v.materialName, materialCode: v.materialCode, unit: v.unit, totalQty: v.totalQty, orderCount: v.orderIds.size })).sort((a, b) => b.totalQty - a.totalQty);
+  }, [mOrders, orderLines]);
+
   const mCollectionPie = useMemo(() => {
     if (mStats.totalDue <= 0) return [];
     return [
@@ -333,7 +368,7 @@ export default function ClientReport() {
         <div className="text-center mb-6 border-b pb-5">
           <h1 className="text-2xl font-bold text-primary mb-1">DSB — Dental Smart Box</h1>
           <h2 className="text-xl font-semibold mb-2">
-            {tab === "monthly" && selectedMonth ? `تقرير شهر ${toYMLabel(selectedMonth)} — ${client.name}` : `تقرير شامل — ${client.name}`}
+            {tab === "monthly" && selectedMonth ? `تقرير ${toFullMonthLabel(selectedMonth)} — ${client.name}` : `تقرير شامل — ${client.name}`}
           </h2>
           <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
             {client.city && <span>📍 {client.city}</span>}
@@ -493,10 +528,51 @@ export default function ClientReport() {
               </div>
             )}
 
+            {mMaterialConsumption.length > 0 && (
+              <div className="border rounded-xl overflow-hidden bg-card mb-6 print:break-inside-avoid">
+                <h3 className="text-sm font-semibold p-4 border-b flex items-center gap-2">
+                  <Package className="h-4 w-4 text-primary" /> تفاصيل استهلاك المواد — {toFullMonthLabel(selectedMonth)}
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-muted/50 border-b">
+                        <th className="py-2.5 px-3 text-start font-semibold">#</th>
+                        <th className="py-2.5 px-3 text-start font-semibold">المادة</th>
+                        <th className="py-2.5 px-3 text-start font-semibold">الكود</th>
+                        <th className="py-2.5 px-3 text-start font-semibold">الوحدة</th>
+                        <th className="py-2.5 px-3 text-end font-semibold">الكمية</th>
+                        <th className="py-2.5 px-3 text-center font-semibold">عدد الأوردرات</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mMaterialConsumption.map((item, idx) => (
+                        <tr key={idx} className="border-b border-border/50 hover:bg-muted/20">
+                          <td className="py-2 px-3 text-muted-foreground">{idx + 1}</td>
+                          <td className="py-2 px-3 font-medium">{item.materialName}</td>
+                          <td className="py-2 px-3 font-mono text-[10px] text-muted-foreground">{item.materialCode}</td>
+                          <td className="py-2 px-3">{item.unit}</td>
+                          <td className="py-2 px-3 text-end font-medium text-orange-600">{item.totalQty}</td>
+                          <td className="py-2 px-3 text-center">{item.orderCount}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-muted/30 font-semibold border-t-2">
+                        <td colSpan={4} className="py-2.5 px-3">الإجمالي: {mMaterialConsumption.length} مادة</td>
+                        <td className="py-2.5 px-3 text-end text-orange-600">{mMaterialConsumption.reduce((s, i) => s + i.totalQty, 0)}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {mOrders.length > 0 && (
               <div className="border rounded-xl overflow-hidden bg-card mb-6 print:break-inside-avoid">
                 <h3 className="text-sm font-semibold p-4 border-b flex items-center gap-2">
-                  <ShoppingCart className="h-4 w-4 text-primary" /> طلبات {toYMLabel(selectedMonth)}
+                  <ShoppingCart className="h-4 w-4 text-primary" /> سجل الطلبات — {toFullMonthLabel(selectedMonth)}
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
@@ -535,13 +611,14 @@ export default function ClientReport() {
             {mDeliveries.length > 0 && (
               <div className="border rounded-xl overflow-hidden bg-card mb-6 print:break-inside-avoid">
                 <h3 className="text-sm font-semibold p-4 border-b flex items-center gap-2">
-                  <Truck className="h-4 w-4 text-primary" /> توصيلات {toYMLabel(selectedMonth)}
+                  <Truck className="h-4 w-4 text-primary" /> سجل التوصيلات — {toFullMonthLabel(selectedMonth)}
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-muted/50 border-b">
                         <th className="py-2.5 px-3 text-start font-semibold">رقم التوصيل</th>
+                        <th className="py-2.5 px-3 text-start font-semibold">رقم الأوردر</th>
                         <th className="py-2.5 px-3 text-start font-semibold">التاريخ</th>
                         <th className="py-2.5 px-3 text-start font-semibold">الحالة</th>
                       </tr>
@@ -550,6 +627,7 @@ export default function ClientReport() {
                       {mDeliveries.map(d => (
                         <tr key={d.id} className="border-b border-border/50">
                           <td className="py-2 px-3 font-mono text-[10px]">{d.id}</td>
+                          <td className="py-2 px-3 font-mono text-[10px]">{d.orderId || "—"}</td>
                           <td className="py-2 px-3">{d.date}</td>
                           <td className="py-2 px-3"><StatusBadge status={d.status} /></td>
                         </tr>
@@ -929,21 +1007,23 @@ export default function ClientReport() {
             {deliveries.length > 0 && (
               <div className="border rounded-xl overflow-hidden bg-card mb-6 print:break-inside-avoid">
                 <h3 className="text-sm font-semibold p-4 border-b flex items-center gap-2">
-                  <Truck className="h-4 w-4 text-primary" /> سجل التوصيلات (آخر 10)
+                  <Truck className="h-4 w-4 text-primary" /> سجل التوصيلات (آخر 15)
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-muted/50 border-b">
                         <th className="py-2.5 px-3 text-start font-semibold">رقم التوصيل</th>
+                        <th className="py-2.5 px-3 text-start font-semibold">رقم الأوردر</th>
                         <th className="py-2.5 px-3 text-start font-semibold">التاريخ</th>
                         <th className="py-2.5 px-3 text-start font-semibold">الحالة</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {deliveries.slice(0, 10).map(d => (
+                      {deliveries.slice(0, 15).map(d => (
                         <tr key={d.id} className="border-b border-border/50">
                           <td className="py-2 px-3 font-mono text-[10px]">{d.id}</td>
+                          <td className="py-2 px-3 font-mono text-[10px]">{d.orderId || "—"}</td>
                           <td className="py-2 px-3">{d.date}</td>
                           <td className="py-2 px-3"><StatusBadge status={d.status} /></td>
                         </tr>
