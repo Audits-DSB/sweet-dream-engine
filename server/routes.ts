@@ -3142,23 +3142,54 @@ router.post("/returns/:id/accept", async (req, res) => {
     for (const item of items) {
       const qty = Number(item.quantity || 0);
       if (qty <= 0) continue;
-      const { data: ciRows } = await supabaseAdmin.from("client_inventory")
+      const matCode = item.materialCode || item.material_code || item.code || "";
+      if (!matCode) {
+        return res.status(400).json({ error: `صنف بدون كود مادة — لا يمكن خصم من جرد العميل` });
+      }
+
+      // Try matching with source_order first, then without it (for legacy data)
+      let ciRows: any[] = [];
+      const { data: rows1, error: ciErr1 } = await supabaseAdmin.from("client_inventory")
         .select("*")
         .eq("client_id", ret.client_id)
-        .eq("code", item.materialCode || item.code || "")
+        .eq("code", matCode)
         .eq("source_order", orderId)
         .order("created_at", { ascending: false });
+      if (ciErr1) {
+        console.error("[Return Accept] client_inventory query error:", ciErr1.message);
+        return res.status(500).json({ error: `خطأ في استعلام جرد العميل: ${ciErr1.message}` });
+      }
+      ciRows = rows1 || [];
+
+      if (ciRows.length === 0) {
+        const { data: rows2 } = await supabaseAdmin.from("client_inventory")
+          .select("*")
+          .eq("client_id", ret.client_id)
+          .eq("code", matCode)
+          .gt("remaining", 0)
+          .order("created_at", { ascending: false });
+        ciRows = rows2 || [];
+      }
+
+      if (ciRows.length === 0) {
+        console.warn("[Return Accept] No client_inventory rows for", { clientId: ret.client_id, code: matCode, orderId });
+      }
 
       let remaining = qty;
-      for (const ci of (ciRows || [])) {
+      for (const ci of ciRows) {
         if (remaining <= 0) break;
         const ciRemaining = Number(ci.remaining || 0);
+        if (ciRemaining <= 0) continue;
         const deduct = Math.min(ciRemaining, remaining);
         const newRemaining = ciRemaining - deduct;
-        await supabaseAdmin.from("client_inventory").update({
+        const { error: updErr } = await supabaseAdmin.from("client_inventory").update({
           remaining: newRemaining,
           status: newRemaining <= 0 ? "Returned" : "In Stock"
         }).eq("id", ci.id);
+        if (updErr) {
+          console.error("[Return Accept] client_inventory update error:", updErr.message, { ciId: ci.id });
+          return res.status(500).json({ error: `خطأ في تحديث جرد العميل: ${updErr.message}` });
+        }
         remaining -= deduct;
       }
     }

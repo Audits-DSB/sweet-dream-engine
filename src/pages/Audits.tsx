@@ -193,7 +193,7 @@ export default function AuditsPage() {
 
   const clientInventory = useMemo(() => {
     if (!selectedClientId) return [];
-    return lots.filter(l => l.clientId === selectedClientId);
+    return lots.filter(l => l.clientId === selectedClientId && l.status !== "Returned" && Number(l.remaining) > 0);
   }, [selectedClientId, lots]);
 
   const filtered = audits.filter((a) => {
