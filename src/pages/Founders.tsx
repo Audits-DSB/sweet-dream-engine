@@ -128,12 +128,32 @@ export default function FoundersPage() {
   const [form, setForm] = useState(emptyForm);
   const [editForm, setEditForm] = useState({ name: "", alias: "", email: "", phone: "" });
 
+  const [returnsData, setReturnsData] = useState<any[]>([]);
+
+  const returnDeductions = useMemo(() => {
+    const map: Record<string, { returnedSelling: number; returnedCost: number }> = {};
+    returnsData.forEach((ret: any) => {
+      if (ret.status !== "accepted") return;
+      const oid = ret.orderId || ret.order_id;
+      if (!oid) return;
+      if (!map[oid]) map[oid] = { returnedSelling: 0, returnedCost: 0 };
+      const items: any[] = ret.items || [];
+      items.forEach((it: any) => {
+        const qty = Number(it.quantity || 0);
+        map[oid].returnedSelling += Number(it.sellingPrice || 0) * qty;
+        map[oid].returnedCost += Number(it.costPrice || 0) * qty;
+      });
+    });
+    return map;
+  }, [returnsData]);
+
   const loadData = async () => {
-    const [f, txs, cols, ords] = await Promise.all([
+    const [f, txs, cols, ords, rets] = await Promise.all([
       api.get<any[]>("/founders"),
       api.get<FounderTx[]>("/founder-transactions").catch(() => [] as FounderTx[]),
       api.get<any[]>("/collections").catch(() => [] as any[]),
       api.get<any[]>("/orders").catch(() => [] as any[]),
+      api.get<any[]>("/returns").catch(() => [] as any[]),
     ]);
     const fm: Record<string, Founder> = {};
     (f || []).forEach((x: any) => {
@@ -149,8 +169,12 @@ export default function FoundersPage() {
     setFounderTxs(txs || []);
     setCollections((cols || []).map(mapCol));
     const om: Record<string, Order> = {};
-    (ords || []).forEach((o: any) => { om[o.id] = o; });
+    (ords || []).forEach((o: any) => {
+      if (o.status === "مرتجع كلي") return;
+      om[o.id] = o;
+    });
     setOrders(om);
+    setReturnsData(rets || []);
   };
 
   useEffect(() => {
@@ -192,7 +216,10 @@ export default function FoundersPage() {
       const companyPct = rules.companyProfitPercentage ?? 40;
 
       let allSelling = 0;
-      srcOrders.forEach(oid => { allSelling += toNum(orders[oid].totalSelling ?? (orders[oid] as any).total_selling); });
+      srcOrders.forEach(oid => {
+        const ded = returnDeductions[oid];
+        allSelling += Math.max(toNum(orders[oid].totalSelling ?? (orders[oid] as any).total_selling) - (ded?.returnedSelling || 0), 0);
+      });
       if (allSelling <= 0) return;
 
       let totalFoundersProfit = 0;
@@ -203,8 +230,9 @@ export default function FoundersPage() {
 
       srcOrders.forEach(oid => {
         const order = orders[oid];
-        const oSelling = toNum(order.totalSelling ?? (order as any).total_selling);
-        const oCost = toNum(order.totalCost ?? (order as any).total_cost);
+        const ded = returnDeductions[oid];
+        const oSelling = Math.max(toNum(order.totalSelling ?? (order as any).total_selling) - (ded?.returnedSelling || 0), 0);
+        const oCost = Math.max(toNum(order.totalCost ?? (order as any).total_cost) - (ded?.returnedCost || 0), 0);
         const share = allSelling > 0 ? oSelling / allSelling : 1 / srcOrders.length;
         const oPaid = col.paidAmount * share;
 
@@ -346,7 +374,7 @@ export default function FoundersPage() {
       });
     });
     return { profitsByFounder: profitMap, capitalByFounder: capitalMap, deliveryReimbursementByFounder: reimbursementMap, companyDeliverySubsidies: subsidyMap };
-  }, [collections, orders, founders, founderTxs, rules.companyProfitPercentage]);
+  }, [collections, orders, founders, founderTxs, rules.companyProfitPercentage, returnDeductions]);
 
   const deliveryPaymentsByFounder = useMemo(() => {
     const map: Record<string, Array<{ orderId: string; clientName: string; date: string; amount: number }>> = {};

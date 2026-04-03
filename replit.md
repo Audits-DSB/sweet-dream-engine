@@ -39,8 +39,11 @@ All financial pages and server endpoints account for returns:
 - **CompanyProfit.tsx**: Excludes "مرتجع كلي" orders from profit ledger. Adjusts "مرتجع جزئي" by subtracting returned items' selling/cost values.
 - **FinancialReport.tsx**: Fetches returns, subtracts return deductions from monthly P&L revenue/cost. Includes partial returns in delivered statuses.
 - **Dashboard.tsx**: Fetches returns, adjusts delivered orders' revenue/cost stats with return deductions.
+- **MonthlyDetail.tsx**: Fetches returns, excludes "مرتجع كلي", adjusts revenue/cost/profit with return deductions. Includes "مرتجع جزئي" in delivered statuses.
+- **MonthlyReport.tsx**: Fetches returns, excludes "مرتجع كلي", adjusts total revenue and daily chart data with return deductions.
+- **Founders.tsx**: Fetches returns, excludes "مرتجع كلي" from order map, adjusts selling/cost with return deductions before profit/capital calculations. Return refunds also create `capital_return` transactions which add to founder capital balance via `founderCapitalBalance()`.
 - **Server `/company-profit-summary`**: Fetches returns table, excludes fully-returned orders, adjusts partial returns.
-- **Founders.tsx**: Return refunds create `capital_return` transactions which add to founder capital balance via `founderCapitalBalance()`.
+- **Server `/founder-balances`**: Fetches returns table, excludes "مرتجع كلي" orders, adjusts selling/cost for partial returns, includes `autoDeliveryReimbursement` in balance calculation.
 - **Return deduction pattern**: Each page builds a `returnDeductions` map: `{ orderId → { returnedSelling, returnedCost } }` from accepted returns' item quantities × prices.
 
 ## Soft-Delete & Trash System

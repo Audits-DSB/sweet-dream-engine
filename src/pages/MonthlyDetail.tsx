@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowRight, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, Truck, CreditCard, FileText } from "lucide-react";
+import { ArrowRight, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, Truck, CreditCard, FileText, RotateCcw } from "lucide-react";
 import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
@@ -40,6 +40,7 @@ export default function MonthlyDetail() {
   const [orders, setOrders] = useState<any[]>([]);
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [collections, setCollections] = useState<any[]>([]);
+  const [returnsData, setReturnsData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const ym = `${year}-${month}`;
@@ -53,18 +54,38 @@ export default function MonthlyDetail() {
       api.get("/orders"),
       api.get("/deliveries"),
       api.get("/collections"),
-    ]).then(([o, d, c]) => {
+      api.get("/returns").catch(() => []),
+    ]).then(([o, d, c, rets]) => {
       setOrders(o as any[]);
       setDeliveries(d as any[]);
       setCollections(c as any[]);
+      setReturnsData(rets as any[]);
     }).catch((e) => {
       setError(e?.message || "فشل تحميل البيانات");
     }).finally(() => setLoading(false));
   }, []);
 
+  const returnDeductions = useMemo(() => {
+    const map: Record<string, { returnedSelling: number; returnedCost: number }> = {};
+    returnsData.forEach((ret: any) => {
+      if (ret.status !== "accepted") return;
+      const oid = ret.orderId || ret.order_id;
+      if (!oid) return;
+      if (!map[oid]) map[oid] = { returnedSelling: 0, returnedCost: 0 };
+      const items: any[] = ret.items || [];
+      items.forEach((it: any) => {
+        const qty = Number(it.quantity || 0);
+        map[oid].returnedSelling += Number(it.sellingPrice || 0) * qty;
+        map[oid].returnedCost += Number(it.costPrice || 0) * qty;
+      });
+    });
+    return map;
+  }, [returnsData]);
+
   const monthOrders = useMemo(() => {
     return orders.filter(o => {
       if (o.clientId === "company-inventory") return false;
+      if (o.status === "مرتجع كلي") return false;
       const d = o.date || o.createdAt || "";
       return d.startsWith(ym);
     });
@@ -84,12 +105,18 @@ export default function MonthlyDetail() {
     });
   }, [collections, ym]);
 
-  const deliveredStatuses = ["Delivered", "Closed", "Completed"];
+  const deliveredStatuses = ["Delivered", "Closed", "Completed", "مرتجع جزئي"];
 
   const stats = useMemo(() => {
     const delivered = monthOrders.filter(o => deliveredStatuses.includes(o.status));
-    const revenue = delivered.reduce((s, o) => s + toNum(o.totalSelling), 0);
-    const cost = delivered.reduce((s, o) => s + toNum(o.totalCost), 0);
+    const revenue = delivered.reduce((s, o) => {
+      const ded = returnDeductions[o.id];
+      return s + Math.max(toNum(o.totalSelling) - (ded?.returnedSelling || 0), 0);
+    }, 0);
+    const cost = delivered.reduce((s, o) => {
+      const ded = returnDeductions[o.id];
+      return s + Math.max(toNum(o.totalCost) - (ded?.returnedCost || 0), 0);
+    }, 0);
     const profit = revenue - cost;
     const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
     const avgOrderValue = delivered.length > 0 ? revenue / delivered.length : 0;
@@ -98,6 +125,11 @@ export default function MonthlyDetail() {
     const totalOutstanding = monthCollections.reduce((s, c) => s + toNum(c.outstanding), 0);
 
     const confirmedDeliveries = monthDeliveries.filter(d => d.status === "Delivered" || d.status === "مُسلَّم").length;
+
+    const totalReturned = delivered.reduce((s, o) => {
+      const ded = returnDeductions[o.id];
+      return s + (ded?.returnedSelling || 0);
+    }, 0);
 
     const statusDist: Record<string, number> = {};
     monthOrders.forEach(o => {
@@ -112,9 +144,10 @@ export default function MonthlyDetail() {
       totalDeliveries: monthDeliveries.length,
       confirmedDeliveries,
       totalCollected, totalOutstanding,
+      totalReturned,
       statusDist,
     };
-  }, [monthOrders, monthDeliveries, monthCollections]);
+  }, [monthOrders, monthDeliveries, monthCollections, returnDeductions]);
 
   if (loading) {
     return (
@@ -232,10 +265,12 @@ export default function MonthlyDetail() {
                 {monthOrders
                   .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
                   .map(o => {
-                    const rev = toNum(o.totalSelling);
-                    const cost = toNum(o.totalCost);
+                    const ded = returnDeductions[o.id];
+                    const rev = Math.max(toNum(o.totalSelling) - (ded?.returnedSelling || 0), 0);
+                    const cost = Math.max(toNum(o.totalCost) - (ded?.returnedCost || 0), 0);
                     const profit = rev - cost;
                     const isDelivered = deliveredStatuses.includes(o.status);
+                    const hasReturn = !!(ded?.returnedSelling);
                     return (
                       <tr
                         key={o.id}

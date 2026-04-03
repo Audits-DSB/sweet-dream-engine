@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Users, TrendingUp, Calendar, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,7 @@ import { api } from "@/lib/api";
 import { Loader2 } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 
-type Order = { id: string; client: string; clientId: string; date: string; status: string; totalSelling: string | number };
-type Client = { id: string; name: string };
+type Order = { id: string; client: string; clientId: string; date: string; status: string; totalSelling: string | number; totalCost?: string | number };
 
 function toNum(v: any): number {
   if (!v) return 0;
@@ -24,6 +23,8 @@ const STATUS_COLORS: Record<string, string> = {
   "Ready for Delivery": "hsl(180, 60%, 45%)", "Awaiting Purchase": "hsl(38, 92%, 50%)",
 };
 
+type Client = { id: string; name: string };
+
 export default function MonthlyReport() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -31,29 +32,55 @@ export default function MonthlyReport() {
   const selectedMonth = searchParams.get("month") || "";
   const [orders, setOrders] = useState<Order[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [returnsData, setReturnsData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       api.get<any[]>("/orders"),
       api.get<any[]>("/clients"),
-    ]).then(([ords, cls]) => {
+      api.get<any[]>("/returns").catch(() => []),
+    ]).then(([ords, cls, rets]) => {
       setOrders((ords || []).map((o: any) => ({
         id: o.id, client: o.client || "", clientId: o.clientId || o.client_id || "",
-        date: o.date || "", status: o.status || "", totalSelling: o.totalSelling ?? o.total_selling ?? 0,
+        date: o.date || "", status: o.status || "",
+        totalSelling: o.totalSelling ?? o.total_selling ?? 0,
+        totalCost: o.totalCost ?? o.total_cost ?? 0,
       })));
       setClients((cls || []).map((c: any) => ({ id: c.id, name: c.name })));
+      setReturnsData(rets || []);
     }).finally(() => setLoading(false));
   }, []);
 
+  const returnDeductions = useMemo(() => {
+    const map: Record<string, { returnedSelling: number; returnedCost: number }> = {};
+    returnsData.forEach((ret: any) => {
+      if (ret.status !== "accepted") return;
+      const oid = ret.orderId || ret.order_id;
+      if (!oid) return;
+      if (!map[oid]) map[oid] = { returnedSelling: 0, returnedCost: 0 };
+      const items: any[] = ret.items || [];
+      items.forEach((it: any) => {
+        const qty = Number(it.quantity || 0);
+        map[oid].returnedSelling += Number(it.sellingPrice || 0) * qty;
+        map[oid].returnedCost += Number(it.costPrice || 0) * qty;
+      });
+    });
+    return map;
+  }, [returnsData]);
+
   const monthlyOrders = orders.filter(o => {
+    if (o.status === "مرتجع كلي") return false;
     if (!selectedMonth) return true;
     return o.date && o.date.startsWith(
       Object.entries({ يناير: "01", فبراير: "02", مارس: "03", أبريل: "04", مايو: "05", يونيو: "06", يوليو: "07", أغسطس: "08", سبتمبر: "09", أكتوبر: "10", نوفمبر: "11", ديسمبر: "12" }).find(([ar]) => selectedMonth.includes(ar))?.[1] || selectedMonth.slice(0, 7)
     );
   });
 
-  const totalRevenue = monthlyOrders.reduce((s, o) => s + toNum(o.totalSelling), 0);
+  const totalRevenue = monthlyOrders.reduce((s, o) => {
+    const ded = returnDeductions[o.id];
+    return s + Math.max(toNum(o.totalSelling) - (ded?.returnedSelling || 0), 0);
+  }, 0);
   const totalOrders = monthlyOrders.length;
   const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
@@ -74,7 +101,8 @@ export default function MonthlyReport() {
     const day = (o.date || "").slice(8, 10) || "?";
     if (!acc[day]) acc[day] = { day, orders: 0, revenue: 0 };
     acc[day].orders++;
-    acc[day].revenue += toNum(o.totalSelling);
+    const ded = returnDeductions[o.id];
+    acc[day].revenue += Math.max(toNum(o.totalSelling) - (ded?.returnedSelling || 0), 0);
     return acc;
   }, {} as Record<string, { day: string; orders: number; revenue: number }>);
   const dailyChartData = Object.values(dailyData).sort((a, b) => a.day.localeCompare(b.day));

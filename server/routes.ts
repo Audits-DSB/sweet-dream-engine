@@ -1962,7 +1962,7 @@ router.get("/company-profit-summary", async (_req, res) => {
         ...o,
         founder_contributions: contribMap[o.id] || [],
         total_cost: Math.max(adjCost, 0),
-        total_selling: Math.max(adjSelling, Number(o.total_selling || 0) > 0 ? adjSelling : 0),
+        total_selling: Math.max(adjSelling, 0),
       };
     });
 
@@ -2055,7 +2055,7 @@ router.get("/company-profit-summary", async (_req, res) => {
 // ── Founder capital balances (mirrors TreasuryAccounts logic) ──
 router.get("/founder-balances", async (_req, res) => {
   try {
-    const [{ data: founders }, { data: txData }, { data: cols }, { data: ords }, { data: rulesRows }, { data: contribRows }, { data: lineRows }] = await Promise.all([
+    const [{ data: founders }, { data: txData }, { data: cols }, { data: ords }, { data: rulesRows }, { data: contribRows }, { data: lineRows }, { data: returnsRows }] = await Promise.all([
       supabaseAdmin.from("founders").select("id,name"),
       supabaseAdmin.from("treasury_transactions").select("*").in("tx_type", FOUNDER_TX_TYPES),
       supabaseAdmin.from("collections").select("id,order_id,paid_amount,total_amount,notes"),
@@ -2063,6 +2063,7 @@ router.get("/founder-balances", async (_req, res) => {
       supabaseAdmin.from("business_rules").select("*").eq("id", "default").maybeSingle(),
       supabaseAdmin.from("order_founder_contributions").select("order_id,contributions"),
       supabaseAdmin.from("order_lines").select("order_id,line_cost"),
+      supabaseAdmin.from("returns").select("order_id,items,status"),
     ]);
     const fList = (founders || []) as { id: string; name: string }[];
     const txList = (txData || []) as any[];
@@ -2075,18 +2076,38 @@ router.get("/founder-balances", async (_req, res) => {
     const costMap: Record<string, number> = {};
     for (const l of lineRows || []) costMap[l.order_id] = (costMap[l.order_id] || 0) + (Number(l.line_cost) || 0);
 
+    const returnDedMap: Record<string, { returnedSelling: number; returnedCost: number }> = {};
+    (returnsRows || []).forEach((ret: any) => {
+      if (ret.status !== "accepted") return;
+      const oid = ret.order_id;
+      if (!oid) return;
+      if (!returnDedMap[oid]) returnDedMap[oid] = { returnedSelling: 0, returnedCost: 0 };
+      const items: any[] = ret.items || [];
+      items.forEach((it: any) => {
+        const qty = Number(it.quantity || 0);
+        returnDedMap[oid].returnedSelling += Number(it.sellingPrice || it.selling_price || 0) * qty;
+        returnDedMap[oid].returnedCost += Number(it.costPrice || it.cost_price || 0) * qty;
+      });
+    });
+
     const orderMap: Record<string, any> = {};
     ordList.forEach(o => {
+      if (o.status === "مرتجع كلي") return;
+      const ded = returnDedMap[o.id];
+      const rawCost = costMap[o.id] || 0;
+      const rawSelling = Number(o.total_selling ?? 0);
       orderMap[o.id] = {
         ...o,
         founder_contributions: contribMap[o.id] || [],
-        total_cost: costMap[o.id] || 0,
+        total_cost: Math.max(rawCost - (ded?.returnedCost || 0), 0),
+        total_selling: Math.max(rawSelling - (ded?.returnedSelling || 0), 0),
       };
     });
 
     const autoCapital: Record<string, number> = {};
     const autoProfit: Record<string, number> = {};
-    fList.forEach(f => { autoCapital[f.id] = 0; autoProfit[f.id] = 0; });
+    const autoDeliveryReimb: Record<string, number> = {};
+    fList.forEach(f => { autoCapital[f.id] = 0; autoProfit[f.id] = 0; autoDeliveryReimb[f.id] = 0; });
     colList.forEach(col => {
       const order = orderMap[col.order_id];
       if (!order) return;
@@ -2106,6 +2127,10 @@ router.get("/founder-balances", async (_req, res) => {
       const sm = order.split_mode || "equal";
       const isWeighted = sm.includes("مساهمة") || sm.toLowerCase().includes("contribution") || sm === "weighted";
       const splits = founderSplit(foundersProfit, capitalReturn, contribs, isWeighted ? "weighted" : "equal");
+
+      const delReimb = qp.deliveryFeeReimbursement || 0;
+      const paidByFounder = order.delivery_fee_paid_by_founder || "";
+
       fList.forEach(f => {
         let capShare = 0;
         let profShare = 0;
@@ -2118,6 +2143,9 @@ router.get("/founder-balances", async (_req, res) => {
         }
         if (capShare > 0) autoCapital[f.id] = (autoCapital[f.id] || 0) + Math.round(capShare);
         if (profShare > 0) autoProfit[f.id] = (autoProfit[f.id] || 0) + Math.round(profShare);
+        if (delReimb > 0 && paidByFounder === f.id) {
+          autoDeliveryReimb[f.id] = (autoDeliveryReimb[f.id] || 0) + Math.round(delReimb);
+        }
       });
     });
 
@@ -2128,7 +2156,7 @@ router.get("/founder-balances", async (_req, res) => {
       return {
         founderId: f.id,
         founderName: f.name,
-        balance: (autoCapital[f.id] || 0) + (autoProfit[f.id] || 0) + manualReturn - withdrawn,
+        balance: (autoCapital[f.id] || 0) + (autoProfit[f.id] || 0) + (autoDeliveryReimb[f.id] || 0) + manualReturn - withdrawn,
       };
     });
     res.json(balances);
