@@ -891,22 +891,45 @@ router.delete("/orders/:id", async (req, res) => {
   }
 
   // ── Step 1b: clean up ALL treasury transactions linked to this order ──
+  // Gather collection IDs for this order (direct + linked) to find their treasury txs
+  const orderCollectionIds = new Set<string>();
+  for (const col of (collectionsRes.data || [])) orderCollectionIds.add(col.id);
+  // Also discover linked collections (via notes.sourceOrders) for treasury matching
+  let linkedCollections: any[] = [];
+  try {
+    const { data: allCollections } = await supabaseAdmin.from("collections").select("*");
+    linkedCollections = (allCollections || []).filter((col: any) => {
+      try {
+        const notes = typeof col.notes === "object" ? col.notes : JSON.parse(col.notes || "{}");
+        const srcOrders: string[] = notes.sourceOrders || [];
+        return srcOrders.includes(orderId);
+      } catch { return false; }
+    });
+    for (const col of linkedCollections) orderCollectionIds.add(col.id);
+  } catch {}
+
   try {
     const { data: allTreasuryTxs } = await supabaseAdmin
       .from("treasury_transactions")
-      .select("*")
-      .in("tx_type", [...FOUNDER_TX_TYPES, "inflow", "expense", "withdrawal"]);
+      .select("*");
 
     const orderTreasuryTxs = (allTreasuryTxs || []).filter((tx: any) => {
       const parsed = parseFounderDesc(tx.description);
       if (parsed.orderId === orderId) return true;
+      if (parsed.collectionId && orderCollectionIds.has(parsed.collectionId)) return true;
       const d = tx.description || "";
-      if (d.includes(orderId)) return true;
+      const orderPattern = new RegExp(`\\b${orderId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+      if (orderPattern.test(d)) return true;
+      for (const colId of orderCollectionIds) {
+        const colPattern = new RegExp(`\\b${colId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+        if (colPattern.test(d)) return true;
+      }
       return false;
     });
 
     for (const tx of orderTreasuryTxs) {
       const absAmt = Math.abs(Number(tx.amount));
+      // Reverse founder balances for founder-type transactions
       if (tx.performed_by) {
         const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", tx.performed_by).single();
         if (f) {
@@ -919,6 +942,16 @@ router.delete("/orders/:id", async (req, res) => {
           if (Object.keys(patch).length > 0) {
             await supabaseAdmin.from("founders").update(patch).eq("id", tx.performed_by);
           }
+        }
+      }
+      // Reverse account balance for account-level transactions (inflow, expense, etc.)
+      if (tx.account_id) {
+        const { data: acct } = await supabaseAdmin.from("treasury_accounts").select("balance").eq("id", tx.account_id).single();
+        if (acct) {
+          const isOutflow = ["withdrawal", "expense", "transfer_out"].includes(tx.tx_type);
+          const balanceChange = isOutflow ? absAmt : -absAmt;
+          const newBal = Math.max(0, Number(acct.balance || 0) + balanceChange);
+          await supabaseAdmin.from("treasury_accounts").update({ balance: newBal, updated_at: new Date().toISOString() }).eq("id", tx.account_id);
         }
       }
       await supabaseAdmin.from("treasury_transactions").delete().eq("id", tx.id);
@@ -934,15 +967,6 @@ router.delete("/orders/:id", async (req, res) => {
 
   // ── Step 1c: clean up collections linked via sourceOrders in notes ──
   try {
-    const { data: allCollections } = await supabaseAdmin.from("collections").select("*");
-    const linkedCollections = (allCollections || []).filter((col: any) => {
-      try {
-        const notes = typeof col.notes === "object" ? col.notes : JSON.parse(col.notes || "{}");
-        const srcOrders: string[] = notes.sourceOrders || [];
-        return srcOrders.includes(orderId);
-      } catch { return false; }
-    });
-
     for (const col of linkedCollections) {
       try {
         const notes = typeof col.notes === "object" ? col.notes : JSON.parse(col.notes || "{}");
@@ -1047,18 +1071,31 @@ router.post("/orders/:id/cascade-restore", async (req, res) => {
         const { error: txErr } = await supabaseAdmin.from("treasury_transactions").upsert(tx, { onConflict: "id" });
         if (txErr) {
           console.warn(`[cascade-restore] treasury tx ${tx.id} error:`, txErr.message);
-        } else if (isNew && tx.performed_by) {
+        } else if (isNew) {
           const absAmt = Math.abs(Number(tx.amount));
-          const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", tx.performed_by).single();
-          if (f) {
-            const patch: Record<string, number> = {};
-            if (tx.tx_type === "order_funding") {
-              patch.total_contributed = Number(f.total_contributed || 0) + absAmt;
-            } else if (tx.tx_type === "capital_withdrawal") {
-              patch.total_withdrawn = Number(f.total_withdrawn || 0) + absAmt;
+          // Restore founder balances
+          if (tx.performed_by) {
+            const { data: f } = await supabaseAdmin.from("founders").select("total_contributed,total_withdrawn").eq("id", tx.performed_by).single();
+            if (f) {
+              const patch: Record<string, number> = {};
+              if (tx.tx_type === "order_funding" || tx.tx_type === "founder_contribution") {
+                patch.total_contributed = Number(f.total_contributed || 0) + absAmt;
+              } else if (tx.tx_type === "capital_withdrawal" || tx.tx_type === "founder_withdrawal") {
+                patch.total_withdrawn = Number(f.total_withdrawn || 0) + absAmt;
+              }
+              if (Object.keys(patch).length > 0) {
+                await supabaseAdmin.from("founders").update(patch).eq("id", tx.performed_by);
+              }
             }
-            if (Object.keys(patch).length > 0) {
-              await supabaseAdmin.from("founders").update(patch).eq("id", tx.performed_by);
+          }
+          // Restore account balance for account-level transactions
+          if (tx.account_id) {
+            const { data: acct } = await supabaseAdmin.from("treasury_accounts").select("balance").eq("id", tx.account_id).single();
+            if (acct) {
+              const isOutflow = ["withdrawal", "expense", "transfer_out"].includes(tx.tx_type);
+              const balanceChange = isOutflow ? -absAmt : absAmt;
+              const newBal = Math.max(0, Number(acct.balance || 0) + balanceChange);
+              await supabaseAdmin.from("treasury_accounts").update({ balance: newBal, updated_at: new Date().toISOString() }).eq("id", tx.account_id);
             }
           }
         }
