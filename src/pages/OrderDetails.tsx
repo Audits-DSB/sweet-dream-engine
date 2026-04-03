@@ -861,9 +861,14 @@ export default function OrderDetails() {
             <span className="cursor-pointer hover:text-primary" onClick={() => navigate(`/clients/${order.clientId}`)}>{order.client}</span>
             {" · "}{order.date}
             {order.source && order.source !== "—" ? ` · ${t.orderDetailsSource || "المصدر"}: ${order.source}` : ""}
-            {order.supplierId && order.supplierName && (
-              <>{" · "}<Link to={`/suppliers/${order.supplierId}`} className="text-primary hover:underline">🏭 {order.supplierName}</Link></>
-            )}
+            {(() => {
+              const uniqueSups = new Map<string, string>();
+              if (order.supplierId && order.supplierName) uniqueSups.set(order.supplierId, order.supplierName);
+              lines.forEach(l => { if (l.supplierId) { const sn = suppliers.find(s => s.id === l.supplierId)?.name; if (sn) uniqueSups.set(l.supplierId, sn); } });
+              return uniqueSups.size > 0 ? <>{" · "}{Array.from(uniqueSups.entries()).map(([sid, sname], i) => (
+                <span key={sid}>{i > 0 && "، "}<Link to={`/suppliers/${sid}`} className="text-primary hover:underline">🏭 {sname}</Link></span>
+              ))}</> : null;
+            })()}
           </p>
         </div>
         <div className="flex gap-2">
@@ -1477,14 +1482,23 @@ export default function OrderDetails() {
                     <div className="text-xs text-muted-foreground mt-0.5">نمط التقسيم: {order.splitMode}</div>
                   )}
                 </div>
-                {order.supplierId && order.supplierName && (
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-0.5">المورد</div>
-                    <Link to={`/suppliers/${order.supplierId}`} className="font-semibold text-primary hover:underline transition-colors">
-                      {order.supplierName}
-                    </Link>
-                  </div>
-                )}
+                {(() => {
+                  const uniqueSups = new Map<string, string>();
+                  if (order.supplierId && order.supplierName) uniqueSups.set(order.supplierId, order.supplierName);
+                  lines.forEach(l => { if (l.supplierId) { const sn = suppliers.find(s => s.id === l.supplierId)?.name; if (sn) uniqueSups.set(l.supplierId, sn); } });
+                  return uniqueSups.size > 0 ? (
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-0.5">{uniqueSups.size > 1 ? "الموردين" : "المورد"}</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {Array.from(uniqueSups.entries()).map(([sid, sname], i) => (
+                          <Link key={sid} to={`/suppliers/${sid}`} className="font-semibold text-primary hover:underline transition-colors">
+                            {sname}{i < uniqueSups.size - 1 ? "،" : ""}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
               </div>
             </div>
 

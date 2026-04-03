@@ -28,6 +28,7 @@ type Order = {
   totalSelling: string; totalCost: string; splitMode: string;
   deliveryFee: number; deliveryFeeBearer: string; deliveryFeePaidByFounder: string; status: string; source: string;
   supplierId: string; supplierName: string;
+  lineSuppliers: { id: string; name: string }[];
   notes?: string;
 };
 
@@ -70,6 +71,7 @@ function mapOrder(raw: any): Order {
     source: raw.source || "",
     supplierId: raw.supplierId || raw.supplier_id || "",
     supplierName: "",
+    lineSuppliers: (raw.lineSuppliers || raw.line_suppliers || []).map((s: any) => ({ id: s.id, name: s.name })),
     notes: raw.notes || "",
   };
 }
@@ -362,12 +364,13 @@ export default function OrdersPage() {
     const dateFilterRange = getDateFilterRange(dateRange);
     let result = orders.filter((o) => {
       const q = search.toLowerCase().trim();
-      const matchSearch = !q || o.client.toLowerCase().includes(q) || o.id.toLowerCase().includes(q) || o.date.includes(q) || o.source.toLowerCase().includes(q) || o.status.toLowerCase().includes(q) || o.supplierName.toLowerCase().includes(q);
+      const supNames = (o.lineSuppliers || []).map(s => s.name.toLowerCase()).join(" ");
+      const matchSearch = !q || o.client.toLowerCase().includes(q) || o.id.toLowerCase().includes(q) || o.date.includes(q) || o.source.toLowerCase().includes(q) || o.status.toLowerCase().includes(q) || o.supplierName.toLowerCase().includes(q) || supNames.includes(q);
       const activeStatuses = ["Processing", "Draft", "Confirmed", "Ready for Delivery"];
       const matchStatus = !filters.status || filters.status === "all" || (filters.status === "active" ? activeStatuses.includes(o.status) : o.status === filters.status);
       const matchDate = !dateFilterRange || (o.date >= dateFilterRange[0] && o.date <= dateFilterRange[1]);
       const matchClient = !clientFilter || o.clientId === clientFilter;
-      const matchSupplier = !supplierFilter || o.supplierId === supplierFilter;
+      const matchSupplier = !supplierFilter || o.supplierId === supplierFilter || (o.lineSuppliers || []).some(s => s.id === supplierFilter);
       return matchSearch && matchStatus && matchDate && matchClient && matchSupplier;
     });
     result.sort((a, b) => {
@@ -734,7 +737,7 @@ export default function OrdersPage() {
           <SelectTrigger className="h-8 w-[150px] text-xs"><Factory className="h-3 w-3 ml-1" /><SelectValue placeholder="كل الموردين" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">كل الموردين</SelectItem>
-            {suppliers.filter(s => orders.some(o => o.supplierId === s.id)).map(s => (
+            {suppliers.filter(s => orders.some(o => o.supplierId === s.id || (o.lineSuppliers || []).some(ls => ls.id === s.id))).map(s => (
               <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
             ))}
           </SelectContent>
@@ -787,7 +790,15 @@ export default function OrdersPage() {
                   </td>
                   <td className="py-3 px-2 font-medium hover:text-primary text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${order.clientId}`); }}>{order.client}</td>
                   <td className="py-3 px-2 text-xs" onClick={(e) => e.stopPropagation()}>
-                    {order.supplierId && order.supplierName ? (
+                    {order.lineSuppliers && order.lineSuppliers.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {order.lineSuppliers.map((sup, idx) => (
+                          <button key={sup.id} className="text-primary hover:underline text-xs" onClick={() => navigate(`/suppliers/${sup.id}`)}>
+                            {sup.name}{idx < order.lineSuppliers.length - 1 ? "،" : ""}
+                          </button>
+                        ))}
+                      </div>
+                    ) : order.supplierId && order.supplierName ? (
                       <button className="text-primary hover:underline" onClick={() => navigate(`/suppliers/${order.supplierId}`)}>{order.supplierName}</button>
                     ) : <span className="text-muted-foreground">—</span>}
                   </td>

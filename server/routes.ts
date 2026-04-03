@@ -279,19 +279,26 @@ router.delete("/materials/:code", async (req, res) => {
 router.get("/suppliers/:id/profile", async (req, res) => {
   try {
     const sid = req.params.id;
-    const [supRes, matsRes, ordersRes, invRes] = await Promise.all([
+    const [supRes, matsRes, ordersRes, invRes, linesRes] = await Promise.all([
       supabaseAdmin.from("suppliers").select("*").eq("id", sid).single(),
       supabaseAdmin.from("supplier_materials").select("*").eq("supplier_id", sid).order("material_name"),
-      supabaseAdmin.from("orders").select("*").eq("supplier_id", sid).order("date", { ascending: false }),
+      supabaseAdmin.from("orders").select("*").order("date", { ascending: false }),
       supabaseAdmin.from("company_inventory").select("*").eq("supplier_id", sid).order("date_added", { ascending: false }),
+      supabaseAdmin.from("order_lines").select("order_id,supplier_id,line_cost").eq("supplier_id", sid),
     ]);
     if (supRes.error) return res.status(404).json({ error: "Supplier not found" });
-    if (ordersRes.error) return res.status(500).json({ error: ordersRes.error.message });
     if (invRes.error) return res.status(500).json({ error: invRes.error.message });
 
-    const orders = ordersRes.data || [];
+    const lineOrderIds = new Set<string>();
+    const lineCostByOrder: Record<string, number> = {};
+    for (const l of (linesRes as any)?.data || []) {
+      lineOrderIds.add(l.order_id);
+      lineCostByOrder[l.order_id] = (lineCostByOrder[l.order_id] || 0) + (Number(l.line_cost) || 0);
+    }
+    const allOrders = ordersRes.data || [];
+    const orders = allOrders.filter((o: any) => o.supplier_id === sid || lineOrderIds.has(o.id));
     const inventory = invRes.data || [];
-    const totalPurchases = orders.reduce((s: number, o: any) => s + (parseFloat(o.total_cost) || 0), 0);
+    const totalPurchases = Object.values(lineCostByOrder).reduce((s, c) => s + c, 0) + orders.filter((o: any) => o.supplier_id === sid && !lineOrderIds.has(o.id)).reduce((s: number, o: any) => s + (parseFloat(o.total_cost) || 0), 0);
     const totalOrders = orders.length;
     const lastOrderDate = orders.length > 0 ? orders[0].date : null;
 
@@ -322,10 +329,11 @@ router.get("/suppliers/:id/profile", async (req, res) => {
 // ─── SUPPLIER STATS (summary for all suppliers) ─────────────────────────────
 router.get("/suppliers-stats", async (_req, res) => {
   try {
-    const [ordersRes, invRes, matsRes] = await Promise.all([
-      supabaseAdmin.from("orders").select("id, supplier_id, total_cost, date").not("supplier_id", "is", null).not("supplier_id", "eq", ""),
+    const [ordersRes, invRes, matsRes, orderLinesRes] = await Promise.all([
+      supabaseAdmin.from("orders").select("id, supplier_id, total_cost, date"),
       supabaseAdmin.from("company_inventory").select("supplier_id, quantity, remaining"),
       supabaseAdmin.from("supplier_materials").select("supplier_id, material_code"),
+      supabaseAdmin.from("order_lines").select("order_id, supplier_id, line_cost"),
     ]);
     if (ordersRes.error || invRes.error || matsRes.error) {
       return res.status(500).json({ error: (ordersRes.error || invRes.error || matsRes.error)!.message });
@@ -333,17 +341,39 @@ router.get("/suppliers-stats", async (_req, res) => {
     const orders = ordersRes.data || [];
     const inventory = invRes.data || [];
     const mats = matsRes.data || [];
+    const orderLines = (orderLinesRes as any)?.data || [];
+
+    const orderDateMap: Record<string, string> = {};
+    for (const o of orders) orderDateMap[o.id] = o.date || "";
 
     const statsMap: Record<string, any> = {};
+    const countedOrders: Record<string, Set<string>> = {};
+
+    for (const l of orderLines) {
+      if (!l.supplier_id) continue;
+      if (!statsMap[l.supplier_id]) statsMap[l.supplier_id] = { totalOrders: 0, totalPurchases: 0, lastOrderDate: null, materialsCount: 0, totalLots: 0 };
+      if (!countedOrders[l.supplier_id]) countedOrders[l.supplier_id] = new Set();
+      countedOrders[l.supplier_id].add(l.order_id);
+      statsMap[l.supplier_id].totalPurchases += parseFloat(l.line_cost) || 0;
+      const oDate = orderDateMap[l.order_id] || "";
+      if (oDate && (!statsMap[l.supplier_id].lastOrderDate || oDate > statsMap[l.supplier_id].lastOrderDate)) {
+        statsMap[l.supplier_id].lastOrderDate = oDate;
+      }
+    }
+
     orders.forEach((o: any) => {
       if (!o.supplier_id) return;
       if (!statsMap[o.supplier_id]) statsMap[o.supplier_id] = { totalOrders: 0, totalPurchases: 0, lastOrderDate: null, materialsCount: 0, totalLots: 0 };
-      statsMap[o.supplier_id].totalOrders++;
-      statsMap[o.supplier_id].totalPurchases += parseFloat(o.total_cost) || 0;
+      if (!countedOrders[o.supplier_id]) countedOrders[o.supplier_id] = new Set();
+      countedOrders[o.supplier_id].add(o.id);
       if (!statsMap[o.supplier_id].lastOrderDate || o.date > statsMap[o.supplier_id].lastOrderDate) {
         statsMap[o.supplier_id].lastOrderDate = o.date;
       }
     });
+
+    for (const [sid, orderSet] of Object.entries(countedOrders)) {
+      statsMap[sid].totalOrders = orderSet.size;
+    }
     inventory.forEach((lot: any) => {
       if (!lot.supplier_id) return;
       if (!statsMap[lot.supplier_id]) statsMap[lot.supplier_id] = { totalOrders: 0, totalPurchases: 0, lastOrderDate: null, materialsCount: 0, totalLots: 0 };
@@ -519,28 +549,42 @@ router.get("/orders/next-id", async (_req, res) => {
   res.json({ nextId: `ORD-${String(max + 1).padStart(3, "0")}` });
 });
 router.get("/orders", async (_req, res) => {
-  const [ordersRes, clientsRes, contribRes, linesRes] = await Promise.all([
+  const [ordersRes, clientsRes, contribRes, linesRes, suppliersRes] = await Promise.all([
     supabaseAdmin.from("orders").select("*").order("created_at", { ascending: false }),
     supabaseAdmin.from("clients").select("id,name"),
     supabaseAdmin.from("order_founder_contributions").select("order_id,contributions"),
-    supabaseAdmin.from("order_lines").select("order_id,line_cost"),
+    supabaseAdmin.from("order_lines").select("order_id,line_cost,supplier_id"),
+    supabaseAdmin.from("suppliers").select("id,name"),
   ]);
   if (ordersRes.error) return res.status(400).json({ error: ordersRes.error.message });
   const clientMap: Record<string, string> = {};
   for (const c of clientsRes.data || []) clientMap[c.id] = c.name || c.id;
   const contribMap: Record<string, any[]> = {};
   for (const r of contribRes.data || []) contribMap[r.order_id] = r.contributions || [];
-  // Compute total_cost per order from order_lines (sum of line_cost)
+  const supMap: Record<string, string> = {};
+  for (const s of (suppliersRes as any)?.data || []) supMap[s.id] = s.name || s.id;
   const costMap: Record<string, number> = {};
+  const lineSupplierMap: Record<string, Set<string>> = {};
   for (const l of linesRes.data || []) {
     costMap[l.order_id] = (costMap[l.order_id] || 0) + (Number(l.line_cost) || 0);
+    if (l.supplier_id) {
+      if (!lineSupplierMap[l.order_id]) lineSupplierMap[l.order_id] = new Set();
+      lineSupplierMap[l.order_id].add(l.supplier_id);
+    }
   }
-  const orders = (ordersRes.data || []).map(o => ({
-    ...o,
-    client: clientMap[o.client_id] || o.client_id || "",
-    founder_contributions: contribMap[o.id] || [],
-    total_cost: costMap[o.id] || 0,
-  }));
+  const orders = (ordersRes.data || []).map(o => {
+    const allSupIds = new Set<string>();
+    if (o.supplier_id) allSupIds.add(o.supplier_id);
+    for (const sid of lineSupplierMap[o.id] || []) allSupIds.add(sid);
+    const lineSuppliers = Array.from(allSupIds).map(sid => ({ id: sid, name: supMap[sid] || sid }));
+    return {
+      ...o,
+      client: clientMap[o.client_id] || o.client_id || "",
+      founder_contributions: contribMap[o.id] || [],
+      total_cost: costMap[o.id] || 0,
+      line_suppliers: lineSuppliers,
+    };
+  });
   res.json(camelizeKeys(orders));
 });
 router.get("/orders/:id", async (req, res) => {
