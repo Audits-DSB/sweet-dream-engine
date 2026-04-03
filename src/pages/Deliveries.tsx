@@ -89,6 +89,7 @@ export default function DeliveriesPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailOtherDeliveries, setDetailOtherDeliveries] = useState<Delivery[]>([]);
   const [confirmingDelivery, setConfirmingDelivery] = useState(false);
+  const [allOrderLinesMap, setAllOrderLinesMap] = useState<Record<string, { materialName: string; materialCode: string; qty: number; unit: string }[]>>({});
   const [materialImageMap, setMaterialImageMap] = useState<Record<string, string>>({});
 
   const getDeliveredQtyMap = (orderDeliveries: any[]): Record<string, number> => {
@@ -196,7 +197,8 @@ export default function DeliveriesPage() {
       api.get<any[]>("/founders"),
       api.get<any[]>("/clients"),
       api.get<{ products: any[] }>("/external-materials").catch(() => ({ products: [] })),
-    ]).then(([dels, ords, founders, clients, extData]) => {
+      api.get<any[]>("/order-lines").catch(() => []),
+    ]).then(([dels, ords, founders, clients, extData, allLines]) => {
       const clientMap: Record<string, string> = {};
       (clients || []).forEach((c: any) => { clientMap[c.id] = c.name || ""; });
       const imgMap: Record<string, string> = {};
@@ -212,6 +214,14 @@ export default function DeliveriesPage() {
         deliveryFee: Number(o.deliveryFee ?? o.delivery_fee ?? 0),
         itemsCount: Number(o.itemsCount ?? o.items_count ?? 0),
       })));
+      const linesMap: Record<string, { materialName: string; materialCode: string; qty: number; unit: string }[]> = {};
+      (allLines || []).forEach((l: any) => {
+        const oid = l.orderId || l.order_id || "";
+        if (!oid) return;
+        if (!linesMap[oid]) linesMap[oid] = [];
+        linesMap[oid].push({ materialName: l.materialName || l.material_name || "", materialCode: l.materialCode || l.material_code || "", qty: Number(l.quantity) || 0, unit: l.unit || "" });
+      });
+      setAllOrderLinesMap(linesMap);
       setDeliveries((dels || []).map(d => mapDelivery(d, clientMap)));
       const founderActors: Actor[] = (founders || []).map((f: any) => ({
         id: f.id, name: f.name || "", label: f.alias ? `${f.name} (${f.alias})` : f.name,
@@ -451,11 +461,14 @@ export default function DeliveriesPage() {
                   {(() => {
                     let items: { name: string; code: string; qty: number }[] = [];
                     try {
-                      const p = JSON.parse(del.type);
+                      const p = typeof del.notes === "string" ? JSON.parse(del.notes) : null;
                       if (p && Array.isArray(p.items) && p.items.length > 0) {
                         items = p.items.map((i: any) => ({ name: i.materialName || "", code: i.materialCode || "", qty: Number(i.qty) || 0 }));
                       }
                     } catch {}
+                    if (items.length === 0 && del.orderId && allOrderLinesMap[del.orderId]) {
+                      items = allOrderLinesMap[del.orderId].map(l => ({ name: l.materialName, code: l.materialCode, qty: l.qty }));
+                    }
                     if (items.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
                     return (
                       <div className="flex flex-col gap-1.5">

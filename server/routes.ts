@@ -724,6 +724,11 @@ router.post("/orders", async (req, res) => {
 
   res.json({ ...camelizeKeys(result.data), founderContributions: founderContributions || [] });
 });
+router.get("/order-lines", async (_req, res) => {
+  const { data, error } = await supabaseAdmin.from("order_lines").select("order_id,material_code,material_name,quantity,unit").order("order_id");
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(camelizeKeys(data));
+});
 router.get("/orders/:id/lines", async (req, res) => {
   const { data, error } = await supabaseAdmin.from("order_lines").select("*").eq("order_id", req.params.id).order("id");
   if (error) return res.status(500).json({ error: error.message });
