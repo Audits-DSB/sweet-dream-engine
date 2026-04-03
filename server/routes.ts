@@ -1353,44 +1353,52 @@ router.get("/alerts", async (_req, res) => {
       }
     }
 
+    const refillSeen = new Set<string>();
     for (const ci of clientInventoryResult.data || []) {
+      if (ci.status === "Expired" || ci.status === "Returned") continue;
       const remaining = Number(ci.remaining || 0);
       const avgWeekly = Number(ci.avg_weekly_usage || 0);
       const leadTime = Number(ci.lead_time_weeks || 2);
       const safetyStock = Number(ci.safety_stock || 0);
-      if (avgWeekly <= 0) continue;
-      const coverageWeeks = remaining / avgWeekly;
-      const reorderPoint = (avgWeekly * leadTime) + safetyStock;
-      if (remaining > reorderPoint) continue;
-      const isCritical = coverageWeeks <= leadTime * 0.5;
-      const isUrgent = coverageWeeks <= leadTime;
-      if (!isCritical && !isUrgent) continue;
+      const shortageQty = Number((ci as any).shortage_qty || 0);
+      const fromAudit = ci.status === "Needs Refill" && shortageQty > 0;
+
+      const coverageWeeks = avgWeekly > 0 ? remaining / avgWeekly : 999;
+
+      let priority: string;
+      if (fromAudit) {
+        priority = remaining <= 0 ? "Critical" : "Urgent";
+      } else if (avgWeekly > 0) {
+        if (coverageWeeks <= leadTime * 0.5) priority = "Critical";
+        else if (coverageWeeks <= leadTime) priority = "Urgent";
+        else if (coverageWeeks <= leadTime * 2) priority = "Normal";
+        else priority = "OK";
+      } else {
+        priority = remaining <= 0 ? "Critical" : "OK";
+      }
+
+      if (priority === "OK") continue;
+
+      let suggestedQty = 0;
+      if (fromAudit) {
+        suggestedQty = shortageQty;
+      } else if (avgWeekly > 0) {
+        suggestedQty = Math.ceil(avgWeekly * (leadTime * 3) - remaining + safetyStock);
+      }
+      suggestedQty = Math.max(0, suggestedQty);
+
       const clientName = ci.client_name || clientMap[ci.client_id] || ci.client_id || "";
-      const suggestedQty = Math.max(0, Math.ceil((avgWeekly * leadTime * 2) + safetyStock - remaining));
+      const severity = priority === "Critical" ? "critical" : priority === "Urgent" ? "warning" : "info";
+      const coverageText = avgWeekly > 0 ? `يكفي ${coverageWeeks.toFixed(1)} أسبوع` : "لا يوجد استهلاك";
+      const titlePrefix = priority === "Critical" ? "⚠ إعادة طلب عاجل" : priority === "Urgent" ? "إعادة طلب" : "يحتاج تعبئة";
+
+      refillSeen.add(ci.id);
       alerts.push({
         id: `refill-${ci.id}`,
         type: "refill",
-        severity: isCritical ? "critical" : "warning",
-        title: `${isCritical ? "⚠ إعادة طلب عاجل" : "إعادة طلب"} — ${ci.material || ci.code}`,
-        description: `${clientName} — متبقي ${remaining} ${ci.unit || "وحدة"} (يكفي ${coverageWeeks.toFixed(1)} أسبوع) — الكمية المقترحة: ${suggestedQty}`,
-        date: today.toISOString().split("T")[0],
-        link: "/refill",
-        clientId: ci.client_id,
-      });
-    }
-
-    const depleted = (clientInventoryResult.data || []).filter((ci: any) => {
-      const remaining = Number(ci.remaining || 0);
-      return remaining === 0 && (ci.status === "Depleted" || ci.status === "نفد");
-    });
-    for (const ci of depleted) {
-      const clientName = ci.client_name || clientMap[ci.client_id] || ci.client_id || "";
-      alerts.push({
-        id: `depleted-${ci.id}`,
-        type: "refill",
-        severity: "critical",
-        title: `نفد المخزون — ${ci.material || ci.code}`,
-        description: `${clientName} — المخزون صفر — يحتاج إعادة طلب فوراً`,
+        severity,
+        title: `${titlePrefix} — ${ci.material || ci.code}`,
+        description: `${clientName} — متبقي ${remaining} ${ci.unit || "وحدة"} (${coverageText})${suggestedQty > 0 ? ` — الكمية المقترحة: ${suggestedQty}` : ""}`,
         date: today.toISOString().split("T")[0],
         link: "/refill",
         clientId: ci.client_id,
