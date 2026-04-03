@@ -1161,6 +1161,26 @@ export default function OrdersPage() {
                     <Wallet className="h-4 w-4 text-amber-600" />
                     <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">مين دفع تكلفة الأوردر؟</span>
                     <span className="text-xs text-muted-foreground mr-auto">{fundingCostDisplay.toLocaleString()} {t.currency}</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-6 text-[11px] px-2 border-amber-300 text-amber-700 hover:bg-amber-100"
+                      onClick={() => {
+                        const activeFounderIds = founders.filter(f => selectedFounders.includes(f.id)).map(f => f.id);
+                        if (activeFounderIds.length === 0) return;
+                        setCostPayers(activeFounderIds);
+                        const equalAmount = Math.floor((fundingCostDisplay / activeFounderIds.length) * 100) / 100;
+                        const remainder = Math.round((fundingCostDisplay - equalAmount * activeFounderIds.length) * 100) / 100;
+                        const newAmounts: Record<string, number> = {};
+                        activeFounderIds.forEach((id, i) => {
+                          newAmounts[id] = i === 0 ? equalAmount + remainder : equalAmount;
+                        });
+                        setFounderPaidAmounts(newAmounts);
+                      }}
+                    >
+                      بالتساوي
+                    </Button>
                   </div>
                   <div className="space-y-1.5">
                     {founders.filter(f => selectedFounders.includes(f.id)).map((f, _idx, arr) => {
