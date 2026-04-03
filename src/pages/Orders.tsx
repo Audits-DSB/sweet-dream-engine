@@ -905,7 +905,7 @@ export default function OrdersPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => navigate(`/orders/${order.id}`)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewDetails}</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => navigate(`/deliveries?new=${order.id}`)}><Truck className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.registerDelivery}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => navigate(`/deliveries?new=${order.id}`)} disabled={order.status === "Delivered"} className={order.status === "Delivered" ? "opacity-50 cursor-not-allowed" : ""}><Truck className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.registerDelivery}</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleDuplicate(order)}><Copy className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />نسخ الطلب</DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(order)} data-testid={`button-delete-order-${order.id}`}>
