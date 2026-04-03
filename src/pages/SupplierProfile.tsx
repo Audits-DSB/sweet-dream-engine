@@ -34,9 +34,12 @@ type SupplierLot = {
   lotNumber: string; quantity: number; remaining: number; costPrice: number;
   sourceOrder: string; dateAdded: string; status: string;
 };
+type PriceHistoryEntry = {
+  orderId: string; date: string; costPrice: number; quantity: number; lineCost: number; client: string;
+};
 type SupplierMaterial = {
   supplierId: string; materialCode: string; materialName: string;
-  auto?: boolean;
+  auto?: boolean; imageUrl?: string | null; priceHistory?: PriceHistoryEntry[];
 };
 type Stats = {
   totalPurchases: number; totalOrders: number; lastOrderDate: string | null;
@@ -456,23 +459,64 @@ export default function SupplierProfile() {
               <p className="text-xs text-muted-foreground mt-1">يمكنك إضافة مواد من صفحة الموردين</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {materials.map(mat => (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {materials.map(mat => {
+                const history = mat.priceHistory || [];
+                const latestPrice = history.length > 0 ? history[0].costPrice : null;
+                const prevPrice = history.length > 1 ? history[1].costPrice : null;
+                const priceChange = latestPrice !== null && prevPrice !== null ? latestPrice - prevPrice : null;
+                return (
                 <div key={mat.materialCode} className="stat-card p-3 hover:border-primary/20 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${mat.auto ? "bg-blue-500/10" : "bg-muted"}`}>
-                      <Package className={`h-5 w-5 ${mat.auto ? "text-blue-500" : "text-muted-foreground"}`} />
-                    </div>
+                  <div className="flex gap-3">
+                    {mat.imageUrl ? (
+                      <img src={mat.imageUrl} alt={mat.materialName} className="h-14 w-14 rounded-lg object-cover shrink-0 border" />
+                    ) : (
+                      <div className={`h-14 w-14 rounded-lg flex items-center justify-center shrink-0 ${mat.auto ? "bg-blue-500/10" : "bg-muted"}`}>
+                        <Package className={`h-6 w-6 ${mat.auto ? "text-blue-500" : "text-muted-foreground"}`} />
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <p className="text-sm font-semibold truncate">{mat.materialName}</p>
                         {mat.auto && <Badge variant="outline" className="text-[9px] h-3.5 px-1 border-blue-300 text-blue-600 shrink-0">من الطلبات</Badge>}
                       </div>
                       <p className="text-xs text-muted-foreground font-mono">{mat.materialCode}</p>
+                      {latestPrice !== null && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-sm font-bold text-primary">{latestPrice.toLocaleString()} ج.م</span>
+                          {priceChange !== null && priceChange !== 0 && (
+                            <span className={`text-[10px] font-medium ${priceChange > 0 ? "text-red-500" : "text-green-500"}`}>
+                              {priceChange > 0 ? "▲" : "▼"} {Math.abs(priceChange).toLocaleString()}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-muted-foreground">({history.length} طلب)</span>
+                        </div>
+                      )}
                     </div>
                   </div>
+                  {history.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-border/50">
+                      <p className="text-[10px] text-muted-foreground mb-1.5 font-semibold">سجل الأسعار</p>
+                      <div className="space-y-1 max-h-28 overflow-y-auto">
+                        {history.map((h, i) => (
+                          <div key={`${h.orderId}-${i}`} className="flex items-center justify-between text-[11px] gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <Link to={`/orders/${h.orderId}`} className="text-primary hover:underline font-mono shrink-0">{h.orderId}</Link>
+                              <span className="text-muted-foreground truncate">— {h.client}</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-muted-foreground">{h.date}</span>
+                              <span className="font-semibold">{h.costPrice.toLocaleString()} ج.م</span>
+                              <span className="text-muted-foreground">×{h.quantity}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </TabsContent>

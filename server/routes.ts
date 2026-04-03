@@ -320,14 +320,40 @@ router.get("/suppliers/:id/profile", async (req, res) => {
     const totalUnitsSupplied = inventory.reduce((s: number, lot: any) => s + (parseFloat(lot.quantity) || 0), 0);
     const totalRemainingUnits = inventory.reduce((s: number, lot: any) => s + (parseFloat(lot.remaining) || 0), 0);
 
+    const allLines = (linesRes as any)?.data || [];
+    const matPriceHistory: Record<string, { orderId: string; date: string; costPrice: number; quantity: number; lineCost: number; client: string }[]> = {};
+    const matImages: Record<string, string> = {};
+    for (const l of allLines) {
+      const code = l.material_code || "";
+      if (!code) continue;
+      const oDate = allOrders.find((o: any) => o.id === l.order_id)?.date || "";
+      const oClientId = allOrders.find((o: any) => o.id === l.order_id)?.client_id || "";
+      if (!matPriceHistory[code]) matPriceHistory[code] = [];
+      matPriceHistory[code].push({
+        orderId: l.order_id,
+        date: oDate,
+        costPrice: Number(l.cost_price || 0),
+        quantity: Number(l.quantity || 0),
+        lineCost: Number(l.line_cost || 0),
+        client: clientMap[oClientId] || oClientId,
+      });
+      if (l.image_url && !matImages[code]) matImages[code] = l.image_url;
+    }
+
     const existingMatCodes = new Set((matsRes.data || []).map((m: any) => m.material_code));
     const autoMaterials = Array.from(suppliedMaterials.entries())
       .filter(([code]) => !existingMatCodes.has(code))
       .map(([code, name]) => ({ material_code: code, material_name: name, supplier_id: sid, auto: true }));
 
+    const enrichedMaterials = [...(matsRes.data || []), ...autoMaterials].map((m: any) => ({
+      ...m,
+      image_url: matImages[m.material_code] || null,
+      price_history: (matPriceHistory[m.material_code] || []).sort((a: any, b: any) => b.date.localeCompare(a.date)),
+    }));
+
     res.json(camelizeKeys({
       supplier: supRes.data,
-      materials: [...(matsRes.data || []), ...autoMaterials],
+      materials: enrichedMaterials,
       orders,
       inventory,
       stats: {
@@ -352,7 +378,7 @@ router.get("/suppliers-stats", async (_req, res) => {
       supabaseAdmin.from("orders").select("id, supplier_id, total_cost, date"),
       supabaseAdmin.from("company_inventory").select("supplier_id, quantity, remaining"),
       supabaseAdmin.from("supplier_materials").select("supplier_id, material_code"),
-      supabaseAdmin.from("order_lines").select("order_id, supplier_id, line_cost"),
+      supabaseAdmin.from("order_lines").select("order_id, supplier_id, line_cost, material_code"),
     ]);
     if (ordersRes.error || invRes.error || matsRes.error) {
       return res.status(500).json({ error: (ordersRes.error || invRes.error || matsRes.error)!.message });
@@ -398,11 +424,22 @@ router.get("/suppliers-stats", async (_req, res) => {
       if (!statsMap[lot.supplier_id]) statsMap[lot.supplier_id] = { totalOrders: 0, totalPurchases: 0, lastOrderDate: null, materialsCount: 0, totalLots: 0 };
       statsMap[lot.supplier_id].totalLots++;
     });
+    const matCodesBySup: Record<string, Set<string>> = {};
     mats.forEach((m: any) => {
       if (!m.supplier_id) return;
       if (!statsMap[m.supplier_id]) statsMap[m.supplier_id] = { totalOrders: 0, totalPurchases: 0, lastOrderDate: null, materialsCount: 0, totalLots: 0 };
-      statsMap[m.supplier_id].materialsCount++;
+      if (!matCodesBySup[m.supplier_id]) matCodesBySup[m.supplier_id] = new Set();
+      matCodesBySup[m.supplier_id].add(m.material_code);
     });
+    for (const l of orderLines) {
+      if (!l.supplier_id || !l.material_code) continue;
+      if (!matCodesBySup[l.supplier_id]) matCodesBySup[l.supplier_id] = new Set();
+      matCodesBySup[l.supplier_id].add(l.material_code);
+    }
+    for (const [sid, codes] of Object.entries(matCodesBySup)) {
+      if (!statsMap[sid]) statsMap[sid] = { totalOrders: 0, totalPurchases: 0, lastOrderDate: null, materialsCount: 0, totalLots: 0 };
+      statsMap[sid].materialsCount = codes.size;
+    }
 
     res.json(statsMap);
   } catch (e: any) {

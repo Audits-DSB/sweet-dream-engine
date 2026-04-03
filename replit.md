@@ -187,7 +187,7 @@ npx tsx server/index.ts   # starts Express on 5000, spawns Vite on 5001
 - **Migration**: POST `/api/migrate/company-inventory` checks and reports schema status
 
 ## Supplier Integration System
-- **Supplier Profile Page** (`src/pages/SupplierProfile.tsx`) — Route `/suppliers/:id`, shows full supplier details, stats, orders, inventory lots, materials, and analytics (monthly purchase chart, supplier statement). Includes edit dialog and delete with confirmation + audit logging.
+- **Supplier Profile Page** (`src/pages/SupplierProfile.tsx`) — Route `/suppliers/:id`, shows full supplier details, stats, orders (supplier-specific cost/items), inventory lots, materials (with images + price history from order lines), and analytics (monthly purchase chart using supplier-specific cost). Materials auto-detected from order lines shown with "من الطلبات" badge. Each material card shows: image, latest price, price change indicator, and scrollable price history with order links. Includes edit dialog and delete with confirmation + audit logging.
 - **API Endpoints**:
   - `GET /api/suppliers/:id/profile` — Aggregated supplier data (supplier info + orders + inventory + materials + computed stats)
   - `GET /api/suppliers-stats` — Summary stats for all suppliers (order count, total purchases, last order date, materials count, lots count)

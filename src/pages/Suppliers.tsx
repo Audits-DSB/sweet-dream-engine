@@ -344,7 +344,7 @@ export default function SuppliersPage() {
               <div className="flex items-center justify-between pt-2 border-t border-border">
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <Package className="h-3 w-3" />
-                  {matCounts[sup.id] ?? 0} {t.materialsCount}
+                  {st?.materialsCount ?? matCounts[sup.id] ?? 0} {t.materialsCount}
                 </span>
                 <div className="flex items-center gap-2">
                   <Link to={`/suppliers/${sup.id}`} onClick={e => e.stopPropagation()} className="text-primary hover:underline text-[11px] flex items-center gap-0.5">
