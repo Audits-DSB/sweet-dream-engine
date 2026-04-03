@@ -26,6 +26,7 @@ All business data in main Supabase project:
 - `deliveries` — Delivery records (columns: id, orderId, clientId, date, scheduledDate, status, deliveredBy, deliveryFee, items, notes)
 - `collections` — Invoice/collection records
 - `inventory` — Inventory lots
+- `returns` — Return/refund records (id, order_id, client_id, client_name, return_date, reason, status [pending/accepted/rejected], total_value, total_cost, disposition [company_inventory/return_to_supplier], refund_status, refund_amount, items jsonb, notes, processed_by, created_at). **NOTE**: Must be created manually via Supabase SQL Editor (exec_sql RPC unavailable).
 - `notifications` — System notifications
 - `treasury_accounts` — Treasury/cash accounts
 - `treasury_transactions` — All financial transactions including:

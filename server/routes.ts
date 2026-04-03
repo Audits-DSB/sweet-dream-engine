@@ -2838,4 +2838,265 @@ router.delete("/admin/users/:userId", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ======================== RETURNS ========================
+
+router.get("/returns", async (_req, res) => {
+  const { data, error } = await supabaseAdmin.from("returns").select("*").order("created_at", { ascending: false });
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(camelizeKeys(data || []));
+});
+
+router.get("/returns/:id", async (req, res) => {
+  const { data, error } = await supabaseAdmin.from("returns").select("*").eq("id", req.params.id).single();
+  if (error) return res.status(404).json({ error: error.message });
+  res.json(camelizeKeys(data));
+});
+
+router.post("/returns", async (req, res) => {
+  try {
+    const body = req.body;
+    const id = body.id || `RET-${Date.now().toString(36).toUpperCase()}`;
+    const items: any[] = body.items || [];
+    const totalValue = items.reduce((s: number, it: any) => s + (Number(it.sellingPrice || 0) * Number(it.quantity || 0)), 0);
+    const totalCost = items.reduce((s: number, it: any) => s + (Number(it.costPrice || 0) * Number(it.quantity || 0)), 0);
+
+    const row = {
+      id,
+      order_id: body.orderId,
+      client_id: body.clientId || "",
+      client_name: body.clientName || "",
+      return_date: body.returnDate || new Date().toISOString().split("T")[0],
+      reason: body.reason || "",
+      status: "pending",
+      total_value: totalValue,
+      total_cost: totalCost,
+      disposition: "",
+      refund_status: "none",
+      refund_amount: 0,
+      items: items,
+      notes: body.notes || "",
+      processed_by: "",
+    };
+
+    const { data, error } = await supabaseAdmin.from("returns").insert(row).select().single();
+    if (error) return res.status(400).json({ error: error.message });
+    res.json(camelizeKeys(data));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.patch("/returns/:id", async (req, res) => {
+  const updates = snakifyKeys(req.body);
+  const { data, error } = await supabaseAdmin.from("returns").update(updates).eq("id", req.params.id).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(camelizeKeys(data));
+});
+
+router.delete("/returns/:id", async (req, res) => {
+  const { error } = await supabaseAdmin.from("returns").delete().eq("id", req.params.id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ ok: true });
+});
+
+router.post("/returns/:id/accept", async (req, res) => {
+  try {
+    const retId = req.params.id;
+    const { disposition, refundStatus } = req.body;
+
+    const { data: ret, error: retErr } = await supabaseAdmin.from("returns").select("*").eq("id", retId).single();
+    if (retErr || !ret) return res.status(404).json({ error: "Return not found" });
+    if (ret.status === "accepted") return res.status(400).json({ error: "Already accepted" });
+
+    const items: any[] = ret.items || [];
+    const orderId = ret.order_id;
+
+    // 1. Deduct from client_inventory
+    for (const item of items) {
+      const qty = Number(item.quantity || 0);
+      if (qty <= 0) continue;
+      const { data: ciRows } = await supabaseAdmin.from("client_inventory")
+        .select("*")
+        .eq("client_id", ret.client_id)
+        .eq("code", item.materialCode || item.code || "")
+        .eq("source_order", orderId)
+        .order("created_at", { ascending: false });
+
+      let remaining = qty;
+      for (const ci of (ciRows || [])) {
+        if (remaining <= 0) break;
+        const ciRemaining = Number(ci.remaining || 0);
+        const deduct = Math.min(ciRemaining, remaining);
+        const newRemaining = ciRemaining - deduct;
+        await supabaseAdmin.from("client_inventory").update({
+          remaining: newRemaining,
+          status: newRemaining <= 0 ? "Returned" : "In Stock"
+        }).eq("id", ci.id);
+        remaining -= deduct;
+      }
+    }
+
+    // 2. If disposition is "company_inventory", add to company stock
+    if (disposition === "company_inventory") {
+      for (const item of items) {
+        const qty = Number(item.quantity || 0);
+        if (qty <= 0) continue;
+        const lotId = `LOT-RET-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6)}`;
+        await supabaseAdmin.from("company_inventory").insert({
+          id: lotId,
+          material_code: item.materialCode || item.code || "",
+          material_name: item.materialName || item.name || "",
+          unit: item.unit || "قطعة",
+          lot_number: `RET-${retId}`,
+          quantity: qty,
+          remaining: qty,
+          cost_price: Number(item.costPrice || 0),
+          source_order: orderId,
+          date_added: new Date().toISOString().split("T")[0],
+          status: item.condition === "damaged" ? "Damaged" : "In Stock",
+        });
+      }
+    }
+
+    // 3. Adjust collection outstanding
+    const totalReturnValue = items.reduce((s: number, it: any) => s + (Number(it.sellingPrice || 0) * Number(it.quantity || 0)), 0);
+    const { data: cols } = await supabaseAdmin.from("collections")
+      .select("*")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: false });
+
+    let creditAmount = 0;
+    if (cols && cols.length > 0) {
+      const col = cols[0];
+      const currentTotal = Number(col.total_amount || 0);
+      const currentPaid = Number(col.paid_amount || 0);
+      const newTotal = Math.max(currentTotal - totalReturnValue, 0);
+      const newOutstanding = Math.max(newTotal - currentPaid, 0);
+      if (currentPaid > newTotal) {
+        creditAmount = currentPaid - newTotal;
+      }
+      await supabaseAdmin.from("collections").update({
+        total_amount: newTotal,
+        outstanding: newOutstanding,
+        status: newOutstanding <= 0 ? "Paid" : col.status,
+      }).eq("id", col.id);
+    }
+
+    // 4. Update order status
+    const { data: allReturns } = await supabaseAdmin.from("returns").select("id,items,status")
+      .eq("order_id", orderId);
+    const { data: orderLines } = await supabaseAdmin.from("order_lines").select("quantity").eq("order_id", orderId);
+    const totalOrderedQty = (orderLines || []).reduce((s: number, l: any) => s + Number(l.quantity || 0), 0);
+    const totalReturnedQty = (allReturns || [])
+      .filter((r: any) => r.status === "accepted" || r.id === retId)
+      .reduce((s: number, r: any) => {
+        const rItems: any[] = r.items || [];
+        return s + rItems.reduce((ss: number, it: any) => ss + Number(it.quantity || 0), 0);
+      }, 0);
+
+    let newOrderStatus: string | undefined;
+    if (totalReturnedQty >= totalOrderedQty && totalOrderedQty > 0) {
+      newOrderStatus = "مرتجع كلي";
+    } else if (totalReturnedQty > 0) {
+      newOrderStatus = "مرتجع جزئي";
+    }
+    if (newOrderStatus) {
+      await supabaseAdmin.from("orders").update({ status: newOrderStatus }).eq("id", orderId);
+    }
+
+    // 5. If supplier return with refund, handle founder refunds
+    let founderRefunds: any[] = [];
+    if (disposition === "return_to_supplier" && refundStatus === "refunded") {
+      const totalReturnCost = items.reduce((s: number, it: any) => s + (Number(it.costPrice || 0) * Number(it.quantity || 0)), 0);
+      const { data: contribRow } = await supabaseAdmin.from("order_founder_contributions")
+        .select("contributions")
+        .eq("order_id", orderId)
+        .maybeSingle();
+      const contributions: any[] = contribRow?.contributions || [];
+      const { data: foundersList } = await supabaseAdmin.from("founders").select("*");
+
+      if (contributions.length > 0) {
+        const totalPct = contributions.reduce((s: number, c: any) => s + (Number(c.percentage) || 0), 0) || 100;
+        for (const c of contributions) {
+          const pct = (Number(c.percentage) || 0) / totalPct;
+          const refundAmt = Math.round(totalReturnCost * pct * 100) / 100;
+          const founderName = (foundersList || []).find((f: any) => f.id === c.founderId)?.name || c.founderId;
+          founderRefunds.push({ founderId: c.founderId, founderName, amount: refundAmt });
+        }
+      } else {
+        const numFounders = (foundersList || []).length || 1;
+        for (const f of (foundersList || [])) {
+          const refundAmt = Math.round(totalReturnCost / numFounders * 100) / 100;
+          founderRefunds.push({ founderId: f.id, founderName: f.name, amount: refundAmt });
+        }
+      }
+    }
+
+    // 6. Update the return record
+    const { data: updated, error: updErr } = await supabaseAdmin.from("returns").update({
+      status: "accepted",
+      disposition: disposition || "",
+      refund_status: refundStatus || "none",
+      refund_amount: disposition === "return_to_supplier" && refundStatus === "refunded"
+        ? items.reduce((s: number, it: any) => s + (Number(it.costPrice || 0) * Number(it.quantity || 0)), 0)
+        : 0,
+      processed_by: req.body.processedBy || "",
+    }).eq("id", retId).select().single();
+    if (updErr) return res.status(400).json({ error: updErr.message });
+
+    res.json(camelizeKeys({ ...updated, founderRefunds, creditAmount }));
+  } catch (e: any) {
+    console.error("[Returns Accept Error]", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/returns/:id/reject", async (req, res) => {
+  const { data, error } = await supabaseAdmin.from("returns").update({
+    status: "rejected",
+    notes: req.body.notes || "",
+    processed_by: req.body.processedBy || "",
+  }).eq("id", req.params.id).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(camelizeKeys(data));
+});
+
+router.get("/orders/:id/returnable-items", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const [linesRes, returnsRes] = await Promise.all([
+      supabaseAdmin.from("order_lines").select("*").eq("order_id", orderId),
+      supabaseAdmin.from("returns").select("items,status").eq("order_id", orderId).in("status", ["pending", "accepted"]),
+    ]);
+
+    const lines = linesRes.data || [];
+    const returnedMap: Record<string, number> = {};
+    for (const r of (returnsRes.data || [])) {
+      for (const it of (r.items || [])) {
+        const key = it.materialCode || it.code || it.material_code || "";
+        returnedMap[key] = (returnedMap[key] || 0) + Number(it.quantity || 0);
+      }
+    }
+
+    const returnableItems = lines.map((l: any) => {
+      const code = l.material_code || l.code || "";
+      const totalQty = Number(l.quantity || 0);
+      const alreadyReturned = returnedMap[code] || 0;
+      const returnable = Math.max(totalQty - alreadyReturned, 0);
+      return {
+        ...camelizeKeys(l),
+        materialCode: code,
+        materialName: l.material_name || l.name || "",
+        totalOrdered: totalQty,
+        alreadyReturned,
+        returnableQty: returnable,
+      };
+    }).filter((item: any) => item.returnableQty > 0);
+
+    res.json(returnableItems);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 export default router;

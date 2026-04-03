@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { quickProfit } from "@/lib/orderProfit";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, ClipboardCheck, CreditCard, ChevronLeft, ChevronDown, Plus, Trash2, Search, Warehouse, Undo2, UserPlus, Factory, ArrowLeftRight, Clock } from "lucide-react";
+import { ArrowLeft, Truck, Upload, Printer, FileCheck, Loader2, Package, TrendingUp, Building2, Users2, CheckCircle2, Circle, DollarSign, Pencil, CalendarDays, User, Hash, StickyNote, ExternalLink, PackageCheck, Wallet, Banknote, AlertCircle, ClipboardList, ClipboardCheck, CreditCard, ChevronLeft, ChevronDown, Plus, Trash2, Search, Warehouse, Undo2, UserPlus, Factory, ArrowLeftRight, Clock, RotateCcw } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -133,6 +133,15 @@ export default function OrderDetails() {
   const [costPayerEditing, setCostPayerEditing] = useState<Record<string, number>>({});
   const [costPayerSaving, setCostPayerSaving] = useState(false);
 
+  // Return state
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [returnableItems, setReturnableItems] = useState<any[]>([]);
+  const [returnQtys, setReturnQtys] = useState<Record<string, number>>({});
+  const [returnReason, setReturnReason] = useState("defective");
+  const [returnNotes, setReturnNotes] = useState("");
+  const [returnLoading, setReturnLoading] = useState(false);
+  const [orderReturns, setOrderReturns] = useState<any[]>([]);
+
   // Edit state
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({ status: "", date: "", source: "", deliveryFee: "", deliveryFeeBearer: "client", deliveryFeePaidByFounder: "", supplierId: "" });
@@ -230,6 +239,67 @@ export default function OrderDetails() {
       .catch(() => toast.error("تعذّر تحميل بيانات الطلب"))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      api.get<any[]>("/returns").then(all => {
+        setOrderReturns((all || []).filter((r: any) => r.orderId === id));
+      }).catch(() => {});
+    }
+  }, [id]);
+
+  const openReturnDialog = async () => {
+    try {
+      const items = await api.get<any[]>(`/orders/${id}/returnable-items`);
+      setReturnableItems(items || []);
+      const qtys: Record<string, number> = {};
+      (items || []).forEach((it: any) => { qtys[it.materialCode] = 0; });
+      setReturnQtys(qtys);
+      setReturnReason("defective");
+      setReturnNotes("");
+      setReturnDialogOpen(true);
+    } catch (e: any) {
+      toast.error("تعذّر تحميل الأصناف القابلة للإرجاع");
+    }
+  };
+
+  const handleSubmitReturn = async () => {
+    if (!order) return;
+    const selectedItems = returnableItems
+      .filter(it => (returnQtys[it.materialCode] || 0) > 0)
+      .map(it => ({
+        materialCode: it.materialCode,
+        materialName: it.materialName,
+        quantity: returnQtys[it.materialCode],
+        sellingPrice: Number(it.sellingPrice || it.selling_price || 0),
+        costPrice: Number(it.unitCost || it.unit_cost || it.costPrice || 0),
+        unit: it.unit || "قطعة",
+        condition: "good" as const,
+      }));
+
+    if (selectedItems.length === 0) {
+      toast.error("اختر صنف واحد على الأقل مع كمية أكبر من 0");
+      return;
+    }
+
+    setReturnLoading(true);
+    try {
+      const ret = await api.post<any>("/returns", {
+        orderId: id,
+        clientId: order.clientId || order.client_id,
+        clientName: order.client,
+        reason: returnReason,
+        notes: returnNotes,
+        items: selectedItems,
+      });
+      setReturnDialogOpen(false);
+      toast.success("تم إنشاء طلب المرتجع بنجاح");
+      navigate(`/returns?highlight=${ret.id}`);
+    } catch (e: any) {
+      toast.error(e.message || "خطأ في إنشاء المرتجع");
+    }
+    setReturnLoading(false);
+  };
 
   const handlePayFounder = async (fc: FounderContrib) => {
     if (!order) return;
@@ -809,6 +879,11 @@ export default function OrderDetails() {
             <Pencil className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />تعديل
           </Button>
           <Button size="sm" disabled={["Delivered", "Completed", "مُسلَّم", "مكتمل", "تم التسليم"].includes(order.status)} onClick={() => navigate(`/deliveries?new=${id}`)}><Truck className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.registerDelivery}</Button>
+          {["Delivered", "Completed", "مُسلَّم", "مكتمل", "تم التسليم", "Partially Delivered", "تسليم جزئي", "مرتجع جزئي"].includes(order.status) && (
+            <Button size="sm" variant="outline" className="text-amber-600 border-amber-300 hover:bg-amber-50" onClick={openReturnDialog}>
+              <RotateCcw className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />مرتجع
+            </Button>
+          )}
         </div>
       </div>
 
@@ -2428,6 +2503,112 @@ export default function OrderDetails() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── RETURN DIALOG ─────────────────────────────────────────────── */}
+      <Dialog open={returnDialogOpen} onOpenChange={setReturnDialogOpen}>
+        <DialogContent dir="rtl" className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>إنشاء مرتجع — الطلب {id}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>سبب الإرجاع</Label>
+              <Select value={returnReason} onValueChange={setReturnReason}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="defective">عيب في المنتج</SelectItem>
+                  <SelectItem value="wrong_item">صنف خاطئ</SelectItem>
+                  <SelectItem value="excess">كمية زائدة</SelectItem>
+                  <SelectItem value="client_request">طلب العميل</SelectItem>
+                  <SelectItem value="other">أخرى</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>ملاحظات</Label>
+              <Input value={returnNotes} onChange={e => setReturnNotes(e.target.value)} placeholder="ملاحظات إضافية..." />
+            </div>
+            <div>
+              <Label className="mb-2 block">الأصناف القابلة للإرجاع</Label>
+              {returnableItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground">لا توجد أصناف قابلة للإرجاع</p>
+              ) : (
+                <div className="border rounded-md divide-y">
+                  {returnableItems.map(it => (
+                    <div key={it.materialCode} className="flex items-center gap-3 px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{it.materialName}</p>
+                        <p className="text-xs text-muted-foreground">الكود: {it.materialCode} — متاح: {it.returnableQty} {it.unit || "قطعة"}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Label className="text-xs">الكمية</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={it.returnableQty}
+                          className="w-20 text-center"
+                          value={returnQtys[it.materialCode] || 0}
+                          onChange={e => {
+                            const v = Math.min(Math.max(0, parseInt(e.target.value) || 0), it.returnableQty);
+                            setReturnQtys(prev => ({ ...prev, [it.materialCode]: v }));
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="gap-2 mt-4">
+            <Button variant="outline" onClick={() => setReturnDialogOpen(false)}>إلغاء</Button>
+            <Button onClick={handleSubmitReturn} disabled={returnLoading || returnableItems.length === 0}>
+              {returnLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "إنشاء المرتجع"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── RETURNS SECTION ───────────────────────────────────────────── */}
+      {orderReturns.length > 0 && (
+        <div className="mt-6 border rounded-lg p-4">
+          <h3 className="text-base font-bold mb-3 flex items-center gap-2">
+            <RotateCcw className="h-4 w-4 text-amber-600" />
+            المرتجعات ({orderReturns.length})
+          </h3>
+          <div className="space-y-2">
+            {orderReturns.map(ret => (
+              <div key={ret.id} className="border rounded-md p-3 bg-amber-50 dark:bg-amber-950/20">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs">{ret.id}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      ret.status === "accepted" ? "bg-green-100 text-green-700" :
+                      ret.status === "rejected" ? "bg-red-100 text-red-700" :
+                      "bg-yellow-100 text-yellow-700"
+                    }`}>{
+                      ret.status === "accepted" ? "مقبول" :
+                      ret.status === "rejected" ? "مرفوض" : "قيد المراجعة"
+                    }</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{ret.returnDate || ret.return_date}</span>
+                    <span>القيمة: {Number(ret.totalValue || ret.total_value || 0).toLocaleString()} ج.م</span>
+                  </div>
+                </div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {(ret.items || []).map((item: any, i: number) => (
+                    <span key={i}>{i > 0 && " ، "}{item.materialName} ×{item.quantity}</span>
+                  ))}
+                </div>
+                <div className="mt-1">
+                  <Link to="/returns" className="text-xs text-primary hover:underline">عرض التفاصيل ←</Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -212,3 +212,22 @@ export const treasuryTransactions = pgTable("treasury_transactions", {
   approvedBy: text("approved_by"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
+
+export const returns = pgTable("returns", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id").notNull(),
+  clientId: text("client_id").notNull().default(""),
+  clientName: text("client_name").notNull().default(""),
+  returnDate: text("return_date").notNull().default(""),
+  reason: text("reason").notNull().default(""),
+  status: text("status").notNull().default("pending"),
+  totalValue: numeric("total_value", { precision: 14, scale: 2 }).notNull().default("0"),
+  totalCost: numeric("total_cost", { precision: 14, scale: 2 }).notNull().default("0"),
+  disposition: text("disposition").notNull().default(""),
+  refundStatus: text("refund_status").notNull().default("none"),
+  refundAmount: numeric("refund_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  items: jsonb("items").notNull().default([]),
+  notes: text("notes").notNull().default(""),
+  processedBy: text("processed_by").notNull().default(""),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});

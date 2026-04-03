@@ -285,9 +285,60 @@ async function ensureSupplierIdColumn() {
   }
 }
 
+async function ensureReturnsTable() {
+  const url = process.env.VITE_SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const headers: Record<string, string> = { apikey: key, Authorization: `Bearer ${key}`, Accept: "application/json", "Content-Type": "application/json", Prefer: "return=minimal" };
+  try {
+    const checkResp = await fetch(`${url}/rest/v1/returns?select=id&limit=1`, { headers });
+    if (checkResp.ok) {
+      console.log("✅ returns table already exists");
+      return;
+    }
+
+    const sqlStatements = [
+      `CREATE TABLE IF NOT EXISTS public.returns (id text PRIMARY KEY, order_id text NOT NULL, client_id text NOT NULL DEFAULT '', client_name text NOT NULL DEFAULT '', return_date text NOT NULL DEFAULT '', reason text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'pending', total_value numeric(14,2) NOT NULL DEFAULT 0, total_cost numeric(14,2) NOT NULL DEFAULT 0, disposition text NOT NULL DEFAULT '', refund_status text NOT NULL DEFAULT 'none', refund_amount numeric(14,2) NOT NULL DEFAULT 0, items jsonb NOT NULL DEFAULT '[]'::jsonb, notes text NOT NULL DEFAULT '', processed_by text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now())`,
+      `ALTER TABLE public.returns ENABLE ROW LEVEL SECURITY`,
+      `CREATE POLICY "service_role_all_returns" ON public.returns FOR ALL TO service_role USING (true) WITH CHECK (true)`,
+    ];
+
+    let created = false;
+    for (const rpcName of ["exec_sql", "execute_sql", "run_sql"]) {
+      for (const paramName of ["sql_text", "sql", "query"]) {
+        try {
+          const { error } = await supabaseAdmin.rpc(rpcName, { [paramName]: sqlStatements[0] });
+          if (!error) {
+            for (let i = 1; i < sqlStatements.length; i++) {
+              await supabaseAdmin.rpc(rpcName, { [paramName]: sqlStatements[i] }).catch(() => {});
+            }
+            console.log(`✅ Created returns table via RPC ${rpcName}(${paramName})`);
+            await reloadSupabaseSchemaCache();
+            created = true;
+            break;
+          }
+        } catch {}
+      }
+      if (created) break;
+    }
+
+    if (!created) {
+      const mgmtUrl = url.replace(".supabase.co", ".supabase.co").replace("https://", "");
+      const projectRef = mgmtUrl.split(".")[0];
+      console.warn(`⚠️ Could not create returns table automatically.`);
+      console.warn(`   Please run this SQL in your Supabase SQL Editor (project: ${projectRef}):`);
+      console.warn(`   ${sqlStatements[0]};`);
+      console.warn(`   ${sqlStatements[1]};`);
+      console.warn(`   ${sqlStatements[2]};`);
+    }
+  } catch (e: any) {
+    console.warn("⚠️ returns table check failed:", e.message);
+  }
+}
+
 app.listen(PORT, "0.0.0.0", async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   await reloadSupabaseSchemaCache();
+  await ensureReturnsTable();
   await ensureDeliveryFeePaidByFounderColumn();
   await ensureOrderCostPaidByFounderColumn();
   await ensureSupplierIdColumn();
