@@ -49,6 +49,16 @@ export function WalkthroughBubble() {
     if (dismissed) localStorage.setItem("dsb_walkthrough_dismissed", "true");
   }, [dismissed]);
 
+  useEffect(() => {
+    const handler = () => {
+      setOpen(true);
+      setDismissed(false);
+      setCurrentStep(0);
+    };
+    window.addEventListener("open-walkthrough", handler);
+    return () => window.removeEventListener("open-walkthrough", handler);
+  }, []);
+
   const workflowSteps = [
     {
       title: "مرحباً بك في DSB",

@@ -68,7 +68,7 @@ export function WorkflowBanner() {
         <Button 
           variant="outline" 
           size="sm" 
-          onClick={() => navigate("/walkthrough")}
+          onClick={() => window.dispatchEvent(new CustomEvent("open-walkthrough"))}
           className="gap-2"
         >
           <Play className="h-3 w-3" />
