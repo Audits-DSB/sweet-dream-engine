@@ -2,6 +2,12 @@ import { Router } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { quickProfit, founderSplit } from "../src/lib/orderProfit";
 
+const supabaseAdmin = createClient(
+  process.env.VITE_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
+
 const router = Router();
 
 router.post("/migrate/company-inventory", async (_req, res) => {
@@ -178,12 +184,6 @@ router.patch("/external-materials/:id", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-const supabaseAdmin = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
 
 // ─── camelCase ↔ snake_case helpers ──────────────────────────────────────────
 const toCamel = (s: string) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
@@ -851,7 +851,7 @@ router.delete("/orders/:id", async (req, res) => {
     supabaseAdmin.from("audits").select("*").eq("order_id", orderId),
   ]);
 
-  const relatedSnapshot = {
+  const relatedSnapshot: Record<string, any> = {
     orderLines: linesRes.data || [],
     founderContributions: contribRes.data || [],
     deliveries: deliveriesRes.data || [],
@@ -859,6 +859,8 @@ router.delete("/orders/:id", async (req, res) => {
     clientInventory: inventoryRes.data || [],
     companyInventory: (companyInvRes as any)?.data || [],
     audits: auditsRes.data || [],
+    treasuryTransactions: [],
+    linkedCollections: [],
   };
 
   const inventoryLines = (linesRes.data || []).filter((l: any) => l.from_inventory && l.inventory_lot_id);
@@ -1686,6 +1688,7 @@ router.get("/client-inventory", async (req, res) => {
   }
   try {
     const ext = getExtClient();
+    if (!ext) throw new Error("External Supabase not configured");
     const { data: extProducts } = await ext.from("products").select("sku, name, image_url");
     (extProducts || []).forEach((p: any) => {
       const img = p.image_url || "";
