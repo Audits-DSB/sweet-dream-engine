@@ -80,12 +80,14 @@ type OrderFundingEntry = {
   orderId: string;
   clientName: string;
   amount: number;
+  originalAmount: number;
   percentage: number;
   totalCost: number;
   totalSelling: number;
   status: string;
   date: string;
   paid: boolean;
+  autoFunded: boolean;
   paidAmount?: number;
   paidAt?: string;
   founderName: string;
@@ -461,16 +463,19 @@ export default function FoundersPage() {
         const fId = c.founderId || c.founder_id;
         if (!fId) return;
         if (!map[fId]) map[fId] = [];
+        const amt = toNum(c.amount);
         map[fId].push({
           orderId,
           clientName,
-          amount: toNum(c.amount),
+          amount: amt,
+          originalAmount: amt,
           percentage: toNum(c.percentage),
           totalCost,
           totalSelling,
           status,
           date: typeof date === "string" ? date.split("T")[0] : "",
           paid: !!c.paid,
+          autoFunded: false,
           paidAmount: toNum(c.paidAmount ?? c.paid_amount),
           paidAt: c.paidAt || undefined,
           founderName: c.founder || "",
@@ -478,8 +483,45 @@ export default function FoundersPage() {
         });
       });
     });
+
+    founders.forEach(f => {
+      const entries = map[f.id] || [];
+      if (entries.length === 0) return;
+
+      const myContributions = founderTxs
+        .filter(tx => (tx.founderId === f.id || tx.founderName === f.name) && tx.type === "contribution")
+        .reduce((s, tx) => s + tx.amount, 0);
+      const myFundingTxs = founderTxs
+        .filter(tx => (tx.founderId === f.id || tx.founderName === f.name) && tx.type === "funding");
+      const myFundings = myFundingTxs.reduce((s, tx) => s + tx.amount, 0);
+      const initialCapital = f.totalContributed > 0 ? f.totalContributed : myContributions;
+      let availableCapital = initialCapital - myFundings;
+
+      entries.sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.orderId || "").localeCompare(b.orderId || ""));
+
+      entries.forEach(entry => {
+        if (entry.paid) {
+          const hasFundingTx = myFundingTxs.some(tx => tx.orderId === entry.orderId);
+          if (!hasFundingTx) {
+            availableCapital -= entry.originalAmount;
+          }
+          return;
+        }
+        if (availableCapital >= entry.originalAmount) {
+          entry.paid = true;
+          entry.autoFunded = true;
+          entry.paidAmount = entry.originalAmount;
+          availableCapital -= entry.originalAmount;
+        } else if (availableCapital > 0) {
+          entry.amount = entry.originalAmount - availableCapital;
+          entry.autoFunded = true;
+          availableCapital = 0;
+        }
+      });
+    });
+
     return map;
-  }, [orders, founders]);
+  }, [orders, founders, founderTxs]);
 
   const totalContributed = founders.reduce((s, f) => s + f.totalContributed, 0);
 
@@ -1277,7 +1319,9 @@ export default function FoundersPage() {
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
                                           <span className="text-sm font-medium">
-                                            {entry.paid ? "مساهمة (تم الدفع)" : "عليه فلوس"}
+                                            {entry.paid
+                                              ? (entry.autoFunded ? "ممول من رأس المال" : "مساهمة (تم الدفع)")
+                                              : (entry.autoFunded ? `باقي عليه (جزء ممول من رأس المال)` : "عليه فلوس")}
                                           </span>
                                           <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
                                             onClick={() => navigate(`/orders/${entry.orderId}`)}>
@@ -1300,6 +1344,9 @@ export default function FoundersPage() {
                                           <span className={`text-sm font-bold ${entry.paid ? "text-success" : "text-destructive"}`}>
                                             {entry.amount.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">{t.currency}</span>
                                           </span>
+                                          {entry.autoFunded && !entry.paid && entry.amount !== entry.originalAmount && (
+                                            <span className="text-[10px] text-muted-foreground line-through">{entry.originalAmount.toLocaleString()}</span>
+                                          )}
                                         </div>
                                         {!entry.paid && (
                                           <Button
