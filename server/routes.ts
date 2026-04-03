@@ -3059,6 +3059,57 @@ router.post("/returns/:id/accept", async (req, res) => {
   }
 });
 
+router.post("/returns/:id/confirm-refund", async (req, res) => {
+  try {
+    const retId = req.params.id;
+    const { data: ret, error: retErr } = await supabaseAdmin.from("returns").select("*").eq("id", retId).single();
+    if (retErr || !ret) return res.status(404).json({ error: "Return not found" });
+    if (ret.status !== "accepted") return res.status(400).json({ error: "Return must be accepted first" });
+    if (ret.disposition !== "return_to_supplier") return res.status(400).json({ error: "Only supplier returns can have refunds" });
+    if (ret.refund_status === "refunded") return res.status(400).json({ error: "Already refunded" });
+    if (ret.refund_status !== "pending_refund") return res.status(400).json({ error: "Refund status must be pending_refund before confirming" });
+
+    const items: any[] = ret.items || [];
+    const orderId = ret.order_id;
+    const totalReturnCost = items.reduce((s: number, it: any) => s + (Number(it.costPrice || 0) * Number(it.quantity || 0)), 0);
+
+    const { data: contribRow } = await supabaseAdmin.from("order_founder_contributions")
+      .select("contributions")
+      .eq("order_id", orderId)
+      .maybeSingle();
+    const contributions: any[] = contribRow?.contributions || [];
+    const { data: foundersList } = await supabaseAdmin.from("founders").select("*");
+
+    let founderRefunds: any[] = [];
+    if (contributions.length > 0) {
+      const totalPct = contributions.reduce((s: number, c: any) => s + (Number(c.percentage) || 0), 0) || 100;
+      for (const c of contributions) {
+        const pct = (Number(c.percentage) || 0) / totalPct;
+        const refundAmt = Math.round(totalReturnCost * pct * 100) / 100;
+        const founderName = (foundersList || []).find((f: any) => f.id === c.founderId)?.name || c.founderId;
+        founderRefunds.push({ founderId: c.founderId, founderName, amount: refundAmt });
+      }
+    } else {
+      const numFounders = (foundersList || []).length || 1;
+      for (const f of (foundersList || [])) {
+        const refundAmt = Math.round(totalReturnCost / numFounders * 100) / 100;
+        founderRefunds.push({ founderId: f.id, founderName: f.name, amount: refundAmt });
+      }
+    }
+
+    const { data: updated, error: updErr } = await supabaseAdmin.from("returns").update({
+      refund_status: "refunded",
+      refund_amount: totalReturnCost,
+    }).eq("id", retId).select().single();
+    if (updErr) return res.status(400).json({ error: updErr.message });
+
+    res.json(camelizeKeys({ ...updated, founderRefunds }));
+  } catch (e: any) {
+    console.error("[Returns Confirm Refund Error]", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post("/returns/:id/reject", async (req, res) => {
   const { data, error } = await supabaseAdmin.from("returns").update({
     status: "rejected",

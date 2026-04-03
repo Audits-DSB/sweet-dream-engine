@@ -47,6 +47,7 @@ import MonthlyDetailPage from "./pages/MonthlyDetail";
 import CompanyInventoryPage from "./pages/CompanyInventory";
 import InventoryLotDetail from "./pages/InventoryLotDetail";
 import ReturnsPage from "./pages/Returns";
+import ReturnDetailsPage from "./pages/ReturnDetails";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -80,6 +81,7 @@ const App = () => (
                 <Route path="/orders/:id" element={<OrderDetails />} />
                 <Route path="/deliveries" element={<DeliveriesPage />} />
                 <Route path="/returns" element={<ReturnsPage />} />
+                <Route path="/returns/:id" element={<ReturnDetailsPage />} />
                 <Route path="/inventory" element={<InventoryPage />} />
                 <Route path="/inventory/:id" element={<InventoryDetail />} />
                 <Route path="/audits" element={<AuditsPage />} />
