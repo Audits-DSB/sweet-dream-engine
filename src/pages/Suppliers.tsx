@@ -278,7 +278,7 @@ export default function SuppliersPage() {
         filters={[]}
         filterValues={{}}
         onFilterChange={() => {}}
-        onExport={() => exportToCsv("suppliers", [t.code, t.name, t.country, t.email, t.phone, t.paymentTerms], filtered.map(s => [s.id, s.name, s.country, s.email, s.phone, s.paymentTerms]))}
+        onExport={() => exportToCsv("suppliers", [t.code, t.name, t.country, t.email, t.phone], filtered.map(s => [s.id, s.name, s.country, s.email, s.phone]))}
         actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addSupplier}</Button>}
       />
 
@@ -347,7 +347,6 @@ export default function SuppliersPage() {
                   {matCounts[sup.id] ?? 0} {t.materialsCount}
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">{sup.paymentTerms}</span>
                   <Link to={`/suppliers/${sup.id}`} onClick={e => e.stopPropagation()} className="text-primary hover:underline text-[11px] flex items-center gap-0.5">
                     <ExternalLink className="h-3 w-3" />
                     الملف
@@ -396,7 +395,6 @@ export default function SuppliersPage() {
               {!editMode ? (
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.country}</p><p className="font-semibold">{detailItem.country || "—"}</p></div>
-                  <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.paymentTerms}</p><p className="font-semibold">{detailItem.paymentTerms}</p></div>
                   <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.email}</p><p className="font-semibold text-xs">{detailItem.email || "—"}</p></div>
                   <div className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{t.phone}</p><p className="font-semibold">{detailItem.phone || "—"}</p></div>
                 </div>
@@ -409,7 +407,6 @@ export default function SuppliersPage() {
                     <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={editForm?.email || ""} onChange={e => setEditForm(f => f ? { ...f, email: e.target.value } : f)} /></div>
                     <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={editForm?.phone || ""} onChange={e => setEditForm(f => f ? { ...f, phone: e.target.value } : f)} /></div>
                   </div>
-                  <div><Label className="text-xs">{t.paymentTerms}</Label><Input className="h-9 mt-1" value={editForm?.paymentTerms || ""} onChange={e => setEditForm(f => f ? { ...f, paymentTerms: e.target.value } : f)} /></div>
                   <div className="flex gap-2 pt-1">
                     <Button className="flex-1" onClick={handleEdit} disabled={editSaving}>
                       {editSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : t.saveChanges}
@@ -589,7 +586,6 @@ export default function SuppliersPage() {
               <div><Label className="text-xs">{t.email}</Label><Input className="h-9 mt-1" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
               <div><Label className="text-xs">{t.phone}</Label><Input className="h-9 mt-1" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
             </div>
-            <div><Label className="text-xs">{t.paymentTerms}</Label><Input className="h-9 mt-1" value={form.paymentTerms} onChange={(e) => setForm({ ...form, paymentTerms: e.target.value })} /></div>
             <Button className="w-full" onClick={handleAdd} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t.addSupplier}
             </Button>

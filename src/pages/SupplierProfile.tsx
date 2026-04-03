@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ArrowLeft, Factory, Globe, Mail, Phone, CreditCard, Package, ShoppingCart,
+  ArrowLeft, Factory, Globe, Mail, Phone, Package, ShoppingCart,
   Boxes, TrendingUp, Calendar, ExternalLink, Search, BarChart3,
   Wallet, Layers, Clock, Pencil, Trash2, Loader2, Save,
 } from "lucide-react";
@@ -286,13 +286,6 @@ export default function SupplierProfile() {
             <p className="font-semibold text-sm">{supplier.phone}</p>
           </div>
         )}
-        <div className="stat-card p-3">
-          <div className="flex items-center gap-2 text-muted-foreground mb-1">
-            <CreditCard className="h-3.5 w-3.5" />
-            <span className="text-[11px]">شروط الدفع</span>
-          </div>
-          <p className="font-semibold text-sm">{supplier.paymentTerms}</p>
-        </div>
       </div>
 
       {stats && (
@@ -613,10 +606,6 @@ export default function SupplierProfile() {
                 <div className="space-y-1.5">
                   <Label className="text-xs">الهاتف</Label>
                   <Input className="h-9" value={editForm.phone} onChange={e => setEditForm(f => f ? { ...f, phone: e.target.value } : f)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">شروط الدفع</Label>
-                  <Input className="h-9" value={editForm.paymentTerms} onChange={e => setEditForm(f => f ? { ...f, paymentTerms: e.target.value } : f)} />
                 </div>
               </div>
               <div className="space-y-1.5">
