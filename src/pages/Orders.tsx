@@ -120,6 +120,7 @@ export default function OrdersPage() {
   const [dateRange, setDateRange] = useState<string>("all");
   const [clientFilter, setClientFilter] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
+  const [bearerFilter, setBearerFilter] = useState("");
   const [statusChanging, setStatusChanging] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -398,7 +399,8 @@ export default function OrdersPage() {
       const matchDate = !dateFilterRange || (o.date >= dateFilterRange[0] && o.date <= dateFilterRange[1]);
       const matchClient = !clientFilter || o.clientId === clientFilter;
       const matchSupplier = !supplierFilter || o.supplierId === supplierFilter || (o.lineSuppliers || []).some(s => s.id === supplierFilter);
-      return matchSearch && matchStatus && matchDate && matchClient && matchSupplier;
+      const matchBearer = !bearerFilter || bearerFilter === "all" || o.deliveryFeeBearer === bearerFilter;
+      return matchSearch && matchStatus && matchDate && matchClient && matchSupplier && matchBearer;
     });
     result.sort((a, b) => {
       let va: any, vb: any;
@@ -421,11 +423,11 @@ export default function OrdersPage() {
       return 0;
     });
     return result;
-  }, [orders, search, filters, dateRange, clientFilter, supplierFilter, sortCol, sortDir]);
+  }, [orders, search, filters, dateRange, clientFilter, supplierFilter, bearerFilter, sortCol, sortDir]);
 
   const totalPages = Math.ceil(filtered.length / pageSize);
   const paginatedOrders = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  useEffect(() => { setCurrentPage(1); }, [search, filters, dateRange, clientFilter, supplierFilter]);
+  useEffect(() => { setCurrentPage(1); }, [search, filters, dateRange, clientFilter, supplierFilter, bearerFilter]);
 
   const toggleSort = (col: string) => {
     if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -770,8 +772,16 @@ export default function OrdersPage() {
             ))}
           </SelectContent>
         </Select>
-        {(dateRange !== "all" || clientFilter || supplierFilter) && (
-          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDateRange("all"); setClientFilter(""); setSupplierFilter(""); }}>مسح الفلاتر</Button>
+        <Select value={bearerFilter || "__all__"} onValueChange={v => setBearerFilter(v === "__all__" ? "" : v)}>
+          <SelectTrigger className="h-8 w-[150px] text-xs"><Truck className="h-3 w-3 ml-1" /><SelectValue placeholder="تحمل التوصيل" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">تحمل التوصيل: الكل</SelectItem>
+            <SelectItem value="client">على العميل</SelectItem>
+            <SelectItem value="company">على الشركة</SelectItem>
+          </SelectContent>
+        </Select>
+        {(dateRange !== "all" || clientFilter || supplierFilter || bearerFilter) && (
+          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDateRange("all"); setClientFilter(""); setSupplierFilter(""); setBearerFilter(""); }}>مسح الفلاتر</Button>
         )}
         <span className="text-xs text-muted-foreground mr-auto">{filtered.length} نتيجة</span>
       </div>
@@ -863,8 +873,13 @@ export default function OrdersPage() {
                           </span>
                         </button>
                       ) : <span className="text-xs text-muted-foreground">—</span>}
-                      {order.deliveryFee > 0 && order.deliveryFeeBearer === "company" && order.deliveryFeePaidByFounder && founders.find(f => f.id === order.deliveryFeePaidByFounder)?.name && (
-                        <span className="text-[10px] text-amber-600 dark:text-amber-400">دفعها: {founders.find(f => f.id === order.deliveryFeePaidByFounder)!.name}</span>
+                      {order.deliveryFeeBearer === "company" && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 font-medium">
+                          على الشركة
+                          {order.deliveryFeePaidByFounder && founders.find(f => f.id === order.deliveryFeePaidByFounder)?.name && (
+                            <span className="text-orange-500 dark:text-orange-300"> ({founders.find(f => f.id === order.deliveryFeePaidByFounder)!.name})</span>
+                          )}
+                        </span>
                       )}
                     </div>
                   </td>
