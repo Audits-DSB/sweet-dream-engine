@@ -175,6 +175,18 @@
   }
 }
 
+@media print {
+  .print\:hidden, nav, aside, header, footer,
+  [data-sidebar], [class*="SidebarProvider"] > aside,
+  .fixed { display: none !important; }
+  body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .print\:p-4 { padding: 1rem !important; }
+  .print\:max-w-none { max-width: none !important; }
+  .print\:break-inside-avoid { break-inside: avoid; }
+  .print\:mt-4 { margin-top: 1rem !important; }
+  .recharts-wrapper { page-break-inside: avoid; }
+}
+
 /* RTL Arabic fixes - MUST be after all @layer blocks */
 [dir="rtl"],
 [dir="rtl"] * {

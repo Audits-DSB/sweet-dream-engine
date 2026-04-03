@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, Package, Receipt, TrendingUp, ClipboardCheck, Loader2, ExternalLink, AlertTriangle, Plus, X } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, Package, Receipt, TrendingUp, ClipboardCheck, Loader2, ExternalLink, AlertTriangle, Plus, X, BarChart3 } from "lucide-react";
 import { parsePhones, serializePhones, type PhoneEntry } from "@/lib/phoneUtils";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -176,7 +176,13 @@ export default function ClientProfile() {
           <div className="flex items-center gap-3"><h1 className="page-header">{client.name}</h1><StatusBadge status={client.status} /></div>
           <p className="page-description">{client.id} · {t.contactPerson}: {client.contact}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>{t.editClient}</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate(`/clients/${id}/report`)} className="gap-1.5">
+            <BarChart3 className="h-3.5 w-3.5" />
+            تقرير الاستهلاك
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>{t.editClient}</Button>
+        </div>
       </div>
 
       <div className="stat-card">
