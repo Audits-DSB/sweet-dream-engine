@@ -12,7 +12,7 @@ A full-featured React + TypeScript operations management dashboard for a dental 
 - **UI**: Tailwind CSS + shadcn/ui + Radix UI components
 - **Routing**: React Router v6
 - **State**: TanStack React Query v5 + React Context (AuthContext, LanguageContext)
-- **Charts**: Recharts
+- **Charts**: Recharts (used in FounderProfile for profit/capital/funding visualizations)
 - **Design**: RTL Arabic, IBM Plex Sans Arabic font, orange primary color theme
 
 ## Database Tables (Supabase PostgreSQL)

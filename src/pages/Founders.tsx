@@ -3,16 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { quickProfit, founderSplit } from "@/lib/orderProfit";
-import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-  Users, TrendingUp, Wallet, Pencil, Plus, Loader2, Trash2, ChevronDown, ChevronUp,
-  ExternalLink, ShoppingBag, Clock, AlertTriangle, Building2, ArrowDownLeft,
-  ArrowUpRight, Coins, Receipt, CheckCircle2, XCircle, Truck,
+  Users, TrendingUp, Wallet, Pencil, Plus, Loader2, Trash2,
+  ExternalLink, AlertTriangle,
+  ArrowUpRight, Coins, CheckCircle2,
 } from "lucide-react";
+import FounderProfile from "@/components/FounderProfile";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
@@ -74,7 +74,6 @@ function typeLabel(type: string) {
   return type;
 }
 
-type ExpandedSection = "ledger" | "order_funding" | "profits" | "capital" | "delivery";
 
 type OrderFundingEntry = {
   orderId: string;
@@ -108,8 +107,7 @@ export default function FoundersPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [expandedFounder, setExpandedFounder] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<Record<string, ExpandedSection>>({});
+  const [selectedFounder, setSelectedFounder] = useState<string | null>(null);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -791,44 +789,56 @@ export default function FoundersPage() {
         </div>
       </div>
 
-      {founders.length === 0 ? (
+      {selectedFounder && (() => {
+        const f = founders.find(x => x.id === selectedFounder);
+        if (!f) return null;
+        const myCapital = capitalByFounder[f.id] || [];
+        const autoCapitalTotal = myCapital.reduce((s, e) => s + e.capitalShare, 0);
+        const autoProfitTotal = (profitsByFounder[f.id] || []).reduce((s, e) => s + e.founderShare, 0);
+        const autoDeliveryReimbursement = founderDeliveryReimbursementTotal(f.id);
+        return (
+          <FounderProfile
+            founder={f}
+            founderTxs={founderTxs}
+            orderFunding={orderFundingByFounder[f.id] || []}
+            profits={profitsByFounder[f.id] || []}
+            capital={capitalByFounder[f.id] || []}
+            deliveryPayments={deliveryPaymentsByFounder[f.id] || []}
+            deliveryReimbursements={deliveryReimbursementByFounder[f.id] || []}
+            deliverySubsidies={companyDeliverySubsidies[f.id] || []}
+            costPayments={orderCostPaymentsByFounder[f.id] || []}
+            settlementsOwed={orderCostSettlements.filter(s => s.fromId === f.id)}
+            settlementsOwing={orderCostSettlements.filter(s => s.toId === f.id)}
+            capitalBalance={founderCapitalBalance(f.id)}
+            autoCapitalTotal={autoCapitalTotal}
+            autoProfitTotal={autoProfitTotal}
+            autoDeliveryReimbursement={autoDeliveryReimbursement}
+            onBack={() => setSelectedFounder(null)}
+            onEdit={() => { setEditingFounder(f); setEditForm({ name: f.name, alias: f.alias, email: f.email, phone: f.phone }); setEditOpen(true); }}
+            onWithdraw={() => { setWithdrawFounderId(f.id); setWithdrawAmount(""); setWithdrawOpen(true); }}
+            onPayFunding={handlePayOrderFunding}
+            onDeleteTx={(tx) => { setDeletingTx(tx); setDeleteTxOpen(true); }}
+            payingEntry={payingEntry}
+          />
+        );
+      })()}
+
+      {!selectedFounder && founders.length === 0 ? (
         <div className="stat-card py-20 text-center">
           <Users className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
           <p className="text-muted-foreground text-sm mb-4">لا يوجد مؤسسون مسجّلون بعد</p>
           <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5"><Plus className="h-3.5 w-3.5" />{t.addFounder}</Button>
         </div>
-      ) : (
-        <div className="space-y-4">
+      ) : !selectedFounder && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {founders.map((f, fIdx) => {
-            const myTxs = founderTxs.filter(tx => tx.founderId === f.id || tx.founderName === f.name)
-              .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
-
-            const contributions = myTxs.filter(tx => tx.type === "contribution");
-            const fundings = myTxs.filter(tx => tx.type === "funding");
-            const capitalReturns = myTxs.filter(tx => tx.type === "capital_return");
-            const capitalWithdrawals = myTxs.filter(tx => tx.type === "capital_withdrawal");
-            const withdrawals = myTxs.filter(tx => tx.type === "withdrawal");
-
-            const myProfits = profitsByFounder[f.id] || [];
-            const myCapital = capitalByFounder[f.id] || [];
             const myOrderFunding = orderFundingByFounder[f.id] || [];
-            const totalOrderFunding = myOrderFunding.reduce((s, e) => s + e.amount, 0);
             const unpaidFunding = myOrderFunding.filter(e => !e.paid);
             const paidFunding = myOrderFunding.filter(e => e.paid);
             const totalOwed = unpaidFunding.reduce((s, e) => s + e.amount, 0);
             const totalPaidFunding = paidFunding.reduce((s, e) => s + e.amount, 0);
-            const isExpanded = expandedFounder === f.id;
-            const section = activeSection[f.id] || "ledger";
-
+            const totalOrderFunding = myOrderFunding.reduce((s, e) => s + e.amount, 0);
             const capitalBalance = founderCapitalBalance(f.id);
-            const autoCapitalTotal = myCapital.reduce((s, e) => s + e.capitalShare, 0);
-            const autoProfitTotal = (profitsByFounder[f.id] || []).reduce((s, e) => s + e.founderShare, 0);
-            const autoDeliveryReimbursement = founderDeliveryReimbursementTotal(f.id);
-            const manualCapitalTotal = capitalReturns.reduce((s, tx) => s + tx.amount, 0);
-            const capitalWithdrawnTotal = capitalWithdrawals.reduce((s, tx) => s + tx.amount, 0);
-
-            const txContribTotal = [...contributions, ...fundings].reduce((s, tx) => s + tx.amount, 0);
-            const displayTotal = txContribTotal > 0 ? txContribTotal : f.totalContributed;
             const paymentPct = totalOrderFunding > 0 ? (totalPaidFunding / totalOrderFunding) * 100 : 0;
 
             const avatarColors = [
@@ -838,8 +848,7 @@ export default function FoundersPage() {
             ];
 
             return (
-              <div key={f.id} className="stat-card p-0 overflow-hidden">
-                {/* ── Header ── */}
+              <div key={f.id} className="stat-card p-0 overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary/30 transition-all" onClick={() => setSelectedFounder(f.id)}>
                 <div className="p-5">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3.5">
@@ -857,70 +866,36 @@ export default function FoundersPage() {
                           {f.alias && <span>{f.alias}</span>}
                           {f.alias && (f.email || f.phone) && <span>·</span>}
                           {f.email && <span>{f.email}</span>}
-                          {f.email && f.phone && <span>·</span>}
-                          {f.phone && <span>{f.phone}</span>}
                         </div>
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                      onClick={() => { setEditingFounder(f); setEditForm({ name: f.name, alias: f.alias, email: f.email, phone: f.phone }); setEditOpen(true); }}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
+                    {unpaidFunding.length > 0 && (
+                      <Badge variant="destructive" className="text-[10px] h-5">{unpaidFunding.length}</Badge>
+                    )}
                   </div>
 
-                  {/* ── Stats Mini Cards ── */}
-                  {(() => {
-                    const myDelPays = deliveryPaymentsByFounder[f.id] || [];
-                    const myDelReimb = deliveryReimbursementByFounder[f.id] || [];
-                    const delPaidTotal = myDelPays.reduce((s, e) => s + e.amount, 0);
-                    const delReimbTotal = myDelReimb.reduce((s, e) => s + e.amount, 0);
-                    const delNet = delPaidTotal - delReimbTotal;
-                    return (
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                  <div className="grid grid-cols-2 gap-2.5">
                     <div className={`rounded-xl p-3 ${totalOwed > 0 ? "bg-red-50 dark:bg-red-950/20 border border-red-200/50 dark:border-red-800/30" : "bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-800/30"}`}>
                       <p className="text-[10px] text-muted-foreground mb-1">عليه فلوس</p>
                       <p className={`text-sm font-bold ${totalOwed > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
                         {totalOwed > 0 ? totalOwed.toLocaleString() : "✓ مدفوع"}
                       </p>
-                      {unpaidFunding.length > 0 && <p className="text-[10px] text-red-500 mt-0.5">{unpaidFunding.length} أوردر</p>}
-                    </div>
-                    <div className="rounded-xl p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-800/30">
-                      <p className="text-[10px] text-muted-foreground mb-1">مساهمات مدفوعة</p>
-                      <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{totalPaidFunding > 0 ? totalPaidFunding.toLocaleString() : "—"}</p>
-                      {paidFunding.length > 0 && <p className="text-[10px] text-emerald-500 mt-0.5">{paidFunding.length} أوردر</p>}
-                    </div>
-                    <div className={`rounded-xl p-3 ${delPaidTotal > 0 ? "bg-orange-50 dark:bg-orange-950/20 border border-orange-200/50 dark:border-orange-800/30" : "bg-muted/50 border border-border/50"}`}>
-                      <p className="text-[10px] text-muted-foreground mb-1">مصاريف توصيل</p>
-                      <p className={`text-sm font-bold ${delPaidTotal > 0 ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground"}`}>
-                        {delPaidTotal > 0 ? delPaidTotal.toLocaleString() : "—"}
-                      </p>
-                      {delNet > 0 && <p className="text-[10px] text-orange-500 mt-0.5">صافي: {delNet.toLocaleString()}</p>}
-                      {delNet <= 0 && delPaidTotal > 0 && <p className="text-[10px] text-emerald-500 mt-0.5">تم الاسترداد</p>}
-                    </div>
-                    <div className="rounded-xl p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/30">
-                      <p className="text-[10px] text-muted-foreground mb-1">أرباح محصّلة</p>
-                      <p className="text-sm font-bold text-blue-600 dark:text-blue-400">{autoProfitTotal > 0 ? autoProfitTotal.toLocaleString() : "—"}</p>
-                      {myProfits.length > 0 && <p className="text-[10px] text-blue-500 mt-0.5">{myProfits.length} عملية</p>}
                     </div>
                     <div className={`rounded-xl p-3 ${capitalBalance > 0 ? "bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200/50 dark:border-indigo-800/30" : "bg-muted/50 border border-border/50"}`}>
                       <p className="text-[10px] text-muted-foreground mb-1">رأس مال متاح</p>
                       <p className={`text-sm font-bold ${capitalBalance > 0 ? "text-indigo-600 dark:text-indigo-400" : "text-muted-foreground"}`}>
                         {capitalBalance > 0 ? capitalBalance.toLocaleString() : "—"}
                       </p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{t.currency}</p>
                     </div>
                   </div>
-                    );
-                  })()}
 
-                  {/* ── Payment Progress Bar ── */}
                   {totalOrderFunding > 0 && (
                     <div className="mt-3">
                       <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
                         <span>نسبة السداد</span>
-                        <span className="font-medium">{paymentPct.toFixed(0)}% · {totalPaidFunding.toLocaleString()} / {totalOrderFunding.toLocaleString()} {t.currency}</span>
+                        <span className="font-medium">{paymentPct.toFixed(0)}%</span>
                       </div>
-                      <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all duration-500 ${paymentPct >= 100 ? "bg-emerald-500" : paymentPct >= 50 ? "bg-blue-500" : "bg-amber-500"}`}
                           style={{ width: `${Math.min(paymentPct, 100)}%` }}
@@ -930,770 +905,6 @@ export default function FoundersPage() {
                   )}
                 </div>
 
-                {/* ── Expand Toggle ── */}
-                <div className="border-t border-border">
-                  <button
-                    className="w-full flex items-center justify-center gap-2 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
-                    onClick={() => setExpandedFounder(isExpanded ? null : f.id)}
-                  >
-                    {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                    {isExpanded ? "إخفاء التفاصيل" : "عرض السجل التفصيلي"}
-                  </button>
-                </div>
-
-                {/* ── Expanded Content ── */}
-                {isExpanded && (
-                  <div className="border-t border-border">
-                    {/* Section Selector */}
-                    <div className="flex border-b border-border bg-muted/20">
-                      {(["order_funding", "delivery", "ledger", "profits", "capital"] as ExpandedSection[]).map(s => {
-                        const tabIcons: Record<ExpandedSection, typeof ShoppingBag> = { order_funding: ShoppingBag, delivery: Truck, ledger: Receipt, profits: TrendingUp, capital: Coins };
-                        const TabIcon = tabIcons[s];
-                        const myDeliveryPays = deliveryPaymentsByFounder[f.id] || [];
-                        const myDeliveryReimbs = deliveryReimbursementByFounder[f.id] || [];
-                        const labels: Record<ExpandedSection, string> = {
-                          order_funding: `الأوردرات (${myOrderFunding.length})`,
-                          delivery: `التوصيل (${myDeliveryPays.length + myDeliveryReimbs.length})`,
-                          ledger: "السجل",
-                          profits: `الأرباح (${myProfits.length})`,
-                          capital: `رأس المال`,
-                        };
-                        const hasAlert = s === "order_funding" && unpaidFunding.length > 0;
-                        return (
-                          <button key={s} className={`flex-1 py-2.5 text-xs font-medium transition-colors border-b-2 flex items-center justify-center gap-1.5 relative ${section === s ? "border-primary text-primary bg-background" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-                            onClick={() => setActiveSection(prev => ({ ...prev, [f.id]: s }))}>
-                            <TabIcon className="h-3 w-3" />
-                            {labels[s]}
-                            {hasAlert && <span className="absolute top-1.5 end-2 h-2 w-2 rounded-full bg-red-500 animate-pulse" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* ── LEDGER: contributions + fundings + withdrawals ── */}
-                    {section === "ledger" && (() => {
-                      const myCostPayments = (orderCostPaymentsByFounder[f.id] || []);
-                      const mySettlementsOwed = orderCostSettlements.filter(s => s.fromId === f.id);
-                      const mySettlementsOwing = orderCostSettlements.filter(s => s.toId === f.id);
-                      const allLedgerItems = [...contributions, ...fundings, ...withdrawals];
-                      const hasEntries = allLedgerItems.length > 0 || myCostPayments.length > 0 || mySettlementsOwed.length > 0 || mySettlementsOwing.length > 0;
-                      return (
-                      <>
-                        {!hasEntries ? (
-                          <div className="py-10 text-center text-sm text-muted-foreground">لا توجد معاملات بعد</div>
-                        ) : (
-                          <div className="max-h-[500px] overflow-y-auto">
-                            <div className="divide-y divide-border/50">
-                              {myCostPayments
-                                .sort((a, b) => b.date.localeCompare(a.date))
-                                .map(entry => (
-                                  <div key={`costpay-ledger-${entry.orderId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
-                                      <Wallet className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium">دفع التكلفة المبدأية</span>
-                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                        </button>
-                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
-                                      </div>
-                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                                        <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.date}</span>
-                                      </div>
-                                    </div>
-                                    <div className="text-sm font-bold flex-shrink-0 text-violet-600 dark:text-violet-400">
-                                      -{entry.paidAmount.toLocaleString()}
-                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              {mySettlementsOwed
-                                .sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date))
-                                .map((entry, i) => (
-                                  <div key={`settle-owed-ledger-${entry.orderId}-${i}`} className={`flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors ${entry.settled ? "opacity-60" : ""}`}>
-                                    <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${entry.settled ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-red-100 dark:bg-red-900/30"}`}>
-                                      {entry.settled
-                                        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                                        : <ArrowUpRight className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className={`text-sm font-medium ${entry.settled ? "text-emerald-600" : "text-red-600"}`}>
-                                          {entry.settled ? `تم التسوية مع ${entry.to}` : `مطلوب منك لـ ${entry.to}`}
-                                        </span>
-                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                        </button>
-                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
-                                      </div>
-                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                                        <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.paidAt || entry.date}</span>
-                                        <span>· {entry.to} دفع {entry.toPaidTotal.toLocaleString()} من أصل حصته {entry.toShare.toLocaleString()}</span>
-                                      </div>
-                                    </div>
-                                    <div className={`text-sm font-bold flex-shrink-0 ${entry.settled ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                                      -{entry.amount.toLocaleString()}
-                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              {mySettlementsOwing
-                                .sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date))
-                                .map((entry, i) => (
-                                  <div key={`settle-owing-ledger-${entry.orderId}-${i}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${entry.settled ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-amber-100 dark:bg-amber-900/30"}`}>
-                                      {entry.settled
-                                        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                                        : <ArrowDownLeft className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium text-emerald-600">
-                                          {entry.settled ? `تم التسوية مع ${entry.from}` : `استرداد من ${entry.from}`}
-                                        </span>
-                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                        </button>
-                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
-                                      </div>
-                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                                        <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.paidAt || entry.date}</span>
-                                        <span>· دفعت {entry.toPaidTotal.toLocaleString()} وحصتك {entry.toShare.toLocaleString()}</span>
-                                      </div>
-                                    </div>
-                                    <div className="text-sm font-bold flex-shrink-0 text-emerald-600 dark:text-emerald-400">
-                                      +{entry.amount.toLocaleString()}
-                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              {allLedgerItems
-                                .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime())
-                                .map(tx => (
-                                  <div key={tx.id} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${(tx.type === "withdrawal" || tx.type === "funding") ? "bg-destructive/10" : "bg-success/10"}`}>
-                                      {(tx.type === "withdrawal" || tx.type === "funding")
-                                        ? <ArrowUpRight className="h-3.5 w-3.5 text-destructive" />
-                                        : <Wallet className="h-3.5 w-3.5 text-success" />}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium">{typeLabel(tx.type)}</span>
-                                        {tx.orderId && (
-                                          <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                            onClick={() => navigate(`/orders/${tx.orderId}`)}>
-                                            {tx.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                          </button>
-                                        )}
-                                        {tx.clientName && <span className="text-xs text-muted-foreground">· {tx.clientName}</span>}
-                                      </div>
-                                      <div className="flex items-center gap-2 mt-0.5">
-                                        <Clock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                        <span className="text-xs text-muted-foreground">{tx.date}</span>
-                                        {tx.notes && <span className="text-xs text-muted-foreground truncate">· {tx.notes}</span>}
-                                      </div>
-                                    </div>
-                                    <div className={`text-sm font-bold flex-shrink-0 ${(tx.type === "withdrawal" || tx.type === "funding") ? "text-destructive" : "text-success"}`}>
-                                      {(tx.type === "withdrawal" || tx.type === "funding") ? "-" : "+"}{tx.amount.toLocaleString()}
-                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
-                                    </div>
-                                    <button className="flex-shrink-0 h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                      onClick={() => { setDeletingTx(tx); setDeleteTxOpen(true); }}>
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
-                                  </div>
-                                ))}
-                            </div>
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between px-5 py-2.5 bg-muted/20 border-t border-border text-xs text-muted-foreground">
-                          <span>إجمالي المساهمات والتمويل</span>
-                          <span className="font-bold text-foreground">{[...contributions, ...fundings].reduce((s, tx) => s + tx.amount, 0).toLocaleString()} {t.currency}</span>
-                        </div>
-                      </>
-                      );
-                    })()}
-
-                    {/* ── DELIVERY: delivery fee payments & reimbursements ── */}
-                    {section === "delivery" && (() => {
-                      const myDeliveryPayments = deliveryPaymentsByFounder[f.id] || [];
-                      const myReimbursements = deliveryReimbursementByFounder[f.id] || [];
-                      const mySubsidies = companyDeliverySubsidies[f.id] || [];
-                      const totalPaid = myDeliveryPayments.reduce((s, e) => s + e.amount, 0);
-                      const totalReimbursed = myReimbursements.reduce((s, e) => s + e.amount, 0);
-                      const totalSubsidizedPaid = mySubsidies.filter(e => e.source === "company_balance").reduce((s, e) => s + e.amount, 0);
-                      const totalPendingDebt = mySubsidies.filter(e => e.source === "company_debt").reduce((s, e) => s + e.amount, 0);
-                      const netDelivery = totalPaid - totalReimbursed - totalSubsidizedPaid;
-                      const hasEntries = myDeliveryPayments.length > 0 || myReimbursements.length > 0 || mySubsidies.length > 0;
-                      return (
-                        <>
-                          {!hasEntries ? (
-                            <div className="py-10 text-center text-sm text-muted-foreground">
-                              <Truck className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                              <p>لا توجد مصاريف توصيل لهذا المؤسس</p>
-                            </div>
-                          ) : (
-                            <div className="max-h-[500px] overflow-y-auto">
-                              <div className="divide-y divide-border/50">
-                                {myDeliveryPayments
-                                  .sort((a, b) => b.date.localeCompare(a.date))
-                                  .map(entry => (
-                                    <div key={`del-${entry.orderId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                      <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                                        <Truck className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <span className="text-sm font-medium">دفع مصاريف توصيل</span>
-                                          <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                            onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                            {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                          </button>
-                                          {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                                          <Clock className="h-3 w-3 flex-shrink-0" />
-                                          <span>{entry.date}</span>
-                                        </div>
-                                      </div>
-                                      <div className="text-sm font-bold flex-shrink-0 text-orange-600 dark:text-orange-400">
-                                        -{entry.amount.toLocaleString()}
-                                        <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                {myReimbursements
-                                  .sort((a, b) => b.date.localeCompare(a.date))
-                                  .map(entry => (
-                                    <div key={`reimb-del-${entry.collectionId}-${entry.orderId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                      <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                                        <Truck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <span className="text-sm font-medium">استرداد مصروفات توصيل</span>
-                                          <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                            onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                            {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                          </button>
-                                          {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                                          <Clock className="h-3 w-3 flex-shrink-0" />
-                                          <span>{entry.date}</span>
-                                          <span>· توصيل: {entry.deliveryFee.toLocaleString()} {t.currency}</span>
-                                          <span>· نسبة السداد: {Math.round(entry.paidRatio * 100)}%</span>
-                                        </div>
-                                      </div>
-                                      <div className="text-sm font-bold flex-shrink-0 text-emerald-600 dark:text-emerald-400">
-                                        +{entry.amount.toLocaleString()}
-                                        <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                {mySubsidies
-                                  .sort((a, b) => b.date.localeCompare(a.date))
-                                  .map((entry, idx) => (
-                                    <div key={`subsidy-${entry.collectionId}-${entry.orderId}-${idx}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                      <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${entry.source === "company_debt" ? "bg-amber-100 dark:bg-amber-900/30" : "bg-blue-100 dark:bg-blue-900/30"}`}>
-                                        <Wallet className={`h-3.5 w-3.5 ${entry.source === "company_debt" ? "text-amber-600 dark:text-amber-400" : "text-blue-600 dark:text-blue-400"}`} />
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <span className="text-sm font-medium">
-                                            {entry.orderId === "سداد-دين"
-                                              ? "سداد دين توصيل من أرباح الشركة"
-                                              : entry.source === "company_debt"
-                                                ? "تعويض توصيل (دين على الشركة)"
-                                                : "تعويض توصيل من حساب الشركة"}
-                                          </span>
-                                          {entry.orderId !== "سداد-دين" && (
-                                            <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                              onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                              {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                            </button>
-                                          )}
-                                          {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                                          <Clock className="h-3 w-3 flex-shrink-0" />
-                                          <span>{entry.date}</span>
-                                          {entry.deliveryFee > 0 && <span>· توصيل: {entry.deliveryFee.toLocaleString()} {t.currency}</span>}
-                                          {entry.orderProfit > 0 && <span>· ربح الأوردر: {entry.orderProfit.toLocaleString()} {t.currency}</span>}
-                                          {entry.source === "company_debt" && <span className="text-amber-600 dark:text-amber-400">· سيُسدد من أرباح الشركة لاحقاً</span>}
-                                        </div>
-                                      </div>
-                                      <div className={`text-sm font-bold flex-shrink-0 ${entry.source === "company_debt" ? "text-amber-600 dark:text-amber-400" : "text-blue-600 dark:text-blue-400"}`}>
-                                        +{entry.amount.toLocaleString()}
-                                        <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
-                                      </div>
-                                    </div>
-                                  ))}
-                              </div>
-                              <div className="border-t border-border bg-muted/30 p-4 space-y-2">
-                                <div className="flex items-center justify-between text-sm">
-                                  <span className="text-muted-foreground">إجمالي مدفوع للتوصيل</span>
-                                  <span className="font-bold text-orange-600 dark:text-orange-400">-{totalPaid.toLocaleString()} {t.currency}</span>
-                                </div>
-                                {totalReimbursed > 0 && (
-                                  <div className="flex items-center justify-between text-sm">
-                                    <span className="text-muted-foreground">مسترد من أرباح الأوردر</span>
-                                    <span className="font-bold text-emerald-600 dark:text-emerald-400">+{totalReimbursed.toLocaleString()} {t.currency}</span>
-                                  </div>
-                                )}
-                                {totalSubsidizedPaid > 0 && (
-                                  <div className="flex items-center justify-between text-sm">
-                                    <span className="text-muted-foreground">تعويض مدفوع من حساب الشركة</span>
-                                    <span className="font-bold text-blue-600 dark:text-blue-400">+{totalSubsidizedPaid.toLocaleString()} {t.currency}</span>
-                                  </div>
-                                )}
-                                {totalPendingDebt > 0 && (
-                                  <div className="flex items-center justify-between text-sm">
-                                    <span className="text-muted-foreground">دين معلق على الشركة (سيُسدد لاحقاً)</span>
-                                    <span className="font-bold text-amber-600 dark:text-amber-400">{totalPendingDebt.toLocaleString()} {t.currency}</span>
-                                  </div>
-                                )}
-                                <div className="flex items-center justify-between text-sm pt-2 border-t border-border/50">
-                                  <span className="font-medium">الصافي (مستحق للمؤسس)</span>
-                                  <span className={`font-bold ${netDelivery > 0 ? "text-red-600 dark:text-red-400" : netDelivery < 0 ? "text-emerald-600" : "text-muted-foreground"}`}>
-                                    {netDelivery > 0 ? `-${netDelivery.toLocaleString()}` : netDelivery < 0 ? `+${Math.abs(netDelivery).toLocaleString()}` : "0"} {t.currency}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-
-                    {/* ── ORDER FUNDING: aggregated from order contributions ── */}
-                    {section === "order_funding" && (
-                      <>
-                        {myOrderFunding.length === 0 ? (
-                          <div className="py-10 text-center text-sm text-muted-foreground">
-                            <ShoppingBag className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                            <p>لا يوجد تمويل مرتبط بأوردرات لهذا المؤسس</p>
-                            <p className="text-xs mt-1">يظهر التمويل تلقائياً عند تعيين المؤسس في الأوردرات</p>
-                          </div>
-                        ) : (
-                          <div className="max-h-[500px] overflow-y-auto">
-                            {unpaidFunding.length > 0 && (
-                              <div className="px-5 py-2 bg-destructive/5 border-b border-destructive/20">
-                                <span className="text-xs font-semibold text-destructive flex items-center gap-1.5">
-                                  <AlertTriangle className="h-3.5 w-3.5" />
-                                  عليه {totalOwed.toLocaleString()} {t.currency} — {unpaidFunding.length} حصة في انتظار الدفع
-                                </span>
-                              </div>
-                            )}
-                            <div className="divide-y divide-border/50">
-                              {myOrderFunding
-                                .sort((a, b) => {
-                                  if (a.paid !== b.paid) return a.paid ? 1 : -1;
-                                  return (b.date || "").localeCompare(a.date || "");
-                                })
-                                .map((entry, idx) => {
-                                  const entryKey = `${entry.orderId}-${entry.founderId}`;
-                                  const isPaying = payingEntry === entryKey;
-                                  return (
-                                    <div key={`of-${entry.orderId}-${idx}`}
-                                      className={`flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors ${
-                                        entry.paid
-                                          ? "bg-emerald-50/50 dark:bg-emerald-950/10"
-                                          : "bg-red-50/30 dark:bg-red-950/10"
-                                      }`}>
-                                      <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${
-                                        entry.paid ? "bg-success/10" : "bg-destructive/10"
-                                      }`}>
-                                        {entry.paid
-                                          ? <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-                                          : <XCircle className="h-3.5 w-3.5 text-destructive" />}
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <span className="text-sm font-medium">
-                                            {entry.paid
-                                              ? (entry.autoFunded ? "ممول من رأس المال" : "مساهمة (تم الدفع)")
-                                              : (entry.autoFunded ? `باقي عليه (جزء ممول من رأس المال)` : "عليه فلوس")}
-                                          </span>
-                                          <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                            onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                            {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                          </button>
-                                          {entry.clientName && <span className="text-xs text-muted-foreground">· {entry.clientName}</span>}
-                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">{entry.status}</Badge>
-                                        </div>
-                                        <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
-                                          <span><Clock className="h-3 w-3 inline ml-0.5" />{entry.date}</span>
-                                          <span>نسبة: <span className="text-foreground font-medium">{entry.percentage.toFixed(1)}%</span></span>
-                                          <span>تكلفة الأوردر: <span className="text-foreground font-medium">{entry.totalCost.toLocaleString()} {t.currency}</span></span>
-                                          {entry.paid && entry.paidAt && (
-                                            <span className="text-success">دفع في {new Date(entry.paidAt).toLocaleDateString("ar-SA")}</span>
-                                          )}
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-2 flex-shrink-0">
-                                        <div className="flex flex-col items-end gap-0.5">
-                                          <span className={`text-sm font-bold ${entry.paid ? "text-success" : "text-destructive"}`}>
-                                            {entry.amount.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">{t.currency}</span>
-                                          </span>
-                                          {entry.autoFunded && !entry.paid && entry.amount !== entry.originalAmount && (
-                                            <span className="text-[10px] text-muted-foreground line-through">{entry.originalAmount.toLocaleString()}</span>
-                                          )}
-                                        </div>
-                                        {!entry.paid && (
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-7 text-xs border-primary text-primary hover:bg-primary hover:text-primary-foreground gap-1"
-                                            disabled={isPaying}
-                                            onClick={() => handlePayOrderFunding(entry)}
-                                          >
-                                            {isPaying
-                                              ? <Loader2 className="h-3 w-3 animate-spin" />
-                                              : <><Wallet className="h-3 w-3" />تسديد</>}
-                                          </Button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                            </div>
-                          </div>
-                        )}
-                        {myOrderFunding.length > 0 && (
-                          <div className="flex items-center justify-between px-5 py-2.5 bg-muted/20 border-t border-border text-xs text-muted-foreground">
-                            <div className="flex gap-4">
-                              {totalOwed > 0 && <span>عليه: <span className="font-bold text-destructive">{totalOwed.toLocaleString()} {t.currency}</span></span>}
-                              {totalPaidFunding > 0 && <span>دفع: <span className="font-bold text-success">{totalPaidFunding.toLocaleString()} {t.currency}</span></span>}
-                            </div>
-                            <span className="font-bold text-foreground">الإجمالي: {totalOrderFunding.toLocaleString()} {t.currency}</span>
-                          </div>
-                        )}
-                      </>
-                    )}
-
-                    {/* ── PROFITS: computed from collections ── */}
-                    {section === "profits" && (
-                      <>
-                        {myProfits.length === 0 ? (
-                          <div className="py-10 text-center text-sm text-muted-foreground">
-                            <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                            <p>لا توجد أرباح محصّلة مرتبطة بهذا المؤسس</p>
-                            <p className="text-xs mt-1">تظهر الأرباح تلقائياً من بيانات التحصيلات</p>
-                          </div>
-                        ) : (
-                          <div className="max-h-[500px] overflow-y-auto">
-                            <div className="divide-y divide-border/50">
-                              {myProfits.map((p, idx) => (
-                                <div key={idx} className="px-5 py-3 hover:bg-muted/20 transition-colors">
-                                  <div className="flex items-start gap-3">
-                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-success/10 flex items-center justify-center">
-                                      <TrendingUp className="h-3.5 w-3.5 text-success" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium">ربح تحصيل</span>
-                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-success/10 text-success px-1.5 py-0.5 rounded hover:bg-success/20"
-                                          onClick={() => navigate(`/collections?search=${p.collectionId}`)}>
-                                          {p.collectionId} <ExternalLink className="h-2.5 w-2.5" />
-                                        </button>
-                                        {p.orderIds.map(oid => (
-                                          <button key={oid} className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                            onClick={() => navigate(`/orders/${oid}`)}>
-                                            {oid} <ExternalLink className="h-2.5 w-2.5" />
-                                          </button>
-                                        ))}
-                                      </div>
-                                      <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
-                                        <span><Clock className="h-3 w-3 inline ml-0.5" />{p.date}</span>
-                                        {p.clientName && <button className="hover:text-primary hover:underline" onClick={() => navigate(`/clients?search=${p.clientName}`)}>{p.clientName}</button>}
-                                        <span>نسبة التحصيل: {(p.paidRatio * 100).toFixed(0)}%</span>
-                                      </div>
-                                    </div>
-                                    <div className="flex flex-col items-end gap-1">
-                                      <span className="text-sm font-bold text-success">+{p.founderShare.toLocaleString()} {t.currency}</span>
-                                      <span className="inline-flex items-center gap-1 text-xs text-success bg-success/10 px-1.5 py-0.5 rounded">
-                                        <CheckCircle2 className="h-3 w-3" /> مضاف تلقائياً لرأس المال
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between px-5 py-2.5 bg-muted/20 border-t border-border text-xs text-muted-foreground">
-                          <span>إجمالي الأرباح المحصّلة</span>
-                          <span className="font-bold text-success">{myProfits.reduce((s, p) => s + p.founderShare, 0).toLocaleString()} {t.currency}</span>
-                        </div>
-                      </>
-                    )}
-
-                    {/* ── CAPITAL ACCOUNT: رأس المال المتاح ── */}
-                    {section === "capital" && (() => {
-                      const myCostPayments = (orderCostPaymentsByFounder[f.id] || []);
-                      const mySettlementsOwed = orderCostSettlements.filter(s => s.fromId === f.id);
-                      const mySettlementsOwing = orderCostSettlements.filter(s => s.toId === f.id);
-                      return (
-                      <>
-                        {/* Balance Card */}
-                        <div className="mx-4 my-3 rounded-lg border-2 p-4 text-center" style={{ borderColor: capitalBalance > 0 ? "hsl(var(--primary))" : "hsl(var(--border))" }}>
-                          <p className="text-xs text-muted-foreground mb-1">رأس المال المتاح في الحساب</p>
-                          <p className={`text-2xl font-bold ${capitalBalance > 0 ? "text-primary" : "text-muted-foreground"}`}>
-                            {capitalBalance.toLocaleString()} <span className="text-base font-normal">{t.currency}</span>
-                          </p>
-                          <div className="flex items-center justify-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
-                            <span>رأس مال عائد: <span className="text-foreground font-medium">{autoCapitalTotal.toLocaleString()}</span></span>
-                            {autoProfitTotal > 0 && <span>أرباح تلقائية: <span className="text-success font-medium">+{autoProfitTotal.toLocaleString()}</span></span>}
-                            {autoDeliveryReimbursement > 0 && <span>استرداد توصيل: <span className="text-amber-600 dark:text-amber-400 font-medium">+{autoDeliveryReimbursement.toLocaleString()}</span></span>}
-                            {manualCapitalTotal > 0 && <span>يدوي: <span className="text-foreground font-medium">{manualCapitalTotal.toLocaleString()}</span></span>}
-                            <span>مسحوب: <span className="text-destructive font-medium">−{capitalWithdrawnTotal.toLocaleString()}</span></span>
-                          </div>
-                          {capitalBalance > 0 && (
-                            <div className="mt-3 flex gap-2 justify-center">
-                              <button
-                                className="text-xs px-3 py-1.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
-                                onClick={() => { setWithdrawFounderId(f.id); setWithdrawAmount(""); setWithdrawOpen(true); }}
-                              >
-                                <ArrowUpRight className="h-3 w-3 inline ml-0.5" />سحب رأس المال
-                              </button>
-                              <p className="text-xs text-muted-foreground flex items-center">
-                                <CheckCircle2 className="h-3 w-3 text-success inline ml-1" />
-                                يُخصم تلقائياً في الأوردرات الجديدة
-                              </p>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Capital History: auto from collections + manual returns + withdrawals */}
-                        {myCapital.length === 0 && capitalReturns.length === 0 && capitalWithdrawals.length === 0 ? (
-                          <div className="py-6 text-center text-sm text-muted-foreground">
-                            <Coins className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                            <p>لا توجد تحصيلات مرتبطة بأوردرات بعد</p>
-                            <p className="text-xs mt-1">سيظهر رأس المال تلقائياً عند تسجيل تحصيلات على الأوردرات</p>
-                          </div>
-                        ) : (
-                          <div className="max-h-[500px] overflow-y-auto">
-                            <div className="divide-y divide-border/50">
-                              {myCapital
-                                .sort((a, b) => b.date.localeCompare(a.date))
-                                .map(entry => (
-                                  <div key={`cap-${entry.collectionId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center">
-                                      <ArrowDownLeft className="h-3.5 w-3.5 text-primary" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium">رأس مال عائد من تحصيل</span>
-                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-success/10 text-success px-1.5 py-0.5 rounded hover:bg-success/20"
-                                          onClick={() => navigate(`/collections?search=${entry.collectionId}`)}>
-                                          {entry.collectionId} <ExternalLink className="h-2.5 w-2.5" />
-                                        </button>
-                                        {entry.orderIds.map(oid => (
-                                          <button key={oid} className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                            onClick={() => navigate(`/orders/${oid}`)}>
-                                            {oid} <ExternalLink className="h-2.5 w-2.5" />
-                                          </button>
-                                        ))}
-                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
-                                      </div>
-                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                                        <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.date}</span>
-                                        <span>· محصّل: {entry.paidAmount.toLocaleString()} {t.currency}</span>
-                                      </div>
-                                    </div>
-                                    <div className="text-sm font-bold flex-shrink-0 text-primary">
-                                      +{entry.capitalShare.toLocaleString()}
-                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              {myCostPayments
-                                .sort((a, b) => b.date.localeCompare(a.date))
-                                .map(entry => (
-                                  <div key={`costpay-${entry.orderId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
-                                      <Wallet className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium">دفع التكلفة المبدأية</span>
-                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                        </button>
-                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
-                                      </div>
-                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                                        <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.date}</span>
-                                        <span>· حصته: {entry.share.toLocaleString()} — دفع: {entry.paidAmount.toLocaleString()}</span>
-                                        {entry.diff > 0 && <span className="text-blue-600">+{entry.diff.toLocaleString()} زيادة</span>}
-                                        {entry.diff < 0 && <span className="text-red-500">{entry.diff.toLocaleString()} متبقي</span>}
-                                      </div>
-                                    </div>
-                                    <div className={`text-sm font-bold flex-shrink-0 ${entry.diff >= 0 ? "text-violet-600 dark:text-violet-400" : "text-amber-600"}`}>
-                                      -{entry.paidAmount.toLocaleString()}
-                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              {mySettlementsOwed
-                                .sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date))
-                                .map((entry, i) => (
-                                  <div key={`settle-owed-${entry.orderId}-${i}`} className={`flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors ${entry.settled ? "opacity-60" : ""}`}>
-                                    <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${entry.settled ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-red-100 dark:bg-red-900/30"}`}>
-                                      {entry.settled
-                                        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                                        : <ArrowUpRight className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className={`text-sm font-medium ${entry.settled ? "text-emerald-600" : "text-red-600"}`}>
-                                          {entry.settled ? `تم التسوية مع ${entry.to}` : `عليك لـ ${entry.to}`}
-                                        </span>
-                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                        </button>
-                                      </div>
-                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                                        <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.paidAt || entry.date}</span>
-                                        <span>· {entry.clientName}</span>
-                                      </div>
-                                    </div>
-                                    <div className={`text-sm font-bold flex-shrink-0 ${entry.settled ? "text-emerald-600" : "text-red-600"}`}>
-                                      -{entry.amount.toLocaleString()}
-                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              {mySettlementsOwing
-                                .sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date))
-                                .map((entry, i) => (
-                                  <div key={`settle-owing-${entry.orderId}-${i}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${entry.settled ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-amber-100 dark:bg-amber-900/30"}`}>
-                                      {entry.settled
-                                        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                                        : <ArrowDownLeft className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium text-emerald-600">
-                                          {entry.settled ? `تم التسوية مع ${entry.from}` : `ليك عند ${entry.from}`}
-                                        </span>
-                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                        </button>
-                                      </div>
-                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                                        <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.paidAt || entry.date}</span>
-                                        <span>· {entry.clientName}</span>
-                                      </div>
-                                    </div>
-                                    <div className="text-sm font-bold flex-shrink-0 text-emerald-600">
-                                      +{entry.amount.toLocaleString()}
-                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              {(deliveryReimbursementByFounder[f.id] || [])
-                                .sort((a, b) => b.date.localeCompare(a.date))
-                                .map(entry => (
-                                  <div key={`reimb-${entry.collectionId}-${entry.orderId}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className="mt-0.5 flex-shrink-0 h-7 w-7 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                                      <Truck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium">استرداد مصروفات توصيل</span>
-                                        <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                          onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                          {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                        </button>
-                                        {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
-                                      </div>
-                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                                        <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{entry.date}</span>
-                                        <span>· توصيل: {entry.deliveryFee.toLocaleString()} {t.currency}</span>
-                                        <span>· نسبة السداد: {Math.round(entry.paidRatio * 100)}%</span>
-                                      </div>
-                                    </div>
-                                    <div className="text-sm font-bold flex-shrink-0 text-amber-600 dark:text-amber-400">
-                                      +{entry.amount.toLocaleString()}
-                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              {/* Manual capital_return + capital_withdrawal transactions */}
-                              {[...capitalReturns, ...capitalWithdrawals]
-                                .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime())
-                                .map(tx => (
-                                  <div key={tx.id} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
-                                    <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${tx.type === "capital_return" ? "bg-primary/10" : "bg-destructive/10"}`}>
-                                      {tx.type === "capital_return"
-                                        ? <ArrowDownLeft className="h-3.5 w-3.5 text-primary" />
-                                        : <ArrowUpRight className="h-3.5 w-3.5 text-destructive" />}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-medium">{tx.method === "return_refund" ? "استرداد مرتجع" : typeLabel(tx.type)}</span>
-                                        {tx.method === "return_refund" && (
-                                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">مرتجع</span>
-                                        )}
-                                        {tx.collectionId && (
-                                          <button className="inline-flex items-center gap-1 font-mono text-xs bg-success/10 text-success px-1.5 py-0.5 rounded hover:bg-success/20"
-                                            onClick={() => navigate(`/collections?search=${tx.collectionId}`)}>
-                                            {tx.collectionId} <ExternalLink className="h-2.5 w-2.5" />
-                                          </button>
-                                        )}
-                                        {tx.orderId && (
-                                          <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
-                                            onClick={() => navigate(`/orders/${tx.orderId}`)}>
-                                            {tx.orderId} <ExternalLink className="h-2.5 w-2.5" />
-                                          </button>
-                                        )}
-                                        {tx.clientName && (
-                                          <span className="text-xs text-muted-foreground">{tx.clientName}</span>
-                                        )}
-                                      </div>
-                                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                                        <Clock className="h-3 w-3 flex-shrink-0" />
-                                        <span>{tx.date}</span>
-                                        {tx.notes && <span className="truncate">· {tx.notes}</span>}
-                                      </div>
-                                    </div>
-                                    <div className={`text-sm font-bold flex-shrink-0 ${tx.type === "capital_return" ? "text-primary" : "text-destructive"}`}>
-                                      {tx.type === "capital_return" ? "+" : "-"}{tx.amount.toLocaleString()}
-                                      <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
-                                    </div>
-                                    <button className="flex-shrink-0 h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                      onClick={() => { setDeletingTx(tx); setDeleteTxOpen(true); }}>
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
-                                  </div>
-                                ))}
-                            </div>
-                          </div>
-                        )}
-                      </>
-                      );
-                    })()}
-                  </div>
-                )}
               </div>
             );
           })}
