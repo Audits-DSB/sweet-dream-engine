@@ -207,12 +207,12 @@ export default function OrderDetails() {
       setLines(enriched);
       setOrderDeliveries(deliveries || []);
       setOrderInventory(inventory || []);
-      const orderClientId = o.clientId || o.client_id || "";
+      const orderClientId = found?.clientId || found?.client_id || "";
       const matchedAudits = (audits || []).filter((a: any) => {
         const aOrderId = a.orderId || a.order_id || "";
         if (aOrderId === id) return true;
         const aClientId = a.clientId || a.client_id || "";
-        if (aClientId && aClientId === orderClientId) return true;
+        if (orderClientId && aClientId && aClientId === orderClientId) return true;
         return false;
       });
       setOrderAudits(matchedAudits);
