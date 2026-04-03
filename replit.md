@@ -202,6 +202,16 @@ npx tsx server/index.ts   # starts Express on 5000, spawns Vite on 5001
 - **Supplier Display**: Supplier name clickable everywhere (Orders table, OrderDetails header/info, per-line badges, CompanyInventory) → navigates to supplier profile
 - **Data Model**: `suppliers` table, `supplier_materials` join table, `orders.supplier_id`, `order_lines.supplier_id`, `company_inventory.supplier_id`
 
+## Dashboard
+- Redesigned with clear visual hierarchy: Hero KPIs → Quick Stats → Charts → Data Tables → Alerts
+- 4 main KPI cards with colored borders: Profit, Revenue, Collection Rate, Active Orders
+- 6 quick stat mini-cards: Clients, Deliveries, Collections, Returns, Client Inventory, Company Inventory
+- Charts: Financial monthly (ComposedChart), Order status pie, Delivery bars, Collection pie, Monthly collection trend, Company inventory material usage bars
+- All sections expanded by default (no collapse toggles)
+- Quick action buttons in header (new order, clients, reports)
+- Action alerts strip at bottom (only shown when pending items exist)
+- Collection rate KPI uses `totalCollected / allOrdersSelling` (same formula as Orders page)
+
 ## Notes
 - API returns camelCase; Supabase stores snake_case. Helpers `camelizeKeys`/`snakifyKeys` handle conversion in routes.ts
 - Seed runs only once when `clients` table is empty

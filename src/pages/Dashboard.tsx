@@ -1,9 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
-import { Users, ShoppingCart, FileText, Receipt, TrendingUp, AlertTriangle, Clock, Package, CheckCircle2, Banknote, Truck, Wallet, ArrowUpRight, ArrowDownRight, BarChart3, Target, Warehouse, Boxes, ChevronDown, ChevronUp } from "lucide-react";
-import { StatCard } from "@/components/StatCard";
+import {
+  Users, ShoppingCart, TrendingUp, AlertTriangle, Clock, Package,
+  Banknote, Truck, Wallet, ArrowUpRight, ArrowDownRight, Boxes,
+  Target, Plus, RotateCcw, BarChart3, Percent,
+  ChevronLeft, CircleDollarSign, Activity, Zap,
+} from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Sector, Legend, LineChart, Line, AreaChart, Area, ComposedChart,
+  PieChart, Pie, Cell, Sector, Legend, Line, Area, ComposedChart,
 } from "recharts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
@@ -57,12 +61,33 @@ const STATUS_COLORS: Record<string, string> = {
   "Awaiting Purchase": "#eab308", "Invoiced": "#6366f1", "Closed": "#6b7280",
 };
 
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "صباح الخير";
+  if (h < 17) return "مساء الخير";
+  return "مساء الخير";
+}
+
+function SectionHeader({ icon: Icon, title, action, onAction }: { icon: any; title: string; action?: string; onAction?: () => void }) {
+  return (
+    <div className="flex items-center justify-between mb-4">
+      <h3 className="font-semibold text-sm flex items-center gap-2">
+        <Icon className="h-4 w-4 text-primary" />
+        {title}
+      </h3>
+      {action && onAction && (
+        <button className="text-xs text-primary hover:underline flex items-center gap-1" onClick={onAction}>
+          {action} <ChevronLeft className="h-3 w-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const [activeSlice, setActiveSlice] = useState<number | null>(null);
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
-  const toggleSection = (key: string) => setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
   const [clients, setClients] = useState<Client[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -70,9 +95,8 @@ export default function Dashboard() {
   const [inventory, setInventory] = useState<any[]>([]);
   const [companyInventory, setCompanyInventory] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const [returnsData, setReturnsData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
@@ -113,12 +137,16 @@ export default function Dashboard() {
     return map;
   }, [returnsData]);
 
+  const clientOrders = useMemo(() => orders.filter(o => o.clientId !== "company-inventory"), [orders]);
+  const deliveredStatuses = ["Delivered", "Closed", "Completed", "مرتجع جزئي"];
+
   const activeClients = clients.filter(c => c.status === "Active").length;
   const activeOrders = orders.filter(o => ["Processing", "Draft", "Confirmed", "Ready for Delivery", "Awaiting Purchase"].includes(o.status)).length;
   const totalCollected = collections.reduce((s, c) => s + c.paidAmount, 0);
   const totalOutstanding = collections.reduce((s, c) => s + c.outstanding, 0);
   const overdueCollections = collections.filter(c => c.status === "Overdue").length;
-  const deliveredOrders = orders.filter(o => ["Delivered", "Closed", "Completed", "مرتجع جزئي"].includes(o.status) && o.status !== "مرتجع كلي" && o.clientId !== "company-inventory");
+
+  const deliveredOrders = orders.filter(o => deliveredStatuses.includes(o.status) && o.status !== "مرتجع كلي" && o.clientId !== "company-inventory");
   const totalRevenue = deliveredOrders.reduce((s, o) => {
     const ded = returnDeductions[o.id];
     return s + Math.max(toNum(o.totalSelling) - (ded?.returnedSelling || 0), 0);
@@ -129,6 +157,9 @@ export default function Dashboard() {
   }, 0);
   const profit = totalRevenue - totalCostDelivered;
   const profitMargin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+
+  const allOrdersSelling = clientOrders.reduce((s, o) => s + toNum(o.totalSelling), 0);
+  const collectionRate = allOrdersSelling > 0 ? (totalCollected / allOrdersSelling) * 100 : 0;
 
   const confirmedDeliveries = deliveries.filter((d: any) => d.status === "Delivered" || d.status === "مُسلَّم").length;
   const pendingDeliveries = deliveries.length - confirmedDeliveries;
@@ -145,6 +176,13 @@ export default function Dashboard() {
   const ciDepleted = companyInventory.filter((i: any) => i.status === "Depleted" || Number(i.remaining || 0) === 0).length;
   const ciUsagePct = ciTotalOriginal > 0 ? Math.round(((ciTotalOriginal - ciTotalRemaining) / ciTotalOriginal) * 100) : 0;
   const ciUniqueMaterials = new Set(companyInventory.map((i: any) => i.materialCode || i.material_code)).size;
+
+  const criticalAlerts = alerts.filter((a: any) => a.severity === "critical").length;
+  const warningAlerts = alerts.filter((a: any) => a.severity === "warning").length;
+
+  const totalReturns = returnsData.length;
+  const acceptedReturns = returnsData.filter((r: any) => r.status === "accepted").length;
+  const pendingReturns = returnsData.filter((r: any) => r.status === "pending").length;
 
   const ciByMaterial = useMemo(() => {
     const map: Record<string, { name: string; remaining: number; total: number; value: number }> = {};
@@ -164,21 +202,15 @@ export default function Dashboard() {
 
   const ciStatusData = useMemo(() => {
     const inStock = companyInventory.filter(i => i.status === "In Stock").length;
-    const low = ciLowStock;
-    const depleted = ciDepleted;
     return [
       { name: "متوفر", value: inStock, color: "#22c55e" },
-      { name: "منخفض", value: low, color: "#f59e0b" },
-      { name: "نفد", value: depleted, color: "#ef4444" },
+      { name: "منخفض", value: ciLowStock, color: "#f59e0b" },
+      { name: "نفد", value: ciDepleted, color: "#ef4444" },
     ].filter(d => d.value > 0);
   }, [companyInventory, ciLowStock, ciDepleted]);
 
-  const criticalAlerts = alerts.filter((a: any) => a.severity === "critical").length;
-  const warningAlerts = alerts.filter((a: any) => a.severity === "warning").length;
-
   const monthlyData = useMemo(() => {
     const map: Record<string, { revenue: number; cost: number; profit: number; orders: number }> = {};
-    const deliveredStatuses = ["Delivered", "Closed", "Completed", "مرتجع جزئي"];
     orders.filter(o => o.clientId !== "company-inventory" && o.status !== "مرتجع كلي").forEach(o => {
       const m = (o.date || "").slice(0, 7);
       if (!m) return;
@@ -199,7 +231,6 @@ export default function Dashboard() {
       .map(([ym, vals]) => ({ month: ARABIC_MONTHS[ym.slice(5, 7)] || ym, ym, ...vals }));
   }, [orders, returnDeductions]);
 
-  const clientOrders = useMemo(() => orders.filter(o => o.clientId !== "company-inventory"), [orders]);
   const orderStatusDist = useMemo(() => {
     const map: Record<string, number> = {};
     clientOrders.forEach(o => { const s = o.status || "Draft"; map[s] = (map[s] || 0) + 1; });
@@ -223,7 +254,6 @@ export default function Dashboard() {
   }, [collections]);
 
   const topClients = useMemo(() => {
-    const deliveredStatuses = ["Delivered", "Closed", "Completed", "مرتجع جزئي"];
     const map: Record<string, { client: string; clientId: string; revenue: number; orders: number; profit: number }> = {};
     orders.filter(o => o.clientId !== "company-inventory" && o.status !== "مرتجع كلي").forEach(o => {
       const cid = o.clientId || "";
@@ -241,19 +271,6 @@ export default function Dashboard() {
     return Object.values(map).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
   }, [orders, returnDeductions]);
 
-  const deliveryMonthly = useMemo(() => {
-    const map: Record<string, { confirmed: number; pending: number }> = {};
-    deliveries.forEach((d: any) => {
-      const m = (d.date || d.created_at || "").slice(0, 7);
-      if (!m) return;
-      if (!map[m]) map[m] = { confirmed: 0, pending: 0 };
-      if (d.status === "Delivered" || d.status === "مُسلَّم") map[m].confirmed += 1;
-      else map[m].pending += 1;
-    });
-    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-6)
-      .map(([ym, v]) => ({ month: ARABIC_MONTHS[ym.slice(5, 7)] || ym, ym, ...v }));
-  }, [deliveries]);
-
   const collectionTrend = useMemo(() => {
     const map: Record<string, { paid: number; outstanding: number }> = {};
     collections.forEach(c => {
@@ -266,6 +283,19 @@ export default function Dashboard() {
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-6)
       .map(([ym, v]) => ({ month: ARABIC_MONTHS[ym.slice(5, 7)] || ym, ym, ...v }));
   }, [collections]);
+
+  const deliveryMonthly = useMemo(() => {
+    const map: Record<string, { confirmed: number; pending: number }> = {};
+    deliveries.forEach((d: any) => {
+      const m = (d.date || d.created_at || "").slice(0, 7);
+      if (!m) return;
+      if (!map[m]) map[m] = { confirmed: 0, pending: 0 };
+      if (d.status === "Delivered" || d.status === "مُسلَّم") map[m].confirmed += 1;
+      else map[m].pending += 1;
+    });
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-6)
+      .map(([ym, v]) => ({ month: ARABIC_MONTHS[ym.slice(5, 7)] || ym, ym, ...v }));
+  }, [deliveries]);
 
   const recentOrders = [...orders].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 5);
 
@@ -294,56 +324,163 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 animate-fade-in">
       <WorkflowBanner />
-      <div className="flex items-center justify-between">
+
+      {/* ─── Header ─── */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
-          <h1 className="page-header">{t.dashboardTitle}</h1>
-          <p className="page-description">{t.dashboardDesc}</p>
+          <h1 className="text-xl font-bold">{getGreeting()} 👋</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{t.dashboardDesc}</p>
         </div>
-        {(criticalAlerts > 0 || warningAlerts > 0) && (
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate("/alerts")}>
-            <AlertTriangle className={`h-3.5 w-3.5 ${criticalAlerts > 0 ? "text-destructive" : "text-yellow-500"}`} />
-            {criticalAlerts > 0 && <Badge className="bg-destructive text-destructive-foreground border-0 h-5 text-[10px]">{criticalAlerts} حرج</Badge>}
-            {warningAlerts > 0 && <Badge className="bg-yellow-500/20 text-yellow-600 border-0 h-5 text-[10px]">{warningAlerts} تحذير</Badge>}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => navigate("/orders/new")}>
+            <Plus className="h-3.5 w-3.5" /> أوردر جديد
           </Button>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3">
-        <div className="cursor-pointer" onClick={() => navigate("/company-profit")}>
-          <StatCard title="صافي الربح" value={profit !== 0 ? `${(profit / 1000).toFixed(0)}k` : "—"} change={`${profitMargin.toFixed(1)}% هامش`} changeType={profit >= 0 ? "positive" : "negative"} icon={TrendingUp} />
-        </div>
-        <div className="cursor-pointer" onClick={() => navigate("/orders")}>
-          <StatCard title="الإيرادات" value={`${(totalRevenue / 1000).toFixed(0)}k`} change={`${deliveredOrders.length} مسلّم`} changeType="positive" icon={Banknote} />
-        </div>
-        <div className="cursor-pointer" onClick={() => navigate("/orders?status=active")}>
-          <StatCard title="أوردرات نشطة" value={activeOrders} change={`${orders.length} إجمالي`} changeType="neutral" icon={ShoppingCart} />
-        </div>
-        <div className="cursor-pointer" onClick={() => navigate("/clients?status=Active")}>
-          <StatCard title="عملاء نشطين" value={activeClients} change={`${clients.length} إجمالي`} changeType="positive" icon={Users} />
-        </div>
-        <div className="cursor-pointer" onClick={() => navigate("/deliveries")}>
-          <StatCard title="التوصيلات" value={deliveries.length} change={`${confirmedDeliveries} مؤكدة`} changeType="positive" icon={Truck} />
-        </div>
-        <div className="cursor-pointer" onClick={() => navigate("/collections")}>
-          <StatCard title="التحصيل" value={`${(totalCollected / 1000).toFixed(0)}k`} change={totalOutstanding > 0 ? `${(totalOutstanding / 1000).toFixed(0)}k متبقي` : "مكتمل"} changeType={totalOutstanding > 0 ? "negative" : "positive"} icon={Wallet} />
-        </div>
-        <div className="cursor-pointer" onClick={() => navigate("/inventory")}>
-          <StatCard title="جرد العملاء" value={inventoryItems} change={lowStockItems > 0 ? `${lowStockItems} منخفض` : "مستقر"} changeType={lowStockItems > 0 ? "negative" : "positive"} icon={Package} />
-        </div>
-        <div className="cursor-pointer" onClick={() => navigate("/company-inventory")}>
-          <StatCard title="مخزون الشركة" value={ciTotalLots} change={ciDepleted > 0 ? `${ciDepleted} نفد` : ciLowStock > 0 ? `${ciLowStock} منخفض` : "مستقر"} changeType={ciDepleted > 0 || ciLowStock > 0 ? "negative" : "positive"} icon={Boxes} />
-        </div>
-        <div className="cursor-pointer" onClick={() => navigate("/alerts")}>
-          <StatCard title="التنبيهات" value={alerts.length} change={criticalAlerts > 0 ? `${criticalAlerts} حرج` : "لا يوجد حرج"} changeType={criticalAlerts > 0 ? "negative" : "positive"} icon={AlertTriangle} />
+          <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={() => navigate("/clients")}>
+            <Users className="h-3.5 w-3.5" /> العملاء
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs" onClick={() => navigate("/reports")}>
+            <BarChart3 className="h-3.5 w-3.5" /> التقارير
+          </Button>
+          {(criticalAlerts > 0 || warningAlerts > 0) && (
+            <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs border-destructive/30" onClick={() => navigate("/alerts")}>
+              <AlertTriangle className={`h-3.5 w-3.5 ${criticalAlerts > 0 ? "text-destructive" : "text-yellow-500"}`} />
+              {criticalAlerts > 0 && <Badge className="bg-destructive text-destructive-foreground border-0 h-4 text-[10px] px-1.5">{criticalAlerts}</Badge>}
+              {warningAlerts > 0 && <Badge className="bg-yellow-500/20 text-yellow-600 border-0 h-4 text-[10px] px-1.5">{warningAlerts}</Badge>}
+            </Button>
+          )}
         </div>
       </div>
 
+      {/* ─── KPI Cards ─── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="stat-card cursor-pointer hover:shadow-md transition-shadow border-r-4 border-r-emerald-500" onClick={() => navigate("/company-profit")}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">صافي الربح</p>
+              <p className="text-2xl font-bold">{profit !== 0 ? `${profit.toLocaleString()}` : "—"}</p>
+              <p className={`text-xs mt-1 font-medium ${profit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                {profitMargin.toFixed(1)}% هامش ربح
+              </p>
+            </div>
+            <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+              <TrendingUp className="h-5 w-5 text-emerald-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="stat-card cursor-pointer hover:shadow-md transition-shadow border-r-4 border-r-blue-500" onClick={() => navigate("/orders")}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">إجمالي المبيعات</p>
+              <p className="text-2xl font-bold">{totalRevenue.toLocaleString()}</p>
+              <p className="text-xs mt-1 text-muted-foreground">
+                {deliveredOrders.length} أوردر مُسلَّم
+              </p>
+            </div>
+            <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+              <Banknote className="h-5 w-5 text-blue-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="stat-card cursor-pointer hover:shadow-md transition-shadow border-r-4 border-r-amber-500" onClick={() => navigate("/collections")}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">نسبة التحصيل</p>
+              <p className="text-2xl font-bold">{collectionRate.toFixed(1)}%</p>
+              <div className="w-full h-1.5 rounded-full bg-muted mt-2 overflow-hidden" style={{ width: "100px" }}>
+                <div className={`h-full rounded-full transition-all ${collectionRate >= 70 ? "bg-emerald-500" : collectionRate >= 40 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${Math.min(collectionRate, 100)}%` }} />
+              </div>
+            </div>
+            <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
+              <Percent className="h-5 w-5 text-amber-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="stat-card cursor-pointer hover:shadow-md transition-shadow border-r-4 border-r-violet-500" onClick={() => navigate("/orders?status=active")}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">أوردرات نشطة</p>
+              <p className="text-2xl font-bold">{activeOrders}</p>
+              <p className="text-xs mt-1 text-muted-foreground">
+                من {clientOrders.length} إجمالي
+              </p>
+            </div>
+            <div className="h-10 w-10 rounded-xl bg-violet-500/10 flex items-center justify-center">
+              <ShoppingCart className="h-5 w-5 text-violet-600" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Quick Stats Row ─── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+        <div className="stat-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 transition-colors" onClick={() => navigate("/clients?status=Active")}>
+          <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+            <Users className="h-4 w-4 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-lg font-bold">{activeClients}</p>
+            <p className="text-[11px] text-muted-foreground">عميل نشط</p>
+          </div>
+        </div>
+
+        <div className="stat-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 transition-colors" onClick={() => navigate("/deliveries")}>
+          <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+            <Truck className="h-4 w-4 text-green-600" />
+          </div>
+          <div>
+            <p className="text-lg font-bold">{confirmedDeliveries}<span className="text-xs text-muted-foreground font-normal">/{deliveries.length}</span></p>
+            <p className="text-[11px] text-muted-foreground">توصيلة مؤكدة</p>
+          </div>
+        </div>
+
+        <div className="stat-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 transition-colors" onClick={() => navigate("/collections")}>
+          <div className="h-9 w-9 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+            <Wallet className="h-4 w-4 text-emerald-600" />
+          </div>
+          <div>
+            <p className="text-lg font-bold">{totalCollected >= 1000 ? `${(totalCollected / 1000).toFixed(0)}k` : totalCollected.toLocaleString()}</p>
+            <p className="text-[11px] text-muted-foreground">محصّل</p>
+          </div>
+        </div>
+
+        <div className="stat-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 transition-colors" onClick={() => navigate("/returns")}>
+          <div className="h-9 w-9 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
+            <RotateCcw className="h-4 w-4 text-orange-600" />
+          </div>
+          <div>
+            <p className="text-lg font-bold">{totalReturns}</p>
+            <p className="text-[11px] text-muted-foreground">{pendingReturns > 0 ? `${pendingReturns} بانتظار` : `${acceptedReturns} مقبول`}</p>
+          </div>
+        </div>
+
+        <div className="stat-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 transition-colors" onClick={() => navigate("/inventory")}>
+          <div className="h-9 w-9 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+            <Package className="h-4 w-4 text-purple-600" />
+          </div>
+          <div>
+            <p className="text-lg font-bold">{inventoryItems}</p>
+            <p className="text-[11px] text-muted-foreground">{lowStockItems > 0 ? <span className="text-red-600">{lowStockItems} منخفض</span> : "جرد العملاء"}</p>
+          </div>
+        </div>
+
+        <div className="stat-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 transition-colors" onClick={() => navigate("/company-inventory")}>
+          <div className="h-9 w-9 rounded-lg bg-cyan-500/10 flex items-center justify-center shrink-0">
+            <Boxes className="h-4 w-4 text-cyan-600" />
+          </div>
+          <div>
+            <p className="text-lg font-bold">{ciTotalLots}</p>
+            <p className="text-[11px] text-muted-foreground">{ciDepleted > 0 ? <span className="text-red-600">{ciDepleted} نفد</span> : "مخزون الشركة"}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Financial Chart + Order Status ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="stat-card lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm">الأداء المالي الشهري</h3>
-            <button className="text-xs text-primary hover:underline" onClick={() => navigate("/reports")}>تقارير مفصلة ←</button>
-          </div>
+          <SectionHeader icon={Activity} title="الأداء المالي الشهري" action="تقارير مفصلة" onAction={() => navigate("/reports")} />
           {monthlyData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <ComposedChart data={monthlyData} onClick={handleChartClick} className="cursor-pointer">
@@ -371,7 +508,7 @@ export default function Dashboard() {
         </div>
 
         <div className="stat-card">
-          <h3 className="font-semibold text-sm mb-4">توزيع حالات الأوردرات</h3>
+          <SectionHeader icon={CircleDollarSign} title="توزيع حالات الأوردرات" />
           {orderStatusDist.length > 0 ? (
             <>
               <ResponsiveContainer width="100%" height={220}>
@@ -385,25 +522,17 @@ export default function Dashboard() {
                   <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} أوردر`]} />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="mt-2">
-                <div className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer select-none mb-1 px-2" onClick={() => toggleSection("statusDist")}>
-                  {expandedSections.statusDist ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                  <span>تفاصيل الحالات</span>
-                </div>
-                {expandedSections.statusDist && (
-                  <div className="space-y-1.5 animate-fade-in">
-                    {orderStatusDist.map((s, i) => (
-                      <div key={s.name} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/30 rounded px-2 py-1 transition-colors"
-                        style={{ opacity: activeSlice !== null && activeSlice !== i ? 0.5 : 1 }}
-                        onClick={() => setActiveSlice(p => p === i ? null : i)}>
-                        <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                        <span className="flex-1">{s.name}</span>
-                        <span className="font-semibold">{s.value}</span>
-                        <span className="text-muted-foreground">({clientOrders.length > 0 ? ((s.value / clientOrders.length) * 100).toFixed(0) : 0}%)</span>
-                      </div>
-                    ))}
+              <div className="space-y-1.5 mt-2">
+                {orderStatusDist.map((s, i) => (
+                  <div key={s.name} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/30 rounded px-2 py-1 transition-colors"
+                    style={{ opacity: activeSlice !== null && activeSlice !== i ? 0.5 : 1 }}
+                    onClick={() => setActiveSlice(p => p === i ? null : i)}>
+                    <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                    <span className="flex-1">{s.name}</span>
+                    <span className="font-semibold">{s.value}</span>
+                    <span className="text-muted-foreground">({clientOrders.length > 0 ? ((s.value / clientOrders.length) * 100).toFixed(0) : 0}%)</span>
                   </div>
-                )}
+                ))}
               </div>
             </>
           ) : (
@@ -412,12 +541,10 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ─── Deliveries + Collection + Inventory Row ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="stat-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm">أداء التوصيلات</h3>
-            <button className="text-xs text-primary hover:underline" onClick={() => navigate("/deliveries")}>عرض الكل ←</button>
-          </div>
+          <SectionHeader icon={Truck} title="أداء التوصيلات" action="عرض الكل" onAction={() => navigate("/deliveries")} />
           {deliveryMonthly.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={deliveryMonthly} onClick={handleChartClick} className="cursor-pointer">
@@ -443,10 +570,7 @@ export default function Dashboard() {
         </div>
 
         <div className="stat-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm">حالة التحصيل</h3>
-            <button className="text-xs text-primary hover:underline" onClick={() => navigate("/collections")}>عرض الكل ←</button>
-          </div>
+          <SectionHeader icon={Wallet} title="حالة التحصيل" action="عرض الكل" onAction={() => navigate("/collections")} />
           {collectionPieData.length > 0 ? (
             <>
               <ResponsiveContainer width="100%" height={200}>
@@ -459,8 +583,8 @@ export default function Dashboard() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="flex items-center justify-between mt-3 pt-3 border-t text-xs">
-                <span className="text-green-600">محصّل: {(totalCollected / 1000).toFixed(0)}k</span>
-                <span className="text-red-600">متبقي: {(totalOutstanding / 1000).toFixed(0)}k</span>
+                <span className="text-green-600">محصّل: {totalCollected.toLocaleString()}</span>
+                <span className="text-red-600">متبقي: {totalOutstanding.toLocaleString()}</span>
                 <span className="text-muted-foreground">{collections.length} فاتورة</span>
               </div>
             </>
@@ -472,131 +596,78 @@ export default function Dashboard() {
         </div>
 
         <div className="stat-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm">ملخص جرد العملاء</h3>
-            <button className="text-xs text-primary hover:underline" onClick={() => navigate("/inventory")}>عرض الكل ←</button>
-          </div>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg bg-primary/5 p-3 text-center">
-                <p className="text-2xl font-bold text-primary">{inventoryItems}</p>
-                <p className="text-[11px] text-muted-foreground">دفعة</p>
+          <SectionHeader icon={Package} title="ملخص المخزون" />
+          <div className="space-y-3">
+            <div className="rounded-lg border p-3">
+              <p className="text-[11px] text-muted-foreground mb-1">جرد العملاء</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-xl font-bold">{inventoryItems}</p>
+                <p className="text-xs text-muted-foreground">دفعة</p>
+                <p className="text-xs text-muted-foreground ms-auto">{inventoryValue >= 1000 ? `${(inventoryValue / 1000).toFixed(0)}k` : inventoryValue.toLocaleString()} ج.م</p>
               </div>
-              <div className="rounded-lg bg-green-500/5 p-3 text-center">
-                <p className="text-2xl font-bold text-green-600">{(inventoryValue / 1000).toFixed(0)}k</p>
-                <p className="text-[11px] text-muted-foreground">قيمة المخزون</p>
+              {lowStockItems > 0 && <p className="text-[11px] text-red-600 mt-1">{lowStockItems} مادة منخفضة المخزون</p>}
+            </div>
+
+            <div className="rounded-lg border p-3">
+              <p className="text-[11px] text-muted-foreground mb-1">مخزون الشركة</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-xl font-bold">{ciTotalLots}</p>
+                <p className="text-xs text-muted-foreground">دفعة</p>
+                <p className="text-xs text-muted-foreground ms-auto">{ciTotalValue >= 1000 ? `${(ciTotalValue / 1000).toFixed(0)}k` : ciTotalValue.toLocaleString()} ج.م</p>
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div className={`h-full rounded-full ${ciUsagePct >= 80 ? "bg-red-500" : ciUsagePct >= 50 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${100 - ciUsagePct}%` }} />
+                </div>
+                <span className="text-[10px] text-muted-foreground">{ciUsagePct}% مُستهلك</span>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className={`rounded-lg p-3 text-center ${lowStockItems > 0 ? "bg-destructive/5" : "bg-muted/50"}`}>
-                <p className={`text-2xl font-bold ${lowStockItems > 0 ? "text-destructive" : "text-muted-foreground"}`}>{lowStockItems}</p>
-                <p className="text-[11px] text-muted-foreground">مخزون منخفض</p>
+
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-blue-500/5 py-2">
+                <p className="text-sm font-bold text-blue-600">{ciUniqueMaterials}</p>
+                <p className="text-[10px] text-muted-foreground">مادة</p>
               </div>
-              <div className="rounded-lg bg-muted/50 p-3 text-center">
-                <p className="text-2xl font-bold text-muted-foreground">{new Set(inventory.map((i: any) => i.material)).size}</p>
-                <p className="text-[11px] text-muted-foreground">مادة مختلفة</p>
+              <div className="rounded-lg bg-amber-500/5 py-2">
+                <p className="text-sm font-bold text-amber-600">{ciLowStock}</p>
+                <p className="text-[10px] text-muted-foreground">منخفض</p>
+              </div>
+              <div className="rounded-lg bg-red-500/5 py-2">
+                <p className="text-sm font-bold text-red-600">{ciDepleted}</p>
+                <p className="text-[10px] text-muted-foreground">نفد</p>
               </div>
             </div>
+
+            {ciStatusData.length > 0 && (
+              <ResponsiveContainer width="100%" height={100}>
+                <PieChart>
+                  <Pie data={ciStatusData} cx="50%" cy="50%" innerRadius={25} outerRadius={40} paddingAngle={3} dataKey="value">
+                    {ciStatusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number, name: string) => [`${v} دُفعة`, name]} />
+                  <Legend wrapperStyle={{ fontSize: "10px" }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+
             {lowStockItems > 0 && (
               <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={() => navigate("/refill")}>
                 <Target className="h-3.5 w-3.5" /> إعادة طلب المواد المنخفضة ({lowStockItems})
               </Button>
             )}
-          </div>
-        </div>
-      </div>
-
-      {/* Company Inventory Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="stat-card lg:col-span-2">
-          <div className="flex items-center justify-between mb-4 cursor-pointer select-none" onClick={() => toggleSection("ciMaterial")}>
-            <h3 className="font-semibold text-sm flex items-center gap-2"><Boxes className="h-4 w-4 text-primary" /> مخزون الشركة — استهلاك المواد
-              {expandedSections.ciMaterial ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            </h3>
-            <button className="text-xs text-primary hover:underline" onClick={(e) => { e.stopPropagation(); navigate("/company-inventory"); }}>عرض الكل ←</button>
-          </div>
-          {expandedSections.ciMaterial && (ciByMaterial.length > 0 ? (
-            <div className="space-y-3 animate-fade-in">
-              {ciByMaterial.slice(0, 8).map((mat) => (
-                <div key={mat.code} className="group">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium truncate max-w-[200px]">{mat.name}</span>
-                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                      <span>{mat.remaining} / {mat.total}</span>
-                      <span className="font-mono font-medium">{mat.value.toLocaleString()} ج.م</span>
-                    </div>
-                  </div>
-                  <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${mat.usedPct >= 80 ? "bg-red-500" : mat.usedPct >= 50 ? "bg-amber-500" : "bg-emerald-500"}`}
-                      style={{ width: `${100 - mat.usedPct}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">لا توجد بيانات في المخزون</div>
-          ))}
-        </div>
-
-        <div className="stat-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm">ملخص مخزون الشركة</h3>
-          </div>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg bg-blue-500/5 p-3 text-center">
-                <p className="text-2xl font-bold text-blue-600">{ciTotalLots}</p>
-                <p className="text-[11px] text-muted-foreground">دُفعة</p>
-              </div>
-              <div className="rounded-lg bg-emerald-500/5 p-3 text-center">
-                <p className="text-2xl font-bold text-emerald-600">{ciTotalValue >= 1000 ? `${(ciTotalValue / 1000).toFixed(1)}k` : ciTotalValue.toLocaleString()}</p>
-                <p className="text-[11px] text-muted-foreground">القيمة المتبقية</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg bg-purple-500/5 p-3 text-center">
-                <p className="text-2xl font-bold text-purple-600">{ciUniqueMaterials}</p>
-                <p className="text-[11px] text-muted-foreground">مادة مختلفة</p>
-              </div>
-              <div className="rounded-lg bg-amber-500/5 p-3 text-center">
-                <p className="text-2xl font-bold text-amber-600">{ciUsagePct}%</p>
-                <p className="text-[11px] text-muted-foreground">نسبة الاستهلاك</p>
-              </div>
-            </div>
-
-            {ciStatusData.length > 0 && (
-              <div className="pt-2">
-                <ResponsiveContainer width="100%" height={140}>
-                  <PieChart>
-                    <Pie data={ciStatusData} cx="50%" cy="50%" innerRadius={35} outerRadius={55} paddingAngle={3} dataKey="value">
-                      {ciStatusData.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number, name: string) => [`${v} دُفعة`, name]} />
-                    <Legend wrapperStyle={{ fontSize: "11px" }} formatter={(v) => v} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
             {(ciLowStock > 0 || ciDepleted > 0) && (
               <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5" onClick={() => navigate("/company-inventory")}>
-                <Warehouse className="h-3.5 w-3.5" /> {ciDepleted > 0 ? `${ciDepleted} دُفعة نفدت` : `${ciLowStock} منخفض`} — مراجعة المخزون
+                <Boxes className="h-3.5 w-3.5" /> {ciDepleted > 0 ? `${ciDepleted} دُفعة نفدت` : `${ciLowStock} منخفض`} — مراجعة المخزون
               </Button>
             )}
           </div>
         </div>
       </div>
 
+      {/* ─── Monthly Collections Trend ─── */}
       {collectionTrend.length > 0 && (
         <div className="stat-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-sm">التحصيل الشهري — المحصّل مقابل المتبقي</h3>
-            <button className="text-xs text-primary hover:underline" onClick={() => navigate("/collections")}>عرض كل التحصيلات ←</button>
-          </div>
+          <SectionHeader icon={BarChart3} title="التحصيل الشهري — المحصّل مقابل المتبقي" action="عرض كل التحصيلات" onAction={() => navigate("/collections")} />
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={collectionTrend} onClick={handleChartClick} className="cursor-pointer">
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -611,16 +682,38 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* ─── Company Inventory Materials ─── */}
+      {ciByMaterial.length > 0 && (
+        <div className="stat-card">
+          <SectionHeader icon={Boxes} title="مخزون الشركة — استهلاك المواد" action="عرض الكل" onAction={() => navigate("/company-inventory")} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+            {ciByMaterial.slice(0, 8).map((mat) => (
+              <div key={mat.code}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium truncate max-w-[200px]">{mat.name}</span>
+                  <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                    <span>{mat.remaining} / {mat.total}</span>
+                    <span className="font-mono font-medium">{mat.value.toLocaleString()} ج.م</span>
+                  </div>
+                </div>
+                <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${mat.usedPct >= 80 ? "bg-red-500" : mat.usedPct >= 50 ? "bg-amber-500" : "bg-emerald-500"}`}
+                    style={{ width: `${100 - mat.usedPct}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Top Clients + Recent Orders ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="stat-card">
-          <div className="flex items-center justify-between mb-4 cursor-pointer select-none" onClick={() => toggleSection("topClients")}>
-            <h3 className="font-semibold text-sm flex items-center gap-2">أعلى 5 عملاء — الإيرادات
-              {expandedSections.topClients ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            </h3>
-            <button className="text-xs text-primary hover:underline" onClick={(e) => { e.stopPropagation(); navigate("/reports"); }}>التقارير ←</button>
-          </div>
-          {expandedSections.topClients && (topClients.length > 0 ? (
-            <div className="space-y-3 animate-fade-in">
+          <SectionHeader icon={Users} title="أعلى 5 عملاء — الإيرادات" action="التقارير" onAction={() => navigate("/reports")} />
+          {topClients.length > 0 ? (
+            <div className="space-y-3">
               {topClients.map((c, i) => {
                 const maxRev = topClients[0]?.revenue || 1;
                 const pct = (c.revenue / maxRev) * 100;
@@ -633,7 +726,7 @@ export default function Dashboard() {
                       </div>
                       <div className="text-left">
                         <span className="text-sm font-bold">{c.revenue.toLocaleString()}</span>
-                        <span className="text-[10px] text-muted-foreground mr-1">ج.م</span>
+                        <span className="text-[10px] text-muted-foreground me-1">ج.م</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -654,21 +747,16 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">لا توجد بيانات</div>
-          ))}
+          )}
         </div>
 
         <div className="stat-card">
-          <div className="flex items-center justify-between mb-4 cursor-pointer select-none" onClick={() => toggleSection("recentOrders")}>
-            <h3 className="font-semibold text-sm flex items-center gap-2">{t.recentOrders}
-              {expandedSections.recentOrders ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            </h3>
-            <button className="text-xs text-primary hover:underline" onClick={(e) => { e.stopPropagation(); navigate("/orders"); }}>كل الأوردرات ←</button>
-          </div>
-          {expandedSections.recentOrders && (
-            <div className="space-y-2 animate-fade-in">
-              {recentOrders.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground text-sm">لا توجد طلبات بعد</div>
-              ) : recentOrders.map(order => (
+          <SectionHeader icon={Clock} title={t.recentOrders} action="كل الأوردرات" onAction={() => navigate("/orders")} />
+          {recentOrders.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">لا توجد طلبات بعد</div>
+          ) : (
+            <div className="space-y-2">
+              {recentOrders.map(order => (
                 <div key={order.id} className="flex items-center gap-3 p-2.5 rounded-lg border border-border/50 hover:border-primary/30 cursor-pointer transition-colors" onClick={() => navigate(`/orders/${order.id}`)}>
                   <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                     <ShoppingCart className="h-4 w-4 text-primary" />
@@ -676,9 +764,8 @@ export default function Dashboard() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold font-mono">{order.id}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                        STATUS_COLORS[order.status] ? "" : "bg-muted text-muted-foreground"
-                      }`} style={{ backgroundColor: `${STATUS_COLORS[order.status] || "#94a3b8"}20`, color: STATUS_COLORS[order.status] || "#94a3b8" }}>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+                        style={{ backgroundColor: `${STATUS_COLORS[order.status] || "#94a3b8"}20`, color: STATUS_COLORS[order.status] || "#94a3b8" }}>
                         {order.status}
                       </span>
                     </div>
@@ -692,24 +779,27 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { icon: Clock, iconClass: "text-yellow-600", bgClass: "bg-yellow-500/10", title: `${pendingDeliveries} توصيلة معلقة`, sub: "بانتظار التسليم", href: "/deliveries?status=Pending" },
-          { icon: AlertTriangle, iconClass: "text-destructive", bgClass: "bg-destructive/10", title: `${overdueCollections} فاتورة متأخرة`, sub: "يحتاج متابعة", href: "/collections?status=Overdue" },
-          { icon: Package, iconClass: "text-primary", bgClass: "bg-primary/10", title: `${activeOrders} أوردر نشط`, sub: "قيد التنفيذ", href: "/orders?status=active" },
-          { icon: Target, iconClass: "text-violet-600", bgClass: "bg-violet-500/10", title: `${criticalAlerts} تنبيه حرج`, sub: "يحتاج إجراء فوري", href: "/alerts" },
-        ].map((card) => (
-          <div key={card.href} className="stat-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 transition-colors group" onClick={() => navigate(card.href)}>
-            <div className={`h-10 w-10 rounded-lg ${card.bgClass} flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
-              <card.icon className={`h-5 w-5 ${card.iconClass}`} />
+      {/* ─── Action Alerts ─── */}
+      {(pendingDeliveries > 0 || overdueCollections > 0 || criticalAlerts > 0 || pendingReturns > 0) && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            pendingDeliveries > 0 && { icon: Clock, iconClass: "text-yellow-600", bgClass: "bg-yellow-500/10", title: `${pendingDeliveries} توصيلة معلقة`, sub: "بانتظار التسليم", href: "/deliveries?status=Pending" },
+            overdueCollections > 0 && { icon: AlertTriangle, iconClass: "text-destructive", bgClass: "bg-destructive/10", title: `${overdueCollections} فاتورة متأخرة`, sub: "يحتاج متابعة", href: "/collections?status=Overdue" },
+            pendingReturns > 0 && { icon: RotateCcw, iconClass: "text-orange-600", bgClass: "bg-orange-500/10", title: `${pendingReturns} مرتجع بانتظار`, sub: "يحتاج مراجعة", href: "/returns" },
+            criticalAlerts > 0 && { icon: Zap, iconClass: "text-destructive", bgClass: "bg-destructive/10", title: `${criticalAlerts} تنبيه حرج`, sub: "يحتاج إجراء فوري", href: "/alerts" },
+          ].filter(Boolean).map((card: any) => (
+            <div key={card.href} className="stat-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 transition-colors group" onClick={() => navigate(card.href)}>
+              <div className={`h-10 w-10 rounded-lg ${card.bgClass} flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
+                <card.icon className={`h-5 w-5 ${card.iconClass}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold">{card.title}</p>
+                <p className="text-xs text-muted-foreground">{card.sub}</p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold">{card.title}</p>
-              <p className="text-xs text-muted-foreground">{card.sub}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
