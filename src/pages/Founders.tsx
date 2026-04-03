@@ -157,7 +157,7 @@ export default function FoundersPage() {
   }, []);
 
   // ── Calculate profit AND capital distributions per founder from collections ──
-  const { profitsByFounder, capitalByFounder, deliveryReimbursementByFounder } = useMemo(() => {
+  const { profitsByFounder, capitalByFounder, deliveryReimbursementByFounder, companyDeliverySubsidies } = useMemo(() => {
     const profitMap: Record<string, Array<{
       collectionId: string; orderIds: string[]; clientName: string; date: string;
       paidAmount: number; founderShare: number; paidRatio: number; alreadyRegistered: boolean;
@@ -170,8 +170,20 @@ export default function FoundersPage() {
       collectionId: string; orderId: string; clientName: string; date: string;
       amount: number; deliveryFee: number; paidRatio: number;
     }>> = {};
+    const subsidyMap: Record<string, Array<{
+      collectionId: string; orderId: string; clientName: string; date: string;
+      amount: number; deliveryFee: number; orderProfit: number;
+      source: "company_balance" | "company_debt";
+    }>> = {};
 
-    collections.forEach(col => {
+    let companyRunningBalance = 0;
+    const founderDebts: Record<string, number> = {};
+
+    const sortedCollections = [...collections].sort((a, b) =>
+      (a.invoiceDate || "").localeCompare(b.invoiceDate || "")
+    );
+
+    sortedCollections.forEach(col => {
       if (col.paidAmount <= 0) return;
       const srcOrders = col.sourceOrders.filter(oid => orders[oid]);
       if (srcOrders.length === 0) return;
@@ -184,7 +196,9 @@ export default function FoundersPage() {
 
       let totalFoundersProfit = 0;
       let totalCapitalReturn = 0;
+      let totalCompanyProfit = 0;
       const allSplits: Array<{ id: string; name: string; profit: number; capitalShare: number }> = [];
+      const orderDeficits: Array<{ orderId: string; paidByFounder: string; deficit: number; deliveryFee: number; orderProfit: number; clientName: string; date: string }> = [];
 
       srcOrders.forEach(oid => {
         const order = orders[oid];
@@ -202,6 +216,7 @@ export default function FoundersPage() {
         const capitalReturn = Math.round(qp.recoveredCapital);
         totalFoundersProfit += qp.foundersProfit;
         totalCapitalReturn += capitalReturn;
+        totalCompanyProfit += qp.companyProfit;
 
         const paidByFounder = order.deliveryFeePaidByFounder || (order as any).delivery_fee_paid_by_founder || "";
         if (paidByFounder && delFeeDeduction > 0 && qp.deliveryFeeReimbursement > 0) {
@@ -215,12 +230,79 @@ export default function FoundersPage() {
           });
         }
 
+        if (paidByFounder && qp.deliveryFeeDeficit > 0) {
+          const grossProfit = oSelling > 0 ? oPaid * ((oSelling - oCost) / oSelling) : 0;
+          orderDeficits.push({
+            orderId: oid,
+            paidByFounder,
+            deficit: qp.deliveryFeeDeficit,
+            deliveryFee: delFeeDeduction,
+            orderProfit: Math.round(grossProfit),
+            clientName: col.client,
+            date: col.invoiceDate.split("T")[0],
+          });
+        }
+
         const splits = founderSplit(qp.foundersProfit, capitalReturn, contribs, isWeighted ? "weighted" : "equal");
         splits.forEach(s => {
           const existing = allSplits.find(e => e.id === s.id);
           if (existing) { existing.profit += s.profit; existing.capitalShare += s.capitalShare; }
           else allSplits.push({ ...s });
         });
+      });
+
+      companyRunningBalance += totalCompanyProfit;
+
+      for (const fId of Object.keys(founderDebts)) {
+        if (founderDebts[fId] <= 0) continue;
+        if (companyRunningBalance <= 0) break;
+        const repay = Math.min(founderDebts[fId], companyRunningBalance);
+        founderDebts[fId] -= repay;
+        companyRunningBalance -= repay;
+        if (!subsidyMap[fId]) subsidyMap[fId] = [];
+        subsidyMap[fId].push({
+          collectionId: col.id, orderId: "سداد-دين", clientName: col.client,
+          date: col.invoiceDate.split("T")[0],
+          amount: Math.round(repay), deliveryFee: 0, orderProfit: 0,
+          source: "company_balance",
+        });
+      }
+
+      orderDeficits.forEach(d => {
+        const fId = d.paidByFounder;
+        if (!subsidyMap[fId]) subsidyMap[fId] = [];
+
+        if (companyRunningBalance >= d.deficit) {
+          companyRunningBalance -= d.deficit;
+          subsidyMap[fId].push({
+            collectionId: col.id, orderId: d.orderId, clientName: d.clientName,
+            date: d.date, amount: Math.round(d.deficit),
+            deliveryFee: d.deliveryFee, orderProfit: d.orderProfit,
+            source: "company_balance",
+          });
+        } else {
+          const fromBalance = Math.max(companyRunningBalance, 0);
+          const asDebt = d.deficit - fromBalance;
+          companyRunningBalance -= fromBalance;
+          if (fromBalance > 0) {
+            subsidyMap[fId].push({
+              collectionId: col.id, orderId: d.orderId, clientName: d.clientName,
+              date: d.date, amount: Math.round(fromBalance),
+              deliveryFee: d.deliveryFee, orderProfit: d.orderProfit,
+              source: "company_balance",
+            });
+          }
+          if (asDebt > 0) {
+            if (!founderDebts[fId]) founderDebts[fId] = 0;
+            founderDebts[fId] += asDebt;
+            subsidyMap[fId].push({
+              collectionId: col.id, orderId: d.orderId, clientName: d.clientName,
+              date: d.date, amount: Math.round(asDebt),
+              deliveryFee: d.deliveryFee, orderProfit: d.orderProfit,
+              source: "company_debt",
+            });
+          }
+        }
       });
 
       const paidRatio = Math.min(col.paidAmount / allSelling, 1);
@@ -262,7 +344,7 @@ export default function FoundersPage() {
         }
       });
     });
-    return { profitsByFounder: profitMap, capitalByFounder: capitalMap, deliveryReimbursementByFounder: reimbursementMap };
+    return { profitsByFounder: profitMap, capitalByFounder: capitalMap, deliveryReimbursementByFounder: reimbursementMap, companyDeliverySubsidies: subsidyMap };
   }, [collections, orders, founders, founderTxs, rules.companyProfitPercentage]);
 
   const deliveryPaymentsByFounder = useMemo(() => {
@@ -1002,10 +1084,13 @@ export default function FoundersPage() {
                     {section === "delivery" && (() => {
                       const myDeliveryPayments = deliveryPaymentsByFounder[f.id] || [];
                       const myReimbursements = deliveryReimbursementByFounder[f.id] || [];
+                      const mySubsidies = companyDeliverySubsidies[f.id] || [];
                       const totalPaid = myDeliveryPayments.reduce((s, e) => s + e.amount, 0);
                       const totalReimbursed = myReimbursements.reduce((s, e) => s + e.amount, 0);
-                      const netDelivery = totalPaid - totalReimbursed;
-                      const hasEntries = myDeliveryPayments.length > 0 || myReimbursements.length > 0;
+                      const totalSubsidizedPaid = mySubsidies.filter(e => e.source === "company_balance").reduce((s, e) => s + e.amount, 0);
+                      const totalPendingDebt = mySubsidies.filter(e => e.source === "company_debt").reduce((s, e) => s + e.amount, 0);
+                      const netDelivery = totalPaid - totalReimbursed - totalSubsidizedPaid;
+                      const hasEntries = myDeliveryPayments.length > 0 || myReimbursements.length > 0 || mySubsidies.length > 0;
                       return (
                         <>
                           {!hasEntries ? (
@@ -1072,6 +1157,44 @@ export default function FoundersPage() {
                                       </div>
                                     </div>
                                   ))}
+                                {mySubsidies
+                                  .sort((a, b) => b.date.localeCompare(a.date))
+                                  .map((entry, idx) => (
+                                    <div key={`subsidy-${entry.collectionId}-${entry.orderId}-${idx}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                                      <div className={`mt-0.5 flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center ${entry.source === "company_debt" ? "bg-amber-100 dark:bg-amber-900/30" : "bg-blue-100 dark:bg-blue-900/30"}`}>
+                                        <Wallet className={`h-3.5 w-3.5 ${entry.source === "company_debt" ? "text-amber-600 dark:text-amber-400" : "text-blue-600 dark:text-blue-400"}`} />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-sm font-medium">
+                                            {entry.orderId === "سداد-دين"
+                                              ? "سداد دين توصيل من أرباح الشركة"
+                                              : entry.source === "company_debt"
+                                                ? "تعويض توصيل (دين على الشركة)"
+                                                : "تعويض توصيل من حساب الشركة"}
+                                          </span>
+                                          {entry.orderId !== "سداد-دين" && (
+                                            <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                              onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                              {entry.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                            </button>
+                                          )}
+                                          {entry.clientName && <span className="text-xs text-muted-foreground">{entry.clientName}</span>}
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                                          <Clock className="h-3 w-3 flex-shrink-0" />
+                                          <span>{entry.date}</span>
+                                          {entry.deliveryFee > 0 && <span>· توصيل: {entry.deliveryFee.toLocaleString()} {t.currency}</span>}
+                                          {entry.orderProfit > 0 && <span>· ربح الأوردر: {entry.orderProfit.toLocaleString()} {t.currency}</span>}
+                                          {entry.source === "company_debt" && <span className="text-amber-600 dark:text-amber-400">· سيُسدد من أرباح الشركة لاحقاً</span>}
+                                        </div>
+                                      </div>
+                                      <div className={`text-sm font-bold flex-shrink-0 ${entry.source === "company_debt" ? "text-amber-600 dark:text-amber-400" : "text-blue-600 dark:text-blue-400"}`}>
+                                        +{entry.amount.toLocaleString()}
+                                        <span className="text-xs font-normal text-muted-foreground mr-0.5">{t.currency}</span>
+                                      </div>
+                                    </div>
+                                  ))}
                               </div>
                               <div className="border-t border-border bg-muted/30 p-4 space-y-2">
                                 <div className="flex items-center justify-between text-sm">
@@ -1080,8 +1203,20 @@ export default function FoundersPage() {
                                 </div>
                                 {totalReimbursed > 0 && (
                                   <div className="flex items-center justify-between text-sm">
-                                    <span className="text-muted-foreground">إجمالي مسترد (بعد التحصيل)</span>
+                                    <span className="text-muted-foreground">مسترد من أرباح الأوردر</span>
                                     <span className="font-bold text-emerald-600 dark:text-emerald-400">+{totalReimbursed.toLocaleString()} {t.currency}</span>
+                                  </div>
+                                )}
+                                {totalSubsidizedPaid > 0 && (
+                                  <div className="flex items-center justify-between text-sm">
+                                    <span className="text-muted-foreground">تعويض مدفوع من حساب الشركة</span>
+                                    <span className="font-bold text-blue-600 dark:text-blue-400">+{totalSubsidizedPaid.toLocaleString()} {t.currency}</span>
+                                  </div>
+                                )}
+                                {totalPendingDebt > 0 && (
+                                  <div className="flex items-center justify-between text-sm">
+                                    <span className="text-muted-foreground">دين معلق على الشركة (سيُسدد لاحقاً)</span>
+                                    <span className="font-bold text-amber-600 dark:text-amber-400">{totalPendingDebt.toLocaleString()} {t.currency}</span>
                                   </div>
                                 )}
                                 <div className="flex items-center justify-between text-sm pt-2 border-t border-border/50">
