@@ -1923,8 +1923,8 @@ function parseFounderDesc(desc: string | null): { orderId: string; collectionId:
   return { orderId: "", collectionId: "", clientName: "", notes: desc };
 }
 function encodeFounderDesc(orderId: string | null, notes: string | null, extra?: { collectionId?: string; clientName?: string }): string | null {
-  if (extra?.collectionId) {
-    return JSON.stringify({ orderId: orderId || "", collectionId: extra.collectionId, clientName: extra.clientName || "", notes: notes || "" });
+  if (extra?.collectionId || extra?.clientName) {
+    return JSON.stringify({ orderId: orderId || "", collectionId: extra?.collectionId || "", clientName: extra?.clientName || "", notes: notes || "" });
   }
   if (!orderId && !notes) return null;
   if (!orderId) return notes || null;
@@ -3158,6 +3158,11 @@ router.post("/returns/:id/accept", async (req, res) => {
 
     // 6. Save founder refund transactions
     if (founderRefunds.length > 0) {
+      let clientName = "";
+      if (ret.client_id) {
+        const { data: cRow } = await supabaseAdmin.from("clients").select("name").eq("id", ret.client_id).maybeSingle();
+        clientName = cRow?.name || "";
+      }
       for (const fr of founderRefunds) {
         await supabaseAdmin.from("treasury_transactions").insert({
           tx_type: "capital_return",
@@ -3166,7 +3171,7 @@ router.post("/returns/:id/accept", async (req, res) => {
           performed_by: fr.founderId,
           reference_id: fr.founderName,
           category: "return_refund",
-          description: encodeFounderDesc(orderId, `استرداد مرتجع ${retId}`, {}),
+          description: encodeFounderDesc(orderId, `استرداد مرتجع ${retId}`, { clientName }),
           date: new Date().toISOString().split("T")[0],
         });
       }
@@ -3229,6 +3234,11 @@ router.post("/returns/:id/confirm-refund", async (req, res) => {
       }
     }
 
+    let clientName2 = "";
+    if (ret.client_id) {
+      const { data: cRow } = await supabaseAdmin.from("clients").select("name").eq("id", ret.client_id).maybeSingle();
+      clientName2 = cRow?.name || "";
+    }
     for (const fr of founderRefunds) {
       await supabaseAdmin.from("treasury_transactions").insert({
         tx_type: "capital_return",
@@ -3237,7 +3247,7 @@ router.post("/returns/:id/confirm-refund", async (req, res) => {
         performed_by: fr.founderId,
         reference_id: fr.founderName,
         category: "return_refund",
-        description: encodeFounderDesc(orderId, `استرداد مرتجع ${retId}`, {}),
+        description: encodeFounderDesc(orderId, `استرداد مرتجع ${retId}`, { clientName: clientName2 }),
         date: new Date().toISOString().split("T")[0],
       });
     }

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowRight, TrendingUp, Wallet, Pencil, Loader2, Trash2,
-  ExternalLink, ShoppingBag, Clock, AlertTriangle,
+  ExternalLink, ShoppingBag, Clock, AlertTriangle, RotateCcw,
   ArrowDownLeft, ArrowUpRight, Coins, Receipt, CheckCircle2, XCircle, Truck,
   PieChart as PieChartIcon, BarChart3,
 } from "lucide-react";
@@ -88,7 +88,7 @@ interface FounderProfileProps {
   payingEntry: string | null;
 }
 
-type TabKey = "overview" | "orders" | "profits" | "capital" | "delivery" | "ledger";
+type TabKey = "overview" | "orders" | "profits" | "capital" | "returns" | "delivery" | "ledger";
 
 export default function FounderProfile({
   founder: f, founderTxs: allTxs, orderFunding, profits, capital,
@@ -104,6 +104,7 @@ export default function FounderProfile({
   const contributions = myTxs.filter(tx => tx.type === "contribution");
   const fundings = myTxs.filter(tx => tx.type === "funding");
   const capitalReturns = myTxs.filter(tx => tx.type === "capital_return");
+  const returnRefunds = capitalReturns.filter(tx => tx.method === "return_refund");
   const capitalWithdrawals = myTxs.filter(tx => tx.type === "capital_withdrawal");
   const withdrawals = myTxs.filter(tx => tx.type === "withdrawal");
 
@@ -115,6 +116,7 @@ export default function FounderProfile({
   const txContribTotal = [...contributions, ...fundings].reduce((s, tx) => s + tx.amount, 0);
   const displayTotal = txContribTotal > 0 ? txContribTotal : f.totalContributed;
   const manualCapitalTotal = capitalReturns.reduce((s, tx) => s + tx.amount, 0);
+  const returnRefundsTotal = returnRefunds.reduce((s, tx) => s + tx.amount, 0);
   const capitalWithdrawnTotal = capitalWithdrawals.reduce((s, tx) => s + tx.amount, 0);
 
   const delPaidTotal = deliveryPayments.reduce((s, e) => s + e.amount, 0);
@@ -188,6 +190,7 @@ export default function FounderProfile({
     { key: "orders", label: "الأوردرات", icon: ShoppingBag, count: orderFunding.length, alert: unpaidFunding.length > 0 },
     { key: "profits", label: "الأرباح", icon: TrendingUp, count: profits.length },
     { key: "capital", label: "رأس المال", icon: Coins },
+    { key: "returns", label: "المرتجعات", icon: RotateCcw, count: returnRefunds.length },
     { key: "delivery", label: "التوصيل", icon: Truck, count: deliveryPayments.length + deliveryReimbursements.length },
     { key: "ledger", label: "السجل", icon: Receipt },
   ];
@@ -652,6 +655,73 @@ export default function FounderProfile({
                         </button>
                       </div>
                     ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ──── RETURNS ──── */}
+          {activeTab === "returns" && (
+            <>
+              {returnRefunds.length === 0 ? (
+                <div className="py-16 text-center text-sm text-muted-foreground">
+                  <RotateCcw className="h-10 w-10 mx-auto mb-3 opacity-20" />
+                  <p>لا توجد مرتجعات</p>
+                </div>
+              ) : (
+                <div>
+                  <div className="px-5 py-3 bg-emerald-50/50 dark:bg-emerald-950/10 border-b border-emerald-200/50 dark:border-emerald-800/30 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <RotateCcw className="h-4 w-4 text-emerald-600" />
+                      <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                        إجمالي دخل المرتجعات: {returnRefundsTotal.toLocaleString()} {t.currency}
+                      </span>
+                    </div>
+                    <Badge variant="secondary" className="text-[10px]">{returnRefunds.length} مرتجع</Badge>
+                  </div>
+                  <div className="divide-y divide-border/50">
+                    {returnRefunds
+                      .sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime())
+                      .map(tx => {
+                        const returnIdMatch = (tx.notes || "").match(/استرداد مرتجع\s+(RET-\S+|[A-Za-z0-9_-]+)/);
+                        const returnId = returnIdMatch ? returnIdMatch[1] : "";
+                        return (
+                          <div key={tx.id} className="flex items-start gap-3 px-5 py-3.5 hover:bg-muted/20 transition-colors">
+                            <div className="mt-0.5 flex-shrink-0 h-8 w-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                              <RotateCcw className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-medium">استرداد مرتجع</span>
+                                {returnId && (
+                                  <button
+                                    className="inline-flex items-center gap-1 font-mono text-xs bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 px-1.5 py-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/40"
+                                    onClick={() => navigate(`/returns/${returnId}`)}
+                                  >
+                                    {returnId} <ExternalLink className="h-2.5 w-2.5" />
+                                  </button>
+                                )}
+                                {tx.orderId && (
+                                  <button
+                                    className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                                    onClick={() => navigate(`/orders/${tx.orderId}`)}
+                                  >
+                                    {tx.orderId} <ExternalLink className="h-2.5 w-2.5" />
+                                  </button>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                                <Clock className="h-3 w-3" /><span>{tx.date}</span>
+                                {tx.clientName && <span>· {tx.clientName}</span>}
+                              </div>
+                            </div>
+                            <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 flex-shrink-0">
+                              +{tx.amount.toLocaleString()} {t.currency}
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
                 </div>
               )}
             </>
