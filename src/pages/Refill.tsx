@@ -144,7 +144,7 @@ export default function RefillPage() {
   // Compute refill items from client inventory
   const refillItems: RefillItem[] = useMemo(() => {
     return lots
-      .filter(l => l.status !== "Expired")
+      .filter(l => l.status !== "Expired" && l.status !== "Returned")
       .map(l => {
         const fromAudit = l.status === "Needs Refill" && l.shortageQty > 0;
         const coverageWeeks = l.avgWeeklyUsage > 0 ? l.remaining / l.avgWeeklyUsage : 999;
