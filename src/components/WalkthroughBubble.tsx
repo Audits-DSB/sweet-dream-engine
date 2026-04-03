@@ -49,16 +49,28 @@ export function WalkthroughBubble() {
   });
 
   useEffect(() => {
-    const mainEl = document.querySelector("main");
-    const target = mainEl || window;
+    let target: Element | Window | null = null;
+    const findTarget = () => {
+      const mainEl = document.querySelector("main");
+      return mainEl || window;
+    };
     const handleScroll = () => {
+      const mainEl = document.querySelector("main");
       const scrollY = mainEl ? mainEl.scrollTop : window.scrollY;
       setAtTop(scrollY <= 60);
     };
-    target.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll();
-    return () => target.removeEventListener("scroll", handleScroll);
-  }, []);
+    const timer = setTimeout(() => {
+      target = findTarget();
+      target.addEventListener("scroll", handleScroll, { passive: true });
+      handleScroll();
+    }, 100);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      if (target) target.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, [location.pathname]);
 
   useEffect(() => {
     if (dismissed) localStorage.setItem("dsb_walkthrough_dismissed", "true");
