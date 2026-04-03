@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Users, TrendingUp, Wallet, Pencil, Plus, Loader2, Trash2,
-  ExternalLink, AlertTriangle,
+  ExternalLink, AlertTriangle, Banknote,
   ArrowUpRight, Coins, CheckCircle2,
 } from "lucide-react";
 import FounderProfile from "@/components/FounderProfile";
@@ -482,42 +483,6 @@ export default function FoundersPage() {
       });
     });
 
-    founders.forEach(f => {
-      const entries = map[f.id] || [];
-      if (entries.length === 0) return;
-
-      const myContributions = founderTxs
-        .filter(tx => (tx.founderId === f.id || tx.founderName === f.name) && tx.type === "contribution")
-        .reduce((s, tx) => s + tx.amount, 0);
-      const myFundingTxs = founderTxs
-        .filter(tx => (tx.founderId === f.id || tx.founderName === f.name) && tx.type === "funding");
-      const myFundings = myFundingTxs.reduce((s, tx) => s + tx.amount, 0);
-      const initialCapital = f.totalContributed > 0 ? f.totalContributed : myContributions;
-      let availableCapital = initialCapital - myFundings;
-
-      entries.sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.orderId || "").localeCompare(b.orderId || ""));
-
-      entries.forEach(entry => {
-        if (entry.paid) {
-          const hasFundingTx = myFundingTxs.some(tx => tx.orderId === entry.orderId);
-          if (!hasFundingTx) {
-            availableCapital -= entry.originalAmount;
-          }
-          return;
-        }
-        if (availableCapital >= entry.originalAmount) {
-          entry.paid = true;
-          entry.autoFunded = true;
-          entry.paidAmount = entry.originalAmount;
-          availableCapital -= entry.originalAmount;
-        } else if (availableCapital > 0) {
-          entry.amount = entry.originalAmount - availableCapital;
-          entry.autoFunded = true;
-          availableCapital = 0;
-        }
-      });
-    });
-
     return map;
   }, [orders, founders, founderTxs]);
 
@@ -662,22 +627,51 @@ export default function FoundersPage() {
   };
 
   const [payingEntry, setPayingEntry] = useState<string | null>(null);
+  const [fundingDialog, setFundingDialog] = useState<{ open: boolean; entry: OrderFundingEntry | null; available: number }>({ open: false, entry: null, available: 0 });
+  const [useBalance, setUseBalance] = useState(false);
 
-  const handlePayOrderFunding = async (entry: OrderFundingEntry) => {
+  const handlePayOrderFunding = (entry: OrderFundingEntry) => {
+    const available = Math.max(0, founderCapitalBalance(entry.founderId));
+    setUseBalance(false);
+    setFundingDialog({ open: true, entry, available });
+  };
+
+  const handlePayWithBalance = async () => {
+    const { entry, available } = fundingDialog;
+    if (!entry) return;
     const founder = founders.find(f => f.id === entry.founderId);
     if (!founder) return;
+    const required = entry.amount;
+    const walletUsed = useBalance ? Math.min(available, required) : 0;
+    const cashPortion = required - walletUsed;
     const key = `${entry.orderId}-${entry.founderId}`;
     setPayingEntry(key);
     try {
       const today = new Date().toISOString().split("T")[0];
+      if (walletUsed > 0) {
+        await api.post("/founder-transactions", {
+          founderId: entry.founderId,
+          founderName: entry.founderName || founder.name,
+          type: "capital_withdrawal",
+          amount: walletUsed,
+          method: "balance",
+          orderId: entry.orderId,
+          notes: `سحب من الرصيد لتمويل طلب ${entry.orderId}`,
+          date: today,
+        });
+      }
       await api.post("/founder-transactions", {
         founderId: entry.founderId,
         founderName: entry.founderName || founder.name,
         type: "funding",
-        amount: entry.amount,
-        method: "transfer",
+        amount: required,
+        method: walletUsed > 0 && cashPortion > 0 ? "mixed" : walletUsed > 0 ? "balance" : "transfer",
         orderId: entry.orderId,
-        notes: `حصة تمويل طلب ${entry.orderId}`,
+        notes: walletUsed > 0 && cashPortion > 0
+          ? `تمويل طلب ${entry.orderId}: ${walletUsed.toLocaleString()} رصيد + ${cashPortion.toLocaleString()} تمويل مالي`
+          : walletUsed > 0
+          ? `تمويل طلب ${entry.orderId} من الرصيد`
+          : `حصة تمويل طلب ${entry.orderId}`,
         date: today,
       });
       const order = orders[entry.orderId];
@@ -692,10 +686,16 @@ export default function FoundersPage() {
       }
       await logAudit({
         entity: "founder", entityId: founder.id, entityName: founder.name,
-        action: "update", snapshot: { type: "order_funding_paid", orderId: entry.orderId, amount: entry.amount },
+        action: "update", snapshot: { type: "order_funding_paid", orderId: entry.orderId, amount: required, walletUsed, cashPortion },
         endpoint: `/orders/${entry.orderId}`, performedBy: _userName });
       await loadData();
-      toast.success(`تم تسجيل دفع ${founder.name} لطلب ${entry.orderId} — ${entry.amount.toLocaleString()} ${t.currency}`);
+      setFundingDialog({ open: false, entry: null, available: 0 });
+      const msg = walletUsed > 0 && cashPortion > 0
+        ? `تم تسجيل دفع ${founder.name} — ${walletUsed.toLocaleString()} رصيد + ${cashPortion.toLocaleString()} تمويل مالي`
+        : walletUsed > 0
+        ? `تم تسجيل دفع ${founder.name} — ${walletUsed.toLocaleString()} من الرصيد`
+        : `تم تسجيل تمويل ${founder.name} — ${required.toLocaleString()} تمويل مالي`;
+      toast.success(msg);
     } catch (err: any) {
       toast.error(err?.message || "فشل تسجيل الدفع");
     } finally {
@@ -1092,6 +1092,99 @@ export default function FoundersPage() {
               {saving
                 ? <Loader2 className="h-4 w-4 animate-spin" />
                 : withdrawMode === "fund_order" ? "تمويل العملية" : "تسجيل السحب"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Pay Funding Dialog (Cash vs Balance) ── */}
+      <Dialog open={fundingDialog.open} onOpenChange={(o) => { if (!o) { setFundingDialog({ open: false, entry: null, available: 0 }); setUseBalance(false); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Banknote className="h-5 w-5 text-primary" />
+              تسديد حصة التمويل
+            </DialogTitle>
+          </DialogHeader>
+          {fundingDialog.entry && (() => {
+            const entry = fundingDialog.entry!;
+            const required = entry.amount;
+            const hasBalance = fundingDialog.available > 0;
+            const walletUsed = (hasBalance && useBalance) ? Math.min(fundingDialog.available, required) : 0;
+            const cashPortion = Math.max(required - walletUsed, 0);
+            return (
+              <div className="space-y-4 py-1">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className={`p-2.5 rounded-lg border ${hasBalance ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800" : "bg-muted/30 border-border"}`}>
+                    <p className={`text-xs mb-0.5 ${hasBalance ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>رصيد متاح</p>
+                    <p className={`font-bold ${hasBalance ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>{fundingDialog.available.toLocaleString()} {t.currency}</p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs text-muted-foreground mb-0.5">الحصة المطلوبة</p>
+                    <p className="font-bold">{required.toLocaleString()} {t.currency}</p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-muted/30 border border-border p-2.5 text-xs space-y-1">
+                  <div className="flex justify-between"><span className="text-muted-foreground">الطلب</span><span className="font-mono">{entry.orderId}</span></div>
+                  {entry.clientName && <div className="flex justify-between"><span className="text-muted-foreground">العميل</span><span>{entry.clientName}</span></div>}
+                  <div className="flex justify-between"><span className="text-muted-foreground">النسبة</span><span>{entry.percentage.toFixed(1)}%</span></div>
+                </div>
+
+                <div className="rounded-lg border border-border p-3 space-y-2 text-sm">
+                  {useBalance && walletUsed > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                        <Wallet className="h-3.5 w-3.5" />من الرصيد
+                      </span>
+                      <span className="font-semibold text-amber-700 dark:text-amber-300">
+                        −{walletUsed.toLocaleString()} {t.currency}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center">
+                    <span className="flex items-center gap-1.5 text-primary">
+                      <Banknote className="h-3.5 w-3.5" />تمويل مالي (كاش)
+                    </span>
+                    <span className={`font-semibold ${cashPortion > 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                      {cashPortion.toLocaleString()} {t.currency}
+                    </span>
+                  </div>
+                  <div className="border-t border-border pt-1.5 flex justify-between text-xs text-muted-foreground">
+                    <span>الإجمالي</span>
+                    <span className="font-medium text-success">{required.toLocaleString()} {t.currency}</span>
+                  </div>
+
+                  <label className={`flex items-center gap-3 p-3 mt-1 rounded-lg border transition-colors ${!hasBalance ? "opacity-50 cursor-not-allowed bg-muted/10 border-border" : useBalance ? "cursor-pointer bg-primary/5 border-primary/30" : "cursor-pointer bg-muted/20 border-border"}`}>
+                    <Checkbox
+                      checked={useBalance}
+                      disabled={!hasBalance}
+                      onCheckedChange={(v) => setUseBalance(!!v)}
+                    />
+                    <div className="flex-1">
+                      <span className="text-sm font-medium">السحب من الرصيد</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {!hasBalance
+                          ? "لا يوجد رصيد متاح للسحب"
+                          : useBalance
+                            ? `سيُخصم ${walletUsed.toLocaleString()} ${t.currency} من رصيده${cashPortion > 0 ? ` — الباقي ${cashPortion.toLocaleString()} ${t.currency} تمويل مالي` : " — لا حاجة لتمويل إضافي"}`
+                            : `رصيد متاح: ${fundingDialog.available.toLocaleString()} ${t.currency} — اضغط للخصم`
+                        }
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            );
+          })()}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setFundingDialog({ open: false, entry: null, available: 0 })}>إلغاء</Button>
+            <Button
+              size="sm"
+              disabled={payingEntry !== null}
+              onClick={handlePayWithBalance}
+            >
+              {payingEntry !== null ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Banknote className="h-3.5 w-3.5 me-1" />تأكيد التسديد</>}
             </Button>
           </DialogFooter>
         </DialogContent>

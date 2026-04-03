@@ -31,7 +31,8 @@ All business data in main Supabase project:
 - `treasury_accounts` — Treasury/cash accounts
 - `treasury_transactions` — All financial transactions including:
   - Standard: inflow, expense, withdrawal, transfer
-  - Founder transactions: founder_contribution, founder_withdrawal, order_funding (stored with performedBy=founderId, referenceId=founderName, linkedAccountId=orderId, category=method)
+  - Founder transactions: founder_contribution, founder_withdrawal, capital_withdrawal, order_funding (stored with performedBy=founderId, referenceId=founderName, linkedAccountId=orderId, category=method)
+  - When paying founder order funding, user chooses: cash only, balance only, or mixed (capital_withdrawal tx created for balance portion)
 
 ## Soft-Delete & Trash System
 - **Soft-Delete**: All DELETE routes snapshot the entity BEFORE physical deletion and save to `deleted_items` table in **Supabase** (via `supabaseAdmin`)

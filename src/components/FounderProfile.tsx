@@ -445,9 +445,7 @@ export default function FounderProfile({
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-sm font-medium">
-                                  {entry.paid
-                                    ? (entry.autoFunded ? "ممول من رأس المال" : "مساهمة (تم الدفع)")
-                                    : (entry.autoFunded ? "باقي عليه (جزء ممول من رأس المال)" : "عليه فلوس")}
+                                  {entry.paid ? "مساهمة (تم الدفع)" : "عليه فلوس"}
                                 </span>
                                 <button className="inline-flex items-center gap-1 font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
                                   onClick={() => navigate(`/orders/${entry.orderId}`)}>
@@ -468,9 +466,6 @@ export default function FounderProfile({
                                 <span className={`text-sm font-bold ${entry.paid ? "text-success" : "text-destructive"}`}>
                                   {entry.amount.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">{t.currency}</span>
                                 </span>
-                                {entry.autoFunded && !entry.paid && entry.amount !== entry.originalAmount && (
-                                  <span className="text-[10px] text-muted-foreground line-through">{entry.originalAmount.toLocaleString()}</span>
-                                )}
                               </div>
                               {!entry.paid && (
                                 <Button size="sm" variant="outline" className="h-7 text-xs border-primary text-primary hover:bg-primary hover:text-primary-foreground gap-1" disabled={isPaying} onClick={() => onPayFunding(entry)}>
