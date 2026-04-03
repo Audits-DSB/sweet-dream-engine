@@ -2863,14 +2863,67 @@ router.get("/returns/:id", async (req, res) => {
 router.post("/returns", async (req, res) => {
   try {
     const body = req.body;
-    const id = body.id || `RET-${Date.now().toString(36).toUpperCase()}`;
+    const orderId = body.orderId;
+    if (!orderId) return res.status(400).json({ error: "orderId is required" });
+
     const items: any[] = body.items || [];
-    const totalValue = items.reduce((s: number, it: any) => s + (Number(it.sellingPrice || 0) * Number(it.quantity || 0)), 0);
-    const totalCost = items.reduce((s: number, it: any) => s + (Number(it.costPrice || 0) * Number(it.quantity || 0)), 0);
+    if (items.length === 0) return res.status(400).json({ error: "items are required" });
+
+    // Server-side validation: check returnable quantities
+    const [linesRes, existingReturnsRes, orderRes] = await Promise.all([
+      supabaseAdmin.from("order_lines").select("*").eq("order_id", orderId),
+      supabaseAdmin.from("returns").select("items,status").eq("order_id", orderId).in("status", ["pending", "accepted"]),
+      supabaseAdmin.from("orders").select("status").eq("id", orderId).single(),
+    ]);
+
+    // Only allow returns on delivered orders
+    const orderStatus = orderRes.data?.status || "";
+    const deliveredStatuses = ["تم التسليم", "delivered", "مرتجع جزئي"];
+    if (!deliveredStatuses.some(s => orderStatus.includes(s) || orderStatus.toLowerCase().includes(s.toLowerCase()))) {
+      return res.status(400).json({ error: `لا يمكن إرجاع طلب بحالة: ${orderStatus}. يجب أن يكون مُسلّم أولاً` });
+    }
+
+    const lines = linesRes.data || [];
+    const returnedMap: Record<string, number> = {};
+    for (const r of (existingReturnsRes.data || [])) {
+      for (const it of (r.items || [])) {
+        const key = it.materialCode || it.code || it.material_code || "";
+        returnedMap[key] = (returnedMap[key] || 0) + Number(it.quantity || 0);
+      }
+    }
+
+    const lineQtyMap: Record<string, number> = {};
+    for (const l of lines) {
+      const code = l.material_code || l.code || "";
+      lineQtyMap[code] = (lineQtyMap[code] || 0) + Number(l.quantity || 0);
+    }
+
+    // Validate each item
+    for (const item of items) {
+      const code = item.materialCode || item.code || "";
+      const orderedQty = lineQtyMap[code] || 0;
+      const alreadyReturned = returnedMap[code] || 0;
+      const maxReturnable = Math.max(orderedQty - alreadyReturned, 0);
+      const requestedQty = Number(item.quantity || 0);
+
+      if (requestedQty <= 0) continue;
+      if (requestedQty > maxReturnable) {
+        return res.status(400).json({
+          error: `الكمية المطلوب إرجاعها (${requestedQty}) للصنف ${item.materialName || code} تتجاوز الكمية المتاحة (${maxReturnable})`
+        });
+      }
+    }
+
+    const validItems = items.filter(it => Number(it.quantity || 0) > 0);
+    if (validItems.length === 0) return res.status(400).json({ error: "لا توجد أصناف بكمية صالحة للإرجاع" });
+
+    const id = body.id || `RET-${Date.now().toString(36).toUpperCase()}`;
+    const totalValue = validItems.reduce((s: number, it: any) => s + (Number(it.sellingPrice || 0) * Number(it.quantity || 0)), 0);
+    const totalCost = validItems.reduce((s: number, it: any) => s + (Number(it.costPrice || 0) * Number(it.quantity || 0)), 0);
 
     const row = {
       id,
-      order_id: body.orderId,
+      order_id: orderId,
       client_id: body.clientId || "",
       client_name: body.clientName || "",
       return_date: body.returnDate || new Date().toISOString().split("T")[0],
@@ -2881,7 +2934,7 @@ router.post("/returns", async (req, res) => {
       disposition: "",
       refund_status: "none",
       refund_amount: 0,
-      items: items,
+      items: validItems,
       notes: body.notes || "",
       processed_by: "",
     };
@@ -2911,10 +2964,12 @@ router.post("/returns/:id/accept", async (req, res) => {
   try {
     const retId = req.params.id;
     const { disposition, refundStatus } = req.body;
+    if (!disposition) return res.status(400).json({ error: "disposition is required" });
 
     const { data: ret, error: retErr } = await supabaseAdmin.from("returns").select("*").eq("id", retId).single();
     if (retErr || !ret) return res.status(404).json({ error: "Return not found" });
     if (ret.status === "accepted") return res.status(400).json({ error: "Already accepted" });
+    if (ret.status === "rejected") return res.status(400).json({ error: "Cannot accept a rejected return" });
 
     const items: any[] = ret.items || [];
     const orderId = ret.order_id;
@@ -3140,21 +3195,55 @@ router.post("/returns/:id/confirm-refund", async (req, res) => {
 });
 
 router.post("/returns/:id/reject", async (req, res) => {
-  const { data, error } = await supabaseAdmin.from("returns").update({
-    status: "rejected",
-    notes: req.body.notes || "",
-    processed_by: req.body.processedBy || "",
-  }).eq("id", req.params.id).select().single();
-  if (error) return res.status(400).json({ error: error.message });
-  res.json(camelizeKeys(data));
+  try {
+    const retId = req.params.id;
+    const { data: ret, error: retErr } = await supabaseAdmin.from("returns").select("*").eq("id", retId).single();
+    if (retErr || !ret) return res.status(404).json({ error: "Return not found" });
+    if (ret.status === "rejected") return res.status(400).json({ error: "Already rejected" });
+    if (ret.status === "accepted") return res.status(400).json({ error: "لا يمكن رفض مرتجع تم قبوله بالفعل" });
+
+    const { data, error } = await supabaseAdmin.from("returns").update({
+      status: "rejected",
+      notes: req.body.notes || "",
+      processed_by: req.body.processedBy || "",
+    }).eq("id", retId).select().single();
+    if (error) return res.status(400).json({ error: error.message });
+
+    // Recalculate order status after rejection
+    const orderId = ret.order_id;
+    const { data: allReturns } = await supabaseAdmin.from("returns").select("id,items,status").eq("order_id", orderId);
+    const { data: orderLines } = await supabaseAdmin.from("order_lines").select("quantity").eq("order_id", orderId);
+    const totalOrderedQty = (orderLines || []).reduce((s: number, l: any) => s + Number(l.quantity || 0), 0);
+    const totalAcceptedReturnQty = (allReturns || [])
+      .filter((r: any) => r.status === "accepted")
+      .reduce((s: number, r: any) => {
+        const rItems: any[] = r.items || [];
+        return s + rItems.reduce((ss: number, it: any) => ss + Number(it.quantity || 0), 0);
+      }, 0);
+
+    if (totalAcceptedReturnQty >= totalOrderedQty && totalOrderedQty > 0) {
+      await supabaseAdmin.from("orders").update({ status: "مرتجع كلي" }).eq("id", orderId);
+    } else if (totalAcceptedReturnQty > 0) {
+      await supabaseAdmin.from("orders").update({ status: "مرتجع جزئي" }).eq("id", orderId);
+    } else {
+      // No accepted returns remain — revert to delivered
+      await supabaseAdmin.from("orders").update({ status: "تم التسليم" }).eq("id", orderId);
+    }
+
+    res.json(camelizeKeys(data));
+  } catch (e: any) {
+    console.error("[Returns Reject Error]", e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 router.get("/orders/:id/returnable-items", async (req, res) => {
   try {
     const orderId = req.params.id;
-    const [linesRes, returnsRes] = await Promise.all([
+    const [linesRes, returnsRes, clientInvRes] = await Promise.all([
       supabaseAdmin.from("order_lines").select("*").eq("order_id", orderId),
       supabaseAdmin.from("returns").select("items,status").eq("order_id", orderId).in("status", ["pending", "accepted"]),
+      supabaseAdmin.from("client_inventory").select("code,remaining").eq("source_order", orderId),
     ]);
 
     const lines = linesRes.data || [];
@@ -3166,11 +3255,21 @@ router.get("/orders/:id/returnable-items", async (req, res) => {
       }
     }
 
+    // Build delivered qty map from client_inventory
+    const deliveredMap: Record<string, number> = {};
+    for (const ci of (clientInvRes.data || [])) {
+      const code = ci.code || "";
+      deliveredMap[code] = (deliveredMap[code] || 0) + Number(ci.remaining || 0);
+    }
+
     const returnableItems = lines.map((l: any) => {
       const code = l.material_code || l.code || "";
       const totalQty = Number(l.quantity || 0);
       const alreadyReturned = returnedMap[code] || 0;
-      const returnable = Math.max(totalQty - alreadyReturned, 0);
+      // Use the minimum of ordered and what's actually in client inventory
+      const deliveredQty = deliveredMap[code];
+      const baseQty = deliveredQty !== undefined ? Math.min(totalQty, deliveredQty + alreadyReturned) : totalQty;
+      const returnable = Math.max(baseQty - alreadyReturned, 0);
       return {
         ...camelizeKeys(l),
         materialCode: code,
