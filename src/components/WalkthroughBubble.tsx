@@ -40,10 +40,23 @@ export function WalkthroughBubble() {
   const { requests, orders, deliveries, collections, refreshData } = useWorkflow();
   const [open, setOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [atTop, setAtTop] = useState(true);
 
   const [dismissed, setDismissed] = useState(() => {
     return localStorage.getItem("dsb_walkthrough_dismissed") === "true";
   });
+
+  useEffect(() => {
+    const mainEl = document.querySelector("main");
+    const target = mainEl || window;
+    const handleScroll = () => {
+      const scrollY = mainEl ? mainEl.scrollTop : window.scrollY;
+      setAtTop(scrollY <= 60);
+    };
+    target.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => target.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     if (dismissed) localStorage.setItem("dsb_walkthrough_dismissed", "true");
@@ -262,10 +275,11 @@ export function WalkthroughBubble() {
   const progress = (currentStep / (workflowSteps.length - 1)) * 100;
 
   if (dismissed && !open) {
+    if (!atTop) return null;
     return (
       <button
         onClick={() => { setOpen(true); setDismissed(false); }}
-        className="fixed bottom-6 left-6 z-50 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center"
+        className="fixed bottom-6 left-6 z-50 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center animate-in fade-in duration-300"
         title="دليل استخدام النظام"
       >
         <BookOpen className="h-5 w-5" />
@@ -275,10 +289,10 @@ export function WalkthroughBubble() {
 
   return (
     <>
-      {!open && (
+      {!open && atTop && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-6 left-6 z-50 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center animate-in fade-in"
+          className="fixed bottom-6 left-6 z-50 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center animate-in fade-in duration-300"
           title="دليل استخدام النظام"
         >
           <BookOpen className="h-5 w-5" />
