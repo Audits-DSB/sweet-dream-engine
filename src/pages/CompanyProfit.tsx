@@ -7,7 +7,7 @@ import { StatCard } from "@/components/StatCard";
 import {
   TrendingUp, TrendingDown, DollarSign, Percent, Download, Wallet,
   Plus, ArrowUpRight, ArrowDownRight, Minus, Receipt, Trash2, Loader2,
-  Users, Building2, ChevronDown, ChevronUp, ExternalLink, AlertTriangle
+  Users, Building2, ChevronDown, ChevronUp, ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { exportToCsv } from "@/lib/exportCsv";
@@ -666,12 +666,6 @@ export default function CompanyProfitPage() {
         <StatCard title="حصة الشركة من الأرباح" value={`${totals.avgCompanyPct}%`} change={`متوسط · ${profitLedger.length} تحصيل`} changeType="positive" icon={Percent} />
         <StatCard title={t.totalCostCompany} value={`${fmtNum(totals.cost)} ${t.currency}`} change={`${totals.revenue > 0 ? ((totals.cost / totals.revenue) * 100).toFixed(0) : 0}% من المُحصَّل`} changeType="negative" icon={TrendingDown} />
       </div>
-      {totals.deliveryDeficit > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-2 text-amber-800 text-sm">
-          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-          <span>عجز توصيل غير مغطى: <strong>{fmtNum(totals.deliveryDeficit)} {t.currency}</strong> — رسوم التوصيل أعلى من الربح المحقق في بعض الأوردرات</span>
-        </div>
-      )}
 
       {/* ===== PROFIT LEDGER ===== */}
       <div className="stat-card overflow-x-auto">
@@ -1051,52 +1045,95 @@ export default function CompanyProfitPage() {
         );
       })()}
 
-      {/* Expenses from Treasury */}
-      <div className="stat-card overflow-x-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-sm flex items-center gap-2">
-            <Receipt className="h-4 w-4 text-destructive" />
-            سجل المصروفات
-          </h3>
-        </div>
-        {(transactions || []).filter((tx: any) => ["expense", "withdrawal"].includes(tx.txType || tx.tx_type)).length === 0 ? (
-          <p className="text-muted-foreground text-sm text-center py-6">لا توجد مصروفات مسجّلة</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">التاريخ</th>
-                <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">الفئة</th>
-                <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">الوصف</th>
-                <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">المبلغ</th>
-                <th className="py-2.5 px-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {(transactions || [])
-                .filter((tx: any) => ["expense", "withdrawal"].includes(tx.txType || tx.tx_type))
-                .sort((a: any, b: any) => (b.createdAt || b.created_at || "").localeCompare(a.createdAt || a.created_at || ""))
-                .map((tx: any) => (
-                  <tr key={tx.id} className="border-b border-border/50 hover:bg-muted/30 group">
-                    <td className="py-2.5 px-3 text-xs text-muted-foreground">{(tx.date || tx.createdAt || tx.created_at || "").split("T")[0]}</td>
-                    <td className="py-2.5 px-3"><span className="text-xs bg-muted px-2 py-0.5 rounded">{categoryLabel(tx.category)}</span></td>
-                    <td className="py-2.5 px-3 text-muted-foreground text-xs">{tx.description || "—"}</td>
-                    <td className="py-2.5 px-3 text-end font-medium text-destructive">{fmtNum(Math.abs(parseAmount(tx.amount)))} {t.currency}</td>
-                    <td className="py-2.5 px-3 text-end">
-                      <button
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive/80"
-                        onClick={() => setDeleteTxTarget(tx)}
-                        data-testid={`button-delete-expense-${tx.id}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
+      {/* Expenses from Treasury + Delivery Deficits */}
+      {(() => {
+        const treasuryExpenses = (transactions || [])
+          .filter((tx: any) => ["expense", "withdrawal"].includes(tx.txType || tx.tx_type))
+          .sort((a: any, b: any) => (b.createdAt || b.created_at || "").localeCompare(a.createdAt || a.created_at || ""))
+          .map((tx: any) => ({
+            key: `tx-${tx.id}`,
+            date: (tx.date || tx.createdAt || tx.created_at || "").split("T")[0],
+            category: categoryLabel(tx.category),
+            categoryKey: "expense",
+            description: tx.description || "—",
+            amount: Math.abs(parseAmount(tx.amount)),
+            isTx: true as const,
+            tx,
+          }));
+        const deficitEntries = profitLedger
+          .filter(e => e.deliveryFeeDeficit > 0)
+          .map(e => ({
+            key: `deficit-${e.collectionId}`,
+            date: e.date,
+            category: "رسوم توصيل",
+            categoryKey: "delivery_deficit",
+            description: `عجز توصيل — طلب ${e.orderId} · ${e.client}`,
+            amount: e.deliveryFeeDeficit,
+            isTx: false as const,
+            tx: null,
+            orderId: e.orderId,
+          }));
+        const allExpenses = [...treasuryExpenses, ...deficitEntries].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+        return (
+          <div className="stat-card overflow-x-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <Receipt className="h-4 w-4 text-destructive" />
+                سجل المصروفات
+              </h3>
+            </div>
+            {allExpenses.length === 0 ? (
+              <p className="text-muted-foreground text-sm text-center py-6">لا توجد مصروفات مسجّلة</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">التاريخ</th>
+                    <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">الفئة</th>
+                    <th className="text-start py-2.5 px-3 text-xs font-medium text-muted-foreground">الوصف</th>
+                    <th className="text-end py-2.5 px-3 text-xs font-medium text-muted-foreground">المبلغ</th>
+                    <th className="py-2.5 px-3"></th>
                   </tr>
-                ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+                </thead>
+                <tbody>
+                  {allExpenses.map((row) => (
+                    <tr key={row.key} className={`border-b border-border/50 hover:bg-muted/30 group ${row.categoryKey === "delivery_deficit" ? "bg-amber-50/30 dark:bg-amber-950/10" : ""}`}>
+                      <td className="py-2.5 px-3 text-xs text-muted-foreground">{row.date}</td>
+                      <td className="py-2.5 px-3">
+                        <span className={`text-xs px-2 py-0.5 rounded ${row.categoryKey === "delivery_deficit" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" : "bg-muted"}`}>
+                          {row.category}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-muted-foreground text-xs">
+                        {row.categoryKey === "delivery_deficit" && (row as any).orderId ? (
+                          <span
+                            className="hover:text-primary cursor-pointer"
+                            onClick={() => navigate(`/orders/${(row as any).orderId}`)}
+                          >
+                            {row.description}
+                          </span>
+                        ) : row.description}
+                      </td>
+                      <td className="py-2.5 px-3 text-end font-medium text-destructive">{fmtNum(row.amount)} {t.currency}</td>
+                      <td className="py-2.5 px-3 text-end">
+                        {row.isTx && (
+                          <button
+                            className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive/80"
+                            onClick={() => setDeleteTxTarget(row.tx)}
+                            data-testid={`button-delete-expense-${row.tx.id}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        );
+      })()}
 
       <ConfirmDeleteDialog
         open={!!deleteTxTarget}
