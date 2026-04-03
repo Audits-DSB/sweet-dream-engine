@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Download, FileText, TrendingUp, Users, Package, Loader2, Truck, Wallet, DollarSign, ArrowUpDown, CheckCircle2 } from "lucide-react";
+import { BarChart3, Download, FileText, TrendingUp, Users, Package, Loader2, Truck, Wallet, DollarSign, ArrowUpDown, CheckCircle2, Factory, RotateCcw, ClipboardCheck, Boxes, UserCog, AlertTriangle } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   LineChart, Line, PieChart, Pie, Cell, Legend, AreaChart, Area, ComposedChart,
@@ -46,6 +46,14 @@ export default function ReportsPage() {
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [collections, setCollections] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
+  const [founders, setFounders] = useState<any[]>([]);
+  const [treasuryAccounts, setTreasuryAccounts] = useState<any[]>([]);
+  const [treasuryTxns, setTreasuryTxns] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [returns, setReturns] = useState<any[]>([]);
+  const [audits, setAudits] = useState<any[]>([]);
+  const [companyInventory, setCompanyInventory] = useState<any[]>([]);
+  const [orderLines, setOrderLines] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -55,12 +63,28 @@ export default function ReportsPage() {
       api.get<any[]>("/deliveries").catch(() => []),
       api.get<any[]>("/collections").catch(() => []),
       api.get<any[]>("/client-inventory").catch(() => []),
-    ]).then(([o, c, d, col, inv]) => {
+      api.get<any[]>("/founders").catch(() => []),
+      api.get<any[]>("/treasury/accounts").catch(() => []),
+      api.get<any[]>("/treasury/transactions").catch(() => []),
+      api.get<any[]>("/suppliers").catch(() => []),
+      api.get<any[]>("/returns").catch(() => []),
+      api.get<any[]>("/audits").catch(() => []),
+      api.get<any[]>("/company-inventory").catch(() => []),
+      api.get<any[]>("/order-lines").catch(() => []),
+    ]).then(([o, c, d, col, inv, f, ta, tt, sup, ret, aud, ci, ol]) => {
       setOrders(o || []);
       setClients(c || []);
       setDeliveries(d || []);
       setCollections(col || []);
       setInventory(inv || []);
+      setFounders(f || []);
+      setTreasuryAccounts(ta || []);
+      setTreasuryTxns(tt || []);
+      setSuppliers(sup || []);
+      setReturns(ret || []);
+      setAudits(aud || []);
+      setCompanyInventory(ci || []);
+      setOrderLines(ol || []);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -182,6 +206,76 @@ export default function ReportsPage() {
     return Object.values(map).sort((a, b) => b.totalValue - a.totalValue).slice(0, 8);
   }, [inventory]);
 
+  const founderStats = useMemo(() => {
+    return (founders || []).map((f: any) => ({
+      name: f.name || f.id,
+      contributed: Number(f.totalContributed || f.total_contributed || 0),
+      withdrawn: Number(f.totalWithdrawn || f.total_withdrawn || 0),
+      balance: Number(f.balance || 0),
+    }));
+  }, [founders]);
+
+  const treasuryStats = useMemo(() => {
+    let totalBalance = 0;
+    (treasuryAccounts || []).forEach((a: any) => { totalBalance += Number(a.balance || 0); });
+    let deposits = 0, withdrawals = 0;
+    (treasuryTxns || []).forEach((tx: any) => {
+      const amt = Number(tx.amount || 0);
+      const type = tx.type || tx.txType || tx.tx_type || "";
+      if (type === "deposit" || type === "إيداع") deposits += amt;
+      else if (type === "withdrawal" || type === "سحب") withdrawals += amt;
+    });
+    return { accountCount: treasuryAccounts.length, totalBalance, deposits, withdrawals, txCount: treasuryTxns.length };
+  }, [treasuryAccounts, treasuryTxns]);
+
+  const supplierStats = useMemo(() => {
+    const map: Record<string, { name: string; orders: number; totalCost: number }> = {};
+    for (const line of orderLines) {
+      const sid = line.supplierId || line.supplier_id || "";
+      if (!sid) continue;
+      if (!map[sid]) {
+        const sup = suppliers.find((s: any) => s.id === sid);
+        map[sid] = { name: sup?.name || sid, orders: 0, totalCost: 0 };
+      }
+      map[sid].orders += 1;
+      map[sid].totalCost += Number(line.lineCost || line.line_cost || 0);
+    }
+    return Object.values(map).sort((a, b) => b.totalCost - a.totalCost);
+  }, [orderLines, suppliers]);
+
+  const returnsStats = useMemo(() => {
+    let totalItems = 0, accepted = 0, pending = 0;
+    for (const r of returns) {
+      const items = Array.isArray(r.items) ? r.items : [];
+      const count = items.length || Number(r.itemsCount || r.items_count || 1);
+      totalItems += count;
+      if (r.status === "Accepted" || r.status === "مقبول") accepted += count;
+      else pending += count;
+    }
+    return { total: returns.length, totalItems, accepted, pending };
+  }, [returns]);
+
+  const auditStats = useMemo(() => {
+    let matched = 0, shortage = 0, surplus = 0;
+    for (const a of audits) {
+      matched += Number(a.matched || 0);
+      shortage += Number(a.shortage || 0);
+      surplus += Number(a.surplus || 0);
+    }
+    return { total: audits.length, matched, shortage, surplus };
+  }, [audits]);
+
+  const companyInvStats = useMemo(() => {
+    let totalValue = 0, inStock = 0;
+    for (const ci of companyInventory) {
+      const remaining = Number(ci.remaining || 0);
+      const cost = Number(ci.costPrice || ci.cost_price || 0);
+      totalValue += remaining * cost;
+      if (remaining > 0) inStock++;
+    }
+    return { total: companyInventory.length, totalValue, inStock };
+  }, [companyInventory]);
+
   const totalRevenue = clientRevenue.reduce((s, c) => s + c.revenue, 0);
   const totalCost = clientRevenue.reduce((s, c) => s + c.cost, 0);
   const totalProfit = totalRevenue - totalCost;
@@ -191,10 +285,17 @@ export default function ReportsPage() {
   const reports = [
     { name: t.clientRevenueReport, desc: t.clientRevenueDesc, icon: Users, action: () => exportToCsv("client_revenue", [t.client, t.revenue, t.totalOrders], clientRevenue.map(c => [c.client, c.revenue, c.orders])) },
     { name: t.pnlSummary, desc: t.pnlDesc, icon: TrendingUp, action: () => navigate("/company-profit") },
+    { name: "التقرير المالي", desc: "تقرير مالي شامل للشركة", icon: DollarSign, action: () => navigate("/financial-report") },
+    { name: "تقرير الأوردرات الشهري", desc: "ملخص الأوردرات والإيرادات شهرياً", icon: BarChart3, action: () => exportToCsv("monthly_orders", ["الشهر", "الأوردرات", "الإيرادات", "التكلفة", "الربح"], monthlyData.map(m => [m.month, m.orders, m.revenue, m.cost, m.profit])) },
     { name: t.inventoryStatusReport, desc: t.inventoryStatusDesc, icon: Package, action: () => navigate("/inventory") },
+    { name: "تقرير مخزون الشركة", desc: `${companyInvStats.total} دفعة — قيمة ${companyInvStats.totalValue.toLocaleString()} ج.م`, icon: Boxes, action: () => exportToCsv("company_inventory", ["المادة", "رقم الدفعة", "الكمية المتبقية", "سعر التكلفة", "القيمة"], companyInventory.map(ci => [ci.materialName || ci.material_name || ci.material_code || "", ci.lotNumber || ci.lot_number || "", Number(ci.remaining || 0), Number(ci.costPrice || ci.cost_price || 0), Number(ci.remaining || 0) * Number(ci.costPrice || ci.cost_price || 0)])) },
     { name: t.agingReport, desc: t.agingDesc, icon: FileText, action: () => navigate("/collections") },
-    { name: t.auditReport, desc: t.auditReportDesc, icon: FileText, action: () => navigate("/audits") },
-    { name: "تقرير الأوردرات الشهري", desc: "ملخص الأوردرات والإيرادات شهرياً", icon: BarChart3, action: () => exportToCsv("monthly_orders", ["الشهر", "الأوردرات", "الإيرادات"], monthlyData.map(m => [m.month, m.orders, m.revenue])) },
+    { name: "تقرير الموردين", desc: `${suppliers.length} مورّد — مشتريات بقيمة ${supplierStats.reduce((s, x) => s + x.totalCost, 0).toLocaleString()} ج.م`, icon: Factory, action: () => exportToCsv("supplier_report", ["المورّد", "عدد البنود", "إجمالي التكلفة"], supplierStats.map(s => [s.name, s.orders, s.totalCost])) },
+    { name: "تقرير المؤسسين", desc: `${founders.length} مؤسس — مساهمات وسحوبات`, icon: UserCog, action: () => exportToCsv("founders_report", ["المؤسس", "إجمالي المساهمات", "إجمالي السحوبات", "الرصيد"], founderStats.map(f => [f.name, f.contributed, f.withdrawn, f.balance])) },
+    { name: "تقرير الخزينة", desc: `${treasuryStats.accountCount} حساب — رصيد ${treasuryStats.totalBalance.toLocaleString()} ج.م`, icon: Wallet, action: () => navigate("/treasury") },
+    { name: "تقرير المرتجعات", desc: `${returnsStats.total} مرتجع — ${returnsStats.totalItems} عنصر`, icon: RotateCcw, action: () => exportToCsv("returns_report", ["الحالة", "العدد"], [["مقبول", returnsStats.accepted], ["معلق", returnsStats.pending], ["الإجمالي", returnsStats.totalItems]]) },
+    { name: t.auditReport, desc: `${auditStats.total} جرد — ${auditStats.shortage} عجز، ${auditStats.surplus} زيادة`, icon: ClipboardCheck, action: () => navigate("/audits") },
+    { name: "تقرير التوصيلات", desc: `${deliveryStats.total} توصيل — ${deliveryStats.confirmed} مؤكدة`, icon: Truck, action: () => exportToCsv("deliveries_report", ["الشهر", "مؤكدة", "معلقة"], deliveryStats.monthly.map(m => [m.month, m.confirmed, m.pending])) },
   ];
 
   if (loading) {
@@ -224,8 +325,26 @@ export default function ReportsPage() {
             ["التحصيل", "إجمالي المبلغ", collectionStats.totalAmount],
             ["التحصيل", "المحصل", collectionStats.paidAmount],
             ["التحصيل", "المتبقي", collectionStats.remaining],
-            ["الجرد", "إجمالي الدفعات", inventoryStats.total],
-            ["الجرد", "قيمة المخزون", inventoryStats.totalValue],
+            ["مخزون العملاء", "إجمالي الدفعات", inventoryStats.total],
+            ["مخزون العملاء", "قيمة المخزون", inventoryStats.totalValue],
+            ["مخزون الشركة", "إجمالي الدفعات", companyInvStats.total],
+            ["مخزون الشركة", "في المخزن", companyInvStats.inStock],
+            ["مخزون الشركة", "قيمة المخزون", companyInvStats.totalValue],
+            ["المؤسسين", "عدد المؤسسين", founders.length],
+            ...founderStats.map(f => ["المؤسسين", `${f.name} — رصيد`, f.balance]),
+            ["الخزينة", "عدد الحسابات", treasuryStats.accountCount],
+            ["الخزينة", "إجمالي الرصيد", treasuryStats.totalBalance],
+            ["الخزينة", "إجمالي الإيداعات", treasuryStats.deposits],
+            ["الخزينة", "إجمالي السحوبات", treasuryStats.withdrawals],
+            ["الموردين", "عدد الموردين", suppliers.length],
+            ...supplierStats.slice(0, 10).map(s => ["الموردين", `${s.name} — تكلفة`, s.totalCost]),
+            ["المرتجعات", "إجمالي المرتجعات", returnsStats.total],
+            ["المرتجعات", "عناصر مقبولة", returnsStats.accepted],
+            ["المرتجعات", "عناصر معلقة", returnsStats.pending],
+            ["الجرد", "إجمالي عمليات الجرد", auditStats.total],
+            ["الجرد", "مطابق", auditStats.matched],
+            ["الجرد", "عجز", auditStats.shortage],
+            ["الجرد", "زيادة", auditStats.surplus],
           ])
         }>
           <Download className="h-3.5 w-3.5" /> تصدير تقرير شامل
