@@ -170,7 +170,6 @@ export default function FoundersPage() {
     setCollections((cols || []).map(mapCol));
     const om: Record<string, Order> = {};
     (ords || []).forEach((o: any) => {
-      if (o.status === "مرتجع كلي") return;
       om[o.id] = o;
     });
     setOrders(om);
@@ -180,6 +179,21 @@ export default function FoundersPage() {
   useEffect(() => {
     loadData().catch(() => toast.error("تعذّر تحميل بيانات المؤسسين")).finally(() => setLoading(false));
   }, []);
+
+  const fullReturnOrderIds = useMemo(() => {
+    const ids = new Set<string>();
+    Object.values(orders).forEach((o: any) => {
+      const s = (o.status || "").trim();
+      if (s === "مرتجع كلي") ids.add(o.id);
+    });
+    returnsData.forEach((ret: any) => {
+      if (ret.status === "accepted" && (ret.returnType === "full" || ret.return_type === "full")) {
+        const oid = ret.orderId || ret.order_id;
+        if (oid) ids.add(oid);
+      }
+    });
+    return ids;
+  }, [orders, returnsData]);
 
   // ── Calculate profit AND capital distributions per founder from collections ──
   const { profitsByFounder, capitalByFounder, deliveryReimbursementByFounder, companyDeliverySubsidies } = useMemo(() => {
@@ -210,7 +224,7 @@ export default function FoundersPage() {
 
     sortedCollections.forEach(col => {
       if (col.paidAmount <= 0) return;
-      const srcOrders = col.sourceOrders.filter(oid => orders[oid]);
+      const srcOrders = col.sourceOrders.filter(oid => orders[oid] && !fullReturnOrderIds.has(oid));
       if (srcOrders.length === 0) return;
 
       const companyPct = rules.companyProfitPercentage ?? 40;
@@ -374,7 +388,7 @@ export default function FoundersPage() {
       });
     });
     return { profitsByFounder: profitMap, capitalByFounder: capitalMap, deliveryReimbursementByFounder: reimbursementMap, companyDeliverySubsidies: subsidyMap };
-  }, [collections, orders, founders, founderTxs, rules.companyProfitPercentage, returnDeductions]);
+  }, [collections, orders, founders, founderTxs, rules.companyProfitPercentage, returnDeductions, fullReturnOrderIds]);
 
   const deliveryPaymentsByFounder = useMemo(() => {
     const map: Record<string, Array<{ orderId: string; clientName: string; date: string; amount: number }>> = {};
@@ -476,6 +490,7 @@ export default function FoundersPage() {
     founders.forEach(f => { map[f.id] = []; });
 
     Object.values(orders).forEach((order: any) => {
+      if (fullReturnOrderIds.has(order.id)) return;
       const contribs = Array.isArray(order.founderContributions) ? order.founderContributions : [];
       if (contribs.length === 0) return;
 
@@ -512,7 +527,7 @@ export default function FoundersPage() {
     });
 
     return map;
-  }, [orders, founders, founderTxs]);
+  }, [orders, founders, founderTxs, fullReturnOrderIds]);
 
   const totalContributed = founders.reduce((s, f) => s + f.totalContributed, 0);
 
