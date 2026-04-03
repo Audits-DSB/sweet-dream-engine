@@ -863,8 +863,8 @@ export default function OrdersPage() {
                           </span>
                         </button>
                       ) : <span className="text-xs text-muted-foreground">—</span>}
-                      {order.deliveryFee > 0 && order.deliveryFeeBearer === "company" && order.deliveryFeePaidByFounder && (
-                        <span className="text-[10px] text-amber-600 dark:text-amber-400">دفعها: {founders.find(f => f.id === order.deliveryFeePaidByFounder)?.name || "—"}</span>
+                      {order.deliveryFee > 0 && order.deliveryFeeBearer === "company" && order.deliveryFeePaidByFounder && founders.find(f => f.id === order.deliveryFeePaidByFounder)?.name && (
+                        <span className="text-[10px] text-amber-600 dark:text-amber-400">دفعها: {founders.find(f => f.id === order.deliveryFeePaidByFounder)!.name}</span>
                       )}
                     </div>
                   </td>
