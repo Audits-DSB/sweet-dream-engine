@@ -34,6 +34,15 @@ All business data in main Supabase project:
   - Founder transactions: founder_contribution, founder_withdrawal, capital_withdrawal, order_funding (stored with performedBy=founderId, referenceId=founderName, linkedAccountId=orderId, category=method)
   - When paying founder order funding, user chooses: cash only, balance only, or mixed (capital_withdrawal tx created for balance portion)
 
+## Return-Aware Financial Calculations
+All financial pages and server endpoints account for returns:
+- **CompanyProfit.tsx**: Excludes "مرتجع كلي" orders from profit ledger. Adjusts "مرتجع جزئي" by subtracting returned items' selling/cost values.
+- **FinancialReport.tsx**: Fetches returns, subtracts return deductions from monthly P&L revenue/cost. Includes partial returns in delivered statuses.
+- **Dashboard.tsx**: Fetches returns, adjusts delivered orders' revenue/cost stats with return deductions.
+- **Server `/company-profit-summary`**: Fetches returns table, excludes fully-returned orders, adjusts partial returns.
+- **Founders.tsx**: Return refunds create `capital_return` transactions which add to founder capital balance via `founderCapitalBalance()`.
+- **Return deduction pattern**: Each page builds a `returnDeductions` map: `{ orderId → { returnedSelling, returnedCost } }` from accepted returns' item quantities × prices.
+
 ## Soft-Delete & Trash System
 - **Soft-Delete**: All DELETE routes snapshot the entity BEFORE physical deletion and save to `deleted_items` table in **Supabase** (via `supabaseAdmin`)
 - **`deleted_items` table**: Columns — id, entity_type, entity_id, entity_name, snapshot (jsonb), related_data (jsonb), deleted_at, deleted_by

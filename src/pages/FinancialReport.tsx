@@ -155,6 +155,28 @@ export default function FinancialReportPage() {
     queryFn: () => api.get<any[]>("/founder-transactions"),
   });
 
+  const { data: returnsData = [] } = useQuery<any[]>({
+    queryKey: ["returns"],
+    queryFn: () => api.get<any[]>("/returns"),
+  });
+
+  const returnDeductions = useMemo(() => {
+    const map: Record<string, { returnedSelling: number; returnedCost: number }> = {};
+    returnsData.forEach((ret: any) => {
+      if (ret.status !== "accepted") return;
+      const oid = ret.orderId || ret.order_id;
+      if (!oid) return;
+      if (!map[oid]) map[oid] = { returnedSelling: 0, returnedCost: 0 };
+      const items: any[] = ret.items || [];
+      items.forEach((it: any) => {
+        const qty = Number(it.quantity || 0);
+        map[oid].returnedSelling += Number(it.sellingPrice || 0) * qty;
+        map[oid].returnedCost += Number(it.costPrice || 0) * qty;
+      });
+    });
+    return map;
+  }, [returnsData]);
+
   const isLoading = loadingOrders || loadingTxs || loadingAccounts || loadingFounders || loadingCollections;
 
   const fmtMoney = (n: number) => n.toLocaleString(lang === "ar" ? "ar-EG" : "en-US");
@@ -169,10 +191,11 @@ export default function FinancialReportPage() {
     const monthlyData: Record<string, { revenue: number; cost: number; orderCount: number }> = {};
     const ensure = (key: string) => { if (!monthlyData[key]) monthlyData[key] = { revenue: 0, cost: 0, orderCount: 0 }; };
 
-    const deliveredStatuses = ["Delivered", "Closed", "Completed"];
+    const deliveredStatuses = ["Delivered", "Closed", "Completed", "مرتجع جزئي"];
     (orders || []).forEach((o) => {
       const cid = o.clientId || o.client_id || "";
       if (cid === "company-inventory") return;
+      if (o.status === "مرتجع كلي") return;
       if (!deliveredStatuses.includes(o.status)) return;
       const dateStr = o.date || o.createdAt || o.created_at;
       if (!dateStr) return;
@@ -181,8 +204,11 @@ export default function FinancialReportPage() {
         if (d < cutoff) return;
         const key = format(d, "yyyy-MM");
         ensure(key);
-        monthlyData[key].revenue += parseAmount(o.totalSelling ?? o.total_selling);
-        monthlyData[key].cost += parseAmount(o.totalCost ?? o.total_cost);
+        const ded = returnDeductions[o.id];
+        const selling = parseAmount(o.totalSelling ?? o.total_selling) - (ded?.returnedSelling || 0);
+        const cost = parseAmount(o.totalCost ?? o.total_cost) - (ded?.returnedCost || 0);
+        monthlyData[key].revenue += Math.max(selling, 0);
+        monthlyData[key].cost += Math.max(cost, 0);
         monthlyData[key].orderCount += 1;
       } catch { }
     });
@@ -217,7 +243,7 @@ export default function FinancialReportPage() {
       monthlyPnL: pnl,
       totals: { revenue: tRev, cost: tCost, profit: tProfit, company: tCompany, founder: tFounder, orders: tOrders, margin },
     };
-  }, [orders, cutoff, rules]);
+  }, [orders, cutoff, rules, returnDeductions]);
 
   const cashFlowData = useMemo(() => {
     const monthly: Record<string, { inflows: number; outflows: number; net: number }> = {};
@@ -294,7 +320,8 @@ export default function FinancialReportPage() {
     (orders || []).forEach((o) => {
       const cid = o.clientId || o.client_id || "";
       if (cid === "company-inventory") return;
-      const deliveredStatuses2 = ["Delivered", "Closed", "Completed"];
+      if (o.status === "مرتجع كلي") return;
+      const deliveredStatuses2 = ["Delivered", "Closed", "Completed", "مرتجع جزئي"];
       if (!deliveredStatuses2.includes(o.status)) return;
       const dateStr = o.createdAt || o.created_at;
       if (dateStr) {
@@ -302,11 +329,13 @@ export default function FinancialReportPage() {
       }
       const name = o.client || "غير محدد";
       if (!clientMap[name]) clientMap[name] = { revenue: 0, orders: 0, name };
-      clientMap[name].revenue += parseAmount(o.totalSelling ?? o.total_selling);
+      const ded = returnDeductions[o.id];
+      const rev = parseAmount(o.totalSelling ?? o.total_selling) - (ded?.returnedSelling || 0);
+      clientMap[name].revenue += Math.max(rev, 0);
       clientMap[name].orders += 1;
     });
     return Object.values(clientMap).sort((a, b) => b.revenue - a.revenue).slice(0, 8);
-  }, [orders, cutoff]);
+  }, [orders, cutoff, returnDeductions]);
 
   const collectionsSummary = useMemo(() => {
     const today = new Date();

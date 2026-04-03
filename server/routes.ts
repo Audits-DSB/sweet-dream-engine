@@ -1921,13 +1921,14 @@ function encodeFounderDesc(orderId: string | null, notes: string | null, extra?:
 // ── Company Profit Summary (total company profit from collections minus expenses) ──
 router.get("/company-profit-summary", async (_req, res) => {
   try {
-    const [colsRes, ordsRes, rulesRes, contribRes, lineRes, txRes] = await Promise.all([
+    const [colsRes, ordsRes, rulesRes, contribRes, lineRes, txRes, returnsRes] = await Promise.all([
       supabaseAdmin.from("collections").select("*"),
       supabaseAdmin.from("orders").select("*"),
       supabaseAdmin.from("business_rules").select("*").eq("id", "default").maybeSingle(),
       supabaseAdmin.from("order_founder_contributions").select("order_id,contributions"),
       supabaseAdmin.from("order_lines").select("order_id,line_cost"),
       supabaseAdmin.from("treasury_transactions").select("*").in("tx_type", ["expense", "withdrawal"]),
+      supabaseAdmin.from("returns").select("order_id,items,status"),
     ]);
     if (colsRes.error || ordsRes.error) return res.status(500).json({ error: (colsRes.error || ordsRes.error)!.message });
 
@@ -1937,12 +1938,31 @@ router.get("/company-profit-summary", async (_req, res) => {
     const costMap: Record<string, number> = {};
     for (const l of lineRes.data || []) costMap[l.order_id] = (costMap[l.order_id] || 0) + (Number(l.line_cost) || 0);
 
+    const returnDedMap: Record<string, { returnedSelling: number; returnedCost: number }> = {};
+    (returnsRes.data || []).forEach((ret: any) => {
+      if (ret.status !== "accepted") return;
+      const oid = ret.order_id;
+      if (!oid) return;
+      if (!returnDedMap[oid]) returnDedMap[oid] = { returnedSelling: 0, returnedCost: 0 };
+      const items: any[] = ret.items || [];
+      items.forEach((it: any) => {
+        const qty = Number(it.quantity || 0);
+        returnDedMap[oid].returnedSelling += Number(it.sellingPrice || it.selling_price || 0) * qty;
+        returnDedMap[oid].returnedCost += Number(it.costPrice || it.cost_price || 0) * qty;
+      });
+    });
+
     const orderMap: Record<string, any> = {};
     (ordsRes.data || []).forEach(o => {
+      if (o.status === "مرتجع كلي") return;
+      const ded = returnDedMap[o.id];
+      const adjCost = (costMap[o.id] || 0) - (ded?.returnedCost || 0);
+      const adjSelling = Number(o.total_selling || 0) - (ded?.returnedSelling || 0);
       orderMap[o.id] = {
         ...o,
         founder_contributions: contribMap[o.id] || [],
-        total_cost: costMap[o.id] || 0,
+        total_cost: Math.max(adjCost, 0),
+        total_selling: Math.max(adjSelling, Number(o.total_selling || 0) > 0 ? adjSelling : 0),
       };
     });
 

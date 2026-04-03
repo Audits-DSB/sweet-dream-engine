@@ -72,6 +72,8 @@ export default function Dashboard() {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [returnsData, setReturnsData] = useState<any[]>([]);
+
   useEffect(() => {
     Promise.all([
       api.get<Client[]>("/clients"),
@@ -81,7 +83,8 @@ export default function Dashboard() {
       api.get<any[]>("/client-inventory").catch(() => []),
       api.get<any[]>("/alerts").catch(() => []),
       api.get<any[]>("/company-inventory").catch(() => []),
-    ]).then(([c, o, cols, del, inv, al, compInv]) => {
+      api.get<any[]>("/returns").catch(() => []),
+    ]).then(([c, o, cols, del, inv, al, compInv, rets]) => {
       setClients(c || []);
       setOrders(o || []);
       setCollections((cols || []).map(mapCollection));
@@ -89,17 +92,41 @@ export default function Dashboard() {
       setInventory(inv || []);
       setAlerts(al || []);
       setCompanyInventory(compInv || []);
+      setReturnsData(rets || []);
     }).finally(() => setLoading(false));
   }, []);
+
+  const returnDeductions = useMemo(() => {
+    const map: Record<string, { returnedSelling: number; returnedCost: number }> = {};
+    returnsData.forEach((ret: any) => {
+      if (ret.status !== "accepted") return;
+      const oid = ret.orderId || ret.order_id;
+      if (!oid) return;
+      if (!map[oid]) map[oid] = { returnedSelling: 0, returnedCost: 0 };
+      const items: any[] = ret.items || [];
+      items.forEach((it: any) => {
+        const qty = Number(it.quantity || 0);
+        map[oid].returnedSelling += Number(it.sellingPrice || 0) * qty;
+        map[oid].returnedCost += Number(it.costPrice || 0) * qty;
+      });
+    });
+    return map;
+  }, [returnsData]);
 
   const activeClients = clients.filter(c => c.status === "Active").length;
   const activeOrders = orders.filter(o => ["Processing", "Draft", "Confirmed", "Ready for Delivery", "Awaiting Purchase"].includes(o.status)).length;
   const totalCollected = collections.reduce((s, c) => s + c.paidAmount, 0);
   const totalOutstanding = collections.reduce((s, c) => s + c.outstanding, 0);
   const overdueCollections = collections.filter(c => c.status === "Overdue").length;
-  const deliveredOrders = orders.filter(o => ["Delivered", "Closed", "Completed"].includes(o.status) && o.clientId !== "company-inventory");
-  const totalRevenue = deliveredOrders.reduce((s, o) => s + toNum(o.totalSelling), 0);
-  const totalCostDelivered = deliveredOrders.reduce((s, o) => s + toNum(o.totalCost), 0);
+  const deliveredOrders = orders.filter(o => ["Delivered", "Closed", "Completed", "مرتجع جزئي"].includes(o.status) && o.status !== "مرتجع كلي" && o.clientId !== "company-inventory");
+  const totalRevenue = deliveredOrders.reduce((s, o) => {
+    const ded = returnDeductions[o.id];
+    return s + Math.max(toNum(o.totalSelling) - (ded?.returnedSelling || 0), 0);
+  }, 0);
+  const totalCostDelivered = deliveredOrders.reduce((s, o) => {
+    const ded = returnDeductions[o.id];
+    return s + Math.max(toNum(o.totalCost) - (ded?.returnedCost || 0), 0);
+  }, 0);
   const profit = totalRevenue - totalCostDelivered;
   const profitMargin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
 
@@ -151,23 +178,26 @@ export default function Dashboard() {
 
   const monthlyData = useMemo(() => {
     const map: Record<string, { revenue: number; cost: number; profit: number; orders: number }> = {};
-    const deliveredStatuses = ["Delivered", "Closed", "Completed"];
-    orders.filter(o => o.clientId !== "company-inventory").forEach(o => {
+    const deliveredStatuses = ["Delivered", "Closed", "Completed", "مرتجع جزئي"];
+    orders.filter(o => o.clientId !== "company-inventory" && o.status !== "مرتجع كلي").forEach(o => {
       const m = (o.date || "").slice(0, 7);
       if (!m) return;
       if (!map[m]) map[m] = { revenue: 0, cost: 0, profit: 0, orders: 0 };
       map[m].orders += 1;
       if (deliveredStatuses.includes(o.status)) {
-        map[m].revenue += toNum(o.totalSelling);
-        map[m].cost += toNum(o.totalCost);
-        map[m].profit += toNum(o.totalSelling) - toNum(o.totalCost);
+        const ded = returnDeductions[o.id];
+        const rev = Math.max(toNum(o.totalSelling) - (ded?.returnedSelling || 0), 0);
+        const cost = Math.max(toNum(o.totalCost) - (ded?.returnedCost || 0), 0);
+        map[m].revenue += rev;
+        map[m].cost += cost;
+        map[m].profit += rev - cost;
       }
     });
     return Object.entries(map)
       .sort(([a], [b]) => a.localeCompare(b))
       .slice(-8)
       .map(([ym, vals]) => ({ month: ARABIC_MONTHS[ym.slice(5, 7)] || ym, ym, ...vals }));
-  }, [orders]);
+  }, [orders, returnDeductions]);
 
   const clientOrders = useMemo(() => orders.filter(o => o.clientId !== "company-inventory"), [orders]);
   const orderStatusDist = useMemo(() => {
@@ -193,20 +223,23 @@ export default function Dashboard() {
   }, [collections]);
 
   const topClients = useMemo(() => {
-    const deliveredStatuses = ["Delivered", "Closed", "Completed"];
+    const deliveredStatuses = ["Delivered", "Closed", "Completed", "مرتجع جزئي"];
     const map: Record<string, { client: string; clientId: string; revenue: number; orders: number; profit: number }> = {};
-    orders.filter(o => o.clientId !== "company-inventory").forEach(o => {
+    orders.filter(o => o.clientId !== "company-inventory" && o.status !== "مرتجع كلي").forEach(o => {
       const cid = o.clientId || "";
       const name = o.client || cid;
       if (!map[cid]) map[cid] = { client: name, clientId: cid, revenue: 0, orders: 0, profit: 0 };
       map[cid].orders += 1;
       if (deliveredStatuses.includes(o.status)) {
-        map[cid].revenue += toNum(o.totalSelling);
-        map[cid].profit += toNum(o.totalSelling) - toNum(o.totalCost);
+        const ded = returnDeductions[o.id];
+        const rev = Math.max(toNum(o.totalSelling) - (ded?.returnedSelling || 0), 0);
+        const cost = Math.max(toNum(o.totalCost) - (ded?.returnedCost || 0), 0);
+        map[cid].revenue += rev;
+        map[cid].profit += rev - cost;
       }
     });
     return Object.values(map).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
-  }, [orders]);
+  }, [orders, returnDeductions]);
 
   const deliveryMonthly = useMemo(() => {
     const map: Record<string, { confirmed: number; pending: number }> = {};

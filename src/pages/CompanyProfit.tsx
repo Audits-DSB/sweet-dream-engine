@@ -126,16 +126,45 @@ export default function CompanyProfitPage() {
     return accounts.reduce((sum, a) => sum + parseAmount(a.balance), 0);
   }, [accounts]);
 
-  // Build order map: orderId → full order data
+  const { data: returnsData } = useQuery({
+    queryKey: ["returns"],
+    queryFn: () => api.get<any[]>("/returns"),
+  });
+
+  const returnDeductions = useMemo(() => {
+    const map: Record<string, { returnedSelling: number; returnedCost: number }> = {};
+    (returnsData || []).forEach((ret: any) => {
+      if (ret.status !== "accepted") return;
+      const oid = ret.orderId || ret.order_id;
+      if (!oid) return;
+      if (!map[oid]) map[oid] = { returnedSelling: 0, returnedCost: 0 };
+      const items: any[] = ret.items || [];
+      items.forEach((it: any) => {
+        const qty = Number(it.quantity || 0);
+        map[oid].returnedSelling += Number(it.sellingPrice || 0) * qty;
+        map[oid].returnedCost += Number(it.costPrice || 0) * qty;
+      });
+    });
+    return map;
+  }, [returnsData]);
+
   const orderMap = useMemo(() => {
     const map: Record<string, any> = {};
     (rawOrders || []).forEach((o: any) => {
       const cid = o.clientId || o.client_id || "";
       if (cid === "company-inventory") return;
+      if (o.status === "مرتجع كلي") return;
+      const ded = returnDeductions[o.id];
+      if (ded) {
+        const adjSelling = parseAmount(o.totalSelling ?? o.total_selling) - ded.returnedSelling;
+        const adjCost = parseAmount(o.totalCost ?? o.total_cost) - ded.returnedCost;
+        map[o.id] = { ...o, totalSelling: Math.max(adjSelling, 0), total_selling: Math.max(adjSelling, 0), totalCost: Math.max(adjCost, 0), total_cost: Math.max(adjCost, 0) };
+        return;
+      }
       map[o.id] = o;
     });
     return map;
-  }, [rawOrders]);
+  }, [rawOrders, returnDeductions]);
 
   // Build founder map: founderId → name
   const founderMap = useMemo(() => {
