@@ -279,26 +279,40 @@ router.delete("/materials/:code", async (req, res) => {
 router.get("/suppliers/:id/profile", async (req, res) => {
   try {
     const sid = req.params.id;
-    const [supRes, matsRes, ordersRes, invRes, linesRes] = await Promise.all([
+    const [supRes, matsRes, ordersRes, invRes, linesRes, clientsRes] = await Promise.all([
       supabaseAdmin.from("suppliers").select("*").eq("id", sid).single(),
       supabaseAdmin.from("supplier_materials").select("*").eq("supplier_id", sid).order("material_name"),
       supabaseAdmin.from("orders").select("*").order("date", { ascending: false }),
       supabaseAdmin.from("company_inventory").select("*").eq("supplier_id", sid).order("date_added", { ascending: false }),
-      supabaseAdmin.from("order_lines").select("order_id,supplier_id,line_cost").eq("supplier_id", sid),
+      supabaseAdmin.from("order_lines").select("*").eq("supplier_id", sid),
+      supabaseAdmin.from("clients").select("id,name"),
     ]);
     if (supRes.error) return res.status(404).json({ error: "Supplier not found" });
     if (invRes.error) return res.status(500).json({ error: invRes.error.message });
 
+    const clientMap: Record<string, string> = {};
+    for (const c of (clientsRes as any)?.data || []) clientMap[c.id] = c.name || c.id;
+
     const lineOrderIds = new Set<string>();
     const lineCostByOrder: Record<string, number> = {};
+    const lineItemsByOrder: Record<string, number> = {};
+    const suppliedMaterials = new Map<string, string>();
     for (const l of (linesRes as any)?.data || []) {
       lineOrderIds.add(l.order_id);
       lineCostByOrder[l.order_id] = (lineCostByOrder[l.order_id] || 0) + (Number(l.line_cost) || 0);
+      lineItemsByOrder[l.order_id] = (lineItemsByOrder[l.order_id] || 0) + 1;
+      if (l.material_code && l.material_name) suppliedMaterials.set(l.material_code, l.material_name);
     }
+
     const allOrders = ordersRes.data || [];
-    const orders = allOrders.filter((o: any) => o.supplier_id === sid || lineOrderIds.has(o.id));
+    const orders = allOrders.filter((o: any) => lineOrderIds.has(o.id)).map((o: any) => ({
+      ...o,
+      client: clientMap[o.client_id] || o.client_id || "",
+      supplier_cost: lineCostByOrder[o.id] || 0,
+      supplier_items: lineItemsByOrder[o.id] || 0,
+    }));
     const inventory = invRes.data || [];
-    const totalPurchases = Object.values(lineCostByOrder).reduce((s, c) => s + c, 0) + orders.filter((o: any) => o.supplier_id === sid && !lineOrderIds.has(o.id)).reduce((s: number, o: any) => s + (parseFloat(o.total_cost) || 0), 0);
+    const totalPurchases = Object.values(lineCostByOrder).reduce((s, c) => s + c, 0);
     const totalOrders = orders.length;
     const lastOrderDate = orders.length > 0 ? orders[0].date : null;
 
@@ -306,9 +320,14 @@ router.get("/suppliers/:id/profile", async (req, res) => {
     const totalUnitsSupplied = inventory.reduce((s: number, lot: any) => s + (parseFloat(lot.quantity) || 0), 0);
     const totalRemainingUnits = inventory.reduce((s: number, lot: any) => s + (parseFloat(lot.remaining) || 0), 0);
 
+    const existingMatCodes = new Set((matsRes.data || []).map((m: any) => m.material_code));
+    const autoMaterials = Array.from(suppliedMaterials.entries())
+      .filter(([code]) => !existingMatCodes.has(code))
+      .map(([code, name]) => ({ material_code: code, material_name: name, supplier_id: sid, auto: true }));
+
     res.json(camelizeKeys({
       supplier: supRes.data,
-      materials: matsRes.data || [],
+      materials: [...(matsRes.data || []), ...autoMaterials],
       orders,
       inventory,
       stats: {
@@ -318,7 +337,7 @@ router.get("/suppliers/:id/profile", async (req, res) => {
         total_lots: totalLots,
         total_units_supplied: totalUnitsSupplied,
         total_remaining_units: totalRemainingUnits,
-        materials_count: (matsRes.data || []).length,
+        materials_count: (matsRes.data || []).length + autoMaterials.length,
       },
     }));
   } catch (e: any) {

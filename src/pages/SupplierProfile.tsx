@@ -27,6 +27,7 @@ type SupplierData = {
 type SupplierOrder = {
   id: string; client: string; clientId: string; date: string; status: string;
   totalSelling: string; totalCost: string; orderType: string;
+  supplierCost: number; supplierItems: number;
 };
 type SupplierLot = {
   id: string; materialCode: string; materialName: string; unit: string;
@@ -35,6 +36,7 @@ type SupplierLot = {
 };
 type SupplierMaterial = {
   supplierId: string; materialCode: string; materialName: string;
+  auto?: boolean;
 };
 type Stats = {
   totalPurchases: number; totalOrders: number; lastOrderDate: string | null;
@@ -57,6 +59,8 @@ function normOrder(r: any): SupplierOrder {
     totalSelling: r.totalSelling ?? r.total_selling ?? "0",
     totalCost: r.totalCost ?? r.total_cost ?? "0",
     orderType: r.orderType ?? r.order_type ?? "client",
+    supplierCost: parseFloat(r.supplierCost ?? r.supplier_cost ?? 0) || 0,
+    supplierItems: parseInt(r.supplierItems ?? r.supplier_items ?? 0) || 0,
   };
 }
 function normLot(r: any): SupplierLot {
@@ -199,7 +203,7 @@ export default function SupplierProfile() {
       const month = o.date?.slice(0, 7) || "N/A";
       if (!map[month]) map[month] = { count: 0, total: 0 };
       map[month].count++;
-      map[month].total += parseFloat(o.totalCost) || 0;
+      map[month].total += o.supplierCost || 0;
     });
     return Object.entries(map).sort(([a], [b]) => b.localeCompare(a)).slice(0, 12);
   }, [orders]);
@@ -394,8 +398,8 @@ export default function SupplierProfile() {
                       </div>
                     </div>
                     <div className="text-left shrink-0">
-                      <p className="text-sm font-bold">{parseFloat(order.totalCost).toLocaleString()}</p>
-                      <p className="text-[10px] text-muted-foreground">ج.م تكلفة</p>
+                      <p className="text-sm font-bold">{order.supplierCost.toLocaleString()}</p>
+                      <p className="text-[10px] text-muted-foreground">{order.supplierItems} مواد · ج.م</p>
                     </div>
                   </div>
                 </div>
@@ -463,11 +467,14 @@ export default function SupplierProfile() {
               {materials.map(mat => (
                 <div key={mat.materialCode} className="stat-card p-3 hover:border-primary/20 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                      <Package className="h-5 w-5 text-muted-foreground" />
+                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${mat.auto ? "bg-blue-500/10" : "bg-muted"}`}>
+                      <Package className={`h-5 w-5 ${mat.auto ? "text-blue-500" : "text-muted-foreground"}`} />
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold truncate">{mat.materialName}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-semibold truncate">{mat.materialName}</p>
+                        {mat.auto && <Badge variant="outline" className="text-[9px] h-3.5 px-1 border-blue-300 text-blue-600 shrink-0">من الطلبات</Badge>}
+                      </div>
                       <p className="text-xs text-muted-foreground font-mono">{mat.materialCode}</p>
                     </div>
                   </div>
@@ -534,7 +541,7 @@ export default function SupplierProfile() {
                             <Link to={`/orders/${order.id}`} className="text-xs text-primary hover:underline font-mono">{order.id}</Link>
                           </td>
                           <td className="py-2 px-2 text-xs">{order.orderType === "inventory" ? "مخزون" : "عميل"}</td>
-                          <td className="py-2 px-2 text-xs font-semibold">{parseFloat(order.totalCost).toLocaleString()} ج.م</td>
+                          <td className="py-2 px-2 text-xs font-semibold">{order.supplierCost.toLocaleString()} ج.م <span className="text-muted-foreground font-normal">({order.supplierItems} مواد)</span></td>
                           <td className="py-2 px-2">
                             <Badge className={`text-[10px] h-4 px-1.5 border-0 ${statusColors[order.status] || "bg-muted"}`}>
                               {statusLabels[order.status] || order.status}
