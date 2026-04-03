@@ -1167,13 +1167,12 @@ export default function OrdersPage() {
                       size="sm"
                       className="h-6 text-[11px] px-2 border-amber-300 text-amber-700 hover:bg-amber-100"
                       onClick={() => {
-                        const activeFounderIds = founders.filter(f => selectedFounders.includes(f.id)).map(f => f.id);
-                        if (activeFounderIds.length === 0) return;
-                        setCostPayers(activeFounderIds);
-                        const equalAmount = Math.floor((fundingCostDisplay / activeFounderIds.length) * 100) / 100;
-                        const remainder = Math.round((fundingCostDisplay - equalAmount * activeFounderIds.length) * 100) / 100;
+                        const checkedPayers = costPayers.filter(id => selectedFounders.includes(id));
+                        if (checkedPayers.length === 0) return;
+                        const equalAmount = Math.floor((fundingCostDisplay / checkedPayers.length) * 100) / 100;
+                        const remainder = Math.round((fundingCostDisplay - equalAmount * checkedPayers.length) * 100) / 100;
                         const newAmounts: Record<string, number> = {};
-                        activeFounderIds.forEach((id, i) => {
+                        checkedPayers.forEach((id, i) => {
                           newAmounts[id] = i === 0 ? equalAmount + remainder : equalAmount;
                         });
                         setFounderPaidAmounts(newAmounts);
@@ -1277,8 +1276,8 @@ export default function OrdersPage() {
                     const costShare = fundingCostDisplay * pct / 100;
                     const isPayer = costPayers.includes(f.id);
                     const paidAmt = effectiveAmounts[f.id] || 0;
-                    const isFullyPaid = isPayer && paidAmt >= costShare && costShare > 0;
-                    const isPartialPayer = isPayer && paidAmt > 0 && paidAmt < costShare;
+                    const isFullyPaid = isPayer && paidAmt > 0 && paidAmt >= costShare - 0.5 && costShare > 0;
+                    const isPartialPayer = isPayer && paidAmt > 0 && paidAmt < costShare - 0.5;
 
                     const netBalances: Record<string, number> = {};
                     selectedFounders.forEach(sId => {
