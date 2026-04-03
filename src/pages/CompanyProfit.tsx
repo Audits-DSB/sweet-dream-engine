@@ -7,7 +7,7 @@ import { StatCard } from "@/components/StatCard";
 import {
   TrendingUp, TrendingDown, DollarSign, Percent, Download, Wallet,
   Plus, ArrowUpRight, ArrowDownRight, Minus, Receipt, Trash2, Loader2,
-  Users, Building2, ChevronDown, ChevronUp, ExternalLink
+  Users, Building2, ChevronDown, ChevronUp, ExternalLink, AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { exportToCsv } from "@/lib/exportCsv";
@@ -50,6 +50,7 @@ type ProfitEntry = {
   companyProfitPct: number;
   companyProfit: number;
   foundersProfit: number;
+  deliveryFeeDeficit: number;
   founderShares: Array<{ id: string; name: string; amount: number; pct: number }>;
   status: string;
   lastPaymentDate: string;
@@ -194,6 +195,7 @@ export default function CompanyProfitPage() {
       let totalCompanyProfit = 0;
       let totalFoundersProfit = 0;
       let totalRealizedProfit = 0;
+      let totalDeliveryDeficit = 0;
       let totalItemsSelling = 0;
       let weightedPctSum = 0;
       const founderAmounts: Record<string, { name: string; amount: number; pct: number }> = {};
@@ -232,7 +234,11 @@ export default function CompanyProfitPage() {
           }
 
           const lineGross = lineSelling - lineCost;
-          const lineRealized = lineGross * payRatio - lineDeliveryDeduction;
+          const grossRealized = lineGross * payRatio;
+          const reimbursable = Math.max(grossRealized, 0);
+          const reimbursement = Math.min(lineDeliveryDeduction, reimbursable);
+          const lineDeficit = Math.max(lineDeliveryDeduction - reimbursement, 0);
+          const lineRealized = Math.max(grossRealized - reimbursement, 0);
           const lineCompany = lineRealized * normPct;
           const lineFounders = lineRealized - lineCompany;
 
@@ -240,6 +246,7 @@ export default function CompanyProfitPage() {
           totalRealizedProfit += lineRealized;
           totalCompanyProfit += lineCompany;
           totalFoundersProfit += lineFounders;
+          totalDeliveryDeficit += lineDeficit;
           weightedPctSum += normPct * lineSelling;
 
           const contribArray = getOrderContribs(oid);
@@ -295,6 +302,7 @@ export default function CompanyProfitPage() {
           totalRealizedProfit += qp.realizedProfit;
           totalCompanyProfit += qp.companyProfit;
           totalFoundersProfit += qp.foundersProfit;
+          totalDeliveryDeficit += qp.deliveryFeeDeficit;
           totalItemsSelling += oSelling;
           weightedPctSum += normPct * oSelling;
 
@@ -347,6 +355,7 @@ export default function CompanyProfitPage() {
         companyProfitPct: blendedPct,
         companyProfit: Math.round(totalCompanyProfit),
         foundersProfit: Math.round(totalFoundersProfit),
+        deliveryFeeDeficit: Math.round(totalDeliveryDeficit),
         founderShares,
         status: col.status || "Pending",
         lastPaymentDate: lastPaymentDate.split("T")[0],
@@ -365,10 +374,10 @@ export default function CompanyProfitPage() {
   // Monthly chart data from profit ledger
   const { monthlyPnL, totals, expenseBreakdown, comparison } = useMemo(() => {
     const cutoff = subMonths(new Date(), parseInt(monthsFilter));
-    const monthlyData: Record<string, { revenue: number; cost: number; companyProfit: number; foundersProfit: number }> = {};
+    const monthlyData: Record<string, { revenue: number; cost: number; companyProfit: number; foundersProfit: number; deliveryDeficit: number }> = {};
 
     const ensureMonth = (key: string) => {
-      if (!monthlyData[key]) monthlyData[key] = { revenue: 0, cost: 0, companyProfit: 0, foundersProfit: 0 };
+      if (!monthlyData[key]) monthlyData[key] = { revenue: 0, cost: 0, companyProfit: 0, foundersProfit: 0, deliveryDeficit: 0 };
     };
 
     // Revenue from collections
@@ -378,6 +387,7 @@ export default function CompanyProfitPage() {
       monthlyData[key].revenue += entry.paidAmount;
       monthlyData[key].companyProfit += entry.companyProfit;
       monthlyData[key].foundersProfit += entry.foundersProfit;
+      monthlyData[key].deliveryDeficit += entry.deliveryFeeDeficit;
     });
 
     // Expenses from treasury transactions
@@ -398,9 +408,10 @@ export default function CompanyProfitPage() {
       monthKey: key,
       revenue: d.revenue,
       cost: d.cost,
-      profit: d.companyProfit + d.foundersProfit,
-      companyShare: d.companyProfit,
+      profit: d.companyProfit + d.foundersProfit - d.deliveryDeficit,
+      companyShare: d.companyProfit - d.deliveryDeficit,
       founderShare: d.foundersProfit,
+      deliveryDeficit: d.deliveryDeficit,
     }));
 
     const comparisonData = pnl.map((m, i) => {
@@ -438,6 +449,7 @@ export default function CompanyProfitPage() {
     const tProfit = pnl.reduce((s, m) => s + m.profit, 0);
     const tCompany = pnl.reduce((s, m) => s + m.companyShare, 0);
     const tFounders = pnl.reduce((s, m) => s + m.founderShare, 0);
+    const tDeficit = pnl.reduce((s, m) => s + m.deliveryDeficit, 0);
 
     // Weighted-average company profit percentage across all entries in period
     const avgCompanyPct = profitLedger.length > 0
@@ -447,7 +459,7 @@ export default function CompanyProfitPage() {
 
     return {
       monthlyPnL: pnl,
-      totals: { revenue: tRev, cost: tCost, profit: tProfit, companyShare: tCompany, foundersShare: tFounders, avgCompanyPct, companyMargin, margin: tRev > 0 ? ((tProfit / tRev) * 100).toFixed(1) : "0" },
+      totals: { revenue: tRev, cost: tCost, profit: tProfit, companyShare: tCompany, foundersShare: tFounders, deliveryDeficit: tDeficit, avgCompanyPct, companyMargin, margin: tRev > 0 ? ((tProfit / tRev) * 100).toFixed(1) : "0" },
       expenseBreakdown: breakdown.length > 0 ? breakdown : [{ name: "other", value: 100, color: colors[0] }],
       comparison: comparisonData,
     };
@@ -621,10 +633,16 @@ export default function CompanyProfitPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard title={t.totalBalance} value={`${fmtNum(totalBalance)} ${t.currency}`} change={`${accounts?.length || 0} ${t.accountsCount}`} changeType="neutral" icon={Wallet} />
         <StatCard title="إجمالي المُحصَّل" value={`${fmtNum(totals.revenue)} ${t.currency}`} change={`${monthsFilter} ${t.monthsLabel}`} changeType="neutral" icon={DollarSign} />
-        <StatCard title="أرباح الشركة المحققة" value={`${fmtNum(totals.companyShare)} ${t.currency}`} change={`هامش ${totals.companyMargin}%`} changeType="positive" icon={TrendingUp} />
+        <StatCard title="أرباح الشركة المحققة" value={`${fmtNum(totals.companyShare)} ${t.currency}`} change={totals.deliveryDeficit > 0 ? `بعد خصم عجز ${fmtNum(totals.deliveryDeficit)}` : `هامش ${totals.companyMargin}%`} changeType={totals.companyShare < 0 ? "negative" : "positive"} icon={TrendingUp} />
         <StatCard title="حصة الشركة من الأرباح" value={`${totals.avgCompanyPct}%`} change={`متوسط · ${profitLedger.length} تحصيل`} changeType="positive" icon={Percent} />
         <StatCard title={t.totalCostCompany} value={`${fmtNum(totals.cost)} ${t.currency}`} change={`${totals.revenue > 0 ? ((totals.cost / totals.revenue) * 100).toFixed(0) : 0}% من المُحصَّل`} changeType="negative" icon={TrendingDown} />
       </div>
+      {totals.deliveryDeficit > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-2 text-amber-800 text-sm">
+          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+          <span>عجز توصيل غير مغطى: <strong>{fmtNum(totals.deliveryDeficit)} {t.currency}</strong> — رسوم التوصيل أعلى من الربح المحقق في بعض الأوردرات</span>
+        </div>
+      )}
 
       {/* ===== PROFIT LEDGER ===== */}
       <div className="stat-card overflow-x-auto">
@@ -797,6 +815,9 @@ export default function CompanyProfitPage() {
                               </div>
                               <div><span className="text-muted-foreground">رقم التحصيل</span><br/><span className="font-mono text-foreground">{entry.collectionId}</span></div>
                               <div><span className="text-muted-foreground">آخر دفعة</span><br/><span className="text-foreground">{entry.lastPaymentDate}</span></div>
+                              {entry.deliveryFeeDeficit > 0 && (
+                                <div className="sm:col-span-2"><span className="text-amber-600">عجز توصيل (رسوم التوصيل أعلى من الربح)</span><br/><span className="font-semibold text-amber-700">-{fmtNum(entry.deliveryFeeDeficit)} {t.currency}</span></div>
+                              )}
                             </div>
                             <div className="mt-2 pt-2 border-t border-border/30">
                               <button
