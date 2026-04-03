@@ -103,7 +103,7 @@ export default function InventoryPage() {
     avgWeeklyUsage: Number(l.avgWeeklyUsage),
     leadTimeWeeks: Number(l.leadTimeWeeks),
     safetyStock: Number(l.safetyStock),
-  }));
+  })).filter(l => l.status !== "Returned" && l.remaining > 0);
 
   const addMutation = useMutation({
     mutationFn: async (data: Partial<InventoryLot>) => {

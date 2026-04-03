@@ -164,9 +164,10 @@ export default function Dashboard() {
   const confirmedDeliveries = deliveries.filter((d: any) => d.status === "Delivered" || d.status === "مُسلَّم").length;
   const pendingDeliveries = deliveries.length - confirmedDeliveries;
 
-  const inventoryValue = inventory.reduce((s, i) => s + (Number(i.remaining || 0) * Number(i.sellingPrice || i.selling_price || 0)), 0);
-  const inventoryItems = inventory.length;
-  const lowStockItems = inventory.filter((i: any) => i.status === "Low Stock" || Number(i.remaining || 0) === 0).length;
+  const activeInventory = inventory.filter((i: any) => (i.status !== "Returned") && Number(i.remaining || 0) > 0);
+  const inventoryValue = activeInventory.reduce((s, i) => s + (Number(i.remaining || 0) * Number(i.sellingPrice || i.selling_price || 0)), 0);
+  const inventoryItems = activeInventory.length;
+  const lowStockItems = activeInventory.filter((i: any) => i.status === "Low Stock").length;
 
   const ciTotalLots = companyInventory.length;
   const ciTotalValue = companyInventory.reduce((s, i) => s + (Number(i.remaining || 0) * Number(i.costPrice || i.cost_price || 0)), 0);
