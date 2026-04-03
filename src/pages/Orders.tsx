@@ -487,12 +487,13 @@ export default function OrdersPage() {
     const totalSelling = clientOrders.reduce((s, o) => s + Number(o.totalSelling), 0);
     const totalCost = clientOrders.reduce((s, o) => s + Number(o.totalCost), 0);
     const activeCount = filtered.filter(o => ["Processing", "Draft", "Confirmed", "Ready for Delivery", "Awaiting Purchase"].includes(o.status)).length;
-    const totalCollPaid = clientOrders.reduce((s, o) => s + (collectionsMap[o.id]?.paid || 0), 0);
-    const totalCollTotal = clientOrders.reduce((s, o) => s + (collectionsMap[o.id]?.total || 0), 0);
-    const collPct = totalCollTotal > 0 ? Math.round((totalCollPaid / totalCollTotal) * 100) : 0;
+    const allClientOrders = orders.filter(o => o.clientId !== "company-inventory");
+    const totalCollPaid = allClientOrders.reduce((s, o) => s + (collectionsMap[o.id]?.paid || 0), 0);
+    const allOrdersSelling = allClientOrders.reduce((s, o) => s + Number(o.totalSelling), 0);
+    const collPct = allOrdersSelling > 0 ? Math.round((totalCollPaid / allOrdersSelling) * 100) : 0;
     const inventoryValue = inventoryOrders.reduce((s, o) => s + Number(o.totalCost), 0);
-    return { totalSelling, totalCost, profit: totalSelling - totalCost, activeCount, collPct, totalCollPaid, totalCollTotal, inventoryValue };
-  }, [filtered, collectionsMap]);
+    return { totalSelling, totalCost, profit: totalSelling - totalCost, activeCount, collPct, totalCollPaid, allOrdersSelling, inventoryValue };
+  }, [filtered, orders, collectionsMap]);
 
   const usedMaterialCodes = orderItems.map(i => i.materialCode);
   const filteredMaterials = useMemo(() => realMaterials.filter(m => {

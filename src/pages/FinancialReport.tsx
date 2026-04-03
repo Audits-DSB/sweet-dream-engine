@@ -377,7 +377,10 @@ export default function FinancialReportPage() {
       if (remaining <= 0) onTimeCount++;
     });
 
-    const rate = totalInvoiced > 0 ? (totalCollected / totalInvoiced) * 100 : 0;
+    const allOrdersSelling = orders
+      .filter((o: any) => (o.clientId || o.client_id) !== "company-inventory")
+      .reduce((s: number, o: any) => s + Number(o.totalSelling ?? o.total_selling ?? 0), 0);
+    const rate = allOrdersSelling > 0 ? (totalCollected / allOrdersSelling) * 100 : 0;
 
     const monthlyData = Object.entries(monthlyCollections)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -388,7 +391,7 @@ export default function FinancialReportPage() {
       }));
 
     return { totalInvoiced, totalCollected, totalOutstanding, overdueAmount, overdueCount, onTimeCount, rate, monthlyData };
-  }, [collections, cutoff]);
+  }, [collections, orders, cutoff]);
 
   const founderAnalysis = useMemo(() => {
     const fundingByFounder: Record<string, { paid: number; owed: number; withdrawals: number; contributions: number; name: string }> = {};
