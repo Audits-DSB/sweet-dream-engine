@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useWorkflow } from "@/contexts/WorkflowContext";
 
 function StepCard({ icon: Icon, title, desc, color }: { icon: any; title: string; desc: string; color: string }) {
@@ -37,10 +37,12 @@ function Tip({ text }: { text: string }) {
 export function WalkthroughBubble() {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
   const { requests, orders, deliveries, collections, refreshData } = useWorkflow();
   const [open, setOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [atTop, setAtTop] = useState(true);
+  const isDashboard = location.pathname === "/" || location.pathname === "/dashboard";
 
   const [dismissed, setDismissed] = useState(() => {
     return localStorage.getItem("dsb_walkthrough_dismissed") === "true";
@@ -275,7 +277,7 @@ export function WalkthroughBubble() {
   const progress = (currentStep / (workflowSteps.length - 1)) * 100;
 
   if (dismissed && !open) {
-    if (!atTop) return null;
+    if (!isDashboard || !atTop) return null;
     return (
       <button
         onClick={() => { setOpen(true); setDismissed(false); }}
@@ -289,7 +291,7 @@ export function WalkthroughBubble() {
 
   return (
     <>
-      {!open && atTop && (
+      {!open && isDashboard && atTop && (
         <button
           onClick={() => setOpen(true)}
           className="fixed bottom-6 left-6 z-50 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center animate-in fade-in duration-300"
