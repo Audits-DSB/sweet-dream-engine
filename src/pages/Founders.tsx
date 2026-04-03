@@ -501,11 +501,19 @@ export default function FoundersPage() {
       const status = order.status || "";
       const date = order.date || order.createdAt || "";
 
+      let costPaidMap: Record<string, number> = {};
+      try {
+        const raw = order.orderCostPaidByFounder ?? order.order_cost_paid_by_founder;
+        costPaidMap = typeof raw === "object" && raw !== null ? raw : JSON.parse(raw || "{}");
+      } catch {}
+
       contribs.forEach((c: any) => {
         const fId = c.founderId || c.founder_id;
         if (!fId) return;
         if (!map[fId]) map[fId] = [];
         const amt = toNum(c.amount);
+        const initialPaid = toNum(costPaidMap[fId]);
+        const isPaid = !!c.paid || (initialPaid >= amt && amt > 0);
         map[fId].push({
           orderId,
           clientName,
@@ -516,9 +524,9 @@ export default function FoundersPage() {
           totalSelling,
           status,
           date: typeof date === "string" ? date.split("T")[0] : "",
-          paid: !!c.paid,
+          paid: isPaid,
           autoFunded: false,
-          paidAmount: toNum(c.paidAmount ?? c.paid_amount),
+          paidAmount: toNum(c.paidAmount ?? c.paid_amount) || (isPaid ? initialPaid : 0),
           paidAt: c.paidAt || undefined,
           founderName: c.founder || "",
           founderId: fId,
