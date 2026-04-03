@@ -1246,7 +1246,8 @@ export default function OrderDetails() {
         const hasDeliveries = orderDeliveries.length > 0;
         const allDelivered = confirmedDeliveries.length > 0 && pendingDeliveries.length === 0 && orderDeliveryStats.pct >= 100;
         const hasInventory = orderInventory.length > 0;
-        const hasCompletedAudit = orderAudits.some((a: any) => a.status === "Completed" || a.status === "Discrepancy");
+        const auditDoneStatuses = ["Completed", "Discrepancy", "تم التحصيل"];
+        const hasCompletedAudit = orderAudits.some((a: any) => auditDoneStatuses.includes(a.status));
         const hasCollections = orderCollections.length > 0;
         const totalCollected = orderCollections.reduce((s: number, c: any) => s + Number(c.paid ?? c.paidAmount ?? 0), 0);
         const totalDue = orderCollections.reduce((s: number, c: any) => s + Number(c.total ?? c.totalAmount ?? 0), 0);
@@ -1276,7 +1277,7 @@ export default function OrderDetails() {
             done: hasCompletedAudit,
             active: hasInventory && !hasCompletedAudit,
             detail: hasCompletedAudit
-              ? `${orderAudits.filter((a: any) => a.status === "Completed" || a.status === "Discrepancy").length} جرد مكتمل`
+              ? `${orderAudits.filter((a: any) => auditDoneStatuses.includes(a.status)).length} جرد مكتمل`
               : hasInventory ? "في انتظار الجرد" : "لم يتم بعد",
             items: orderInventory.slice(0, 5).map((inv: any) => ({
               id: inv.id, name: inv.material || inv.code, date: inv.deliveryDate, remaining: inv.remaining, delivered: inv.delivered,
