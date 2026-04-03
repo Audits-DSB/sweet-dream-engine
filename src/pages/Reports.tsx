@@ -276,6 +276,52 @@ export default function ReportsPage() {
     return { total: companyInventory.length, totalValue, inStock };
   }, [companyInventory]);
 
+  const deliveryBearerDist = useMemo(() => {
+    let clientBearer = 0, companyBearer = 0, companyDeliveryCost = 0;
+    for (const o of clientOnlyOrders) {
+      const bearer = o.deliveryFeeBearer || o.delivery_fee_bearer || "client";
+      const fee = Number(o.deliveryFee || o.delivery_fee || 0);
+      if (bearer === "company") { companyBearer++; companyDeliveryCost += fee; }
+      else clientBearer++;
+    }
+    return [
+      { name: "على العميل", value: clientBearer, color: "#3b82f6" },
+      { name: "على الشركة", value: companyBearer, color: "#f97316" },
+    ].filter(d => d.value > 0);
+  }, [clientOnlyOrders]);
+
+  const profitMarginByClient = useMemo(() => {
+    return clientRevenue.filter(c => c.revenue > 0).map(c => ({
+      client: c.client,
+      margin: Number(((c.revenue - c.cost) / c.revenue * 100).toFixed(1)),
+      profit: c.revenue - c.cost,
+    })).sort((a, b) => b.margin - a.margin).slice(0, 10);
+  }, [clientRevenue]);
+
+  const treasuryMonthly = useMemo(() => {
+    const map: Record<string, { month: string; deposits: number; withdrawals: number }> = {};
+    for (const tx of treasuryTxns) {
+      const date = tx.date || tx.created_at || "";
+      const ym = date.slice(0, 7);
+      if (!ym) continue;
+      if (!map[ym]) map[ym] = { month: MONTH_LABELS[ym.slice(5)] || ym.slice(5), deposits: 0, withdrawals: 0 };
+      const amt = Number(tx.amount || 0);
+      const type = tx.type || tx.txType || tx.tx_type || "";
+      if (type === "deposit" || type === "إيداع") map[ym].deposits += amt;
+      else if (type === "withdrawal" || type === "سحب") map[ym].withdrawals += amt;
+    }
+    return Object.values(map).slice(-8);
+  }, [treasuryTxns]);
+
+  const orderSourceDist = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const o of clientOnlyOrders) {
+      const src = o.source || "يدوي";
+      map[src] = (map[src] || 0) + 1;
+    }
+    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  }, [clientOnlyOrders]);
+
   const totalRevenue = clientRevenue.reduce((s, c) => s + c.revenue, 0);
   const totalCost = clientRevenue.reduce((s, c) => s + c.cost, 0);
   const totalProfit = totalRevenue - totalCost;
@@ -557,6 +603,189 @@ export default function ReportsPage() {
           </ResponsiveContainer>
         </div>
       )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {supplierStats.length > 0 && (
+          <div className="stat-card">
+            <h3 className="font-semibold text-sm mb-4">مشتريات الموردين</h3>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={supplierStats.slice(0, 8)} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+                <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ${t.currency}`, "التكلفة"]} />
+                <Bar dataKey="totalCost" fill="#f59e0b" radius={[0, 4, 4, 0]} name="إجمالي التكلفة" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {profitMarginByClient.length > 0 && (
+          <div className="stat-card">
+            <h3 className="font-semibold text-sm mb-4">هامش الربح حسب العميل</h3>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={profitMarginByClient} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `${v}%`} domain={[0, 'auto']} />
+                <YAxis dataKey="client" type="category" width={90} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [name === "هامش الربح" ? `${v}%` : `${Number(v).toLocaleString()} ${t.currency}`, name]} />
+                <Bar dataKey="margin" fill="#22c55e" radius={[0, 4, 4, 0]} name="هامش الربح">
+                  {profitMarginByClient.map((entry, i) => (
+                    <Cell key={i} fill={entry.margin >= 20 ? "#22c55e" : entry.margin >= 10 ? "#f59e0b" : "#ef4444"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {founderStats.length > 0 && (
+          <div className="stat-card cursor-pointer" onClick={() => navigate("/founders")}>
+            <h3 className="font-semibold text-sm mb-4">أرصدة المؤسسين</h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={founderStats}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [`${Number(v).toLocaleString()} ${t.currency}`, name]} />
+                <Legend wrapperStyle={{ fontSize: "10px" }} />
+                <Bar dataKey="contributed" fill="#3b82f6" radius={[4, 4, 0, 0]} name="المساهمات" />
+                <Bar dataKey="withdrawn" fill="#ef4444" radius={[4, 4, 0, 0]} name="السحوبات" />
+                <Bar dataKey="balance" fill="#22c55e" radius={[4, 4, 0, 0]} name="الرصيد" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {deliveryBearerDist.length > 0 && (
+          <div className="stat-card">
+            <h3 className="font-semibold text-sm mb-4">تحمّل رسوم التوصيل</h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={deliveryBearerDist} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value"
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1 }} style={{ fontSize: "11px" }}>
+                  {deliveryBearerDist.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [`${v} أوردر`, name]} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="flex items-center justify-between mt-3 pt-3 border-t text-xs">
+              {deliveryBearerDist.map(d => (
+                <span key={d.name} style={{ color: d.color }}>{d.name}: {d.value}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {orderSourceDist.length > 0 && (
+          <div className="stat-card">
+            <h3 className="font-semibold text-sm mb-4">مصادر الأوردرات</h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={orderSourceDist} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value"
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1 }} style={{ fontSize: "10px" }}>
+                  {orderSourceDist.map((_, i) => (
+                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [`${v} أوردر`, name]} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {treasuryMonthly.length > 0 && (
+          <div className="stat-card cursor-pointer" onClick={() => navigate("/treasury")}>
+            <h3 className="font-semibold text-sm mb-4">حركة الخزينة الشهرية</h3>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={treasuryMonthly}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [`${Number(v).toLocaleString()} ${t.currency}`, name]} />
+                <Legend wrapperStyle={{ fontSize: "11px" }} />
+                <Bar dataKey="deposits" fill="#22c55e" radius={[4, 4, 0, 0]} name="إيداعات" />
+                <Bar dataKey="withdrawals" fill="#ef4444" radius={[4, 4, 0, 0]} name="سحوبات" />
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="flex items-center justify-between mt-3 pt-3 border-t text-xs">
+              <span className="text-muted-foreground">{treasuryStats.accountCount} حساب</span>
+              <span className="text-green-600">إيداعات: {treasuryStats.deposits.toLocaleString()}</span>
+              <span className="text-red-600">سحوبات: {treasuryStats.withdrawals.toLocaleString()}</span>
+              <span className="font-medium text-primary">الرصيد: {treasuryStats.totalBalance.toLocaleString()}</span>
+            </div>
+          </div>
+        )}
+
+        {(auditStats.total > 0 || returnsStats.total > 0) && (
+          <div className="stat-card">
+            <h3 className="font-semibold text-sm mb-4">الجرد والمرتجعات</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {auditStats.total > 0 && (
+                <div className="cursor-pointer" onClick={() => navigate("/audits")}>
+                  <p className="text-xs text-muted-foreground mb-2 font-medium">نتائج الجرد</p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie data={[
+                        { name: "مطابق", value: auditStats.matched, color: "#22c55e" },
+                        { name: "عجز", value: auditStats.shortage, color: "#ef4444" },
+                        { name: "زيادة", value: auditStats.surplus, color: "#3b82f6" },
+                      ].filter(d => d.value > 0)} cx="50%" cy="50%" innerRadius={35} outerRadius={60} paddingAngle={3} dataKey="value"
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1 }} style={{ fontSize: "9px" }}>
+                        {[
+                          { name: "مطابق", value: auditStats.matched, color: "#22c55e" },
+                          { name: "عجز", value: auditStats.shortage, color: "#ef4444" },
+                          { name: "زيادة", value: auditStats.surplus, color: "#3b82f6" },
+                        ].filter(d => d.value > 0).map((entry, i) => (
+                          <Cell key={i} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={TOOLTIP_STYLE} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="flex items-center justify-center gap-3 text-[10px] mt-1">
+                    <span className="text-green-600">مطابق: {auditStats.matched}</span>
+                    <span className="text-red-600">عجز: {auditStats.shortage}</span>
+                    <span className="text-blue-600">زيادة: {auditStats.surplus}</span>
+                  </div>
+                </div>
+              )}
+              {returnsStats.total > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-2 font-medium">المرتجعات</p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie data={[
+                        { name: "مقبول", value: returnsStats.accepted, color: "#22c55e" },
+                        { name: "معلق", value: returnsStats.pending, color: "#f59e0b" },
+                      ].filter(d => d.value > 0)} cx="50%" cy="50%" innerRadius={35} outerRadius={60} paddingAngle={3} dataKey="value"
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1 }} style={{ fontSize: "9px" }}>
+                        {[
+                          { name: "مقبول", value: returnsStats.accepted, color: "#22c55e" },
+                          { name: "معلق", value: returnsStats.pending, color: "#f59e0b" },
+                        ].filter(d => d.value > 0).map((entry, i) => (
+                          <Cell key={i} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={TOOLTIP_STYLE} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="flex items-center justify-center gap-3 text-[10px] mt-1">
+                    <span className="text-green-600">مقبول: {returnsStats.accepted}</span>
+                    <span className="text-yellow-600">معلق: {returnsStats.pending}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="stat-card overflow-x-auto">
