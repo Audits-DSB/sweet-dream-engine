@@ -1256,7 +1256,11 @@ export default function FoundersPage() {
                     )}
 
                     {/* ── CAPITAL ACCOUNT: رأس المال المتاح ── */}
-                    {section === "capital" && (
+                    {section === "capital" && (() => {
+                      const myCostPayments = (orderCostPaymentsByFounder[f.id] || []);
+                      const mySettlementsOwed = orderCostSettlements.filter(s => s.fromId === f.id);
+                      const mySettlementsOwing = orderCostSettlements.filter(s => s.toId === f.id);
+                      return (
                       <>
                         {/* Balance Card */}
                         <div className="mx-4 my-3 rounded-lg border-2 p-4 text-center" style={{ borderColor: capitalBalance > 0 ? "hsl(var(--primary))" : "hsl(var(--border))" }}>
@@ -1501,7 +1505,8 @@ export default function FoundersPage() {
                           </div>
                         )}
                       </>
-                    )}
+                      );
+                    })()}
                   </div>
                 )}
               </div>
