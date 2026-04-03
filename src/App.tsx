@@ -41,7 +41,6 @@ import LoginPage from "./pages/Login";
 import SignupPage from "./pages/Signup";
 import ForgotPasswordPage from "./pages/ForgotPassword";
 import ResetPasswordPage from "./pages/ResetPassword";
-import Walkthrough from "./pages/Walkthrough";
 import ActivityPage from "./pages/Activity";
 import MonthlyDetailPage from "./pages/MonthlyDetail";
 import CompanyInventoryPage from "./pages/CompanyInventory";
@@ -102,7 +101,6 @@ const App = () => (
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/user-management" element={<UserManagementPage />} />
-                <Route path="/walkthrough" element={<Walkthrough />} />
                 <Route path="/activity" element={<ActivityPage />} />
                 <Route path="/monthly/:year/:month" element={<MonthlyDetailPage />} />
                 <Route path="/company-inventory" element={<CompanyInventoryPage />} />

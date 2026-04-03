@@ -3,6 +3,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { Outlet } from "react-router-dom";
 import { NotificationBell } from "@/components/NotificationBell";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { WalkthroughBubble } from "@/components/WalkthroughBubble";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -41,6 +42,7 @@ export function AppLayout() {
             <Outlet />
           </main>
         </div>
+        <WalkthroughBubble />
       </div>
     </SidebarProvider>
   );
