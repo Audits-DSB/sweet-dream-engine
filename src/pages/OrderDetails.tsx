@@ -275,6 +275,7 @@ export default function OrderDetails() {
         costPrice: Number(it.unitCost || it.unit_cost || it.costPrice || 0),
         unit: it.unit || "قطعة",
         condition: "good" as const,
+        imageUrl: it.imageUrl || "",
       }));
 
     if (selectedItems.length === 0) {
@@ -2536,6 +2537,13 @@ export default function OrderDetails() {
                 <div className="border rounded-md divide-y">
                   {returnableItems.map(it => (
                     <div key={it.materialCode} className="flex items-center gap-3 px-3 py-2">
+                      {it.imageUrl ? (
+                        <img src={it.imageUrl} alt={it.materialName} className="w-10 h-10 rounded object-cover shrink-0 border" />
+                      ) : (
+                        <div className="w-10 h-10 rounded bg-muted flex items-center justify-center shrink-0 border">
+                          <Package className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{it.materialName}</p>
                         <p className="text-xs text-muted-foreground">الكود: {it.materialCode} — متاح: {it.returnableQty} {it.unit || "قطعة"}</p>

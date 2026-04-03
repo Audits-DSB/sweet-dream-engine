@@ -20,6 +20,7 @@ type ReturnItem = {
   costPrice: number;
   unit: string;
   condition: "good" | "damaged";
+  imageUrl?: string;
 };
 
 type ReturnRecord = {
@@ -297,8 +298,19 @@ export default function ReturnsPage() {
                           {(ret.items || []).map((item, i) => (
                             <tr key={i} className="border-b border-border/30">
                               <td className="py-1.5 px-2">
-                                <span className="font-medium">{item.materialName}</span>
-                                <span className="text-muted-foreground mr-1">({item.materialCode})</span>
+                                <div className="flex items-center gap-2">
+                                  {item.imageUrl ? (
+                                    <img src={item.imageUrl} alt={item.materialName} className="w-8 h-8 rounded object-cover shrink-0 border" />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0 border">
+                                      <Package className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                  )}
+                                  <div>
+                                    <span className="font-medium">{item.materialName}</span>
+                                    <span className="text-muted-foreground mr-1">({item.materialCode})</span>
+                                  </div>
+                                </div>
                               </td>
                               <td className="py-1.5 px-2 text-center">{item.quantity} {item.unit}</td>
                               <td className="py-1.5 px-2 text-center">{fmtNum(Number(item.sellingPrice))}</td>
@@ -381,7 +393,16 @@ export default function ReturnsPage() {
                   <div className="space-y-2">
                     {selectedReturn.items.map((item, i) => (
                       <div key={i} className="flex items-center justify-between bg-muted/20 rounded p-2">
-                        <span className="text-sm">{item.materialName} ({item.quantity})</span>
+                        <div className="flex items-center gap-2">
+                          {item.imageUrl ? (
+                            <img src={item.imageUrl} alt={item.materialName} className="w-7 h-7 rounded object-cover shrink-0 border" />
+                          ) : (
+                            <div className="w-7 h-7 rounded bg-muted flex items-center justify-center shrink-0 border">
+                              <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <span className="text-sm">{item.materialName} ({item.quantity})</span>
+                        </div>
                         <Select value={itemConditions[i] || "good"} onValueChange={v => setItemConditions(prev => ({ ...prev, [i]: v }))}>
                           <SelectTrigger className="w-24 h-7 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
