@@ -820,6 +820,24 @@ export default function OrderDetails() {
   const foundersProfit = Math.round(qpFull.foundersProfit);
   const isCollected = ["Delivered", "Completed", "مُسلَّم", "مكتمل"].includes(order.status);
 
+  const acceptedReturns = orderReturns.filter((r: any) => r.status === "accepted");
+  const hasReturns = acceptedReturns.length > 0;
+  const returnedSelling = acceptedReturns.reduce((s: number, r: any) => {
+    const items: any[] = r.items || [];
+    return s + items.reduce((ss: number, it: any) => ss + (Number(it.sellingPrice || 0) * Number(it.quantity || 0)), 0);
+  }, 0);
+  const returnedCost = acceptedReturns.reduce((s: number, r: any) => {
+    const items: any[] = r.items || [];
+    return s + items.reduce((ss: number, it: any) => ss + (Number(it.costPrice || 0) * Number(it.quantity || 0)), 0);
+  }, 0);
+  const netSelling = linesTotal - returnedSelling;
+  const netCost = costTotal - returnedCost;
+  const netOperatingRevenue = netSelling + subscriptionAmt;
+  const netQp = hasReturns ? quickProfit({ orderTotal: netOperatingRevenue, totalCost: netCost, paidValue: netOperatingRevenue, companyProfitPct: companyPct, deliveryFeeDeduction: delFeeDeduction }) : null;
+  const netGrossProfit = hasReturns ? (netQp?.expectedProfit ?? 0) : grossProfit;
+  const netCompanyProfit = hasReturns ? Math.round(netQp?.companyProfit ?? 0) : companyProfit;
+  const netFoundersProfit = hasReturns ? Math.round(netQp?.foundersProfit ?? 0) : foundersProfit;
+
   // Per-founder cost + profit share
   const totalPct = order.founderContributions.reduce((s, f) => s + (f.percentage || 0), 0) || 100;
   const isEqualSplit = !order.splitMode?.includes("مساهمة") && !order.splitMode?.toLowerCase().includes("contribution");
@@ -827,7 +845,10 @@ export default function OrderDetails() {
     const profitShare = isEqualSplit
       ? (order.founderContributions.length > 0 ? foundersProfit / order.founderContributions.length : 0)
       : foundersProfit * (fc.percentage || 0) / totalPct;
-    return { ...fc, profitShare };
+    const netProfitShare = isEqualSplit
+      ? (order.founderContributions.length > 0 ? netFoundersProfit / order.founderContributions.length : 0)
+      : netFoundersProfit * (fc.percentage || 0) / totalPct;
+    return { ...fc, profitShare, netProfitShare };
   });
 
   return (
@@ -1734,6 +1755,18 @@ export default function OrderDetails() {
                   <span>الإجمالي النهائي</span>
                   <span className="text-primary">{(linesTotal + (order.deliveryFee || 0)).toLocaleString()} {t.currency}</span>
                 </div>
+                {hasReturns && (
+                  <>
+                    <div className="flex justify-between text-sm mt-2 text-red-600">
+                      <span className="flex items-center gap-1.5"><RotateCcw className="h-3.5 w-3.5" />مرتجعات (بيع)</span>
+                      <span className="font-medium">- {returnedSelling.toLocaleString()} {t.currency}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-base border-t border-red-200 dark:border-red-800 pt-2 mt-1">
+                      <span className="text-red-700 dark:text-red-400">الصافي بعد المرتجع</span>
+                      <span className="text-red-700 dark:text-red-400">{(netSelling + (order.deliveryFee || 0)).toLocaleString()} {t.currency}</span>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1776,6 +1809,19 @@ export default function OrderDetails() {
                     );
                   })()}
                   <div className="flex justify-between font-bold text-base"><span>الربح الإجمالي</span><span className={grossProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}>{grossProfit.toLocaleString()} {t.currency}</span></div>
+                  {hasReturns && (
+                    <div className="border-t border-red-200 dark:border-red-800 pt-3 mt-3 space-y-2">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-red-600 dark:text-red-400 mb-1">
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        بعد المرتجع
+                      </div>
+                      <div className="flex justify-between text-red-600"><span>مرتجعات (بيع)</span><span>- {returnedSelling.toLocaleString()} {t.currency}</span></div>
+                      <div className="flex justify-between text-red-600"><span>مرتجعات (تكلفة)</span><span>+ {returnedCost.toLocaleString()} {t.currency}</span></div>
+                      <div className="flex justify-between font-semibold"><span>صافي المبيعات</span><span>{netSelling.toLocaleString()} {t.currency}</span></div>
+                      <div className="flex justify-between text-muted-foreground"><span>صافي التكلفة</span><span className="text-destructive">- {netCost.toLocaleString()} {t.currency}</span></div>
+                      <div className="flex justify-between font-bold text-base"><span>الربح بعد المرتجع</span><span className={netGrossProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}>{netGrossProfit.toLocaleString()} {t.currency}</span></div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1792,6 +1838,22 @@ export default function OrderDetails() {
                       <span className="flex items-center gap-1.5 text-muted-foreground"><Users2 className="h-3.5 w-3.5" />نصيب المؤسسين ({(100 - companyPct).toFixed(0)}%)</span>
                       <span className="font-semibold text-emerald-600 dark:text-emerald-400">{foundersProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })} {t.currency}</span>
                     </div>
+                    {hasReturns && (
+                      <div className="border-t border-red-200 dark:border-red-800 pt-3 mt-1 space-y-2">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-red-600 dark:text-red-400 mb-1">
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          بعد المرتجع
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="flex items-center gap-1.5 text-muted-foreground"><Building2 className="h-3.5 w-3.5" />نصيب الشركة</span>
+                          <span className="font-semibold text-primary">{netCompanyProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })} {t.currency}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="flex items-center gap-1.5 text-muted-foreground"><Users2 className="h-3.5 w-3.5" />نصيب المؤسسين</span>
+                          <span className="font-semibold text-emerald-600 dark:text-emerald-400">{netFoundersProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })} {t.currency}</span>
+                        </div>
+                      </div>
+                    )}
                     <div className="border-t border-border pt-2 text-xs text-muted-foreground">
                       {order.companyProfitPercentage != null ? "النسبة محفوظة من وقت إنشاء الطلب" : "النسبة من الإعدادات الحالية"}
                     </div>
@@ -1814,18 +1876,26 @@ export default function OrderDetails() {
                 {isCollected ? (
                   <div className="space-y-2">
                     {founderPayments.map(fp => (
-                      <div key={fp.founder} className="flex items-center justify-between p-3 rounded-lg bg-muted/40 text-sm">
-                        <span className="font-medium">{fp.founder}</span>
-                        <div className="flex items-center gap-4 text-end">
-                          <div>
-                            <div className="text-xs text-muted-foreground">نسبته</div>
-                            <div className="font-medium">{isEqualSplit ? (100 / founderPayments.length).toFixed(1) : (fp.percentage || 0).toFixed(1)}%</div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-muted-foreground">حصته من الربح</div>
-                            <div className={`font-bold ${fp.profitShare >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>{fp.profitShare.toLocaleString(undefined, { maximumFractionDigits: 0 })} {t.currency}</div>
+                      <div key={fp.founder} className="flex flex-col gap-2 p-3 rounded-lg bg-muted/40 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{fp.founder}</span>
+                          <div className="flex items-center gap-4 text-end">
+                            <div>
+                              <div className="text-xs text-muted-foreground">نسبته</div>
+                              <div className="font-medium">{isEqualSplit ? (100 / founderPayments.length).toFixed(1) : (fp.percentage || 0).toFixed(1)}%</div>
+                            </div>
+                            <div>
+                              <div className="text-xs text-muted-foreground">حصته من الربح</div>
+                              <div className={`font-bold ${fp.profitShare >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>{fp.profitShare.toLocaleString(undefined, { maximumFractionDigits: 0 })} {t.currency}</div>
+                            </div>
                           </div>
                         </div>
+                        {hasReturns && (
+                          <div className="flex items-center justify-between border-t border-red-200 dark:border-red-800 pt-2">
+                            <span className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1"><RotateCcw className="h-3 w-3" />بعد المرتجع</span>
+                            <span className={`font-bold ${fp.netProfitShare >= 0 ? "text-red-700 dark:text-red-400" : "text-destructive"}`}>{fp.netProfitShare.toLocaleString(undefined, { maximumFractionDigits: 0 })} {t.currency}</span>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
