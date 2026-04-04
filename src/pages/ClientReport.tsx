@@ -854,19 +854,31 @@ export default function ClientReport() {
                 <Package className="h-5 w-5 text-primary" /> تفاصيل الاستهلاك لكل مادة
               </h3>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm table-fixed">
+                  <colgroup>
+                    <col className="w-[30px]" />
+                    <col className="w-[45px]" />
+                    <col />
+                    <col className="w-[50px]" />
+                    <col className="w-[70px]" />
+                    <col className="w-[55px]" />
+                    <col className="w-[55px]" />
+                    <col className="w-[55px]" />
+                    <col className="w-[55px]" />
+                    <col className="w-[90px]" />
+                  </colgroup>
                   <thead>
                     <tr className="bg-gray-100 border-b-2 border-gray-300">
-                      <th className="py-3 px-4 text-start font-bold text-gray-900">#</th>
-                      <th className="py-3 px-4 text-center font-bold text-gray-900">الصورة</th>
-                      <th className="py-3 px-4 text-start font-bold text-gray-900">المادة</th>
-                      <th className="py-3 px-4 text-start font-bold text-gray-900">الوحدة</th>
-                      <th className="py-3 px-4 text-end font-bold text-gray-900">سعر البيع</th>
-                      <th className="py-3 px-4 text-end font-bold text-gray-900">الكمية الموّردة</th>
-                      <th className="py-3 px-4 text-end font-bold text-gray-900">المستهلك</th>
-                      <th className="py-3 px-4 text-end font-bold text-gray-900">المتبقي</th>
-                      <th className="py-3 px-4 text-end font-bold text-gray-900">معدل أسبوعي</th>
-                      <th className="py-3 px-4 text-end font-bold text-gray-900">نسبة الاستهلاك</th>
+                      <th className="py-3 px-2 text-start font-bold text-gray-900">#</th>
+                      <th className="py-3 px-2 text-center font-bold text-gray-900">الصورة</th>
+                      <th className="py-3 px-2 text-start font-bold text-gray-900">المادة</th>
+                      <th className="py-3 px-2 text-start font-bold text-gray-900 w-14">الوحدة</th>
+                      <th className="py-3 px-2 text-end font-bold text-gray-900 w-20">سعر البيع</th>
+                      <th className="py-3 px-2 text-end font-bold text-gray-900 w-16">الموّردة</th>
+                      <th className="py-3 px-2 text-end font-bold text-gray-900 w-16">المستهلك</th>
+                      <th className="py-3 px-2 text-end font-bold text-gray-900 w-16">المتبقي</th>
+                      <th className="py-3 px-2 text-end font-bold text-gray-900 w-16">أسبوعي</th>
+                      <th className="py-3 px-2 text-end font-bold text-gray-900 w-24">الاستهلاك</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -874,16 +886,16 @@ export default function ClientReport() {
                       const rate = item.totalDelivered > 0 ? Math.round((item.totalConsumed / item.totalDelivered) * 100) : 0;
                       return (
                         <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
-                          <td className="py-3 px-4 text-gray-600 font-medium">{idx + 1}</td>
-                          <td className="py-2 px-4 text-center">{item.imageUrl ? <img src={item.imageUrl} alt={item.material} className="w-10 h-10 object-cover rounded-lg border border-gray-200 mx-auto" /> : <div className="w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center mx-auto"><Package className="h-5 w-5 text-gray-300" /></div>}</td>
-                          <td className="py-3 px-4 font-semibold text-gray-900">{item.material}</td>
-                          <td className="py-3 px-4 text-gray-700">{item.unit}</td>
-                          <td className="py-3 px-4 text-end text-gray-800 font-medium">{item.sellingPrice > 0 ? `${item.sellingPrice.toLocaleString()} ج.م` : "—"}</td>
-                          <td className="py-3 px-4 text-end text-gray-800 font-medium">{item.totalDelivered}</td>
-                          <td className="py-3 px-4 text-end font-bold text-orange-700">{item.totalConsumed}</td>
-                          <td className="py-3 px-4 text-end font-bold text-blue-700">{item.totalRemaining}</td>
-                          <td className="py-3 px-4 text-end text-gray-700 font-medium">{item.avgWeekly > 0 ? item.avgWeekly.toFixed(1) : "—"}</td>
-                          <td className="py-3 px-4 text-end">
+                          <td className="py-2 px-2 text-gray-600 font-medium">{idx + 1}</td>
+                          <td className="py-1 px-2 text-center">{item.imageUrl ? <img src={item.imageUrl} alt={item.material} className="w-8 h-8 object-cover rounded border border-gray-200 mx-auto" /> : <div className="w-8 h-8 rounded border border-gray-200 bg-gray-50 flex items-center justify-center mx-auto"><Package className="h-4 w-4 text-gray-300" /></div>}</td>
+                          <td className="py-2 px-2 font-semibold text-gray-900 text-xs overflow-hidden text-ellipsis whitespace-nowrap" title={item.material}>{item.material}</td>
+                          <td className="py-2 px-2 text-gray-700 text-xs">{item.unit}</td>
+                          <td className="py-2 px-2 text-end text-gray-800 font-medium text-xs">{item.sellingPrice > 0 ? `${item.sellingPrice.toLocaleString()}` : "—"}</td>
+                          <td className="py-2 px-2 text-end text-gray-800 font-medium">{item.totalDelivered}</td>
+                          <td className="py-2 px-2 text-end font-bold text-orange-700">{item.totalConsumed}</td>
+                          <td className="py-2 px-2 text-end font-bold text-blue-700">{item.totalRemaining}</td>
+                          <td className="py-2 px-2 text-end text-gray-700 font-medium">{item.avgWeekly > 0 ? item.avgWeekly.toFixed(1) : "—"}</td>
+                          <td className="py-2 px-2 text-end">
                             <div className="flex items-center justify-end gap-2">
                               <div className="w-16 h-2.5 bg-gray-200 rounded-full overflow-hidden">
                                 <div className={`h-full rounded-full ${rate >= 80 ? "bg-red-600" : rate >= 50 ? "bg-orange-600" : "bg-green-600"}`} style={{ width: `${Math.min(100, rate)}%` }} />
