@@ -14,10 +14,11 @@ import {
   PieChart, Pie, Cell, Legend, AreaChart, Area, ComposedChart, RadialBarChart, RadialBar,
 } from "recharts";
 
-const COLORS = ["#c2410c", "#1d4ed8", "#047857", "#6d28d9", "#b91c1c", "#0e7490", "#b45309", "#be185d", "#0f766e", "#4338ca"];
+const COLORS = ["#f97316", "#3b82f6", "#22c55e", "#a855f7", "#ef4444", "#06b6d4", "#eab308", "#ec4899", "#14b8a6", "#6366f1"];
 const MONTH_NAMES = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 const TOOLTIP_STYLE = { backgroundColor: "#fff", border: "1.5px solid #d1d5db", borderRadius: "8px", fontSize: "13px", direction: "rtl" as const, color: "#111" };
-const AXIS_TICK = { fontSize: 12, fill: "#222", fontWeight: 600 };
+const AXIS_TICK = { fontSize: 12, fill: "currentColor", fontWeight: 600 };
+const PIE_LABEL_STYLE = { fontSize: "10px", fontWeight: 600, fill: "currentColor" };
 const GRID_COLOR = "#e5e7eb";
 
 function toMonthLabel(ym: string) {
@@ -433,12 +434,12 @@ export default function ClientReport() {
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={mDailyData}>
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-                      <XAxis dataKey="day" tick={AXIS_TICK} stroke="#555" />
-                      <YAxis tick={AXIS_TICK} stroke="#555" />
+                      <XAxis dataKey="day" tick={AXIS_TICK} stroke="currentColor" />
+                      <YAxis tick={AXIS_TICK} stroke="currentColor" />
                       <Tooltip contentStyle={TOOLTIP_STYLE} />
                       <Legend wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
-                      <Bar dataKey="orders" fill="#c2410c" name="طلبات" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="deliveries" fill="#047857" name="توصيلات" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="orders" fill="#f97316" name="طلبات" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="deliveries" fill="#22c55e" name="توصيلات" radius={[4, 4, 0, 0]} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -455,7 +456,7 @@ export default function ClientReport() {
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={mOrderStatusDist} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value" strokeWidth={2} stroke="#fff"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 2, stroke: "#666" }} style={{ fontSize: "12px", fontWeight: 600, fill: "#222" }}>
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1.5 }} style={PIE_LABEL_STYLE}>
                           {mOrderStatusDist.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} />
@@ -474,9 +475,9 @@ export default function ClientReport() {
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={mCollectionPie} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={4} dataKey="value" strokeWidth={2} stroke="#fff"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 2, stroke: "#666" }} style={{ fontSize: "12px", fontWeight: 600, fill: "#222" }}>
-                          <Cell fill="#047857" />
-                          <Cell fill="#b91c1c" />
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1.5 }} style={PIE_LABEL_STYLE}>
+                          <Cell fill="#22c55e" />
+                          <Cell fill="#ef4444" />
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, ""]} />
                       </PieChart>
@@ -494,7 +495,7 @@ export default function ClientReport() {
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={mMaterialDist} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 2, stroke: "#666" }} style={{ fontSize: "11px", fontWeight: 600, fill: "#222" }}>
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1.5 }} style={PIE_LABEL_STYLE}>
                           {mMaterialDist.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} />
@@ -515,15 +516,15 @@ export default function ClientReport() {
                     <AreaChart data={mDailyData}>
                       <defs>
                         <linearGradient id="mValueGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#c2410c" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#c2410c" stopOpacity={0} />
+                          <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-                      <XAxis dataKey="day" tick={AXIS_TICK} stroke="#555" />
-                      <YAxis tick={AXIS_TICK} stroke="#555" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                      <XAxis dataKey="day" tick={AXIS_TICK} stroke="currentColor" />
+                      <YAxis tick={AXIS_TICK} stroke="currentColor" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, "القيمة"]} />
-                      <Area type="monotone" dataKey="value" stroke="#c2410c" strokeWidth={3} fill="url(#mValueGrad)" name="القيمة" />
+                      <Area type="monotone" dataKey="value" stroke="#f97316" strokeWidth={3} fill="url(#mValueGrad)" name="القيمة" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -745,12 +746,12 @@ export default function ClientReport() {
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={monthlyOverviewData}>
                         <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-                        <XAxis dataKey="label" tick={AXIS_TICK} stroke="#555" />
-                        <YAxis tick={AXIS_TICK} stroke="#555" />
+                        <XAxis dataKey="label" tick={AXIS_TICK} stroke="currentColor" />
+                        <YAxis tick={AXIS_TICK} stroke="currentColor" />
                         <Tooltip contentStyle={TOOLTIP_STYLE} />
                         <Legend wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
-                        <Bar dataKey="orders" fill="#c2410c" name="طلبات" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="deliveries" fill="#047857" name="توصيلات" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="orders" fill="#f97316" name="طلبات" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="deliveries" fill="#22c55e" name="توصيلات" radius={[4, 4, 0, 0]} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
@@ -765,15 +766,15 @@ export default function ClientReport() {
                       <AreaChart data={monthlyOverviewData}>
                         <defs>
                           <linearGradient id="valueGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#c2410c" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#c2410c" stopOpacity={0} />
+                            <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-                        <XAxis dataKey="label" tick={AXIS_TICK} stroke="#555" />
-                        <YAxis tick={AXIS_TICK} stroke="#555" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                        <XAxis dataKey="label" tick={AXIS_TICK} stroke="currentColor" />
+                        <YAxis tick={AXIS_TICK} stroke="currentColor" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
                         <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, "القيمة"]} />
-                        <Area type="monotone" dataKey="value" stroke="#c2410c" strokeWidth={3} fill="url(#valueGrad)" name="القيمة" />
+                        <Area type="monotone" dataKey="value" stroke="#f97316" strokeWidth={3} fill="url(#valueGrad)" name="القيمة" />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -791,7 +792,7 @@ export default function ClientReport() {
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={orderStatusDist} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value" strokeWidth={2} stroke="#fff"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 2, stroke: "#666" }} style={{ fontSize: "12px", fontWeight: 600, fill: "#222" }}>
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1.5 }} style={PIE_LABEL_STYLE}>
                           {orderStatusDist.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [`${v} طلب`, name]} />
@@ -813,9 +814,9 @@ export default function ClientReport() {
                           { name: "محصّل", value: collectionStats.paidAmount },
                           { name: "متبقي", value: collectionStats.remaining },
                         ].filter(d => d.value > 0)} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={4} dataKey="value" strokeWidth={2} stroke="#fff"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 2, stroke: "#666" }} style={{ fontSize: "12px", fontWeight: 600, fill: "#222" }}>
-                          <Cell fill="#047857" />
-                          <Cell fill="#b91c1c" />
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1.5 }} style={PIE_LABEL_STYLE}>
+                          <Cell fill="#22c55e" />
+                          <Cell fill="#ef4444" />
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, ""]} />
                       </PieChart>
@@ -833,7 +834,7 @@ export default function ClientReport() {
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 2, stroke: "#666" }} style={{ fontSize: "11px", fontWeight: 600, fill: "#222" }}>
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1.5 }} style={PIE_LABEL_STYLE}>
                           {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} وحدة`, "مستهلك"]} />
@@ -853,12 +854,12 @@ export default function ClientReport() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={barData} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 10 }} barGap={2} barCategoryGap="30%">
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-                      <XAxis type="number" tick={AXIS_TICK} stroke="#555" />
-                      <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 10, fill: "#222", fontWeight: 600 }} stroke="#555" interval={0} />
+                      <XAxis type="number" tick={AXIS_TICK} stroke="currentColor" />
+                      <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 10, fill: "currentColor", fontWeight: 600 }} stroke="currentColor" interval={0} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [v, name === "consumed" ? "مستهلك" : "متبقي"]} />
                       <Legend wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
-                      <Bar dataKey="consumed" fill="#c2410c" name="مستهلك" radius={[0, 4, 4, 0]} barSize={12} />
-                      <Bar dataKey="remaining" fill="#1d4ed8" name="متبقي" radius={[0, 4, 4, 0]} barSize={12} />
+                      <Bar dataKey="consumed" fill="#f97316" name="مستهلك" radius={[0, 4, 4, 0]} barSize={12} />
+                      <Bar dataKey="remaining" fill="#3b82f6" name="متبقي" radius={[0, 4, 4, 0]} barSize={12} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -874,12 +875,12 @@ export default function ClientReport() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={coverageData} layout="vertical" margin={{ top: 10, right: 20, left: 10, bottom: 10 }} barCategoryGap="35%">
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-                      <XAxis type="number" tick={AXIS_TICK} stroke="#555" />
-                      <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 10, fill: "#222", fontWeight: 600 }} stroke="#555" interval={0} />
+                      <XAxis type="number" tick={AXIS_TICK} stroke="currentColor" />
+                      <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 10, fill: "currentColor", fontWeight: 600 }} stroke="currentColor" interval={0} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} أسبوع`, "التغطية"]} />
-                      <Bar dataKey="weeks" fill="#047857" name="أسابيع" radius={[0, 4, 4, 0]} barSize={14}>
+                      <Bar dataKey="weeks" fill="#22c55e" name="أسابيع" radius={[0, 4, 4, 0]} barSize={14}>
                         {coverageData.map((entry, i) => (
-                          <Cell key={i} fill={entry.weeks <= 2 ? "#b91c1c" : entry.weeks <= 4 ? "#b45309" : "#047857"} />
+                          <Cell key={i} fill={entry.weeks <= 2 ? "#ef4444" : entry.weeks <= 4 ? "#eab308" : "#22c55e"} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -898,15 +899,15 @@ export default function ClientReport() {
                     <AreaChart data={monthlyOverviewData}>
                       <defs>
                         <linearGradient id="collGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#047857" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#047857" stopOpacity={0} />
+                          <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-                      <XAxis dataKey="label" tick={AXIS_TICK} stroke="#555" />
-                      <YAxis tick={AXIS_TICK} stroke="#555" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                      <XAxis dataKey="label" tick={AXIS_TICK} stroke="currentColor" />
+                      <YAxis tick={AXIS_TICK} stroke="currentColor" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, "المحصّل"]} />
-                      <Area type="monotone" dataKey="collections" stroke="#047857" strokeWidth={3} fill="url(#collGrad)" name="المحصّل" />
+                      <Area type="monotone" dataKey="collections" stroke="#22c55e" strokeWidth={3} fill="url(#collGrad)" name="المحصّل" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
