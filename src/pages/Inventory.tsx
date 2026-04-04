@@ -228,7 +228,7 @@ export default function InventoryPage() {
           <p className="page-description">{filtered.length} {t.batchCount} {t.acrossClients} {clientNames.length} {t.clientsLabel}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" className="h-8 gap-1.5" onClick={() => setAddDialogOpen(true)}>
+          <Button size="sm" className="h-8 gap-1.5 hidden" onClick={() => setAddDialogOpen(true)}>
             <Plus className="h-3.5 w-3.5" /> إضافة دفعة
           </Button>
           <div className="flex gap-1 bg-muted rounded-lg p-0.5">
@@ -380,10 +380,6 @@ export default function InventoryPage() {
                                       </td>
                                       <td className="py-2 px-3"><StatusBadge status={lot.status} /></td>
                                       <td className="py-2 px-3 text-end" onClick={e => e.stopPropagation()}>
-                                        <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditItem(lot)}><Pencil className="h-3.5 w-3.5" /></Button>
-                                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteTarget(lot)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                                        </div>
                                       </td>
                                     </tr>
                                   );
@@ -457,11 +453,7 @@ export default function InventoryPage() {
                     </td>
                     <td className="py-3 px-3 font-mono text-xs text-muted-foreground hover:text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/orders/${lot.sourceOrder}`); }}>{lot.sourceOrder}</td>
                     <td className="py-3 px-3"><StatusBadge status={lot.status} /></td>
-                    <td className="py-3 px-3 text-end" onClick={e => e.stopPropagation()}>
-                      <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditItem(lot)}><Pencil className="h-3.5 w-3.5" /></Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteTarget(lot)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                      </div>
+                    <td className="py-3 px-3 text-end">
                     </td>
                   </tr>
                 );
@@ -502,12 +494,6 @@ export default function InventoryPage() {
               </div>
               <div className="pt-2"><StatusBadge status={detailItem.status} /></div>
               <DialogFooter className="gap-2">
-                <Button size="sm" variant="destructive" onClick={() => { setDetailItem(null); setDeleteTarget(detailItem); }}>
-                  <Trash2 className="h-3.5 w-3.5 ml-1.5" /> حذف
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => { setDetailItem(null); setEditItem(detailItem); }}>
-                  <Pencil className="h-3.5 w-3.5 ml-1.5" /> تعديل
-                </Button>
               </DialogFooter>
             </div>
           )}
