@@ -886,28 +886,47 @@ export default function ClientReport() {
             )}
 
             {barData.length > 0 && (
-              <div className="mb-8 border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
-                <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
-                  <BarChart3 className="h-5 w-5 text-primary" /> الاستهلاك مقابل المتبقي — أعلى المواد
+              <div className="mb-8 border-2 border-gray-200 rounded-xl overflow-hidden bg-card">
+                <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
+                  <BarChart3 className="h-5 w-5 text-primary" /> الاستهلاك مقابل المتبقي
                 </h3>
-                <p className="hidden print:block text-xs text-gray-500 mb-3">يقارن لكل مادة بين الكمية المستهلكة (برتقالي) والكمية المتبقية (أزرق). كلما كان الأزرق أقل، يعني أن المادة قاربت على النفاد.</p>
-                <div style={{ height: `${Math.max(400, barData.length * 45)}px` }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={barData} layout="vertical" margin={{ top: 5, right: 30, left: 5, bottom: 5 }} barCategoryGap="30%">
-                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize: 11, fill: "currentColor", fontWeight: 600 }} stroke="currentColor" />
-                      <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 10, fill: "currentColor", fontWeight: 700 }} stroke="none" interval={0} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [`${v} وحدة`, name === "consumed" ? "مستهلك" : "متبقي"]} />
-                      <Legend wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
-                      <Bar dataKey="consumed" stackId="a" fill="#f97316" name="مستهلك" radius={[0, 0, 0, 0]} barSize={22} />
-                      <Bar dataKey="remaining" stackId="a" fill="#3b82f6" name="متبقي" radius={[0, 6, 6, 0]} barSize={22} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-4 border-t border-gray-200 pt-3">
-                  <table className="w-full text-xs">
-                    <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">المادة</th><th className="py-2 px-3 text-end font-bold text-gray-700">مستهلك</th><th className="py-2 px-3 text-end font-bold text-gray-700">متبقي</th></tr></thead>
-                    <tbody>{barData.map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.name}</td><td className="py-1.5 px-3 text-end font-semibold text-orange-600">{d.consumed}</td><td className="py-1.5 px-3 text-end font-semibold text-blue-600">{d.remaining}</td></tr>)}</tbody>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b-2 border-gray-200 text-xs">
+                        <th className="py-2.5 px-3 text-start font-bold text-gray-600 w-[30px]">#</th>
+                        <th className="py-2.5 px-3 text-start font-bold text-gray-600">المادة</th>
+                        <th className="py-2.5 px-3 text-end font-bold text-gray-600 w-[60px]">موّرد</th>
+                        <th className="py-2.5 px-3 text-end font-bold text-gray-600 w-[60px]">مستهلك</th>
+                        <th className="py-2.5 px-3 text-end font-bold text-gray-600 w-[60px]">متبقي</th>
+                        <th className="py-2.5 px-3 text-center font-bold text-gray-600 w-[200px]">نسبة الاستهلاك</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {barData.map((d, idx) => {
+                        const total = d.consumed + d.remaining;
+                        const pct = total > 0 ? Math.round((d.consumed / total) * 100) : 0;
+                        const isLow = d.remaining <= 5 && d.remaining > 0;
+                        const isDepleted = d.remaining === 0 && d.consumed > 0;
+                        return (
+                          <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="py-2 px-3 text-gray-500 font-medium text-xs">{idx + 1}</td>
+                            <td className="py-2 px-3 font-semibold text-gray-900 text-xs">{d.name}</td>
+                            <td className="py-2 px-3 text-end font-medium text-gray-700 text-xs">{total}</td>
+                            <td className="py-2 px-3 text-end font-bold text-orange-600 text-xs">{d.consumed}</td>
+                            <td className={`py-2 px-3 text-end font-bold text-xs ${isDepleted ? "text-red-600" : isLow ? "text-amber-600" : "text-blue-600"}`}>{d.remaining}</td>
+                            <td className="py-2 px-3">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden border border-gray-200" style={{ printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
+                                  <div className={`h-full rounded-full ${pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-orange-500" : pct >= 40 ? "bg-amber-400" : "bg-green-500"}`} style={{ width: `${pct}%`, printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}></div>
+                                </div>
+                                <span className={`text-xs font-bold min-w-[36px] text-end ${pct >= 90 ? "text-red-600" : pct >= 70 ? "text-orange-600" : "text-gray-700"}`}>{pct}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
                   </table>
                 </div>
               </div>
