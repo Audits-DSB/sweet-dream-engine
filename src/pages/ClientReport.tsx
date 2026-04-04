@@ -327,6 +327,45 @@ export default function ClientReport() {
     })).sort((a, b) => b.totalQty - a.totalQty);
   }, [mOrders, orderLines, inventoryImageMap]);
 
+  const mAggregated = useMemo(() => {
+    const map = new Map<string, { material: string; code: string; unit: string; totalDelivered: number; totalRemaining: number; totalConsumed: number; sellingPrice: number; imageUrl: string }>();
+    for (const item of mInventoryDelivered) {
+      const key = item.code || item.material;
+      const consumed = Math.max(0, item.delivered - item.remaining);
+      const existing = map.get(key);
+      if (existing) {
+        existing.totalDelivered += item.delivered;
+        existing.totalRemaining += item.remaining;
+        existing.totalConsumed += consumed;
+        if (item.sellingPrice > 0) existing.sellingPrice = item.sellingPrice;
+        if (item.imageUrl && !existing.imageUrl) existing.imageUrl = item.imageUrl;
+      } else {
+        map.set(key, {
+          material: item.material, code: item.code, unit: item.unit,
+          totalDelivered: item.delivered, totalRemaining: item.remaining,
+          totalConsumed: consumed, sellingPrice: item.sellingPrice,
+          imageUrl: item.imageUrl || "",
+        });
+      }
+    }
+    return [...map.values()].sort((a, b) => b.totalConsumed - a.totalConsumed);
+  }, [mInventoryDelivered]);
+
+  const mBarData = mAggregated.map(a => ({
+    name: a.material.length > 15 ? a.material.slice(0, 15) + "…" : a.material,
+    fullName: a.material,
+    consumed: a.totalConsumed, remaining: a.totalRemaining,
+  }));
+
+  const mPieData = mAggregated.filter(a => a.totalConsumed > 0).slice(0, 8).map(a => ({
+    name: a.material.length > 20 ? a.material.slice(0, 20) + "…" : a.material,
+    value: a.totalConsumed,
+  }));
+
+  const mTotalDelivered = mAggregated.reduce((s, i) => s + i.totalDelivered, 0);
+  const mTotalConsumed = mAggregated.reduce((s, i) => s + i.totalConsumed, 0);
+  const mConsumptionRate = mTotalDelivered > 0 ? Math.round((mTotalConsumed / mTotalDelivered) * 100) : 0;
+
   const mCollectionPie = useMemo(() => {
     if (mStats.totalDue <= 0) return [];
     return [
@@ -532,166 +571,242 @@ export default function ClientReport() {
               </Button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
-              <StatBox label="الطلبات" value={mStats.ordersCount} icon={ShoppingCart} color="bg-orange-100 text-orange-700" />
-              <StatBox label="التوصيلات" value={mStats.deliveriesCount} icon={Truck} color="bg-green-100 text-green-700" />
-              <StatBox label="قيمة الطلبات" value={mStats.totalValue > 0 ? `${mStats.totalValue.toLocaleString()} ج.م` : "—"} icon={DollarSign} color="bg-amber-100 text-amber-700" />
-              <StatBox label="المحصّل" value={mStats.totalCollected > 0 ? `${mStats.totalCollected.toLocaleString()} ج.م` : "—"} icon={CreditCard} color="bg-cyan-100 text-cyan-700" />
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-              <StatBox label="كمية موّردة" value={mStats.deliveredQty > 0 ? mStats.deliveredQty.toLocaleString() : "—"} icon={Package} color="bg-blue-100 text-blue-700" />
-              <StatBox label="عمليات تحصيل" value={mStats.collectionsCount} icon={Receipt} color="bg-teal-100 text-teal-700" />
-              <StatBox label="مرتجعات" value={mStats.returnsCount} icon={RotateCcw} color="bg-rose-100 text-rose-700" />
-              <StatBox label="نسبة التحصيل" value={mStats.totalDue > 0 ? `${Math.round((mStats.totalCollected / mStats.totalDue) * 100)}%` : "—"} icon={PieChartIcon} color="bg-purple-100 text-purple-700" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+              <StatBox label="عدد المواد" value={mAggregated.length > 0 ? mAggregated.length : mMaterialConsumption.length} icon={Package} color="bg-blue-100 text-blue-700" />
+              <StatBox label="إجمالي الطلبات" value={mStats.ordersCount} icon={ShoppingCart} color="bg-orange-100 text-orange-700" />
+              <StatBox label="عمليات التوصيل" value={mStats.deliveriesCount} icon={Truck} color="bg-green-100 text-green-700" />
+              <StatBox label="الكمية الموّردة" value={mStats.deliveredQty > 0 ? mStats.deliveredQty.toLocaleString() : "—"} icon={BarChart3} color="bg-teal-100 text-teal-700" />
+              <StatBox label="نسبة الاستهلاك" value={mConsumptionRate > 0 ? `${mConsumptionRate}%` : "—"} icon={PieChartIcon} color="bg-purple-100 text-purple-700" />
             </div>
 
             {mDailyData.length > 0 && (
-              <div className="mb-8 border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
-                <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
-                  <CalendarDays className="h-5 w-5 text-primary" /> الحركة اليومية — {toYMLabel(selectedMonth)}
-                </h3>
-                <p className="hidden print:block text-xs text-gray-500 mb-3">يوضح هذا الرسم عدد الطلبات والتوصيلات لكل يوم خلال الشهر. الأعمدة البرتقالية تمثل الطلبات، والخضراء تمثل التوصيلات.</p>
-                <div className="h-[260px] print:h-[180px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={mDailyData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-                      <XAxis dataKey="day" tick={AXIS_TICK} stroke="currentColor" />
-                      <YAxis tick={AXIS_TICK} stroke="currentColor" />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} />
-                      <Legend wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
-                      <Bar dataKey="orders" fill="#f97316" name="طلبات" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="deliveries" fill="#22c55e" name="توصيلات" radius={[4, 4, 0, 0]} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-3 border-t border-gray-200 pt-3">
-                  <table className="w-full text-xs">
-                    <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">اليوم</th><th className="py-2 px-3 text-end font-bold text-gray-700">طلبات</th><th className="py-2 px-3 text-end font-bold text-gray-700">توصيلات</th></tr></thead>
-                    <tbody>{mDailyData.filter(d => d.orders > 0 || d.deliveries > 0).map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.day}</td><td className="py-1.5 px-3 text-end font-semibold text-orange-600">{d.orders}</td><td className="py-1.5 px-3 text-end font-semibold text-green-600">{d.deliveries}</td></tr>)}</tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
-              {mCollectionPie.length > 0 && (
-                <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
+                <div className="border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
                   <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
-                    <Receipt className="h-5 w-5 text-primary" /> تحصيل الشهر
+                    <CalendarDays className="h-5 w-5 text-primary" /> حركة الطلبات والتوصيل اليومية
                   </h3>
-                  <p className="hidden print:block text-xs text-gray-500 mb-3">يوضح نسبة المبالغ المحصّلة (أخضر) مقابل المبالغ المتبقية (أحمر) خلال الشهر.</p>
-                  <div className="h-[220px] print:h-[160px]">
+                  <p className="hidden print:block text-xs text-gray-500 mb-3">يوضح عدد الطلبات (برتقالي) والتوصيلات (أخضر) لكل يوم خلال الشهر.</p>
+                  <div className="h-[260px] print:h-[180px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={mCollectionPie} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={4} dataKey="value" strokeWidth={2} stroke="#fff">
-                          <Cell fill="#22c55e" />
-                          <Cell fill="#ef4444" />
-                        </Pie>
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, ""]} />
-                        <Legend wrapperStyle={{ fontSize: "11px", fontWeight: 600 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
-                    {mCollectionPie.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: i === 0 ? "#22c55e" : "#ef4444" }}></span>{d.name}</span><span className="font-bold text-gray-900">{Number(d.value).toLocaleString()} ج.م</span></div>)}
-                  </div>
-                </div>
-              )}
-
-              {mMaterialDist.length > 0 && (
-                <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
-                  <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
-                    <Package className="h-5 w-5 text-primary" /> المواد الموّردة
-                  </h3>
-                  <p className="hidden print:block text-xs text-gray-500 mb-3">يوضح توزيع الكميات الموّردة حسب نوع المادة خلال الشهر.</p>
-                  <div className="h-[220px] print:h-[160px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={mMaterialDist} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff">
-                          {mMaterialDist.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                        </Pie>
+                      <ComposedChart data={mDailyData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                        <XAxis dataKey="day" tick={AXIS_TICK} stroke="currentColor" />
+                        <YAxis tick={AXIS_TICK} stroke="currentColor" />
                         <Tooltip contentStyle={TOOLTIP_STYLE} />
-                        <Legend wrapperStyle={{ fontSize: "11px", fontWeight: 600 }} />
-                      </PieChart>
+                        <Legend wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
+                        <Bar dataKey="orders" fill="#f97316" name="طلبات" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="deliveries" fill="#22c55e" name="توصيلات" radius={[4, 4, 0, 0]} />
+                      </ComposedChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
-                    {mMaterialDist.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>{d.name}</span><span className="font-bold text-gray-900">{d.value} وحدة</span></div>)}
+                  <div className="mt-3 border-t border-gray-200 pt-3">
+                    <table className="w-full text-xs">
+                      <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">اليوم</th><th className="py-2 px-3 text-end font-bold text-gray-700">طلبات</th><th className="py-2 px-3 text-end font-bold text-gray-700">توصيلات</th></tr></thead>
+                      <tbody>{mDailyData.filter(d => d.orders > 0 || d.deliveries > 0).map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.day}</td><td className="py-1.5 px-3 text-end font-semibold text-orange-600">{d.orders}</td><td className="py-1.5 px-3 text-end font-semibold text-green-600">{d.deliveries}</td></tr>)}</tbody>
+                    </table>
                   </div>
                 </div>
-              )}
-            </div>
 
-            {mDailyData.length > 0 && mStats.totalValue > 0 && (
-              <div className="mb-8 border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
-                <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
-                  <DollarSign className="h-5 w-5 text-primary" /> قيمة الطلبات اليومية — {toYMLabel(selectedMonth)}
-                </h3>
-                <p className="hidden print:block text-xs text-gray-500 mb-3">يوضح القيمة المالية للطلبات (بالجنيه المصري) لكل يوم خلال الشهر. المنطقة البرتقالية تمثل حجم التعاملات.</p>
-                <div className="h-[240px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={mDailyData}>
-                      <defs>
-                        <linearGradient id="mValueGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-                      <XAxis dataKey="day" tick={AXIS_TICK} stroke="currentColor" />
-                      <YAxis tick={AXIS_TICK} stroke="currentColor" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, "القيمة"]} />
-                      <Area type="monotone" dataKey="value" stroke="#f97316" strokeWidth={3} fill="url(#mValueGrad)" name="القيمة" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-3 border-t border-gray-200 pt-3">
-                  <table className="w-full text-xs">
-                    <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">اليوم</th><th className="py-2 px-3 text-end font-bold text-gray-700">القيمة (ج.م)</th></tr></thead>
-                    <tbody>{mDailyData.filter(d => d.value > 0).map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.day}</td><td className="py-1.5 px-3 text-end font-semibold text-orange-600">{Number(d.value).toLocaleString()} ج.م</td></tr>)}</tbody>
-                  </table>
-                </div>
+                {mStats.totalValue > 0 && (
+                  <div className="border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
+                    <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
+                      <DollarSign className="h-5 w-5 text-primary" /> قيمة الطلبات اليومية
+                    </h3>
+                    <p className="hidden print:block text-xs text-gray-500 mb-3">يوضح القيمة المالية للطلبات (بالجنيه المصري) لكل يوم خلال الشهر.</p>
+                    <div className="h-[260px] print:h-[180px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={mDailyData}>
+                          <defs>
+                            <linearGradient id="mValueGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
+                              <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                          <XAxis dataKey="day" tick={AXIS_TICK} stroke="currentColor" />
+                          <YAxis tick={AXIS_TICK} stroke="currentColor" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, "القيمة"]} />
+                          <Area type="monotone" dataKey="value" stroke="#f97316" strokeWidth={3} fill="url(#mValueGrad)" name="القيمة" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="mt-3 border-t border-gray-200 pt-3">
+                      <table className="w-full text-xs">
+                        <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">اليوم</th><th className="py-2 px-3 text-end font-bold text-gray-700">القيمة (ج.م)</th></tr></thead>
+                        <tbody>{mDailyData.filter(d => d.value > 0).map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.day}</td><td className="py-1.5 px-3 text-end font-semibold text-orange-600">{Number(d.value).toLocaleString()} ج.م</td></tr>)}</tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {mMaterialConsumption.length > 0 && (
-              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+            {(mCollectionPie.length > 0 || mPieData.length > 0) && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
+                {mPieData.length > 0 && (
+                  <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
+                    <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
+                      <PieChartIcon className="h-5 w-5 text-primary" /> توزيع الاستهلاك
+                    </h3>
+                    <p className="hidden print:block text-xs text-gray-500 mb-3">يوضح نسبة استهلاك كل مادة من إجمالي المواد المستهلكة خلال الشهر.</p>
+                    <div className="h-[220px] print:h-[160px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={mPieData} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff">
+                            {mPieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                          </Pie>
+                          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} وحدة`, "مستهلك"]} />
+                          <Legend wrapperStyle={{ fontSize: "11px", fontWeight: 600 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
+                      {mPieData.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>{d.name}</span><span className="font-bold text-gray-900">{d.value} وحدة</span></div>)}
+                    </div>
+                  </div>
+                )}
+
+                {mCollectionPie.length > 0 && (
+                  <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
+                    <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
+                      <Receipt className="h-5 w-5 text-primary" /> تحصيل الشهر
+                    </h3>
+                    <p className="hidden print:block text-xs text-gray-500 mb-3">يوضح نسبة المبالغ المحصّلة (أخضر) مقابل المبالغ المتبقية (أحمر) خلال الشهر.</p>
+                    <div className="h-[220px] print:h-[160px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={mCollectionPie} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={4} dataKey="value" strokeWidth={2} stroke="#fff">
+                            <Cell fill="#22c55e" />
+                            <Cell fill="#ef4444" />
+                          </Pie>
+                          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, ""]} />
+                          <Legend wrapperStyle={{ fontSize: "11px", fontWeight: 600 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
+                      {mCollectionPie.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: i === 0 ? "#22c55e" : "#ef4444" }}></span>{d.name}</span><span className="font-bold text-gray-900">{Number(d.value).toLocaleString()} ج.م</span></div>)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {mBarData.length > 0 && (
+              <div className="mb-8 border-2 border-gray-200 rounded-xl overflow-hidden bg-card">
                 <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
-                  <Package className="h-5 w-5 text-primary" /> تفاصيل استهلاك المواد — {toFullMonthLabel(selectedMonth)}
+                  <BarChart3 className="h-5 w-5 text-primary" /> الاستهلاك مقابل المتبقي — {toFullMonthLabel(selectedMonth)}
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-gray-100 border-b-2 border-gray-300">
-                        <th className="py-3 px-4 text-start font-bold text-gray-900">#</th>
-                        <th className="py-3 px-4 text-center font-bold text-gray-900">الصورة</th>
-                        <th className="py-3 px-4 text-start font-bold text-gray-900">المادة</th>
-                        <th className="py-3 px-4 text-start font-bold text-gray-900">الكود</th>
-                        <th className="py-3 px-4 text-start font-bold text-gray-900">الوحدة</th>
-                        <th className="py-3 px-4 text-end font-bold text-gray-900">الكمية</th>
-                        <th className="py-3 px-4 text-center font-bold text-gray-900">عدد الأوردرات</th>
+                      <tr className="bg-gray-50 border-b-2 border-gray-200 text-xs">
+                        <th className="py-2.5 px-3 text-start font-bold text-gray-600 w-[30px]">#</th>
+                        <th className="py-2.5 px-3 text-start font-bold text-gray-600">المادة</th>
+                        <th className="py-2.5 px-3 text-end font-bold text-gray-600 w-[60px]">موّرد</th>
+                        <th className="py-2.5 px-3 text-end font-bold text-gray-600 w-[60px]">مستهلك</th>
+                        <th className="py-2.5 px-3 text-end font-bold text-gray-600 w-[60px]">متبقي</th>
+                        <th className="py-2.5 px-3 text-center font-bold text-gray-600 w-[200px]">نسبة الاستهلاك</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {mMaterialConsumption.map((item, idx) => (
-                        <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
-                          <td className="py-3 px-4 text-gray-600 font-medium">{idx + 1}</td>
-                          <td className="py-2 px-4 text-center">{item.imageUrl && item.imageUrl.startsWith("http") ? <><img src={item.imageUrl} alt={item.materialName} className="w-10 h-10 object-cover rounded-lg border border-gray-200 mx-auto" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).parentElement!.querySelector('.img-fallback')?.classList.remove("hidden"); (e.target as HTMLImageElement).parentElement!.querySelector('.img-fallback')?.classList.add("flex"); }} /><div className="w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 items-center justify-center mx-auto hidden img-fallback"><Package className="h-5 w-5 text-gray-300" /></div></> : <div className="w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center mx-auto"><Package className="h-5 w-5 text-gray-300" /></div>}</td>
-                          <td className="py-3 px-4 font-semibold text-gray-900">{item.materialName}</td>
-                          <td className="py-3 px-4 font-mono text-xs text-gray-600">{item.materialCode}</td>
-                          <td className="py-3 px-4 text-gray-700">{item.unit}</td>
-                          <td className="py-3 px-4 text-end font-bold text-orange-700">{item.totalQty}</td>
-                          <td className="py-3 px-4 text-center font-medium text-gray-700">{item.orderCount}</td>
-                        </tr>
-                      ))}
+                      {mBarData.map((d, idx) => {
+                        const total = d.consumed + d.remaining;
+                        const pct = total > 0 ? Math.round((d.consumed / total) * 100) : 0;
+                        const isLow = d.remaining <= 5 && d.remaining > 0;
+                        const isDepleted = d.remaining === 0 && d.consumed > 0;
+                        return (
+                          <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="py-2 px-3 text-gray-500 font-medium text-xs">{idx + 1}</td>
+                            <td className="py-2 px-3 font-semibold text-gray-900 text-xs">{d.name}</td>
+                            <td className="py-2 px-3 text-end font-medium text-gray-700 text-xs">{total}</td>
+                            <td className="py-2 px-3 text-end font-bold text-orange-600 text-xs">{d.consumed}</td>
+                            <td className={`py-2 px-3 text-end font-bold text-xs ${isDepleted ? "text-red-600" : isLow ? "text-amber-600" : "text-blue-600"}`}>{d.remaining}</td>
+                            <td className="py-2 px-3">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden border border-gray-200" style={{ printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
+                                  <div className={`h-full rounded-full ${pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-orange-500" : pct >= 40 ? "bg-amber-400" : "bg-green-500"}`} style={{ width: `${pct}%`, printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}></div>
+                                </div>
+                                <span className={`text-xs font-bold min-w-[36px] text-end ${pct >= 90 ? "text-red-600" : pct >= 70 ? "text-orange-600" : "text-gray-700"}`}>{pct}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
-                    <tfoot>
-                      <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
-                        <td colSpan={5} className="py-3 px-4 text-gray-900">الإجمالي: {mMaterialConsumption.length} مادة</td>
-                        <td className="py-3 px-4 text-end text-orange-700">{mMaterialConsumption.reduce((s, i) => s + i.totalQty, 0)}</td>
-                        <td></td>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {mAggregated.length > 0 && (
+              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+                <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
+                  <Package className="h-5 w-5 text-primary" /> تفاصيل الاستهلاك لكل مادة — {toFullMonthLabel(selectedMonth)}
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm table-fixed">
+                    <colgroup>
+                      <col className="w-[30px]" />
+                      <col className="w-[45px]" />
+                      <col />
+                      <col className="w-[50px]" />
+                      <col className="w-[70px]" />
+                      <col className="w-[55px]" />
+                      <col className="w-[55px]" />
+                      <col className="w-[55px]" />
+                      <col className="w-[90px]" />
+                    </colgroup>
+                    <thead>
+                      <tr className="bg-gray-100 border-b-2 border-gray-300">
+                        <th className="py-3 px-2 text-start font-bold text-gray-900">#</th>
+                        <th className="py-3 px-2 text-center font-bold text-gray-900">الصورة</th>
+                        <th className="py-3 px-2 text-start font-bold text-gray-900">المادة</th>
+                        <th className="py-3 px-2 text-start font-bold text-gray-900 w-14">الوحدة</th>
+                        <th className="py-3 px-2 text-end font-bold text-gray-900 w-20">سعر البيع</th>
+                        <th className="py-3 px-2 text-end font-bold text-gray-900 w-16">الموّردة</th>
+                        <th className="py-3 px-2 text-end font-bold text-gray-900 w-16">المستهلك</th>
+                        <th className="py-3 px-2 text-end font-bold text-gray-900 w-16">المتبقي</th>
+                        <th className="py-3 px-2 text-end font-bold text-gray-900 w-24">الاستهلاك</th>
                       </tr>
-                    </tfoot>
+                    </thead>
+                    <tbody>
+                      {mAggregated.map((item, idx) => {
+                        const rate = item.totalDelivered > 0 ? Math.round((item.totalConsumed / item.totalDelivered) * 100) : 0;
+                        return (
+                          <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
+                            <td className="py-2 px-2 text-gray-600 font-medium">{idx + 1}</td>
+                            <td className="py-1 px-2 text-center">{item.imageUrl && item.imageUrl.startsWith("http") ? <><img src={item.imageUrl} alt={item.material} className="w-8 h-8 object-cover rounded border border-gray-200 mx-auto" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).parentElement!.querySelector('.img-fallback')?.classList.remove("hidden"); (e.target as HTMLImageElement).parentElement!.querySelector('.img-fallback')?.classList.add("flex"); }} /><div className="w-8 h-8 rounded border border-gray-200 bg-gray-50 items-center justify-center mx-auto hidden img-fallback"><Package className="h-4 w-4 text-gray-300" /></div></> : <div className="w-8 h-8 rounded border border-gray-200 bg-gray-50 flex items-center justify-center mx-auto"><Package className="h-4 w-4 text-gray-300" /></div>}</td>
+                            <td className="py-2 px-2 font-semibold text-gray-900 text-xs overflow-hidden text-ellipsis whitespace-nowrap" title={item.material}>{item.material}</td>
+                            <td className="py-2 px-2 text-gray-700 text-xs">{item.unit}</td>
+                            <td className="py-2 px-2 text-end text-gray-800 font-medium text-xs">{item.sellingPrice > 0 ? `${item.sellingPrice.toLocaleString()}` : "—"}</td>
+                            <td className="py-2 px-2 text-end text-gray-800 font-medium">{item.totalDelivered}</td>
+                            <td className="py-2 px-2 text-end font-bold text-orange-700">{item.totalConsumed}</td>
+                            <td className="py-2 px-2 text-end font-bold text-blue-700">{item.totalRemaining}</td>
+                            <td className="py-2 px-2 text-end">
+                              <div className="flex items-center justify-end gap-2">
+                                <div className="w-16 h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${rate >= 80 ? "bg-red-600" : rate >= 50 ? "bg-orange-600" : "bg-green-600"}`} style={{ width: `${Math.min(100, rate)}%` }} />
+                                </div>
+                                <span className="text-xs font-bold text-gray-800 min-w-[32px] text-end">{rate}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    {mAggregated.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
+                          <td colSpan={4} className="py-3 px-4 text-gray-900">الإجمالي</td>
+                          <td className="py-3 px-4 text-end text-gray-900">{mAggregated.reduce((s, i) => s + (i.sellingPrice * i.totalDelivered), 0) > 0 ? `${mAggregated.reduce((s, i) => s + (i.sellingPrice * i.totalDelivered), 0).toLocaleString()} ج.م` : ""}</td>
+                          <td className="py-3 px-4 text-end text-gray-900">{mTotalDelivered}</td>
+                          <td className="py-3 px-4 text-end text-orange-700">{mTotalConsumed}</td>
+                          <td className="py-3 px-4 text-end text-blue-700">{mAggregated.reduce((s, i) => s + i.totalRemaining, 0)}</td>
+                          <td className="py-3 px-4 text-end text-gray-900">{mConsumptionRate}%</td>
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
               </div>
