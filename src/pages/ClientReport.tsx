@@ -673,27 +673,6 @@ export default function ClientReport() {
           </div>
         </div>
 
-        {/* === SCREEN ACCOUNT SUMMARY === */}
-        <div className="mb-8 grid grid-cols-3 gap-4 print:hidden">
-          <div className="rounded-xl p-5 text-center bg-gradient-to-br from-gray-50 to-slate-100 dark:from-gray-900 dark:to-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
-            <DollarSign className="h-6 w-6 mx-auto text-gray-400 mb-2" />
-            <p className="text-xs text-gray-500 font-semibold mb-1">{t.crTotalSupplies}</p>
-            <p className="text-2xl font-bold text-gray-900">{totalOrderValue > 0 ? `${totalOrderValue.toLocaleString()}` : "0"}</p>
-            <p className="text-xs text-gray-400 font-medium">{t.crCurrency}</p>
-          </div>
-          <div className="rounded-xl p-5 text-center bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950/30 dark:to-emerald-900/20 border border-green-200 dark:border-green-800/40 shadow-sm">
-            <CreditCard className="h-6 w-6 mx-auto text-green-500 mb-2" />
-            <p className="text-xs text-green-600 font-semibold mb-1">{t.crPaidAmount}</p>
-            <p className="text-2xl font-bold text-green-700">{collectionStats.paidAmount > 0 ? `${collectionStats.paidAmount.toLocaleString()}` : "0"}</p>
-            <p className="text-xs text-green-500 font-medium">{t.crCurrency}</p>
-          </div>
-          <div className={`rounded-xl p-5 text-center shadow-sm ${collectionStats.remaining > 0 ? "bg-gradient-to-br from-red-50 to-rose-100 dark:from-red-950/30 dark:to-rose-900/20 border border-red-200 dark:border-red-800/40" : "bg-gradient-to-br from-gray-50 to-slate-100 dark:from-gray-900 dark:to-gray-800 border border-gray-200 dark:border-gray-700"}`}>
-            <Receipt className="h-6 w-6 mx-auto mb-2" style={{ color: collectionStats.remaining > 0 ? '#ef4444' : '#9ca3af' }} />
-            <p className={`text-xs font-semibold mb-1 ${collectionStats.remaining > 0 ? "text-red-600" : "text-gray-500"}`}>{t.crRemainingAmount}</p>
-            <p className={`text-2xl font-bold ${collectionStats.remaining > 0 ? "text-red-700" : "text-gray-900"}`}>{collectionStats.remaining > 0 ? `${collectionStats.remaining.toLocaleString()}` : "0"}</p>
-            <p className={`text-xs font-medium ${collectionStats.remaining > 0 ? "text-red-400" : "text-gray-400"}`}>{t.crCurrency}</p>
-          </div>
-        </div>
         {/* === PRINT-ONLY ACCOUNT SUMMARY === */}
         <div className="hidden print:block mb-5 print-account-block">
           <table className="w-full border-collapse text-center">
