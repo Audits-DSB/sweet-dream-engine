@@ -252,115 +252,135 @@
 
   .print-report-page {
     max-width: 100% !important;
-    padding: 0.3rem !important;
+    padding: 0 !important;
     margin: 0 !important;
     background: white !important;
   }
-  .print-report-page .mb-8 { margin-bottom: 0.75rem !important; }
-  .print-report-page .mb-6 { margin-bottom: 0.5rem !important; }
-  .print-report-page .mb-5 { margin-bottom: 0.5rem !important; }
-  .print-report-page .p-6 { padding: 0.75rem !important; }
-  .print-report-page .p-5 { padding: 0.65rem !important; }
-  .print-report-page .pb-6 { padding-bottom: 0.5rem !important; }
-  .print-report-page .pt-5 { padding-top: 0.5rem !important; }
-  .print-report-page .mt-8 { margin-top: 0.75rem !important; }
-  .print-report-page .gap-5 { gap: 0.5rem !important; }
-  .print-report-page .gap-4 { gap: 0.4rem !important; }
-  .print-report-page table { font-size: 10pt !important; border-collapse: collapse !important; background: white !important; }
-  .print-report-page th { font-weight: 800 !important; color: #000 !important; background: #f3f4f6 !important; border-bottom: 2px solid #9ca3af !important; padding: 5px 8px !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page td { color: #111 !important; padding: 4px 8px !important; border-bottom: 1px solid #d1d5db !important; background: white !important; }
-  .print-report-page tfoot td { font-weight: 700 !important; background: #f3f4f6 !important; border-top: 2px solid #9ca3af !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page h3 { font-size: 12pt !important; font-weight: 800 !important; color: #000 !important; background: white !important; }
-  .print-report-page > div:not(.report-header) { background: white !important; }
 
-  .print-report-page .report-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page .report-header [class*="bg-gradient"] { background: linear-gradient(to left, #f97316, #f59e0b) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page .report-header .bg-white { background: white !important; }
-  .print-report-page .report-header h1 { color: white !important; }
-  .print-report-page .report-header .text-white { color: white !important; }
-  .print-report-page .report-header .text-orange-100 { color: #ffedd5 !important; }
-  .print-report-page .report-header .text-orange-500 { color: #f97316 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page .report-header .text-orange-400 { color: #fb923c !important; }
+  .print-report-page .print-header-block {
+    margin-bottom: 10px !important;
+  }
+  .print-report-page .print-header-block .border-b-\[3px\] {
+    border-bottom: 3px solid #ea580c !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-report-page .print-header-block img {
+    width: 48px !important;
+    height: 48px !important;
+  }
+  .print-report-page .print-header-block .text-xl { font-size: 15pt !important; }
+  .print-report-page .print-header-block .text-lg { font-size: 13pt !important; }
+  .print-report-page .print-header-block .text-orange-600 {
+    color: #ea580c !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 
-  .print-report-page .bg-gray-50 { background: #f9fafb !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page .bg-gray-100 { background: #f3f4f6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page [class*="from-green-50"], .print-report-page [class*="from-emerald-50"] { background: linear-gradient(to bottom right, #f0fdf4, #d1fae5) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page [class*="from-red-50"] { background: linear-gradient(to bottom right, #fef2f2, #ffe4e6) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page [class*="from-gray-50"][class*="to-slate"] { background: linear-gradient(to bottom right, #f9fafb, #f1f5f9) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page [class*="from-emerald-50"][class*="via-teal"] { background: linear-gradient(to left, #ecfdf5, #f0fdfa, #ecfeff) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page .border-green-200, .print-report-page .border-emerald-200 { border-color: #a7f3d0 !important; }
-  .print-report-page .border-red-200 { border-color: #fecaca !important; }
-  .print-report-page .border-orange-100 { border-color: #fed7aa !important; }
+  .print-report-page .print-thankyou-block {
+    margin-bottom: 8px !important;
+  }
 
-  .print-report-page .stat-box-print { border: 1.5px solid #d1d5db !important; background: white !important; padding: 0.4rem !important; }
-  .print-report-page .stat-box-print p { color: #000 !important; }
-  .print-report-page .stat-box-print .text-lg { font-size: 13pt !important; }
+  .print-report-page .print-account-block table {
+    font-size: 10pt !important;
+    border-collapse: collapse !important;
+  }
+  .print-report-page .print-account-block th {
+    background: #f9fafb !important;
+    padding: 6px 10px !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-report-page .print-account-block td {
+    padding: 8px 10px !important;
+  }
+  .print-report-page .print-account-block .text-green-700 {
+    color: #15803d !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-report-page .print-account-block .text-red-700 {
+    color: #b91c1c !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 
-  .print-report-page .text-muted-foreground { color: #333 !important; }
-  .print-report-page h1, .print-report-page h2, .print-report-page h3 { color: #000 !important; }
-  .print-report-page .text-orange-600 { color: #ea580c !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .print-report-page .mb-8 { margin-bottom: 10px !important; }
+  .print-report-page .mb-6 { margin-bottom: 8px !important; }
+  .print-report-page .mb-5 { margin-bottom: 8px !important; }
+  .print-report-page .p-6 { padding: 8px !important; }
+  .print-report-page .p-5 { padding: 8px !important; }
+  .print-report-page .gap-5 { gap: 6px !important; }
+  .print-report-page .gap-4 { gap: 6px !important; }
+
+  .print-report-page .stat-box-print {
+    border: 1px solid #d1d5db !important;
+    background: white !important;
+    padding: 6px !important;
+    box-shadow: none !important;
+    border-radius: 6px !important;
+  }
+  .print-report-page .stat-box-print .rounded-full {
+    display: none !important;
+  }
+  .print-report-page .stat-box-print p:first-of-type { color: #374151 !important; font-size: 8pt !important; }
+  .print-report-page .stat-box-print p:last-of-type { color: #111 !important; font-size: 11pt !important; }
+
+  .print-report-page table:not(.print-account-block table) {
+    font-size: 9pt !important;
+    border-collapse: collapse !important;
+    background: white !important;
+  }
+  .print-report-page th {
+    font-weight: 700 !important;
+    color: #111 !important;
+    background: #f9fafb !important;
+    border-bottom: 2px solid #d1d5db !important;
+    padding: 5px 6px !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-report-page td {
+    color: #111 !important;
+    padding: 4px 6px !important;
+    border-bottom: 1px solid #e5e7eb !important;
+    background: white !important;
+  }
+  .print-report-page tfoot td {
+    font-weight: 700 !important;
+    background: #f9fafb !important;
+    border-top: 2px solid #d1d5db !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-report-page h3 {
+    font-size: 11pt !important;
+    font-weight: 700 !important;
+    color: #111 !important;
+    background: white !important;
+    margin-bottom: 6px !important;
+    padding: 6px 8px !important;
+  }
+
+  .print-report-page .border-2 {
+    border-width: 1px !important;
+    border-color: #e5e7eb !important;
+  }
+
+  .print-report-page .text-muted-foreground { color: #555 !important; }
+
+  .print-report-page .text-orange-600,
   .print-report-page .text-orange-700 { color: #c2410c !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page .text-blue-600 { color: #2563eb !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .print-report-page .text-blue-600,
   .print-report-page .text-blue-700 { color: #1d4ed8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page .text-blue-800 { color: #1e40af !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page .text-green-600 { color: #16a34a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .print-report-page .text-green-600,
   .print-report-page .text-green-700 { color: #15803d !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page .text-red-600 { color: #dc2626 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .print-report-page .text-red-600,
   .print-report-page .text-red-700 { color: #b91c1c !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page .text-amber-700, .print-report-page .text-amber-800 { color: #92400e !important; }
-  .print-report-page .text-cyan-700 { color: #0e7490 !important; }
-  .print-report-page .text-pink-700 { color: #be185d !important; }
-  .print-report-page .text-gray-900 { color: #000 !important; }
-  .print-report-page .text-gray-800 { color: #1f2937 !important; }
-  .print-report-page .text-gray-700 { color: #374151 !important; }
-  .print-report-page .text-gray-600 { color: #4b5563 !important; }
-  .print-report-page .text-gray-500 { color: #6b7280 !important; }
-  .print-report-page .text-gray-400 { color: #9ca3af !important; }
 
-  .print-report-page img.w-10 { width: 28px !important; height: 28px !important; }
-  .print-report-page .w-10.h-10:not(img) { width: 28px !important; height: 28px !important; min-width: 28px !important; }
-  .print-report-page .text-3xl { font-size: 18pt !important; }
-  .print-report-page .text-2xl { font-size: 14pt !important; }
-  .print-report-page .text-xl { font-size: 13pt !important; }
-  .print-report-page .text-lg { font-size: 11pt !important; }
-  .print-report-page .text-base { font-size: 10pt !important; }
-  .print-report-page .text-sm { font-size: 9pt !important; }
-  .print-report-page .text-xs { font-size: 8pt !important; }
-  .print-report-page .rounded-full { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page [class*="bg-green-"] { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page [class*="bg-red-"] { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page [class*="bg-orange-"] { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page [class*="bg-blue-"] { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page [class*="bg-amber-"] { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page [class*="bg-cyan-"] { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page [class*="bg-purple-"] { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page [class*="bg-teal-"] { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page [class*="bg-rose-"] { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-report-page [class*="bg-pink-"] { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-
-  .recharts-text, .recharts-cartesian-axis-tick-value {
-    fill: #222 !important;
-    font-size: 11px !important;
-    font-weight: 600 !important;
-  }
-  .recharts-legend-item-text { fill: #222 !important; font-size: 11px !important; font-weight: 600 !important; }
-  .recharts-label { fill: #111 !important; font-size: 11px !important; font-weight: 700 !important; }
-
-  .recharts-pie .recharts-sector,
-  .recharts-pie-sector path {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-  .recharts-bar .recharts-rectangle,
-  .recharts-bar-rectangle path {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-  .recharts-area path,
-  .recharts-line path {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
+  .print-report-page img.w-8 { width: 24px !important; height: 24px !important; }
+  .print-report-page .w-8.h-8:not(img) { width: 24px !important; height: 24px !important; min-width: 24px !important; }
 }
 
 /* RTL Arabic fixes - MUST be after all @layer blocks */

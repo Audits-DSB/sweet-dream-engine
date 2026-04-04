@@ -386,7 +386,8 @@ export default function ClientReport() {
       </div>
 
       <div className="max-w-[900px] mx-auto p-8 print:p-4 print:max-w-none print-report-page">
-        <div className="report-header mb-8 rounded-2xl overflow-hidden border border-orange-100 print:border-gray-300">
+        {/* === SCREEN HEADER === */}
+        <div className="report-header mb-8 rounded-2xl overflow-hidden border border-orange-100 print:hidden">
           <div className="bg-gradient-to-l from-orange-500 via-orange-400 to-amber-400 px-8 py-6 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-full bg-white shadow-lg flex items-center justify-center p-1.5">
@@ -416,13 +417,50 @@ export default function ClientReport() {
           </div>
         </div>
 
-        <div className="mb-6 rounded-xl overflow-hidden print:break-inside-avoid">
+        {/* === PRINT-ONLY HEADER === */}
+        <div className="hidden print:block mb-6 print-header-block">
+          <div className="flex items-center justify-between border-b-[3px] border-orange-500 pb-4 mb-4">
+            <div className="flex items-center gap-3">
+              <img src="/images/dsb-logo.png" alt="DSB Logo" className="w-14 h-14 object-contain" />
+              <div>
+                <p className="text-xl font-bold text-gray-900" style={{ letterSpacing: '1px' }}>Dental Smart Box</p>
+                <p className="text-xs text-gray-500 font-medium">إدارة مستلزمات طب الأسنان</p>
+              </div>
+            </div>
+            <div className="text-left text-xs text-gray-600 leading-relaxed">
+              <p dir="ltr" className="font-semibold">+20 11 0229 7174</p>
+              <p dir="ltr">dsbs.store</p>
+            </div>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] text-orange-600 font-bold tracking-[3px] uppercase mb-1">
+              {tab === "monthly" && selectedMonth ? `تقرير ${toFullMonthLabel(selectedMonth)}` : "تقرير شامل"}
+            </p>
+            <p className="text-lg font-bold text-gray-900">{client.name}</p>
+            <div className="flex items-center justify-center gap-3 text-xs text-gray-500 font-medium mt-1">
+              {client.city && <span>📍 {client.city}</span>}
+              {client.phone && <span dir="ltr">📞 {client.phone}</span>}
+              {client.joinDate && <span>📅 عميل منذ {new Date(client.joinDate).toLocaleDateString("ar-EG", { year: "numeric", month: "long" })}</span>}
+            </div>
+            <p className="text-[9px] text-gray-400 mt-1">{reportDate}</p>
+          </div>
+        </div>
+
+        {/* === SCREEN THANK YOU === */}
+        <div className="mb-6 rounded-xl overflow-hidden print:hidden">
           <div className="bg-gradient-to-l from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-950/20 dark:via-teal-950/20 dark:to-cyan-950/20 border border-emerald-200 dark:border-emerald-800/30 rounded-xl py-4 px-6 text-center">
             <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">✨ نشكركم على ثقتكم في DSB — نسعد دائماً بخدمتكم ونتطلع لشراكة مستمرة ✨</p>
           </div>
         </div>
+        {/* === PRINT-ONLY THANK YOU === */}
+        <div className="hidden print:block mb-4 print-thankyou-block">
+          <div className="border border-gray-300 rounded-lg py-2 px-4 text-center">
+            <p className="text-[10px] font-semibold text-gray-600">نشكركم على ثقتكم في DSB — نسعد دائماً بخدمتكم ونتطلع لشراكة مستمرة</p>
+          </div>
+        </div>
 
-        <div className="mb-8 grid grid-cols-3 gap-4 print:break-inside-avoid">
+        {/* === SCREEN ACCOUNT SUMMARY === */}
+        <div className="mb-8 grid grid-cols-3 gap-4 print:hidden">
           <div className="rounded-xl p-5 text-center bg-gradient-to-br from-gray-50 to-slate-100 dark:from-gray-900 dark:to-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
             <DollarSign className="h-6 w-6 mx-auto text-gray-400 mb-2" />
             <p className="text-xs text-gray-500 font-semibold mb-1">إجمالي المبيعات</p>
@@ -441,6 +479,25 @@ export default function ClientReport() {
             <p className={`text-2xl font-bold ${collectionStats.remaining > 0 ? "text-red-700" : "text-gray-900"}`}>{collectionStats.remaining > 0 ? `${collectionStats.remaining.toLocaleString()}` : "0"}</p>
             <p className={`text-xs font-medium ${collectionStats.remaining > 0 ? "text-red-400" : "text-gray-400"}`}>ج.م</p>
           </div>
+        </div>
+        {/* === PRINT-ONLY ACCOUNT SUMMARY === */}
+        <div className="hidden print:block mb-5 print-account-block">
+          <table className="w-full border-collapse text-center">
+            <thead>
+              <tr>
+                <th className="border border-gray-300 py-2 px-3 text-[10px] font-bold text-gray-600 bg-gray-50">إجمالي المبيعات</th>
+                <th className="border border-gray-300 py-2 px-3 text-[10px] font-bold text-green-700 bg-gray-50">المدفوع</th>
+                <th className="border border-gray-300 py-2 px-3 text-[10px] font-bold text-red-700 bg-gray-50">المتبقي</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="border border-gray-300 py-2 px-3 text-sm font-bold text-gray-900">{totalOrderValue > 0 ? `${totalOrderValue.toLocaleString()} ج.م` : "0 ج.م"}</td>
+                <td className="border border-gray-300 py-2 px-3 text-sm font-bold text-green-700">{collectionStats.paidAmount > 0 ? `${collectionStats.paidAmount.toLocaleString()} ج.م` : "0 ج.م"}</td>
+                <td className="border border-gray-300 py-2 px-3 text-sm font-bold text-red-700">{collectionStats.remaining > 0 ? `${collectionStats.remaining.toLocaleString()} ج.م` : "0 ج.م"}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
         <div className="print:hidden flex items-center gap-2 mb-6">
