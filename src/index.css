@@ -284,6 +284,22 @@
   }
   .recharts-legend-item-text { fill: #222 !important; font-size: 11px !important; font-weight: 600 !important; }
   .recharts-label { fill: #111 !important; font-size: 11px !important; font-weight: 700 !important; }
+
+  .recharts-pie .recharts-sector,
+  .recharts-pie-sector path {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .recharts-bar .recharts-rectangle,
+  .recharts-bar-rectangle path {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .recharts-area path,
+  .recharts-line path {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }
 
 /* RTL Arabic fixes - MUST be after all @layer blocks */

@@ -478,11 +478,11 @@ export default function ClientReport() {
                   <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={mOrderStatusDist} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value" strokeWidth={2} stroke="#fff"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1.5 }} style={PIE_LABEL_STYLE}>
+                        <Pie data={mOrderStatusDist} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={3} dataKey="value" strokeWidth={2} stroke="#fff">
                           {mOrderStatusDist.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} />
+                        <Legend wrapperStyle={{ fontSize: "11px", fontWeight: 600 }} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -500,12 +500,12 @@ export default function ClientReport() {
                   <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={mCollectionPie} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={4} dataKey="value" strokeWidth={2} stroke="#fff"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1.5 }} style={PIE_LABEL_STYLE}>
+                        <Pie data={mCollectionPie} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={4} dataKey="value" strokeWidth={2} stroke="#fff">
                           <Cell fill="#22c55e" />
                           <Cell fill="#ef4444" />
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, ""]} />
+                        <Legend wrapperStyle={{ fontSize: "11px", fontWeight: 600 }} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -523,11 +523,11 @@ export default function ClientReport() {
                   <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={mMaterialDist} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1.5 }} style={PIE_LABEL_STYLE}>
+                        <Pie data={mMaterialDist} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff">
                           {mMaterialDist.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} />
+                        <Legend wrapperStyle={{ fontSize: "11px", fontWeight: 600 }} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -843,11 +843,11 @@ export default function ClientReport() {
                   <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={orderStatusDist} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value" strokeWidth={2} stroke="#fff"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1.5 }} style={PIE_LABEL_STYLE}>
+                        <Pie data={orderStatusDist} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={3} dataKey="value" strokeWidth={2} stroke="#fff">
                           {orderStatusDist.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [`${v} طلب`, name]} />
+                        <Legend wrapperStyle={{ fontSize: "11px", fontWeight: 600 }} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -868,12 +868,12 @@ export default function ClientReport() {
                         <Pie data={[
                           { name: "محصّل", value: collectionStats.paidAmount },
                           { name: "متبقي", value: collectionStats.remaining },
-                        ].filter(d => d.value > 0)} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={4} dataKey="value" strokeWidth={2} stroke="#fff"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1.5 }} style={PIE_LABEL_STYLE}>
+                        ].filter(d => d.value > 0)} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={4} dataKey="value" strokeWidth={2} stroke="#fff">
                           <Cell fill="#22c55e" />
                           <Cell fill="#ef4444" />
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, ""]} />
+                        <Legend wrapperStyle={{ fontSize: "11px", fontWeight: 600 }} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -893,11 +893,11 @@ export default function ClientReport() {
                   <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1.5 }} style={PIE_LABEL_STYLE}>
+                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff">
                           {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} وحدة`, "مستهلك"]} />
+                        <Legend wrapperStyle={{ fontSize: "11px", fontWeight: 600 }} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
