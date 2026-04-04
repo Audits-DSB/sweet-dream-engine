@@ -774,17 +774,12 @@ export default function ClientReport() {
 
         {tab === "full" && (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
               <StatBox label="عدد المواد" value={stats.materialCount} icon={Package} color="bg-blue-100 text-blue-700" />
               <StatBox label="إجمالي الطلبات" value={orders.length} icon={ShoppingCart} color="bg-orange-100 text-orange-700" />
               <StatBox label="عمليات التوصيل" value={confirmedDeliveries.length} icon={Truck} color="bg-green-100 text-green-700" />
-              <StatBox label="نسبة الاستهلاك" value={`${stats.consumptionRate}%`} icon={PieChartIcon} color="bg-purple-100 text-purple-700" />
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
               <StatBox label="الكمية الموّردة" value={stats.totalDelivered.toLocaleString()} icon={BarChart3} color="bg-teal-100 text-teal-700" />
-              <StatBox label="المستهلك" value={stats.totalConsumed.toLocaleString()} icon={TrendingDown} color="bg-red-100 text-red-700" />
-              <StatBox label="قيمة الطلبات" value={`${totalOrderValue.toLocaleString()} ج.م`} icon={DollarSign} color="bg-amber-100 text-amber-700" />
-              <StatBox label="التحصيل" value={collectionStats.totalAmount > 0 ? `${Math.round((collectionStats.paidAmount / collectionStats.totalAmount) * 100)}%` : "—"} icon={CreditCard} color="bg-cyan-100 text-cyan-700" />
+              <StatBox label="نسبة الاستهلاك" value={`${stats.consumptionRate}%`} icon={PieChartIcon} color="bg-purple-100 text-purple-700" />
             </div>
 
             {lastAudit && (
