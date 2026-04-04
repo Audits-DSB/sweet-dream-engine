@@ -49,6 +49,7 @@ import ReturnsPage from "./pages/Returns";
 import ReturnDetailsPage from "./pages/ReturnDetails";
 import ClientReport from "./pages/ClientReport";
 import ClientAnalysis from "./pages/ClientAnalysis";
+import CompanyAnalysis from "./pages/CompanyAnalysis";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -107,6 +108,7 @@ const App = () => (
                 <Route path="/user-management" element={<UserManagementPage />} />
                 <Route path="/activity" element={<ActivityPage />} />
                 <Route path="/monthly/:year/:month" element={<MonthlyDetailPage />} />
+                <Route path="/company-analysis" element={<CompanyAnalysis />} />
                 <Route path="/company-inventory" element={<CompanyInventoryPage />} />
                 <Route path="/company-inventory/:id" element={<InventoryLotDetail />} />
               </Route>

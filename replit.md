@@ -86,6 +86,27 @@ Internal company page for analyzing client performance and consumption patterns.
 - File: `src/pages/ClientAnalysis.tsx`. Fully bilingual (AR/EN) via `ca*` translation keys. Print-ready with fixed header/footer.
 - Linked from ClientProfile via "تحليل العميل" / "Client Analysis" button.
 
+## Company Analysis Page (`/company-analysis`)
+Company-wide business intelligence report accessible from the sidebar. Features:
+- **Company Health Score (0-100)**: Weighted composite of profit margin (25%), collection rate (25%), growth (20%), return rate (15%), delivery rate (15%). SVG gauge + radar chart.
+- **KPI Cards**: Total revenue, net profit with margin %, total orders, active clients (last 90 days), collection rate, total returns.
+- **Treasury Overview**: Inflow, outflow, net cash flow cards.
+- **Monthly Revenue & Profit Trend**: 12-month ComposedChart (revenue bars, cost bars, profit line).
+- **Order Status Distribution**: Pie chart with color-coded statuses.
+- **Client Segments**: Pie chart (High Value >50k, Medium 10-50k, Low <10k, New).
+- **Top Clients Table**: Clickable rows → client profile. Shows orders, revenue, paid, balance.
+- **At-Risk Clients**: Overdue (>30 days), inactive (>45 days), high returns (>15%). Red alert cards.
+- **Top Materials by Revenue**: Horizontal bar chart.
+- **Delivery Performance**: Confirmed vs pending with rate bar.
+- **Collection Health**: Collected vs remaining + collection rate bar.
+- **Aging Analysis**: Bar chart of outstanding by age bucket (0-30, 31-60, 61-90, 90+ days).
+- **Inventory & Supply Predictions**: Top 20 items by runout urgency. Status badges.
+- **Supplier Analysis**: Cost bar chart by supplier.
+- **Returns by Client**: Bar chart of return items per client.
+- **Monthly Activity Overview**: Combined chart (orders, deliveries, returns bars + collections line).
+- File: `src/pages/CompanyAnalysis.tsx`. Fully bilingual (AR/EN) via `co*` translation keys. Print-ready. CSV export with 7 sections.
+- Sidebar: Under "System" group with PieChart icon.
+
 ## Key API Endpoints (server/routes.ts)
 - `/api/clients`, `/api/suppliers`, `/api/materials`, `/api/founders` — CRUD
 - `/api/orders`, `/api/orders/next-id` — Orders CRUD + auto-increment ID
