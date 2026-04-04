@@ -221,8 +221,8 @@ export default function ClientReport() {
     return Object.entries(map).map(([name, value]) => ({ name, value }));
   }, [orders]);
 
-  const barData = aggregated.slice(0, 10).map(a => ({
-    name: a.material.length > 14 ? a.material.slice(0, 14) + "…" : a.material,
+  const barData = aggregated.slice(0, 8).map(a => ({
+    name: a.material.length > 12 ? a.material.slice(0, 12) + "…" : a.material,
     consumed: a.totalConsumed, remaining: a.totalRemaining,
   }));
 
@@ -231,8 +231,8 @@ export default function ClientReport() {
     value: a.totalConsumed,
   }));
 
-  const coverageData = aggregated.filter(a => a.avgWeekly > 0).slice(0, 10).map(a => ({
-    name: a.material.length > 18 ? a.material.slice(0, 18) + "…" : a.material,
+  const coverageData = aggregated.filter(a => a.avgWeekly > 0).slice(0, 8).map(a => ({
+    name: a.material.length > 12 ? a.material.slice(0, 12) + "…" : a.material,
     weeks: a.totalRemaining > 0 && a.avgWeekly > 0 ? Math.round((a.totalRemaining / a.avgWeekly) * 10) / 10 : 0,
   }));
 
@@ -849,16 +849,16 @@ export default function ClientReport() {
                 <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
                   <BarChart3 className="h-5 w-5 text-primary" /> الاستهلاك مقابل المتبقي — أعلى المواد
                 </h3>
-                <div style={{ height: `${Math.max(350, barData.length * 45)}px` }}>
+                <div style={{ height: `${Math.max(300, barData.length * 55)}px` }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={barData} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 10 }} barGap={4} barCategoryGap="20%">
+                    <BarChart data={barData} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 10 }} barGap={2} barCategoryGap="30%">
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
                       <XAxis type="number" tick={AXIS_TICK} stroke="#555" />
-                      <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 11, fill: "#222", fontWeight: 600 }} stroke="#555" interval={0} />
+                      <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 10, fill: "#222", fontWeight: 600 }} stroke="#555" interval={0} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [v, name === "consumed" ? "مستهلك" : "متبقي"]} />
                       <Legend wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
-                      <Bar dataKey="consumed" fill="#c2410c" name="مستهلك" radius={[0, 4, 4, 0]} barSize={14} />
-                      <Bar dataKey="remaining" fill="#1d4ed8" name="متبقي" radius={[0, 4, 4, 0]} barSize={14} />
+                      <Bar dataKey="consumed" fill="#c2410c" name="مستهلك" radius={[0, 4, 4, 0]} barSize={12} />
+                      <Bar dataKey="remaining" fill="#1d4ed8" name="متبقي" radius={[0, 4, 4, 0]} barSize={12} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -870,14 +870,14 @@ export default function ClientReport() {
                 <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
                   <TrendingDown className="h-5 w-5 text-primary" /> تغطية المخزون (بالأسابيع)
                 </h3>
-                <div style={{ height: `${Math.max(300, coverageData.length * 40)}px` }}>
+                <div style={{ height: `${Math.max(280, coverageData.length * 45)}px` }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={coverageData} layout="vertical" margin={{ top: 10, right: 20, left: 10, bottom: 10 }} barCategoryGap="25%">
+                    <BarChart data={coverageData} layout="vertical" margin={{ top: 10, right: 20, left: 10, bottom: 10 }} barCategoryGap="35%">
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
                       <XAxis type="number" tick={AXIS_TICK} stroke="#555" />
-                      <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 11, fill: "#222", fontWeight: 600 }} stroke="#555" interval={0} />
+                      <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 10, fill: "#222", fontWeight: 600 }} stroke="#555" interval={0} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} أسبوع`, "التغطية"]} />
-                      <Bar dataKey="weeks" fill="#047857" name="أسابيع" radius={[0, 4, 4, 0]} barSize={16}>
+                      <Bar dataKey="weeks" fill="#047857" name="أسابيع" radius={[0, 4, 4, 0]} barSize={14}>
                         {coverageData.map((entry, i) => (
                           <Cell key={i} fill={entry.weeks <= 2 ? "#b91c1c" : entry.weeks <= 4 ? "#b45309" : "#047857"} />
                         ))}
