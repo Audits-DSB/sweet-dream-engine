@@ -386,56 +386,60 @@ export default function ClientReport() {
       </div>
 
       <div className="max-w-[900px] mx-auto p-8 print:p-4 print:max-w-none print-report-page">
-        <div className="mb-8 border-b-2 border-gray-300 pb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <img src="/images/dsb-logo.png" alt="DSB Logo" className="w-14 h-14 object-contain rounded-lg" />
+        <div className="report-header mb-8 rounded-2xl overflow-hidden border border-orange-100 print:border-gray-300">
+          <div className="bg-gradient-to-l from-orange-500 via-orange-400 to-amber-400 px-8 py-6 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-white shadow-lg flex items-center justify-center p-1.5">
+                <img src="/images/dsb-logo.png" alt="DSB Logo" className="w-full h-full object-contain rounded-full" />
+              </div>
               <div>
-                <h1 className="text-3xl font-bold text-primary print:text-black">DSB</h1>
-                <p className="text-sm font-semibold text-gray-600 print:text-gray-700">Dental Smart Box</p>
+                <h1 className="text-2xl font-bold text-white tracking-wide">Dental Smart Box</h1>
+                <p className="text-orange-100 text-sm font-medium mt-0.5">إدارة مستلزمات طب الأسنان</p>
               </div>
             </div>
-            <div className="text-left text-xs text-gray-500 font-medium leading-relaxed print:text-gray-600">
-              <p>إدارة مستلزمات طب الأسنان</p>
-              <p dir="ltr">+20 11 0229 7174</p>
+            <div className="text-left text-xs text-orange-100 font-medium leading-relaxed">
+              <p dir="ltr" className="text-white font-semibold">+20 11 0229 7174</p>
               <p dir="ltr">dsbs.store</p>
             </div>
           </div>
-          <div className="text-center">
-            <h2 className="text-2xl font-bold mb-3 print:text-gray-900">
+          <div className="bg-white px-8 py-5 text-center">
+            <p className="text-xs text-orange-500 font-bold tracking-widest uppercase mb-1">
               {tab === "monthly" && selectedMonth ? `تقرير ${toFullMonthLabel(selectedMonth)}` : "تقرير شامل"}
-            </h2>
-            <div className="inline-block bg-gray-50 border border-gray-200 rounded-xl px-6 py-3 print:bg-gray-100">
-              <p className="text-lg font-bold text-gray-900">{client.name}</p>
-              <div className="flex items-center justify-center gap-4 text-sm text-gray-600 font-medium mt-1">
-                {client.city && <span>📍 {client.city}</span>}
-                {client.phone && <span>📞 {client.phone}</span>}
-                {client.joinDate && <span>📅 عميل منذ {new Date(client.joinDate).toLocaleDateString("ar-EG", { year: "numeric", month: "long" })}</span>}
-              </div>
+            </p>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">{client.name}</h2>
+            <div className="flex items-center justify-center gap-4 text-sm text-gray-500 font-medium flex-wrap">
+              {client.city && <span className="flex items-center gap-1"><span className="text-orange-400">●</span> {client.city}</span>}
+              {client.phone && <span className="flex items-center gap-1" dir="ltr"><span className="text-orange-400">●</span> {client.phone}</span>}
+              {client.joinDate && <span className="flex items-center gap-1"><span className="text-orange-400">●</span> عميل منذ {new Date(client.joinDate).toLocaleDateString("ar-EG", { year: "numeric", month: "long" })}</span>}
             </div>
-            <p className="text-sm text-gray-500 font-medium mt-3">تاريخ التقرير: {reportDate}</p>
+            <p className="text-xs text-gray-400 mt-2">{reportDate}</p>
           </div>
         </div>
 
-        <div className="mb-6 text-center bg-gradient-to-l from-blue-50 to-cyan-50 dark:from-blue-950/20 dark:to-cyan-950/20 border border-blue-100 dark:border-blue-900/30 rounded-xl py-4 px-6 print:break-inside-avoid">
-          <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">نشكركم على ثقتكم في DSB — نسعد دائماً بخدمتكم ونتطلع لشراكة مستمرة</p>
+        <div className="mb-6 rounded-xl overflow-hidden print:break-inside-avoid">
+          <div className="bg-gradient-to-l from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-950/20 dark:via-teal-950/20 dark:to-cyan-950/20 border border-emerald-200 dark:border-emerald-800/30 rounded-xl py-4 px-6 text-center">
+            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">✨ نشكركم على ثقتكم في DSB — نسعد دائماً بخدمتكم ونتطلع لشراكة مستمرة ✨</p>
+          </div>
         </div>
 
         <div className="mb-8 grid grid-cols-3 gap-4 print:break-inside-avoid">
-          <div className="border-2 border-gray-200 rounded-xl p-4 bg-card text-center">
-            <p className="text-xs text-gray-500 font-medium mb-1">إجمالي المبيعات</p>
-            <p className="text-xl font-bold text-gray-900">{totalOrderValue > 0 ? `${totalOrderValue.toLocaleString()}` : "0"}</p>
-            <p className="text-xs text-gray-500">ج.م</p>
+          <div className="rounded-xl p-5 text-center bg-gradient-to-br from-gray-50 to-slate-100 dark:from-gray-900 dark:to-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
+            <DollarSign className="h-6 w-6 mx-auto text-gray-400 mb-2" />
+            <p className="text-xs text-gray-500 font-semibold mb-1">إجمالي المبيعات</p>
+            <p className="text-2xl font-bold text-gray-900">{totalOrderValue > 0 ? `${totalOrderValue.toLocaleString()}` : "0"}</p>
+            <p className="text-xs text-gray-400 font-medium">ج.م</p>
           </div>
-          <div className="border-2 border-green-200 rounded-xl p-4 bg-green-50 dark:bg-green-950/20 text-center">
-            <p className="text-xs text-green-700 font-medium mb-1">المدفوع</p>
-            <p className="text-xl font-bold text-green-700">{collectionStats.paidAmount > 0 ? `${collectionStats.paidAmount.toLocaleString()}` : "0"}</p>
-            <p className="text-xs text-green-600">ج.م</p>
+          <div className="rounded-xl p-5 text-center bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950/30 dark:to-emerald-900/20 border border-green-200 dark:border-green-800/40 shadow-sm">
+            <CreditCard className="h-6 w-6 mx-auto text-green-500 mb-2" />
+            <p className="text-xs text-green-600 font-semibold mb-1">المدفوع</p>
+            <p className="text-2xl font-bold text-green-700">{collectionStats.paidAmount > 0 ? `${collectionStats.paidAmount.toLocaleString()}` : "0"}</p>
+            <p className="text-xs text-green-500 font-medium">ج.م</p>
           </div>
-          <div className={`border-2 rounded-xl p-4 text-center ${collectionStats.remaining > 0 ? "border-red-200 bg-red-50 dark:bg-red-950/20" : "border-gray-200 bg-card"}`}>
-            <p className={`text-xs font-medium mb-1 ${collectionStats.remaining > 0 ? "text-red-700" : "text-gray-500"}`}>المتبقي</p>
-            <p className={`text-xl font-bold ${collectionStats.remaining > 0 ? "text-red-700" : "text-gray-900"}`}>{collectionStats.remaining > 0 ? `${collectionStats.remaining.toLocaleString()}` : "0"}</p>
-            <p className={`text-xs ${collectionStats.remaining > 0 ? "text-red-600" : "text-gray-500"}`}>ج.م</p>
+          <div className={`rounded-xl p-5 text-center shadow-sm ${collectionStats.remaining > 0 ? "bg-gradient-to-br from-red-50 to-rose-100 dark:from-red-950/30 dark:to-rose-900/20 border border-red-200 dark:border-red-800/40" : "bg-gradient-to-br from-gray-50 to-slate-100 dark:from-gray-900 dark:to-gray-800 border border-gray-200 dark:border-gray-700"}`}>
+            <Receipt className="h-6 w-6 mx-auto mb-2" style={{ color: collectionStats.remaining > 0 ? '#ef4444' : '#9ca3af' }} />
+            <p className={`text-xs font-semibold mb-1 ${collectionStats.remaining > 0 ? "text-red-600" : "text-gray-500"}`}>المتبقي</p>
+            <p className={`text-2xl font-bold ${collectionStats.remaining > 0 ? "text-red-700" : "text-gray-900"}`}>{collectionStats.remaining > 0 ? `${collectionStats.remaining.toLocaleString()}` : "0"}</p>
+            <p className={`text-xs font-medium ${collectionStats.remaining > 0 ? "text-red-400" : "text-gray-400"}`}>ج.م</p>
           </div>
         </div>
 
@@ -1001,12 +1005,12 @@ export default function ClientReport() {
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: any; color: string }) {
   return (
-    <div className="border-2 border-gray-200 rounded-xl p-4 bg-card print:break-inside-avoid stat-box-print">
-      <div className={`h-8 w-8 rounded-lg ${color} flex items-center justify-center mb-2`}>
+    <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 bg-card print:break-inside-avoid stat-box-print shadow-sm hover:shadow-md transition-shadow">
+      <div className={`h-9 w-9 rounded-full ${color} flex items-center justify-center mb-2.5`}>
         <Icon className="h-4 w-4" />
       </div>
-      <p className="text-xs text-gray-500 font-medium">{label}</p>
-      <p className="text-lg font-bold mt-1 text-gray-900">{value}</p>
+      <p className="text-xs text-gray-500 font-semibold">{label}</p>
+      <p className="text-lg font-bold mt-0.5 text-gray-900">{value}</p>
     </div>
   );
 }
