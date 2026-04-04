@@ -787,10 +787,11 @@ router.post("/orders/:id/lines", async (req, res) => {
     }
   }
 
-  const { data: orderData } = await supabaseAdmin.from("orders").select("order_type, date").eq("id", orderId).single();
+  const { data: orderData } = await supabaseAdmin.from("orders").select("order_type, date, client_id").eq("id", orderId).single();
+  const deliveredStatuses = ["Delivered", "تم التسليم", "مُسلَّم"];
   if (orderData?.order_type === "inventory") {
     const { data: existingInv } = await supabaseAdmin.from("company_inventory").select("id").eq("source_order", orderId).limit(1);
-    const { data: confirmedDeliveries } = await supabaseAdmin.from("deliveries").select("id").eq("order_id", orderId).in("status", ["Delivered", "تم التسليم", "مُسلَّم"]);
+    const { data: confirmedDeliveries } = await supabaseAdmin.from("deliveries").select("id").eq("order_id", orderId).in("status", deliveredStatuses);
     const hasExistingInventory = existingInv && existingInv.length > 0;
     const hasConfirmedDelivery = confirmedDeliveries && confirmedDeliveries.length > 0;
     if (hasExistingInventory || hasConfirmedDelivery) {
@@ -815,6 +816,71 @@ router.post("/orders/:id/lines", async (req, res) => {
     }
   }
 
+  if (!orderData || orderData.order_type !== "inventory") {
+    try {
+      const { data: deliveredDels } = await supabaseAdmin.from("deliveries").select("*").eq("order_id", orderId).in("status", deliveredStatuses).order("created_at", { ascending: false });
+      if (deliveredDels && deliveredDels.length > 0) {
+        const latestDel = deliveredDels[0];
+        const clientId = orderData?.client_id || latestDel.client_id;
+        const { data: clientData } = await supabaseAdmin.from("clients").select("name").eq("id", clientId).single();
+        const clientName = clientData?.name || clientId;
+        const deliveryDate = latestDel.date || new Date().toISOString().split("T")[0];
+        const ts = Date.now();
+
+        const ciRows = (data || []).map((line: any) => ({
+          id: `CI-${latestDel.id}-${line.material_code || line.id}-${ts}`,
+          client_id: clientId,
+          client_name: clientName,
+          material: line.material_name || "",
+          code: line.material_code || "",
+          unit: line.unit || "unit",
+          delivered: Number(line.quantity) || 0,
+          remaining: Number(line.quantity) || 0,
+          selling_price: Number(line.selling_price) || 0,
+          store_cost: Number(line.cost_price) || 0,
+          delivery_date: deliveryDate,
+          source_order: orderId,
+        }));
+
+        if (ciRows.length > 0) {
+          await supabaseAdmin.from("client_inventory").insert(ciRows);
+        }
+
+        let parsedNotes: any = null;
+        try { parsedNotes = typeof latestDel.notes === "string" ? JSON.parse(latestDel.notes) : null; } catch {}
+        const existingItems: any[] = (parsedNotes && Array.isArray(parsedNotes.items)) ? parsedNotes.items : [];
+
+        if (existingItems.length === 0 && !parsedNotes) {
+          const { data: allLines } = await supabaseAdmin.from("order_lines").select("*").eq("order_id", orderId);
+          const fullItems = (allLines || []).map((l: any) => ({
+            lineId: l.id,
+            materialCode: l.material_code || "",
+            materialName: l.material_name || "",
+            qty: Number(l.quantity) || 0,
+            unit: l.unit || "unit",
+          }));
+          await supabaseAdmin.from("deliveries").update({
+            notes: JSON.stringify({ items: fullItems }),
+            items: fullItems.length,
+          }).eq("id", latestDel.id);
+        } else {
+          const newNoteItems = (data || []).map((line: any) => ({
+            lineId: line.id,
+            materialCode: line.material_code || "",
+            materialName: line.material_name || "",
+            qty: Number(line.quantity) || 0,
+            unit: line.unit || "unit",
+          }));
+          const mergedItems = [...existingItems, ...newNoteItems];
+          await supabaseAdmin.from("deliveries").update({
+            notes: JSON.stringify({ items: mergedItems }),
+            items: mergedItems.length,
+          }).eq("id", latestDel.id);
+        }
+      }
+    } catch (e: any) { console.warn("[add-lines] client_inventory + delivery sync error:", e.message); }
+  }
+
   res.json(camelizeKeys(data));
 });
 router.delete("/order-lines/:id", async (req, res) => {
@@ -836,6 +902,41 @@ router.delete("/order-lines/:id", async (req, res) => {
         await supabaseAdmin.from("company_inventory").delete().like("id", `CI-edit-${snap.id}-%`);
         await supabaseAdmin.from("company_inventory").delete().like("id", `CI-%-${snap.material_code}-%`).eq("source_order", snap.order_id).eq("quantity", snap.quantity);
       } catch (e: any) { console.warn("[delete-line] company_inventory cleanup:", e.message); }
+    }
+
+    if (!orderData || orderData.order_type !== "inventory") {
+      try {
+        const deliveredStatuses = ["Delivered", "تم التسليم", "مُسلَّم"];
+        const { data: deliveredDels } = await supabaseAdmin.from("deliveries").select("*").eq("order_id", snap.order_id).in("status", deliveredStatuses);
+        if (deliveredDels && deliveredDels.length > 0) {
+          const lineId = String(snap.id);
+          const matCode = snap.material_code || "";
+
+          const { data: ciRows } = await supabaseAdmin.from("client_inventory").select("id")
+            .eq("source_order", snap.order_id).eq("code", matCode);
+          for (const ci of ciRows || []) {
+            await supabaseAdmin.from("client_inventory").delete().eq("id", ci.id);
+          }
+
+          for (const del of deliveredDels) {
+            let parsedNotes: any = null;
+            try { parsedNotes = typeof del.notes === "string" ? JSON.parse(del.notes) : null; } catch {}
+            if (parsedNotes && Array.isArray(parsedNotes.items)) {
+              const filtered = parsedNotes.items.filter((it: any) => {
+                if (it.lineId && String(it.lineId) === lineId) return false;
+                if (!it.lineId && (it.materialCode || "") === matCode) return false;
+                return true;
+              });
+              if (filtered.length !== parsedNotes.items.length) {
+                await supabaseAdmin.from("deliveries").update({
+                  notes: JSON.stringify({ items: filtered }),
+                  items: filtered.length,
+                }).eq("id", del.id);
+              }
+            }
+          }
+        }
+      } catch (e: any) { console.warn("[delete-line] client_inventory + delivery cleanup error:", e.message); }
     }
   }
   const { error } = await supabaseAdmin.from("order_lines").delete().eq("id", req.params.id);
@@ -891,6 +992,65 @@ router.patch("/order-lines/:id", async (req, res) => {
           await supabaseAdmin.from("company_inventory").update(updateFields).eq("id", matchRow.id);
         }
       }
+    }
+
+    if (!orderData || orderData.order_type !== "inventory") {
+      try {
+        const deliveredStatuses = ["Delivered", "تم التسليم", "مُسلَّم"];
+        const { data: deliveredDels } = await supabaseAdmin.from("deliveries").select("*").eq("order_id", orderId).in("status", deliveredStatuses);
+        if (deliveredDels && deliveredDels.length > 0) {
+          const oldQty = Number(oldLine.quantity) || 0;
+          const newQty = Number(quantity) || 0;
+          const oldSell = Number(oldLine.selling_price) || 0;
+          const newSell = Number(sellingPrice) || 0;
+          const oldCost = Number(oldLine.cost_price) || 0;
+          const newCost = Number(costPrice) || 0;
+          if (oldQty !== newQty || Math.abs(oldSell - newSell) > 0.001 || Math.abs(oldCost - newCost) > 0.001) {
+            const { data: ciRows } = await supabaseAdmin.from("client_inventory").select("*").eq("source_order", orderId).eq("code", oldLine.material_code);
+            if (ciRows && ciRows.length > 0) {
+              let qtyDiff = newQty - oldQty;
+              for (const ci of ciRows) {
+                const ciUpdate: Record<string, any> = {};
+                if (Math.abs(oldSell - newSell) > 0.001) ciUpdate.selling_price = newSell;
+                if (Math.abs(oldCost - newCost) > 0.001) ciUpdate.store_cost = newCost;
+                if (qtyDiff !== 0) {
+                  const newDelivered = Math.max(0, Number(ci.delivered) + qtyDiff);
+                  const newRemaining = Math.max(0, Number(ci.remaining) + qtyDiff);
+                  ciUpdate.delivered = newDelivered;
+                  ciUpdate.remaining = newRemaining;
+                  qtyDiff = 0;
+                }
+                if (Object.keys(ciUpdate).length > 0) {
+                  await supabaseAdmin.from("client_inventory").update(ciUpdate).eq("id", ci.id);
+                }
+              }
+            }
+
+            const lineId = String(oldLine.id);
+            for (const del of deliveredDels) {
+              let parsedNotes: any = null;
+              try { parsedNotes = typeof del.notes === "string" ? JSON.parse(del.notes) : null; } catch {}
+              if (parsedNotes && Array.isArray(parsedNotes.items)) {
+                let changed = false;
+                const updatedItems = parsedNotes.items.map((it: any) => {
+                  const matchById = it.lineId && String(it.lineId) === lineId;
+                  const matchByCode = !it.lineId && (it.materialCode || "") === oldLine.material_code;
+                  if (matchById || matchByCode) {
+                    changed = true;
+                    return { ...it, qty: newQty };
+                  }
+                  return it;
+                });
+                if (changed) {
+                  await supabaseAdmin.from("deliveries").update({
+                    notes: JSON.stringify({ items: updatedItems }),
+                  }).eq("id", del.id);
+                }
+              }
+            }
+          }
+        }
+      } catch (e: any) { console.warn("[patch-line] client_inventory + delivery sync error:", e.message); }
     }
   }
 
