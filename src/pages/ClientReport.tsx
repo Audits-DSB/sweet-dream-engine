@@ -547,9 +547,10 @@ export default function ClientReport() {
 
             {mDailyData.length > 0 && (
               <div className="mb-8 border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
-                <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
+                <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
                   <CalendarDays className="h-5 w-5 text-primary" /> الحركة اليومية — {toYMLabel(selectedMonth)}
                 </h3>
+                <p className="hidden print:block text-xs text-gray-500 mb-3">يوضح هذا الرسم عدد الطلبات والتوصيلات لكل يوم خلال الشهر. الأعمدة البرتقالية تمثل الطلبات، والخضراء تمثل التوصيلات.</p>
                 <div className="h-[260px] print:h-[180px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={mDailyData}>
@@ -563,7 +564,7 @@ export default function ClientReport() {
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-3 border-t border-gray-200 pt-3 print:hidden">
+                <div className="mt-3 border-t border-gray-200 pt-3">
                   <table className="w-full text-xs">
                     <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">اليوم</th><th className="py-2 px-3 text-end font-bold text-gray-700">طلبات</th><th className="py-2 px-3 text-end font-bold text-gray-700">توصيلات</th></tr></thead>
                     <tbody>{mDailyData.filter(d => d.orders > 0 || d.deliveries > 0).map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.day}</td><td className="py-1.5 px-3 text-end font-semibold text-orange-600">{d.orders}</td><td className="py-1.5 px-3 text-end font-semibold text-green-600">{d.deliveries}</td></tr>)}</tbody>
@@ -575,9 +576,10 @@ export default function ClientReport() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
               {mCollectionPie.length > 0 && (
                 <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
-                  <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
+                  <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
                     <Receipt className="h-5 w-5 text-primary" /> تحصيل الشهر
                   </h3>
+                  <p className="hidden print:block text-xs text-gray-500 mb-3">يوضح نسبة المبالغ المحصّلة (أخضر) مقابل المبالغ المتبقية (أحمر) خلال الشهر.</p>
                   <div className="h-[220px] print:h-[160px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -590,7 +592,7 @@ export default function ClientReport() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1 print:hidden">
+                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
                     {mCollectionPie.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: i === 0 ? "#22c55e" : "#ef4444" }}></span>{d.name}</span><span className="font-bold text-gray-900">{Number(d.value).toLocaleString()} ج.م</span></div>)}
                   </div>
                 </div>
@@ -598,9 +600,10 @@ export default function ClientReport() {
 
               {mMaterialDist.length > 0 && (
                 <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
-                  <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
+                  <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
                     <Package className="h-5 w-5 text-primary" /> المواد الموّردة
                   </h3>
+                  <p className="hidden print:block text-xs text-gray-500 mb-3">يوضح توزيع الكميات الموّردة حسب نوع المادة خلال الشهر.</p>
                   <div className="h-[220px] print:h-[160px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -612,7 +615,7 @@ export default function ClientReport() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1 print:hidden">
+                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
                     {mMaterialDist.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>{d.name}</span><span className="font-bold text-gray-900">{d.value} وحدة</span></div>)}
                   </div>
                 </div>
@@ -621,9 +624,10 @@ export default function ClientReport() {
 
             {mDailyData.length > 0 && mStats.totalValue > 0 && (
               <div className="mb-8 border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
-                <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
+                <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
                   <DollarSign className="h-5 w-5 text-primary" /> قيمة الطلبات اليومية — {toYMLabel(selectedMonth)}
                 </h3>
+                <p className="hidden print:block text-xs text-gray-500 mb-3">يوضح القيمة المالية للطلبات (بالجنيه المصري) لكل يوم خلال الشهر. المنطقة البرتقالية تمثل حجم التعاملات.</p>
                 <div className="h-[240px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={mDailyData}>
@@ -801,9 +805,10 @@ export default function ClientReport() {
             {monthlyOverviewData.length > 0 && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
                 <div className="border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
-                  <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
+                  <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
                     <CalendarDays className="h-5 w-5 text-primary" /> حركة الطلبات والتوصيل الشهرية
                   </h3>
+                  <p className="hidden print:block text-xs text-gray-500 mb-3">يوضح عدد الطلبات (برتقالي) والتوصيلات (أخضر) لكل شهر خلال فترة التعامل.</p>
                   <div className="h-[260px] print:h-[180px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={monthlyOverviewData}>
@@ -817,7 +822,7 @@ export default function ClientReport() {
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="mt-3 border-t border-gray-200 pt-3 print:hidden">
+                  <div className="mt-3 border-t border-gray-200 pt-3">
                     <table className="w-full text-xs">
                       <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">الشهر</th><th className="py-2 px-3 text-end font-bold text-gray-700">طلبات</th><th className="py-2 px-3 text-end font-bold text-gray-700">توصيلات</th></tr></thead>
                       <tbody>{monthlyOverviewData.map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.label}</td><td className="py-1.5 px-3 text-end font-semibold text-orange-600">{d.orders}</td><td className="py-1.5 px-3 text-end font-semibold text-green-600">{d.deliveries}</td></tr>)}</tbody>
@@ -826,9 +831,10 @@ export default function ClientReport() {
                 </div>
 
                 <div className="border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
-                  <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
+                  <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
                     <DollarSign className="h-5 w-5 text-primary" /> قيمة الطلبات الشهرية
                   </h3>
+                  <p className="hidden print:block text-xs text-gray-500 mb-3">يوضح القيمة المالية الإجمالية للطلبات (بالجنيه المصري) لكل شهر. المنطقة البرتقالية تعكس حجم التعاملات الشهرية.</p>
                   <div className="h-[260px] print:h-[180px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={monthlyOverviewData}>
@@ -846,7 +852,7 @@ export default function ClientReport() {
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="mt-3 border-t border-gray-200 pt-3 print:hidden">
+                  <div className="mt-3 border-t border-gray-200 pt-3">
                     <table className="w-full text-xs">
                       <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">الشهر</th><th className="py-2 px-3 text-end font-bold text-gray-700">القيمة (ج.م)</th></tr></thead>
                       <tbody>{monthlyOverviewData.map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.label}</td><td className="py-1.5 px-3 text-end font-semibold text-orange-600">{Number(d.value).toLocaleString()} ج.م</td></tr>)}</tbody>
@@ -858,9 +864,10 @@ export default function ClientReport() {
 
             {pieData.length > 0 && (
               <div className="mb-8 border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
-                <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
+                <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
                   <PieChartIcon className="h-5 w-5 text-primary" /> توزيع الاستهلاك
                 </h3>
+                <p className="hidden print:block text-xs text-gray-500 mb-3">يوضح نسبة استهلاك كل مادة من إجمالي المواد المستهلكة. كل لون يمثل مادة مختلفة.</p>
                 <div className="h-[260px] print:h-[200px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -872,7 +879,7 @@ export default function ClientReport() {
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-3 border-t border-gray-200 pt-2 space-y-1 print:hidden">
+                <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
                   {pieData.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>{d.name}</span><span className="font-bold text-gray-900">{d.value} وحدة</span></div>)}
                 </div>
               </div>
@@ -880,23 +887,24 @@ export default function ClientReport() {
 
             {barData.length > 0 && (
               <div className="mb-8 border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
-                <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
+                <h3 className="text-base font-bold mb-2 flex items-center gap-2 text-gray-900">
                   <BarChart3 className="h-5 w-5 text-primary" /> الاستهلاك مقابل المتبقي — أعلى المواد
                 </h3>
-                <div style={{ height: `${Math.max(400, barData.length * 55)}px` }}>
+                <p className="hidden print:block text-xs text-gray-500 mb-3">يقارن لكل مادة بين الكمية المستهلكة (برتقالي) والكمية المتبقية (أزرق). كلما كان الأزرق أقل، يعني أن المادة قاربت على النفاد.</p>
+                <div style={{ height: `${Math.max(400, barData.length * 45)}px` }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={barData} layout="vertical" margin={{ top: 5, right: 30, left: 5, bottom: 5 }} barGap={2} barCategoryGap="25%">
+                    <BarChart data={barData} layout="vertical" margin={{ top: 5, right: 30, left: 5, bottom: 5 }} barCategoryGap="30%">
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} horizontal={false} />
                       <XAxis type="number" tick={{ fontSize: 11, fill: "currentColor", fontWeight: 600 }} stroke="currentColor" />
-                      <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 11, fill: "currentColor", fontWeight: 700 }} stroke="none" interval={0} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [v, name === "consumed" ? "مستهلك" : "متبقي"]} />
+                      <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 10, fill: "currentColor", fontWeight: 700 }} stroke="none" interval={0} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [`${v} وحدة`, name === "consumed" ? "مستهلك" : "متبقي"]} />
                       <Legend wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
-                      <Bar dataKey="consumed" fill="#f97316" name="مستهلك" radius={[0, 6, 6, 0]} barSize={18} />
-                      <Bar dataKey="remaining" fill="#3b82f6" name="متبقي" radius={[0, 6, 6, 0]} barSize={18} />
+                      <Bar dataKey="consumed" stackId="a" fill="#f97316" name="مستهلك" radius={[0, 0, 0, 0]} barSize={22} />
+                      <Bar dataKey="remaining" stackId="a" fill="#3b82f6" name="متبقي" radius={[0, 6, 6, 0]} barSize={22} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-4 border-t border-gray-200 pt-3 print:hidden">
+                <div className="mt-4 border-t border-gray-200 pt-3">
                   <table className="w-full text-xs">
                     <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">المادة</th><th className="py-2 px-3 text-end font-bold text-gray-700">مستهلك</th><th className="py-2 px-3 text-end font-bold text-gray-700">متبقي</th></tr></thead>
                     <tbody>{barData.map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.name}</td><td className="py-1.5 px-3 text-end font-semibold text-orange-600">{d.consumed}</td><td className="py-1.5 px-3 text-end font-semibold text-blue-600">{d.remaining}</td></tr>)}</tbody>
