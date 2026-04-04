@@ -629,7 +629,7 @@ export default function ClientReport() {
                       {mMaterialConsumption.map((item, idx) => (
                         <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
                           <td className="py-3 px-4 text-gray-600 font-medium">{idx + 1}</td>
-                          <td className="py-2 px-4 text-center">{item.imageUrl ? <img src={item.imageUrl} alt={item.materialName} className="w-10 h-10 object-cover rounded-lg border border-gray-200 mx-auto" /> : <span className="text-gray-300 text-xs">—</span>}</td>
+                          <td className="py-2 px-4 text-center">{item.imageUrl ? <img src={item.imageUrl} alt={item.materialName} className="w-10 h-10 object-cover rounded-lg border border-gray-200 mx-auto" /> : <div className="w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center mx-auto"><Package className="h-5 w-5 text-gray-300" /></div>}</td>
                           <td className="py-3 px-4 font-semibold text-gray-900">{item.materialName}</td>
                           <td className="py-3 px-4 font-mono text-xs text-gray-600">{item.materialCode}</td>
                           <td className="py-3 px-4 text-gray-700">{item.unit}</td>
@@ -985,7 +985,7 @@ export default function ClientReport() {
                       return (
                         <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
                           <td className="py-3 px-4 text-gray-600 font-medium">{idx + 1}</td>
-                          <td className="py-2 px-4 text-center">{item.imageUrl ? <img src={item.imageUrl} alt={item.material} className="w-10 h-10 object-cover rounded-lg border border-gray-200 mx-auto" /> : <span className="text-gray-300 text-xs">—</span>}</td>
+                          <td className="py-2 px-4 text-center">{item.imageUrl ? <img src={item.imageUrl} alt={item.material} className="w-10 h-10 object-cover rounded-lg border border-gray-200 mx-auto" /> : <div className="w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center mx-auto"><Package className="h-5 w-5 text-gray-300" /></div>}</td>
                           <td className="py-3 px-4 font-semibold text-gray-900">{item.material}<br/><span className="text-xs text-gray-500 font-mono">{item.code}</span></td>
                           <td className="py-3 px-4 text-gray-700">{item.unit}</td>
                           <td className="py-3 px-4 text-end text-gray-800 font-medium">{item.sellingPrice > 0 ? `${item.sellingPrice.toLocaleString()} ج.م` : "—"}</td>
