@@ -185,6 +185,17 @@
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     font-size: 12pt !important;
+    overflow: visible !important;
+  }
+  * {
+    overflow: visible !important;
+    scrollbar-width: none !important;
+  }
+  *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+  html, body, #root, main, [class*="SidebarProvider"], [class*="overflow"] {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
   }
   .print\:p-4 { padding: 1rem !important; }
   .print\:max-w-none { max-width: none !important; }

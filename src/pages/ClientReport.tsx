@@ -221,8 +221,8 @@ export default function ClientReport() {
     return Object.entries(map).map(([name, value]) => ({ name, value }));
   }, [orders]);
 
-  const barData = aggregated.slice(0, 12).map(a => ({
-    name: a.material.length > 18 ? a.material.slice(0, 18) + "…" : a.material,
+  const barData = aggregated.slice(0, 10).map(a => ({
+    name: a.material.length > 14 ? a.material.slice(0, 14) + "…" : a.material,
     consumed: a.totalConsumed, remaining: a.totalRemaining,
   }));
 
@@ -849,16 +849,16 @@ export default function ClientReport() {
                 <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
                   <BarChart3 className="h-5 w-5 text-primary" /> الاستهلاك مقابل المتبقي — أعلى المواد
                 </h3>
-                <div className="h-[320px]">
+                <div style={{ height: `${Math.max(350, barData.length * 45)}px` }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={barData} layout="vertical" margin={{ top: 5, right: 30, left: 5, bottom: 5 }}>
+                    <BarChart data={barData} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 10 }} barGap={4} barCategoryGap="20%">
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
                       <XAxis type="number" tick={AXIS_TICK} stroke="#555" />
-                      <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 12, fill: "#222", fontWeight: 500 }} stroke="#555" />
+                      <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 11, fill: "#222", fontWeight: 600 }} stroke="#555" interval={0} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [v, name === "consumed" ? "مستهلك" : "متبقي"]} />
                       <Legend wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
-                      <Bar dataKey="consumed" fill="#c2410c" name="مستهلك" radius={[0, 4, 4, 0]} />
-                      <Bar dataKey="remaining" fill="#1d4ed8" name="متبقي" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="consumed" fill="#c2410c" name="مستهلك" radius={[0, 4, 4, 0]} barSize={14} />
+                      <Bar dataKey="remaining" fill="#1d4ed8" name="متبقي" radius={[0, 4, 4, 0]} barSize={14} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -870,14 +870,14 @@ export default function ClientReport() {
                 <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
                   <TrendingDown className="h-5 w-5 text-primary" /> تغطية المخزون (بالأسابيع)
                 </h3>
-                <div className="h-[280px]">
+                <div style={{ height: `${Math.max(300, coverageData.length * 40)}px` }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={coverageData} layout="vertical" margin={{ top: 5, right: 20, left: 5, bottom: 5 }}>
+                    <BarChart data={coverageData} layout="vertical" margin={{ top: 10, right: 20, left: 10, bottom: 10 }} barCategoryGap="25%">
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
                       <XAxis type="number" tick={AXIS_TICK} stroke="#555" />
-                      <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 12, fill: "#222", fontWeight: 500 }} stroke="#555" />
+                      <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 11, fill: "#222", fontWeight: 600 }} stroke="#555" interval={0} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} أسبوع`, "التغطية"]} />
-                      <Bar dataKey="weeks" fill="#047857" name="أسابيع" radius={[0, 4, 4, 0]}>
+                      <Bar dataKey="weeks" fill="#047857" name="أسابيع" radius={[0, 4, 4, 0]} barSize={16}>
                         {coverageData.map((entry, i) => (
                           <Cell key={i} fill={entry.weeks <= 2 ? "#b91c1c" : entry.weeks <= 4 ? "#b45309" : "#047857"} />
                         ))}
