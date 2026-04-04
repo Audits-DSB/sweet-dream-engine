@@ -3750,11 +3750,9 @@ router.get("/orders/:id/returnable-items", async (req, res) => {
 
 router.get("/monthly-snapshots", async (_req, res) => {
   try {
-    const { pool } = await import("./db");
-    const tableExists = await pool.query(`SELECT to_regclass('monthly_snapshots')`);
-    if (!tableExists.rows[0]?.to_regclass) return res.json([]);
-    const { rows } = await pool.query(`SELECT * FROM monthly_snapshots ORDER BY month DESC`);
-    res.json(rows || []);
+    const { data, error } = await supabaseAdmin.from("monthly_snapshots").select("*").order("month", { ascending: false });
+    if (error) return res.json([]);
+    res.json(data || []);
   } catch {
     res.json([]);
   }
@@ -3765,32 +3763,25 @@ router.post("/monthly-snapshots", async (req, res) => {
     const { month, revenue, profit, orders_count, new_clients, collection_rate, total_collected, total_outstanding } = req.body;
     if (!month) return res.status(400).json({ error: "month is required" });
 
-    const { pool } = await import("./db");
-    await pool.query(`CREATE TABLE IF NOT EXISTS monthly_snapshots (
-      id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-      month text NOT NULL UNIQUE,
-      revenue numeric DEFAULT 0,
-      profit numeric DEFAULT 0,
-      orders_count integer DEFAULT 0,
-      new_clients integer DEFAULT 0,
-      collection_rate numeric DEFAULT 0,
-      total_collected numeric DEFAULT 0,
-      total_outstanding numeric DEFAULT 0,
-      created_at timestamptz DEFAULT now()
-    )`);
+    const snapshotData = { month, revenue, profit, orders_count, new_clients, collection_rate, total_collected, total_outstanding };
 
-    const { rows } = await pool.query(`SELECT id FROM monthly_snapshots WHERE month = $1`, [month]);
+    const { data: existing } = await supabaseAdmin
+      .from("monthly_snapshots")
+      .select("id")
+      .eq("month", month)
+      .maybeSingle();
 
-    if (rows.length > 0) {
-      await pool.query(
-        `UPDATE monthly_snapshots SET revenue=$1, profit=$2, orders_count=$3, new_clients=$4, collection_rate=$5, total_collected=$6, total_outstanding=$7 WHERE month=$8`,
-        [revenue, profit, orders_count, new_clients, collection_rate, total_collected, total_outstanding, month]
-      );
+    if (existing) {
+      const { error } = await supabaseAdmin
+        .from("monthly_snapshots")
+        .update({ revenue, profit, orders_count, new_clients, collection_rate, total_collected, total_outstanding })
+        .eq("month", month);
+      if (error) return res.status(500).json({ error: error.message });
     } else {
-      await pool.query(
-        `INSERT INTO monthly_snapshots (month, revenue, profit, orders_count, new_clients, collection_rate, total_collected, total_outstanding) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [month, revenue, profit, orders_count, new_clients, collection_rate, total_collected, total_outstanding]
-      );
+      const { error } = await supabaseAdmin
+        .from("monthly_snapshots")
+        .insert(snapshotData);
+      if (error) return res.status(500).json({ error: error.message });
     }
     res.json({ success: true });
   } catch (e: any) {
