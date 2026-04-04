@@ -392,14 +392,14 @@ export default function ClientReport() {
         {tab === "monthly" && (
           <>
             <div className="print:hidden mb-6 flex items-center justify-center gap-3">
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigateMonth(1)} disabled={availableMonths.indexOf(selectedMonth) >= availableMonths.length - 1}>
-                <ChevronRight className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => navigateMonth(1)} disabled={availableMonths.indexOf(selectedMonth) >= availableMonths.length - 1}>
+                <ChevronRight className="h-5 w-5" />
               </Button>
               <div className="relative">
                 <select
                   value={selectedMonth}
                   onChange={e => setSelectedMonth(e.target.value)}
-                  className="appearance-none bg-card border rounded-lg px-4 py-2 pr-10 text-sm font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className="appearance-none bg-card border-2 rounded-xl pl-10 pr-5 py-2.5 text-sm font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[160px]"
                 >
                   {availableMonths.map(ym => (
                     <option key={ym} value={ym}>{toYMLabel(ym)}</option>
@@ -407,7 +407,7 @@ export default function ClientReport() {
                 </select>
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigateMonth(-1)} disabled={availableMonths.indexOf(selectedMonth) <= 0}>
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => navigateMonth(-1)} disabled={availableMonths.indexOf(selectedMonth) <= 0}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
             </div>
