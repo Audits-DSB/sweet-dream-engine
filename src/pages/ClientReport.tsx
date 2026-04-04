@@ -463,7 +463,7 @@ export default function ClientReport() {
         <div className="mb-8 grid grid-cols-3 gap-4 print:hidden">
           <div className="rounded-xl p-5 text-center bg-gradient-to-br from-gray-50 to-slate-100 dark:from-gray-900 dark:to-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
             <DollarSign className="h-6 w-6 mx-auto text-gray-400 mb-2" />
-            <p className="text-xs text-gray-500 font-semibold mb-1">إجمالي المبيعات</p>
+            <p className="text-xs text-gray-500 font-semibold mb-1">إجمالي التوريدات</p>
             <p className="text-2xl font-bold text-gray-900">{totalOrderValue > 0 ? `${totalOrderValue.toLocaleString()}` : "0"}</p>
             <p className="text-xs text-gray-400 font-medium">ج.م</p>
           </div>
@@ -485,7 +485,7 @@ export default function ClientReport() {
           <table className="w-full border-collapse text-center">
             <thead>
               <tr>
-                <th className="border border-gray-300 py-2 px-3 text-[10px] font-bold text-gray-600 bg-gray-50">إجمالي المبيعات</th>
+                <th className="border border-gray-300 py-2 px-3 text-[10px] font-bold text-gray-600 bg-gray-50">إجمالي التوريدات</th>
                 <th className="border border-gray-300 py-2 px-3 text-[10px] font-bold text-green-700 bg-gray-50">المدفوع</th>
                 <th className="border border-gray-300 py-2 px-3 text-[10px] font-bold text-red-700 bg-gray-50">المتبقي</th>
               </tr>
