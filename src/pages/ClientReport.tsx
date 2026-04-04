@@ -90,6 +90,7 @@ export default function ClientReport() {
         deliveryDate: r.deliveryDate || r.delivery_date || "",
         sourceOrder: r.sourceOrder || r.source_order || "",
         status: r.status || "",
+        imageUrl: r.imageUrl || r.image_url || "",
       })));
       const clientOrders = (ord || []).filter((o: any) => (o.clientId || o.client_id) === id).map((o: any) => ({
         id: o.id, date: o.date || "", totalSelling: Number(o.totalSelling ?? o.total_selling ?? 0),
@@ -145,7 +146,7 @@ export default function ClientReport() {
   }, [orders, deliveries, collections, returns]);
 
   const aggregated = useMemo(() => {
-    const map = new Map<string, { material: string; code: string; unit: string; totalDelivered: number; totalRemaining: number; totalConsumed: number; avgWeekly: number; sellingPrice: number; count: number }>();
+    const map = new Map<string, { material: string; code: string; unit: string; totalDelivered: number; totalRemaining: number; totalConsumed: number; avgWeekly: number; sellingPrice: number; count: number; imageUrl: string }>();
     for (const item of inventory) {
       const key = item.code || item.material;
       const consumed = Math.max(0, item.delivered - item.remaining);
@@ -156,6 +157,7 @@ export default function ClientReport() {
         existing.totalConsumed += consumed;
         existing.avgWeekly = Math.max(existing.avgWeekly, item.avgWeeklyUsage);
         if (item.sellingPrice > 0) existing.sellingPrice = item.sellingPrice;
+        if (item.imageUrl && !existing.imageUrl) existing.imageUrl = item.imageUrl;
         existing.count++;
       } else {
         map.set(key, {
@@ -163,6 +165,7 @@ export default function ClientReport() {
           totalDelivered: item.delivered, totalRemaining: item.remaining,
           totalConsumed: consumed, avgWeekly: item.avgWeeklyUsage,
           sellingPrice: item.sellingPrice, count: 1,
+          imageUrl: item.imageUrl || "",
         });
       }
     }
@@ -292,6 +295,17 @@ export default function ClientReport() {
     }));
   }, [mInventoryDelivered]);
 
+  const inventoryImageMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const item of inventory) {
+      if (item.imageUrl) {
+        if (item.code && !map[item.code]) map[item.code] = item.imageUrl;
+        if (item.material && !map[item.material.toLowerCase().trim()]) map[item.material.toLowerCase().trim()] = item.imageUrl;
+      }
+    }
+    return map;
+  }, [inventory]);
+
   const mMaterialConsumption = useMemo(() => {
     const mOrderIds = new Set(mOrders.map(o => o.id));
     const lines = orderLines.filter(l => mOrderIds.has(l.orderId));
@@ -306,8 +320,11 @@ export default function ClientReport() {
         map.set(key, { materialName: l.materialName, materialCode: l.materialCode, unit: l.unit, totalQty: l.quantity, orderIds: new Set([l.orderId]) });
       }
     }
-    return [...map.values()].map(v => ({ materialName: v.materialName, materialCode: v.materialCode, unit: v.unit, totalQty: v.totalQty, orderCount: v.orderIds.size })).sort((a, b) => b.totalQty - a.totalQty);
-  }, [mOrders, orderLines]);
+    return [...map.values()].map(v => ({
+      materialName: v.materialName, materialCode: v.materialCode, unit: v.unit, totalQty: v.totalQty, orderCount: v.orderIds.size,
+      imageUrl: inventoryImageMap[v.materialCode] || inventoryImageMap[v.materialName.toLowerCase().trim()] || "",
+    })).sort((a, b) => b.totalQty - a.totalQty);
+  }, [mOrders, orderLines, inventoryImageMap]);
 
   const mCollectionPie = useMemo(() => {
     if (mStats.totalDue <= 0) return [];
@@ -562,6 +579,7 @@ export default function ClientReport() {
                     <thead>
                       <tr className="bg-gray-100 border-b-2 border-gray-300">
                         <th className="py-3 px-4 text-start font-bold text-gray-900">#</th>
+                        <th className="py-3 px-4 text-center font-bold text-gray-900">الصورة</th>
                         <th className="py-3 px-4 text-start font-bold text-gray-900">المادة</th>
                         <th className="py-3 px-4 text-start font-bold text-gray-900">الكود</th>
                         <th className="py-3 px-4 text-start font-bold text-gray-900">الوحدة</th>
@@ -573,6 +591,7 @@ export default function ClientReport() {
                       {mMaterialConsumption.map((item, idx) => (
                         <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
                           <td className="py-3 px-4 text-gray-600 font-medium">{idx + 1}</td>
+                          <td className="py-2 px-4 text-center">{item.imageUrl ? <img src={item.imageUrl} alt={item.materialName} className="w-10 h-10 object-cover rounded-lg border border-gray-200 mx-auto" /> : <span className="text-gray-300 text-xs">—</span>}</td>
                           <td className="py-3 px-4 font-semibold text-gray-900">{item.materialName}</td>
                           <td className="py-3 px-4 font-mono text-xs text-gray-600">{item.materialCode}</td>
                           <td className="py-3 px-4 text-gray-700">{item.unit}</td>
@@ -583,7 +602,7 @@ export default function ClientReport() {
                     </tbody>
                     <tfoot>
                       <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
-                        <td colSpan={4} className="py-3 px-4 text-gray-900">الإجمالي: {mMaterialConsumption.length} مادة</td>
+                        <td colSpan={5} className="py-3 px-4 text-gray-900">الإجمالي: {mMaterialConsumption.length} مادة</td>
                         <td className="py-3 px-4 text-end text-orange-700">{mMaterialConsumption.reduce((s, i) => s + i.totalQty, 0)}</td>
                         <td></td>
                       </tr>
@@ -985,6 +1004,7 @@ export default function ClientReport() {
                   <thead>
                     <tr className="bg-gray-100 border-b-2 border-gray-300">
                       <th className="py-3 px-4 text-start font-bold text-gray-900">#</th>
+                      <th className="py-3 px-4 text-center font-bold text-gray-900">الصورة</th>
                       <th className="py-3 px-4 text-start font-bold text-gray-900">المادة</th>
                       <th className="py-3 px-4 text-start font-bold text-gray-900">الوحدة</th>
                       <th className="py-3 px-4 text-end font-bold text-gray-900">سعر البيع</th>
@@ -1001,6 +1021,7 @@ export default function ClientReport() {
                       return (
                         <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
                           <td className="py-3 px-4 text-gray-600 font-medium">{idx + 1}</td>
+                          <td className="py-2 px-4 text-center">{item.imageUrl ? <img src={item.imageUrl} alt={item.material} className="w-10 h-10 object-cover rounded-lg border border-gray-200 mx-auto" /> : <span className="text-gray-300 text-xs">—</span>}</td>
                           <td className="py-3 px-4 font-semibold text-gray-900">{item.material}<br/><span className="text-xs text-gray-500 font-mono">{item.code}</span></td>
                           <td className="py-3 px-4 text-gray-700">{item.unit}</td>
                           <td className="py-3 px-4 text-end text-gray-800 font-medium">{item.sellingPrice > 0 ? `${item.sellingPrice.toLocaleString()} ج.م` : "—"}</td>
@@ -1023,7 +1044,7 @@ export default function ClientReport() {
                   {aggregated.length > 0 && (
                     <tfoot>
                       <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
-                        <td colSpan={3} className="py-3 px-4 text-gray-900">الإجمالي</td>
+                        <td colSpan={4} className="py-3 px-4 text-gray-900">الإجمالي</td>
                         <td className="py-3 px-4 text-end text-gray-900">{stats.totalSellingValue > 0 ? `${stats.totalSellingValue.toLocaleString()} ج.م` : ""}</td>
                         <td className="py-3 px-4 text-end text-gray-900">{stats.totalDelivered}</td>
                         <td className="py-3 px-4 text-end text-orange-700">{stats.totalConsumed}</td>
