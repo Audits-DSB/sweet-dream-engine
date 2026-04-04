@@ -777,28 +777,6 @@ export default function ClientReport() {
               </div>
             )}
 
-            {collectionStats.total > 0 && (
-              <div className="mb-8 border-2 border-gray-200 rounded-xl p-5 bg-card flex items-center gap-4 print:break-inside-avoid">
-                <div className="h-10 w-10 rounded-lg bg-cyan-100 flex items-center justify-center shrink-0">
-                  <Receipt className="h-5 w-5 text-cyan-700" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <p className="text-base font-bold text-gray-900">ملخص التحصيل</p>
-                    <span className={`text-sm font-semibold ${collectionStats.remaining > 0 ? "text-red-700" : "text-green-700"}`}>
-                      {collectionStats.remaining > 0 ? `متبقي: ${collectionStats.remaining.toLocaleString()} ج.م` : "تم التحصيل بالكامل ✓"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 mt-2">
-                    <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-green-600 rounded-full transition-all" style={{ width: `${collectionStats.totalAmount > 0 ? Math.min(100, (collectionStats.paidAmount / collectionStats.totalAmount) * 100) : 0}%` }} />
-                    </div>
-                    <span className="text-sm text-gray-600 font-medium">{collectionStats.paidAmount.toLocaleString()} / {collectionStats.totalAmount.toLocaleString()} ج.م</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {returnsStats.total > 0 && (
               <div className="mb-8 border-2 border-gray-200 rounded-xl p-5 bg-card flex items-center gap-4 print:break-inside-avoid">
                 <div className="h-10 w-10 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
@@ -871,79 +849,27 @@ export default function ClientReport() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
-              {orderStatusDist.length > 0 && (
-                <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
-                  <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
-                    <ShoppingCart className="h-5 w-5 text-primary" /> حالات الطلبات
-                  </h3>
-                  <div className="h-[220px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={orderStatusDist} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={3} dataKey="value" strokeWidth={2} stroke="#fff">
-                          {orderStatusDist.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                        </Pie>
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [`${v} طلب`, name]} />
-                        <Legend wrapperStyle={{ fontSize: "11px", fontWeight: 600 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
-                    {orderStatusDist.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>{d.name}</span><span className="font-bold text-gray-900">{d.value} طلب</span></div>)}
-                  </div>
+            {pieData.length > 0 && (
+              <div className="mb-8 border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
+                <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
+                  <PieChartIcon className="h-5 w-5 text-primary" /> توزيع الاستهلاك
+                </h3>
+                <div className="h-[260px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={95} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff">
+                        {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} وحدة`, "مستهلك"]} />
+                      <Legend wrapperStyle={{ fontSize: "11px", fontWeight: 600 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              )}
-
-              {collectionStats.totalAmount > 0 && (
-                <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
-                  <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
-                    <Receipt className="h-5 w-5 text-primary" /> تقدم التحصيل
-                  </h3>
-                  <div className="h-[220px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={[
-                          { name: "محصّل", value: collectionStats.paidAmount },
-                          { name: "متبقي", value: collectionStats.remaining },
-                        ].filter(d => d.value > 0)} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={4} dataKey="value" strokeWidth={2} stroke="#fff">
-                          <Cell fill="#22c55e" />
-                          <Cell fill="#ef4444" />
-                        </Pie>
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, ""]} />
-                        <Legend wrapperStyle={{ fontSize: "11px", fontWeight: 600 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
-                    <div className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block bg-green-500"></span>محصّل</span><span className="font-bold text-gray-900">{Number(collectionStats.paidAmount).toLocaleString()} ج.م</span></div>
-                    <div className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block bg-red-500"></span>متبقي</span><span className="font-bold text-gray-900">{Number(collectionStats.remaining).toLocaleString()} ج.م</span></div>
-                    <div className="flex justify-between text-xs border-t border-gray-200 pt-1 mt-1"><span className="font-bold text-gray-800">الإجمالي</span><span className="font-bold text-gray-900">{Number(collectionStats.totalAmount).toLocaleString()} ج.م</span></div>
-                  </div>
+                <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
+                  {pieData.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>{d.name}</span><span className="font-bold text-gray-900">{d.value} وحدة</span></div>)}
                 </div>
-              )}
-
-              {pieData.length > 0 && (
-                <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
-                  <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
-                    <PieChartIcon className="h-5 w-5 text-primary" /> توزيع الاستهلاك
-                  </h3>
-                  <div className="h-[220px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff">
-                          {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                        </Pie>
-                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} وحدة`, "مستهلك"]} />
-                        <Legend wrapperStyle={{ fontSize: "11px", fontWeight: 600 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
-                    {pieData.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>{d.name}</span><span className="font-bold text-gray-900">{d.value} وحدة</span></div>)}
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {barData.length > 0 && (
               <div className="mb-8 border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
