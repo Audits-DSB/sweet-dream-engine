@@ -13,7 +13,8 @@ A full-featured React + TypeScript operations management dashboard for a dental 
 - **Routing**: React Router v6
 - **State**: TanStack React Query v5 + React Context (AuthContext, LanguageContext)
 - **Charts**: Recharts (used in FounderProfile for profit/capital/funding visualizations)
-- **Design**: RTL Arabic, IBM Plex Sans Arabic font, orange primary color theme
+- **Design**: Bilingual (AR/EN) via LanguageContext, RTL Arabic / LTR English, Cairo/Tajawal/IBM Plex Sans Arabic fonts, orange primary color theme
+- **i18n**: `src/i18n/ar.ts` and `src/i18n/en.ts` — flat key-value translation files. Client report keys prefixed with `cr`. Type derived from `ar.ts`.
 
 ## Database Tables (Supabase PostgreSQL)
 All business data in main Supabase project:
@@ -71,6 +72,19 @@ All financial pages and server endpoints account for returns:
 - **NotificationBell** (`src/components/NotificationBell.tsx`) — Clicking a notification navigates to `/activity?highlight=<id>` to show full details before navigating to the entity.
 - **Order Cascade Delete**: Deleting an order also deletes all related records. Full related data is saved in the trash snapshot.
 - **Order Cascade Restore**: `POST /orders/:id/cascade-restore` re-creates the order and all related records from the saved snapshot.
+
+## Client Analysis Page (`/clients/:id/analysis`)
+Internal company page for analyzing client performance and consumption patterns. Features:
+- **Client Score (0-100)**: Weighted composite of collection rate (35%), order regularity (25%), consumption volume (20%), return rate (20%). Displayed as circular gauge + radar chart.
+- **Month-over-Month Comparison**: Current vs previous month for orders, order value, deliveries, collections, returns — with percentage change indicators.
+- **Smart Alerts**: Overdue payments (>30 days), inactive client (>45 days no orders), high return rate (>15%), low consumption materials (<30%).
+- **Consumption Predictions**: Per-material runout estimates based on remaining qty / weekly usage. Status badges: Critical (≤2 weeks), Soon (≤6 weeks), Stable.
+- **Returns Analysis**: Return count, items, accepted/pending breakdown, return rate %.
+- **Order Trend Charts**: Last 6 months bar chart (orders) + line chart (value).
+- **Preferred Materials**: Pie chart of top 6 ordered materials by quantity.
+- **Consumption Pattern Table**: Top 15 materials with delivered/consumed/remaining + progress bar.
+- File: `src/pages/ClientAnalysis.tsx`. Fully bilingual (AR/EN) via `ca*` translation keys. Print-ready with fixed header/footer.
+- Linked from ClientProfile via "تحليل العميل" / "Client Analysis" button.
 
 ## Key API Endpoints (server/routes.ts)
 - `/api/clients`, `/api/suppliers`, `/api/materials`, `/api/founders` — CRUD

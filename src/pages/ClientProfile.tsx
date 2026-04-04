@@ -181,6 +181,10 @@ export default function ClientProfile() {
             <BarChart3 className="h-3.5 w-3.5" />
             تقرير الاستهلاك
           </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate(`/clients/${id}/analysis`)} className="gap-1.5">
+            <BarChart3 className="h-3.5 w-3.5" />
+            {t.caTitle}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>{t.editClient}</Button>
         </div>
       </div>

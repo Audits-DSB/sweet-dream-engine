@@ -48,6 +48,7 @@ import InventoryLotDetail from "./pages/InventoryLotDetail";
 import ReturnsPage from "./pages/Returns";
 import ReturnDetailsPage from "./pages/ReturnDetails";
 import ClientReport from "./pages/ClientReport";
+import ClientAnalysis from "./pages/ClientAnalysis";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -76,6 +77,7 @@ const App = () => (
                 <Route path="/clients" element={<ClientsPage />} />
                 <Route path="/clients/:id" element={<ClientProfile />} />
                 <Route path="/clients/:id/report" element={<ClientReport />} />
+                <Route path="/clients/:id/analysis" element={<ClientAnalysis />} />
                 <Route path="/requests" element={<RequestsPage />} />
                 <Route path="/materials" element={<MaterialsPage />} />
                 <Route path="/orders" element={<OrdersPage />} />
