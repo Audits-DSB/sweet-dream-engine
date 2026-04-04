@@ -1020,9 +1020,7 @@ export default function ClientReport() {
                           </tr>
                         );
                       })}
-                    </tbody>
-                    {mAggregated.length > 0 && (
-                      <tfoot>
+                      {mAggregated.length > 0 && (
                         <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
                           <td colSpan={4} className="py-3 px-4 text-gray-900">{t.crTotalLabel}</td>
                           <td className="py-3 px-4 text-end text-gray-900">{mAggregated.reduce((s, i) => s + (i.sellingPrice * i.totalDelivered), 0) > 0 ? cur(mAggregated.reduce((s, i) => s + (i.sellingPrice * i.totalDelivered), 0)) : ""}</td>
@@ -1031,8 +1029,8 @@ export default function ClientReport() {
                           <td className="py-3 px-4 text-end text-blue-700">{mAggregated.reduce((s, i) => s + i.totalRemaining, 0)}</td>
                           <td className="py-3 px-4 text-end text-gray-900">{mConsumptionRate}%</td>
                         </tr>
-                      </tfoot>
-                    )}
+                      )}
+                    </tbody>
                   </table>
                 </div>
               </div>
@@ -1064,14 +1062,12 @@ export default function ClientReport() {
                           <td className="py-3 px-4"><StatusBadge status={o.status} label={statusLabel(o.status)} /></td>
                         </tr>
                       ))}
-                    </tbody>
-                    <tfoot>
                       <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
                         <td colSpan={3} className="py-3 px-4 text-gray-900">{t.crTotalCount} {mOrders.length} {t.crOrderUnit}</td>
                         <td className="py-3 px-4 text-end text-gray-900">{cur(mStats.totalValue)}</td>
                         <td></td>
                       </tr>
-                    </tfoot>
+                    </tbody>
                   </table>
                 </div>
               </div>
@@ -1308,9 +1304,7 @@ export default function ClientReport() {
                         </tr>
                       );
                     })}
-                  </tbody>
-                  {aggregated.length > 0 && (
-                    <tfoot>
+                    {aggregated.length > 0 && (
                       <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
                         <td colSpan={4} className="py-3 px-4 text-gray-900">{t.crTotalLabel}</td>
                         <td className="py-3 px-4 text-end text-gray-900">{stats.totalSellingValue > 0 ? cur(stats.totalSellingValue) : ""}</td>
@@ -1320,8 +1314,8 @@ export default function ClientReport() {
                         <td className="py-3 px-4 text-end text-gray-900">{stats.avgWeeklyTotal > 0 ? stats.avgWeeklyTotal.toFixed(1) : "—"}</td>
                         <td className="py-3 px-4 text-end text-gray-900">{stats.consumptionRate}%</td>
                       </tr>
-                    </tfoot>
-                  )}
+                    )}
+                  </tbody>
                 </table>
               </div>
             </div>
