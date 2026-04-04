@@ -880,7 +880,10 @@ export default function Dashboard() {
                     });
                     const { toast } = await import("sonner");
                     toast.success(t.snapshotSaved);
-                  } catch { }
+                  } catch (err: any) {
+                    const { toast: t2 } = await import("sonner");
+                    t2.error(err?.message || "Failed to save snapshot");
+                  }
                 }}>
                   {t.generateSnapshot}
                 </Button>
