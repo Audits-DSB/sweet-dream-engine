@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { exportToCsv } from "@/lib/exportCsv";
+import { exportMultiSectionCsv } from "@/lib/exportCsv";
 import {
   Printer, ArrowRight, ArrowLeft, Package, TrendingDown, BarChart3, PieChart as PieChartIcon,
   ShoppingCart, Truck, ClipboardCheck, CalendarDays, DollarSign, Download,
@@ -419,12 +419,47 @@ export default function ClientReport() {
   const lastAuditDate = lastAudit ? (lastAudit.date || lastAudit.createdAt || lastAudit.created_at || "") : "";
 
   const handleExportCSV = () => {
-    exportToCsv(`client_report_${client.name}`, [
-      t.crMaterial, isEn ? "Code" : "الكود", t.crUnit, t.crSellingPrice, t.crDelivered, t.crConsumedQty, t.crRemainingQty, t.crWeekly, t.crConsRate
-    ], aggregated.map(item => {
-      const rate = item.totalDelivered > 0 ? Math.round((item.totalConsumed / item.totalDelivered) * 100) : 0;
-      return [item.material, item.code, item.unit, item.sellingPrice, item.totalDelivered, item.totalConsumed, item.totalRemaining, item.avgWeekly > 0 ? item.avgWeekly.toFixed(1) : "—", `${rate}%`];
-    }));
+    const sections = [
+      {
+        title: `📋 ${isEn ? "Client Info" : "بيانات العميل"}`,
+        headers: [isEn ? "Field" : "الحقل", isEn ? "Value" : "القيمة"],
+        rows: [
+          [isEn ? "Name" : "الاسم", client.name],
+          [isEn ? "City" : "المدينة", client.city || "—"],
+          [isEn ? "Phone" : "الهاتف", client.phone || "—"],
+          [isEn ? "Report Date" : "تاريخ التقرير", new Date().toLocaleDateString(dateLocale)],
+        ] as (string | number)[][],
+      },
+      {
+        title: `💰 ${t.crAccountSummary || (isEn ? "Account Summary" : "ملخص الحساب")}`,
+        headers: [isEn ? "Metric" : "البند", isEn ? "Value" : "القيمة"],
+        rows: [
+          [isEn ? "Total Orders" : "إجمالي الطلبات", orders.length],
+          [isEn ? "Delivered Orders" : "طلبات مسلّمة", deliveredOrders.length],
+          [isEn ? "Total Order Value" : "إجمالي قيمة الطلبات", totalOrderValue],
+          [isEn ? "Total Deliveries" : "إجمالي التوصيلات", deliveries.length],
+          [isEn ? "Total Billed" : "إجمالي المفوتر", collectionStats.totalAmount],
+          [isEn ? "Total Paid" : "إجمالي المدفوع", collectionStats.paidAmount],
+          [isEn ? "Outstanding" : "المتبقي", collectionStats.remaining],
+          [isEn ? "Returns" : "المرتجعات", returnsStats.total],
+          [isEn ? "Returned Items" : "عناصر مرتجعة", returnsStats.totalItems],
+        ] as (string | number)[][],
+      },
+      {
+        title: `📦 ${t.crMaterial}`,
+        headers: [t.crMaterial, isEn ? "Code" : "الكود", t.crUnit, t.crSellingPrice, t.crDelivered, t.crConsumedQty, t.crRemainingQty, t.crWeekly, t.crConsRate],
+        rows: aggregated.map(item => {
+          const rate = item.totalDelivered > 0 ? Math.round((item.totalConsumed / item.totalDelivered) * 100) : 0;
+          return [item.material, item.code, item.unit, item.sellingPrice, item.totalDelivered, item.totalConsumed, item.totalRemaining, item.avgWeekly > 0 ? item.avgWeekly.toFixed(1) : "—", `${rate}%`];
+        }),
+      },
+      {
+        title: `📅 ${isEn ? "Monthly Overview" : "نظرة شهرية"}`,
+        headers: [isEn ? "Month" : "الشهر", t.crOrders, isEn ? "Value" : "القيمة", t.crDeliveries, isEn ? "Collections" : "التحصيلات"],
+        rows: monthlyOverviewData.map(m => [m.label, m.orders, m.value, m.deliveries, m.collections]),
+      },
+    ];
+    exportMultiSectionCsv(`client_report_${client.name}`, sections);
   };
 
   const navigateMonth = (dir: number) => {

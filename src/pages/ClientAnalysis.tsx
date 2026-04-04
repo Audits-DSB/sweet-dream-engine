@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { exportToCsv } from "@/lib/exportCsv";
+import { exportMultiSectionCsv } from "@/lib/exportCsv";
 import {
   ArrowRight, ArrowLeft, Printer, Download, Loader2,
   TrendingUp, TrendingDown, Minus, AlertTriangle, AlertCircle,
@@ -374,13 +374,90 @@ export default function ClientAnalysis() {
 
   const handleExportCSV = () => {
     if (!client) return;
-    exportToCsv(`client_analysis_${client.name}`, [
-      t.caMaterial, isEn ? "Code" : "الكود", t.caRemaining, t.caWeeklyUsage, isEn ? "Est. Weeks Left" : "أسابيع متبقية", isEn ? "Status" : "الحالة",
-    ], consumptionPredictions.map(p => [
-      p.material, p.code, p.remaining, p.weeklyUsage > 0 ? p.weeklyUsage.toFixed(1) : "—",
-      p.weeksLeft !== null ? p.weeksLeft.toFixed(1) : "—",
-      p.status === "critical" ? t.caRunoutCritical : p.status === "soon" ? t.caRunoutSoon : t.caRunoutOk,
-    ]));
+    const si = scoreLabel(clientScore.overall);
+    const sections = [
+      {
+        title: `📋 ${isEn ? "Client Info" : "بيانات العميل"}`,
+        headers: [isEn ? "Field" : "الحقل", isEn ? "Value" : "القيمة"],
+        rows: [
+          [isEn ? "Name" : "الاسم", client.name],
+          [isEn ? "City" : "المدينة", client.city || "—"],
+          [isEn ? "Report Date" : "تاريخ التقرير", new Date().toLocaleDateString(dateLocale)],
+        ] as (string | number)[][],
+      },
+      {
+        title: `⭐ ${t.caClientScore}`,
+        headers: [isEn ? "Metric" : "المقياس", isEn ? "Score" : "النتيجة"],
+        rows: [
+          [isEn ? "Overall Score" : "التقييم العام", `${clientScore.overall}/100 (${si.label})`],
+          [t.caCollectionRate, `${clientScore.collectionRate}%`],
+          [t.caOrderRegularity, `${clientScore.orderRegularity}%`],
+          [t.caConsumptionVolume, `${clientScore.consumptionVolume}%`],
+          [t.caReturnRate, `${clientScore.returnRate}%`],
+        ] as (string | number)[][],
+      },
+      {
+        title: `💰 ${t.caAccountSummary}`,
+        headers: [isEn ? "Metric" : "البند", isEn ? "Value" : "القيمة"],
+        rows: [
+          [t.caTotalOrders, orders.length],
+          [t.caTotalDeliveries, deliveries.length],
+          [t.caTotalBilled, collectionStats.totalAmount],
+          [t.caTotalPaid, collectionStats.paidAmount],
+          [t.caOutstanding, collectionStats.remaining],
+          [t.caReturns, returnsStats.total],
+          [t.caReturnItems, returnsStats.totalItems],
+          [t.caAvgOrderValue, overviewStats.avgOrderVal],
+          [t.caOrderFrequency, `${overviewStats.ordersPerMonth} ${t.caOrdersPerMonth}`],
+        ] as (string | number)[][],
+      },
+      {
+        title: `📊 ${t.caMonthComparison}`,
+        headers: ["", monthComparison.curLabel, monthComparison.prevLabel, t.caChange],
+        rows: monthComparison.rows.map(r => [
+          r.label, r.isCurrency ? r.cur : r.cur, r.isCurrency ? r.prev : r.prev,
+          r.change === 0 ? t.caNoChange : `${r.change > 0 ? "+" : ""}${r.change}%`,
+        ]),
+      },
+      {
+        title: `⚠️ ${t.caSmartAlerts}`,
+        headers: [isEn ? "Type" : "النوع", isEn ? "Alert" : "التنبيه", isEn ? "Details" : "التفاصيل"],
+        rows: smartAlerts.length > 0
+          ? smartAlerts.map(a => [
+              a.type === "danger" ? t.caAlertDanger : a.type === "warning" ? t.caAlertWarning : t.caAlertInfo,
+              a.title, a.desc,
+            ])
+          : [[t.caAlertNoAlerts, "", ""]],
+      },
+      {
+        title: `🔮 ${t.caConsumptionPredictions}`,
+        headers: [t.caMaterial, isEn ? "Code" : "الكود", t.caRemaining, t.caWeeklyUsage, isEn ? "Est. Weeks Left" : "أسابيع متبقية", isEn ? "Status" : "الحالة"],
+        rows: consumptionPredictions.map(p => [
+          p.material, p.code, p.remaining, p.weeklyUsage > 0 ? p.weeklyUsage.toFixed(1) : "—",
+          p.weeksLeft !== null ? p.weeksLeft.toFixed(1) : "—",
+          p.status === "critical" ? t.caRunoutCritical : p.status === "soon" ? t.caRunoutSoon : t.caRunoutOk,
+        ]),
+      },
+      {
+        title: `📈 ${t.caOrderTrend}`,
+        headers: [isEn ? "Month" : "الشهر", t.caMonthlyOrders, t.caMonthlyValue],
+        rows: orderTrendData.map(d => [d.month, d.orders, d.value]),
+      },
+      {
+        title: `🥇 ${t.caPreferredMaterials}`,
+        headers: [t.caMaterial, isEn ? "Quantity" : "الكمية", t.caMaterialShare],
+        rows: topMaterials.map(m => [m.fullName, m.value, `${m.pct}%`]),
+      },
+      {
+        title: `📦 ${t.caConsumptionPattern}`,
+        headers: [t.caMaterial, isEn ? "Delivered" : "مُسلَّم", isEn ? "Consumed" : "مستهلك", t.caRemaining, t.caConsumptionRate],
+        rows: aggregated.map(a => {
+          const rate = a.totalDelivered > 0 ? Math.round((a.totalConsumed / a.totalDelivered) * 100) : 0;
+          return [a.material, a.totalDelivered, a.totalConsumed, a.totalRemaining, `${rate}%`];
+        }),
+      },
+    ];
+    exportMultiSectionCsv(`client_analysis_${client.name}`, sections);
   };
 
   if (loading) {
