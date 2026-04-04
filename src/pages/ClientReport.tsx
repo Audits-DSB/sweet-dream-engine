@@ -226,7 +226,7 @@ export default function ClientReport() {
   }, [orders]);
 
   const barData = aggregated.slice(0, 8).map(a => ({
-    name: a.material.length > 12 ? a.material.slice(0, 12) + "…" : a.material,
+    name: a.material.length > 20 ? a.material.slice(0, 20) + "…" : a.material,
     consumed: a.totalConsumed, remaining: a.totalRemaining,
   }));
 
@@ -236,7 +236,7 @@ export default function ClientReport() {
   }));
 
   const coverageData = aggregated.filter(a => a.avgWeekly > 0).slice(0, 8).map(a => ({
-    name: a.material.length > 12 ? a.material.slice(0, 12) + "…" : a.material,
+    name: a.material.length > 20 ? a.material.slice(0, 20) + "…" : a.material,
     weeks: a.totalRemaining > 0 && a.avgWeekly > 0 ? Math.round((a.totalRemaining / a.avgWeekly) * 10) / 10 : 0,
   }));
 
@@ -915,10 +915,10 @@ export default function ClientReport() {
                 </h3>
                 <div style={{ height: `${Math.max(300, barData.length * 55)}px` }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={barData} layout="vertical" margin={{ top: 10, right: 30, left: 20, bottom: 10 }} barGap={2} barCategoryGap="30%">
+                    <BarChart data={barData} layout="vertical" margin={{ top: 10, right: 30, left: 30, bottom: 10 }} barGap={2} barCategoryGap="30%">
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
                       <XAxis type="number" tick={AXIS_TICK} stroke="currentColor" />
-                      <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 11, fill: "currentColor", fontWeight: 600 }} stroke="currentColor" interval={0} />
+                      <YAxis dataKey="name" type="category" width={200} tick={{ fontSize: 11, fill: "currentColor", fontWeight: 600 }} stroke="currentColor" interval={0} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [v, name === "consumed" ? "مستهلك" : "متبقي"]} />
                       <Legend wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
                       <Bar dataKey="consumed" fill="#f97316" name="مستهلك" radius={[0, 4, 4, 0]} barSize={12} />
@@ -942,10 +942,10 @@ export default function ClientReport() {
                 </h3>
                 <div style={{ height: `${Math.max(280, coverageData.length * 45)}px` }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={coverageData} layout="vertical" margin={{ top: 10, right: 20, left: 20, bottom: 10 }} barCategoryGap="35%">
+                    <BarChart data={coverageData} layout="vertical" margin={{ top: 10, right: 20, left: 30, bottom: 10 }} barCategoryGap="35%">
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
                       <XAxis type="number" tick={AXIS_TICK} stroke="currentColor" />
-                      <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 11, fill: "currentColor", fontWeight: 600 }} stroke="currentColor" interval={0} />
+                      <YAxis dataKey="name" type="category" width={200} tick={{ fontSize: 11, fill: "currentColor", fontWeight: 600 }} stroke="currentColor" interval={0} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} أسبوع`, "التغطية"]} />
                       <Bar dataKey="weeks" fill="#22c55e" name="أسابيع" radius={[0, 4, 4, 0]} barSize={14}>
                         {coverageData.map((entry, i) => (
