@@ -892,15 +892,15 @@ export default function ClientReport() {
                     </colgroup>
                     <thead>
                       <tr className="bg-gray-100 border-b-2 border-gray-300">
-                        <th className="py-3 px-2 text-start font-bold text-gray-900">#</th>
-                        <th className="py-3 px-2 text-center font-bold text-gray-900">{t.crImage}</th>
-                        <th className="py-3 px-2 text-start font-bold text-gray-900">{t.crMaterial}</th>
-                        <th className="py-3 px-2 text-start font-bold text-gray-900 w-14">{t.crUnit}</th>
-                        <th className="py-3 px-2 text-end font-bold text-gray-900 w-20">{t.crSellingPrice}</th>
-                        <th className="py-3 px-2 text-end font-bold text-gray-900 w-16">{t.crDelivered}</th>
-                        <th className="py-3 px-2 text-end font-bold text-gray-900 w-16">{t.crConsumedQty}</th>
-                        <th className="py-3 px-2 text-end font-bold text-gray-900 w-16">{t.crRemainingQty}</th>
-                        <th className="py-3 px-2 text-end font-bold text-gray-900 w-24">{t.crConsumption}</th>
+                        <th className="py-2 px-1 text-start font-bold text-gray-900 text-[9px] print:text-[8px]">#</th>
+                        <th className="py-2 px-1 text-center font-bold text-gray-900 text-[9px] print:text-[8px]">{t.crImage}</th>
+                        <th className="py-2 px-1 text-start font-bold text-gray-900 text-[9px] print:text-[8px]">{t.crMaterial}</th>
+                        <th className="py-2 px-1 text-start font-bold text-gray-900 text-[9px] print:text-[8px] w-10">{t.crUnit}</th>
+                        <th className="py-2 px-1 text-end font-bold text-gray-900 text-[9px] print:text-[8px] w-14">{t.crSellingPrice}</th>
+                        <th className="py-2 px-1 text-end font-bold text-gray-900 text-[9px] print:text-[8px] w-12">{t.crDelivered}</th>
+                        <th className="py-2 px-1 text-end font-bold text-gray-900 text-[9px] print:text-[8px] w-12">{t.crConsumedQty}</th>
+                        <th className="py-2 px-1 text-end font-bold text-gray-900 text-[9px] print:text-[8px] w-12">{t.crRemainingQty}</th>
+                        <th className="py-2 px-1 text-end font-bold text-gray-900 text-[9px] print:text-[8px] w-16">{t.crConsumption}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1174,16 +1174,16 @@ export default function ClientReport() {
                   </colgroup>
                   <thead>
                     <tr className="bg-gray-100 border-b-2 border-gray-300">
-                      <th className="py-3 px-2 text-start font-bold text-gray-900">#</th>
-                      <th className="py-3 px-2 text-center font-bold text-gray-900">{t.crImage}</th>
-                      <th className="py-3 px-2 text-start font-bold text-gray-900">{t.crMaterial}</th>
-                      <th className="py-3 px-2 text-start font-bold text-gray-900 w-14">{t.crUnit}</th>
-                      <th className="py-3 px-2 text-end font-bold text-gray-900 w-20">{t.crSellingPrice}</th>
-                      <th className="py-3 px-2 text-end font-bold text-gray-900 w-16">{t.crDelivered}</th>
-                      <th className="py-3 px-2 text-end font-bold text-gray-900 w-16">{t.crConsumedQty}</th>
-                      <th className="py-3 px-2 text-end font-bold text-gray-900 w-16">{t.crRemainingQty}</th>
-                      <th className="py-3 px-2 text-end font-bold text-gray-900 w-16">{t.crWeekly}</th>
-                      <th className="py-3 px-2 text-end font-bold text-gray-900 w-24">{t.crConsumption}</th>
+                      <th className="py-2 px-1 text-start font-bold text-gray-900 text-[9px] print:text-[8px]">#</th>
+                      <th className="py-2 px-1 text-center font-bold text-gray-900 text-[9px] print:text-[8px]">{t.crImage}</th>
+                      <th className="py-2 px-1 text-start font-bold text-gray-900 text-[9px] print:text-[8px]">{t.crMaterial}</th>
+                      <th className="py-2 px-1 text-start font-bold text-gray-900 text-[9px] print:text-[8px] w-10">{t.crUnit}</th>
+                      <th className="py-2 px-1 text-end font-bold text-gray-900 text-[9px] print:text-[8px] w-14">{t.crSellingPrice}</th>
+                      <th className="py-2 px-1 text-end font-bold text-gray-900 text-[9px] print:text-[8px] w-12">{t.crDelivered}</th>
+                      <th className="py-2 px-1 text-end font-bold text-gray-900 text-[9px] print:text-[8px] w-12">{t.crConsumedQty}</th>
+                      <th className="py-2 px-1 text-end font-bold text-gray-900 text-[9px] print:text-[8px] w-12">{t.crRemainingQty}</th>
+                      <th className="py-2 px-1 text-end font-bold text-gray-900 text-[9px] print:text-[8px] w-12">{t.crWeekly}</th>
+                      <th className="py-2 px-1 text-end font-bold text-gray-900 text-[9px] print:text-[8px] w-16">{t.crConsumption}</th>
                     </tr>
                   </thead>
                   <tbody>
