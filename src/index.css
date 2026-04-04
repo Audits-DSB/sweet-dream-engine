@@ -228,19 +228,38 @@
   .print\:mt-4 { margin-top: 1rem !important; }
   .recharts-wrapper { page-break-inside: avoid; break-inside: avoid; }
 
-  .dark { --background: 0 0% 100%; --foreground: 0 0% 5%; --card: 0 0% 100%; --card-foreground: 0 0% 5%; --muted-foreground: 0 0% 30%; --border: 0 0% 75%; }
+  :root, .dark {
+    --background: 0 0% 100% !important;
+    --foreground: 0 0% 5% !important;
+    --card: 0 0% 100% !important;
+    --card-foreground: 0 0% 5% !important;
+    --popover: 0 0% 100% !important;
+    --popover-foreground: 0 0% 5% !important;
+    --muted: 0 0% 90% !important;
+    --muted-foreground: 0 0% 25% !important;
+    --accent: 0 0% 96% !important;
+    --accent-foreground: 0 0% 5% !important;
+    --border: 0 0% 80% !important;
+  }
+
+  .bg-background, .bg-card, .bg-card\/50, .bg-muted\/50, .bg-muted\/30, .bg-muted\/20,
+  [class*="bg-card"], [class*="bg-background"],
+  .bg-amber-50, .bg-amber-50\/50, .bg-gray-50,
+  div[class*="border"], div[class*="rounded"] { background-color: white !important; }
 
   .print-report-page {
     max-width: 100% !important;
-    padding: 0 !important;
+    padding: 0.5rem !important;
     margin: 0 !important;
+    background: white !important;
   }
-  .print-report-page table { font-size: 11pt !important; border-collapse: collapse !important; }
-  .print-report-page th { font-weight: 800 !important; color: #000 !important; background: #e5e7eb !important; border-bottom: 2px solid #9ca3af !important; padding: 8px 12px !important; }
-  .print-report-page td { color: #111 !important; padding: 7px 12px !important; border-bottom: 1px solid #d1d5db !important; }
-  .print-report-page tfoot td { font-weight: 700 !important; background: #e5e7eb !important; border-top: 2px solid #9ca3af !important; }
-  .print-report-page h3 { font-size: 14pt !important; font-weight: 800 !important; color: #000 !important; background: #f3f4f6 !important; }
-  .print-report-page .stat-box-print { border: 2px solid #9ca3af !important; background: #f9fafb !important; }
+  .print-report-page table { font-size: 11pt !important; border-collapse: collapse !important; background: white !important; }
+  .print-report-page th { font-weight: 800 !important; color: #000 !important; background: #f3f4f6 !important; border-bottom: 2px solid #9ca3af !important; padding: 8px 12px !important; }
+  .print-report-page td { color: #111 !important; padding: 7px 12px !important; border-bottom: 1px solid #d1d5db !important; background: white !important; }
+  .print-report-page tfoot td { font-weight: 700 !important; background: #f3f4f6 !important; border-top: 2px solid #9ca3af !important; }
+  .print-report-page h3 { font-size: 14pt !important; font-weight: 800 !important; color: #000 !important; background: white !important; }
+  .print-report-page > div { background: white !important; }
+  .print-report-page .stat-box-print { border: 2px solid #d1d5db !important; background: white !important; }
   .print-report-page .stat-box-print p { color: #000 !important; }
   .print-report-page .text-muted-foreground { color: #333 !important; }
   .print-report-page .font-bold, .print-report-page .font-semibold { color: #000 !important; }

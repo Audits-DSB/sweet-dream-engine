@@ -351,7 +351,7 @@ export default function ClientReport() {
   };
 
   return (
-    <div className="min-h-screen bg-background" dir="rtl">
+    <div className="min-h-screen bg-background print:bg-white" dir="rtl">
       <div className="print:hidden sticky top-0 z-10 bg-card border-b px-6 py-3 flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={() => navigate(`/clients/${id}`)} className="gap-2">
           <ArrowRight className="h-4 w-4" /> العودة للبروفايل
