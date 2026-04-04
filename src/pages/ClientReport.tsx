@@ -5,10 +5,10 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { exportMultiSectionCsv } from "@/lib/exportCsv";
 import {
-  Printer, ArrowRight, ArrowLeft, Package, TrendingDown, BarChart3, PieChart as PieChartIcon,
+  Printer, ArrowRight, ArrowLeft, Package, TrendingDown, TrendingUp, BarChart3, PieChart as PieChartIcon,
   ShoppingCart, Truck, ClipboardCheck, CalendarDays, DollarSign, Download,
   Receipt, RotateCcw, AlertTriangle, Loader2, CreditCard, ChevronRight, ChevronLeft,
-  Calendar, FileText, Award,
+  Calendar, FileText, Award, Users,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -64,12 +64,15 @@ export default function ClientReport() {
   }
 
   const [client, setClient] = useState<any>(null);
+  const [allClients, setAllClients] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [allOrders, setAllOrders] = useState<any[]>([]);
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [audits, setAudits] = useState<any[]>([]);
   const [collections, setCollections] = useState<any[]>([]);
   const [returns, setReturns] = useState<any[]>([]);
+  const [allCollections, setAllCollections] = useState<any[]>([]);
   const [orderLines, setOrderLines] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"full" | "monthly">("full");
@@ -87,7 +90,9 @@ export default function ClientReport() {
       api.get<any[]>("/returns").catch(() => []),
       api.get<any[]>("/order-lines").catch(() => []),
     ]).then(([cl, inv, ord, del, aud, col, ret, oLines]) => {
-      const found = (cl || []).find((c: any) => c.id === id);
+      const allCl = (cl || []).filter((c: any) => c.name !== "company-inventory");
+      setAllClients(allCl);
+      const found = allCl.find((c: any) => c.id === id);
       if (found) {
         setClient({
           id: found.id, name: found.name || "", contact: found.contact || "",
@@ -105,9 +110,18 @@ export default function ClientReport() {
         status: r.status || "",
         imageUrl: r.imageUrl || r.image_url || "",
       })));
-      const clientOrders = (ord || []).filter((o: any) => (o.clientId || o.client_id) === id).map((o: any) => ({
+      const allOrd = (ord || []).filter((o: any) => {
+        const cName = o.client || "";
+        return cName !== "company-inventory";
+      }).map((o: any) => ({
         id: o.id, date: o.date || "", totalSelling: Number(o.totalSelling ?? o.total_selling ?? 0),
         status: o.status || "", lines: Number(o.lines || 0),
+        clientId: o.clientId || o.client_id || "",
+      }));
+      setAllOrders(allOrd);
+      const clientOrders = allOrd.filter((o: any) => o.clientId === id).map((o: any) => ({
+        id: o.id, date: o.date, totalSelling: o.totalSelling,
+        status: o.status, lines: o.lines,
       })).sort((a: any, b: any) => b.date.localeCompare(a.date));
       setOrders(clientOrders);
       setDeliveries((del || []).filter((d: any) => (d.clientId || d.client_id) === id).map((d: any) => ({
@@ -118,12 +132,14 @@ export default function ClientReport() {
       setAudits((aud || []).filter((a: any) => (a.clientId || a.client_id) === id).sort((a: any, b: any) =>
         (b.date || b.createdAt || b.created_at || "").localeCompare(a.date || a.createdAt || a.created_at || "")
       ));
-      setCollections((col || []).filter((c: any) => (c.clientId || c.client_id) === id).map((c: any) => ({
+      const allCol = (col || []).map((c: any) => ({
         id: c.id, date: c.date || c.invoiceDate || c.invoice_date || c.createdAt || "",
         totalAmount: Number(c.totalAmount ?? c.total_amount ?? c.amount ?? 0),
         paidAmount: Number(c.paidAmount ?? c.paid_amount ?? c.paid ?? 0),
-        status: c.status || "",
-      })));
+        status: c.status || "", clientId: c.clientId || c.client_id || "",
+      }));
+      setAllCollections(allCol);
+      setCollections(allCol.filter((c: any) => c.clientId === id));
       setReturns((ret || []).filter((r: any) => (r.clientId || r.client_id) === id).map((r: any) => ({
         id: r.id, date: r.date || r.createdAt || r.created_at || "",
         status: r.status || "",
@@ -398,6 +414,55 @@ export default function ClientReport() {
     if (collectionStats.totalAmount <= 0) return 0;
     return Math.round((collectionStats.paidAmount / collectionStats.totalAmount) * 100);
   }, [collectionStats]);
+
+  const avgComparison = useMemo(() => {
+    const DELIVERED = ["Delivered", "Closed", "Partially Delivered", "Completed"];
+    const totalClients = allClients.length;
+    if (totalClients <= 1) return null;
+
+    const clientOrdersMap: Record<string, number> = {};
+    const clientValueMap: Record<string, number> = {};
+    for (const o of allOrders) {
+      clientOrdersMap[o.clientId] = (clientOrdersMap[o.clientId] || 0) + 1;
+      if (DELIVERED.includes(o.status)) {
+        clientValueMap[o.clientId] = (clientValueMap[o.clientId] || 0) + o.totalSelling;
+      }
+    }
+
+    const clientCollTotalMap: Record<string, number> = {};
+    const clientCollPaidMap: Record<string, number> = {};
+    for (const c of allCollections) {
+      clientCollTotalMap[c.clientId] = (clientCollTotalMap[c.clientId] || 0) + c.totalAmount;
+      clientCollPaidMap[c.clientId] = (clientCollPaidMap[c.clientId] || 0) + c.paidAmount;
+    }
+
+    const avgOrders = Object.values(clientOrdersMap).reduce((s, v) => s + v, 0) / totalClients;
+
+    const allDeliveredOrders = allOrders.filter(o => DELIVERED.includes(o.status));
+    const globalAvgOrderValue = allDeliveredOrders.length > 0
+      ? allDeliveredOrders.reduce((s, o) => s + o.totalSelling, 0) / allDeliveredOrders.length
+      : 0;
+
+    const collRates = allClients.map(c => {
+      const total = clientCollTotalMap[c.id] || 0;
+      const paid = clientCollPaidMap[c.id] || 0;
+      return total > 0 ? (paid / total) * 100 : 100;
+    });
+    const avgCollRate = Math.round(collRates.reduce((s, v) => s + v, 0) / collRates.length);
+
+    const myDeliveredOrders = orders.filter(o => DELIVERED.includes(o.status));
+    const myAvgOrderValue = myDeliveredOrders.length > 0
+      ? myDeliveredOrders.reduce((s, o) => s + o.totalSelling, 0) / myDeliveredOrders.length
+      : 0;
+    const myOrders = orders.length;
+    const myCollRate = collectionRate;
+
+    return {
+      orders: { mine: myOrders, avg: Math.round(avgOrders * 10) / 10 },
+      value: { mine: Math.round(myAvgOrderValue), avg: Math.round(globalAvgOrderValue) },
+      collRate: { mine: myCollRate, avg: avgCollRate },
+    };
+  }, [allClients, allOrders, allCollections, orders, collectionRate, stats]);
 
   if (loading) {
     return (
@@ -678,6 +743,48 @@ export default function ClientReport() {
             </tbody>
           </table>
         </div>
+
+        {/* === COMPARISON WITH AVERAGE === */}
+        {avgComparison && (
+          <div className="mb-8 border-2 border-gray-200 rounded-xl overflow-hidden bg-card print:break-inside-avoid">
+            <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
+              <Users className="h-5 w-5 text-primary" /> {t.crCompareWithAvg}
+            </h3>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-0 divide-x divide-y divide-gray-100 rtl:divide-x-reverse">
+              {[
+                { label: t.crAvgOrders, mine: avgComparison.orders.mine, avg: avgComparison.orders.avg, unit: "", format: false },
+                { label: t.crAvgOrderValue, mine: avgComparison.value.mine, avg: avgComparison.value.avg, unit: t.crCurrency, format: true },
+                { label: t.crAvgCollRate, mine: avgComparison.collRate.mine, avg: avgComparison.collRate.avg, unit: "%", format: false },
+              ].map((item, idx) => {
+                const diff = item.avg > 0 ? Math.round(((item.mine - item.avg) / item.avg) * 100) : 0;
+                const isAbove = diff > 5;
+                const isBelow = diff < -5;
+                return (
+                  <div key={idx} className="p-4 text-center">
+                    <p className="text-xs text-gray-500 font-semibold mb-2">{item.label}</p>
+                    <div className="flex items-center justify-center gap-4">
+                      <div>
+                        <p className="text-lg font-black text-gray-900">{item.format ? item.mine.toLocaleString() : item.mine}{item.unit === "%" ? "%" : ""}</p>
+                        <p className="text-[10px] text-gray-400 font-medium">{t.crYourClient}</p>
+                      </div>
+                      <div className="text-gray-300 text-lg font-light">/</div>
+                      <div>
+                        <p className="text-lg font-bold text-gray-500">{item.format ? Math.round(item.avg).toLocaleString() : item.avg}{item.unit === "%" ? "%" : ""}</p>
+                        <p className="text-[10px] text-gray-400 font-medium">{t.crAllClientsAvg}</p>
+                      </div>
+                    </div>
+                    {diff !== 0 && (
+                      <div className={`mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${isAbove ? "bg-green-100 text-green-700" : isBelow ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
+                        {isAbove ? <TrendingUp className="h-3 w-3" /> : isBelow ? <TrendingDown className="h-3 w-3" /> : null}
+                        {isAbove ? `+${diff}% ${t.crAboveAvg}` : isBelow ? `${diff}% ${t.crBelowAvg}` : t.crAtAvg}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* === TABS === */}
         <div className="print:hidden flex items-center gap-2 mb-6">

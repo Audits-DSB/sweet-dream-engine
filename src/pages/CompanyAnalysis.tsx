@@ -350,6 +350,67 @@ export default function CompanyAnalysis() {
     return Math.round(((cur.revenue - prev.revenue) / prev.revenue) * 100);
   }, [monthlyTrend]);
 
+  const periodComparison = useMemo(() => {
+    if (monthlyTrend.length < 2) return null;
+    const cur = monthlyTrend[monthlyTrend.length - 1];
+    const prev = monthlyTrend[monthlyTrend.length - 2];
+    const pctChange = (field: string) => {
+      const c = (cur as any)[field] || 0;
+      const p = (prev as any)[field] || 0;
+      if (p === 0) return c > 0 ? 100 : 0;
+      return Math.round(((c - p) / p) * 100);
+    };
+    return {
+      curMonth: cur.month, prevMonth: prev.month,
+      revenue: { cur: cur.revenue, prev: prev.revenue, pct: pctChange("revenue") },
+      profit: { cur: cur.profit, prev: prev.profit, pct: pctChange("profit") },
+      orders: { cur: cur.orders, prev: prev.orders, pct: pctChange("orders") },
+      collections: { cur: cur.collections, prev: prev.collections, pct: pctChange("collections") },
+    };
+  }, [monthlyTrend]);
+
+  const bestWorstMonth = useMemo(() => {
+    const withRevenue = monthlyTrend.filter(m => m.revenue > 0);
+    if (withRevenue.length === 0) return null;
+    const best = withRevenue.reduce((a, b) => b.revenue > a.revenue ? b : a);
+    const worst = withRevenue.reduce((a, b) => b.revenue < a.revenue ? b : a);
+    return { best, worst };
+  }, [monthlyTrend]);
+
+  const revenueForecast = useMemo(() => {
+    const last6 = monthlyTrend.slice(-6);
+    if (last6.filter(m => m.revenue > 0).length < 3) return null;
+    const n = last6.length;
+    const xMean = (n - 1) / 2;
+    const yMean = last6.reduce((s, m) => s + m.revenue, 0) / n;
+    let num = 0, den = 0;
+    for (let i = 0; i < n; i++) {
+      num += (i - xMean) * (last6[i].revenue - yMean);
+      den += (i - xMean) * (i - xMean);
+    }
+    const slope = den !== 0 ? num / den : 0;
+    const forecast = Math.max(0, Math.round(yMean + slope * (n - xMean)));
+    const trend = slope > 0 ? "up" : slope < 0 ? "down" : "flat";
+    return { forecast, trend, avgLast6: Math.round(yMean) };
+  }, [monthlyTrend]);
+
+  const clientGrowth = useMemo(() => {
+    const now = new Date();
+    const months: { ym: string; label: string; count: number }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const count = clients.filter(c => {
+        const jd = c.joinDate || c.join_date || c.createdAt || c.created_at || "";
+        return jd && jd.startsWith(ym);
+      }).length;
+      months.push({ ym, label: toMonthLabel(ym), count });
+    }
+    const total = months.reduce((s, m) => s + m.count, 0);
+    const avgPerMonth = months.length > 0 ? Math.round((total / months.length) * 10) / 10 : 0;
+    return { months: months.filter(m => m.count > 0), total, avgPerMonth };
+  }, [clients, lang]);
+
   const companyHealthScore = useMemo(() => {
     const profitScore = Math.min(100, Math.max(0, profitMargin * 2.5));
     const collScore = collectionTotals.rate;
@@ -443,8 +504,11 @@ export default function CompanyAnalysis() {
       },
       {
         title: `👥 ${t.coTopClients}`,
-        headers: [t.coClientName, t.coClientOrders, t.coClientRevenue, t.coClientPaid, t.coClientBalance],
-        rows: clientPortfolio.slice(0, 15).map(c => [c.name, c.orders, c.revenue, c.paid, c.revenue - c.paid]),
+        headers: [t.coClientName, t.coClientOrders, t.coClientRevenue, t.coClientProfitMargin, t.coClientPaid, t.coClientBalance],
+        rows: clientPortfolio.slice(0, 15).map(c => {
+          const m = c.revenue > 0 ? Math.round(((c.revenue - c.cost) / c.revenue) * 100) : 0;
+          return [c.name, c.orders, c.revenue, `${m}%`, c.paid, c.revenue - c.paid];
+        }),
       },
       {
         title: `📈 ${t.coMonthlyTrend}`,
@@ -538,6 +602,77 @@ export default function CompanyAnalysis() {
           <KPI icon={<CreditCard className="h-5 w-5" />} label={t.coCollectionRate} value={`${collectionTotals.rate}%`} sub={cur(collectionTotals.remaining)} color={collectionTotals.rate >= 80 ? "text-green-600 bg-green-100" : "text-red-600 bg-red-100"} />
           <KPI icon={<RotateCcw className="h-5 w-5" />} label={t.coTotalReturns} value={String(returns.length)} color="text-red-600 bg-red-100" />
         </div>
+
+        {/* Period Comparison */}
+        {periodComparison && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { label: t.coTotalRevenue, cur: periodComparison.revenue.cur, prev: periodComparison.revenue.prev, pct: periodComparison.revenue.pct, isCur: true },
+              { label: t.coNetProfit, cur: periodComparison.profit.cur, prev: periodComparison.profit.prev, pct: periodComparison.profit.pct, isCur: true },
+              { label: t.coTotalOrders, cur: periodComparison.orders.cur, prev: periodComparison.orders.prev, pct: periodComparison.orders.pct, isCur: false },
+              { label: t.coMonthlyCollections, cur: periodComparison.collections.cur, prev: periodComparison.collections.prev, pct: periodComparison.collections.pct, isCur: true },
+            ].map((item, i) => (
+              <div key={i} className="bg-card rounded-xl border p-3">
+                <p className="text-xs text-muted-foreground mb-1 truncate">{item.label}</p>
+                <p className="text-sm font-bold">{item.isCur ? cur(item.cur) : item.cur}</p>
+                <div className="flex items-center gap-1 mt-1">
+                  {item.pct > 0 ? <ArrowUpRight className="h-3 w-3 text-green-600" /> : item.pct < 0 ? <ArrowDownRight className="h-3 w-3 text-red-600" /> : null}
+                  <span className={`text-xs font-bold ${item.pct > 0 ? "text-green-600" : item.pct < 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                    {item.pct > 0 ? "+" : ""}{item.pct}%
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">{t.coVsLastMonth}</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{periodComparison.prevMonth}: {item.isCur ? cur(item.prev) : item.prev}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Monthly Highlights + Forecast */}
+        {(bestWorstMonth || revenueForecast || clientGrowth.total > 0) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {bestWorstMonth && (
+              <div className="bg-card rounded-xl border p-4 text-center">
+                <div className="w-9 h-9 rounded-lg bg-green-100 flex items-center justify-center mx-auto mb-2">
+                  <TrendingUp className="h-5 w-5 text-green-600" />
+                </div>
+                <p className="text-xs text-muted-foreground">{t.coBestMonth}</p>
+                <p className="text-sm font-bold text-green-600">{bestWorstMonth.best.month}</p>
+                <p className="text-xs font-semibold">{cur(bestWorstMonth.best.revenue)}</p>
+              </div>
+            )}
+            {bestWorstMonth && (
+              <div className="bg-card rounded-xl border p-4 text-center">
+                <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center mx-auto mb-2">
+                  <TrendingDown className="h-5 w-5 text-red-600" />
+                </div>
+                <p className="text-xs text-muted-foreground">{t.coWorstMonth}</p>
+                <p className="text-sm font-bold text-red-600">{bestWorstMonth.worst.month}</p>
+                <p className="text-xs font-semibold">{cur(bestWorstMonth.worst.revenue)}</p>
+              </div>
+            )}
+            {revenueForecast && (
+              <div className="bg-card rounded-xl border p-4 text-center">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center mx-auto mb-2 ${revenueForecast.trend === "up" ? "bg-blue-100" : "bg-amber-100"}`}>
+                  <Target className={`h-5 w-5 ${revenueForecast.trend === "up" ? "text-blue-600" : "text-amber-600"}`} />
+                </div>
+                <p className="text-xs text-muted-foreground">{t.coNextMonthForecast}</p>
+                <p className="text-sm font-bold">{cur(revenueForecast.forecast)}</p>
+                <p className="text-[10px] text-muted-foreground">{t.coBasedOnTrend}</p>
+              </div>
+            )}
+            {clientGrowth.total > 0 && (
+              <div className="bg-card rounded-xl border p-4 text-center">
+                <div className="w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center mx-auto mb-2">
+                  <Users className="h-5 w-5 text-purple-600" />
+                </div>
+                <p className="text-xs text-muted-foreground">{t.coClientGrowth}</p>
+                <p className="text-sm font-bold text-purple-600">{clientGrowth.total} {t.coNewClients}</p>
+                <p className="text-[10px] text-muted-foreground">~{clientGrowth.avgPerMonth} {t.coNewClientsPerMonth}</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Health Score + Radar + Treasury */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -657,23 +792,30 @@ export default function CompanyAnalysis() {
                   <th className="text-start py-2 font-bold">{t.coClientName}</th>
                   <th className="text-center py-2 font-bold">{t.coClientOrders}</th>
                   <th className="text-center py-2 font-bold">{t.coClientRevenue}</th>
+                  <th className="text-center py-2 font-bold">{t.coClientProfitMargin}</th>
                   <th className="text-center py-2 font-bold">{t.coClientPaid}</th>
                   <th className="text-center py-2 font-bold">{t.coClientBalance}</th>
                 </tr>
               </thead>
               <tbody>
-                {clientPortfolio.slice(0, 15).map((c, i) => (
+                {clientPortfolio.slice(0, 15).map((c, i) => {
+                  const margin = c.revenue > 0 ? Math.round(((c.revenue - c.cost) / c.revenue) * 100) : 0;
+                  return (
                   <tr key={i} className="border-b border-muted/30 cursor-pointer hover:bg-muted/20" onClick={() => navigate(`/clients/${c.id}`)}>
                     <td className="py-2.5 text-muted-foreground">{i + 1}</td>
                     <td className="py-2.5 font-medium">{c.name}</td>
                     <td className="text-center py-2.5">{c.orders}</td>
                     <td className="text-center py-2.5">{cur(c.revenue)}</td>
+                    <td className="text-center py-2.5">
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold ${margin >= 30 ? "bg-green-100 text-green-700" : margin >= 15 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>{margin}%</span>
+                    </td>
                     <td className="text-center py-2.5">{cur(c.paid)}</td>
                     <td className="text-center py-2.5">
                       <span className={c.revenue - c.paid > 0 ? "text-red-600 font-bold" : "text-green-600"}>{cur(c.revenue - c.paid)}</span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -906,6 +1048,24 @@ export default function CompanyAnalysis() {
             </ComposedChart>
           </ResponsiveContainer>
         </div>
+
+        {/* Client Growth */}
+        {clientGrowth.months.length > 0 && (
+          <div className="bg-card rounded-2xl border p-6">
+            <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" /> {t.coClientGrowth}
+            </h2>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={clientGrowth.months}>
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: "currentColor" }} />
+                <YAxis tick={{ fontSize: 10, fill: "currentColor" }} allowDecimals={false} />
+                <Tooltip contentStyle={{ fontSize: "12px", direction: dir as "rtl" | "ltr" }} />
+                <Bar dataKey="count" name={t.coNewClients} fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
       </div>
     </div>

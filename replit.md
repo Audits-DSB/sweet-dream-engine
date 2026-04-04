@@ -86,6 +86,9 @@ Internal company page for analyzing client performance and consumption patterns.
 - File: `src/pages/ClientAnalysis.tsx`. Fully bilingual (AR/EN) via `ca*` translation keys. Print-ready with fixed header/footer.
 - Linked from ClientProfile via "تحليل العميل" / "Client Analysis" button.
 
+## Client Report Enhancements
+- **Comparison with Average**: New section comparing client's metrics (orders count, avg order value, collection rate) against all-clients average. Shows trend badges (above/below average) with percentage difference.
+
 ## Company Analysis Page (`/company-analysis`)
 Company-wide business intelligence report accessible from the sidebar. Features:
 - **Company Health Score (0-100)**: Weighted composite of profit margin (25%), collection rate (25%), growth (20%), return rate (15%), delivery rate (15%). SVG gauge + radar chart.
@@ -100,6 +103,10 @@ Company-wide business intelligence report accessible from the sidebar. Features:
 - **Delivery Performance**: Confirmed vs pending with rate bar.
 - **Collection Health**: Collected vs remaining + collection rate bar.
 - **Aging Analysis**: Bar chart of outstanding by age bucket (0-30, 31-60, 61-90, 90+ days).
+- **Period Comparison**: This month vs last month with % change arrows for revenue, profit, orders, collections.
+- **Monthly Highlights**: Best month, worst month cards. Revenue forecast (linear regression on last 6 months). Client growth rate card.
+- **Per-Client Profit Margin**: Profit margin column in Top Clients table with color-coded badges (green ≥30%, amber ≥15%, red <15%).
+- **Client Growth Chart**: Bar chart showing new clients per month over last 12 months.
 - **Inventory & Supply Predictions**: Top 20 items by runout urgency. Status badges.
 - **Supplier Analysis**: Cost bar chart by supplier.
 - **Returns by Client**: Bar chart of return items per client.
