@@ -87,7 +87,7 @@ export default function ClientsPage() {
       const saved = await api.post<any>("/clients", {
         id: newId, name: form.name, contact: form.contact,
         email: form.email, phone: serializePhones(phones), city: form.city,
-        status: form.status,
+        status: form.status, joinDate: today,
       });
       await logAudit({ entity: "client", entityId: saved.id || newId, entityName: form.name, action: "create", snapshot: saved, endpoint: "/clients" , performedBy: _userName });
       setClients(prev => [...prev, mapClient(saved)]);
