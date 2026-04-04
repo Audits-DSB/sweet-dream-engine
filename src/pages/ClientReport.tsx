@@ -550,7 +550,7 @@ export default function ClientReport() {
                 <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
                   <CalendarDays className="h-5 w-5 text-primary" /> الحركة اليومية — {toYMLabel(selectedMonth)}
                 </h3>
-                <div className="h-[260px]">
+                <div className="h-[260px] print:h-[180px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={mDailyData}>
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
@@ -578,7 +578,7 @@ export default function ClientReport() {
                   <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
                     <Receipt className="h-5 w-5 text-primary" /> تحصيل الشهر
                   </h3>
-                  <div className="h-[220px]">
+                  <div className="h-[220px] print:h-[160px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={mCollectionPie} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={4} dataKey="value" strokeWidth={2} stroke="#fff">
@@ -601,7 +601,7 @@ export default function ClientReport() {
                   <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
                     <Package className="h-5 w-5 text-primary" /> المواد الموّردة
                   </h3>
-                  <div className="h-[220px]">
+                  <div className="h-[220px] print:h-[160px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={mMaterialDist} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff">
@@ -804,7 +804,7 @@ export default function ClientReport() {
                   <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
                     <CalendarDays className="h-5 w-5 text-primary" /> حركة الطلبات والتوصيل الشهرية
                   </h3>
-                  <div className="h-[260px] print:hidden">
+                  <div className="h-[260px] print:h-[180px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={monthlyOverviewData}>
                         <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
@@ -829,7 +829,7 @@ export default function ClientReport() {
                   <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
                     <DollarSign className="h-5 w-5 text-primary" /> قيمة الطلبات الشهرية
                   </h3>
-                  <div className="h-[260px] print:hidden">
+                  <div className="h-[260px] print:h-[180px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={monthlyOverviewData}>
                         <defs>
@@ -861,7 +861,7 @@ export default function ClientReport() {
                 <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
                   <PieChartIcon className="h-5 w-5 text-primary" /> توزيع الاستهلاك
                 </h3>
-                <div className="h-[260px] print:hidden">
+                <div className="h-[260px] print:h-[200px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={95} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff">
@@ -883,7 +883,7 @@ export default function ClientReport() {
                 <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
                   <BarChart3 className="h-5 w-5 text-primary" /> الاستهلاك مقابل المتبقي — أعلى المواد
                 </h3>
-                <div className="print:hidden" style={{ height: `${Math.max(320, barData.length * 60)}px` }}>
+                <div className="print:h-[250px]" style={{ height: `${Math.max(320, barData.length * 60)}px` }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={barData} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 10 }} barGap={4} barCategoryGap="40%">
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
