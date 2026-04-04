@@ -417,6 +417,10 @@ export default function ClientReport() {
           </div>
         </div>
 
+        <div className="mb-6 text-center bg-gradient-to-l from-blue-50 to-cyan-50 dark:from-blue-950/20 dark:to-cyan-950/20 border border-blue-100 dark:border-blue-900/30 rounded-xl py-4 px-6 print:break-inside-avoid">
+          <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">نشكركم على ثقتكم في DSB — نسعد دائماً بخدمتكم ونتطلع لشراكة مستمرة</p>
+        </div>
+
         <div className="mb-8 grid grid-cols-3 gap-4 print:break-inside-avoid">
           <div className="border-2 border-gray-200 rounded-xl p-4 bg-card text-center">
             <p className="text-xs text-gray-500 font-medium mb-1">إجمالي المبيعات</p>
@@ -722,24 +726,6 @@ export default function ClientReport() {
               <StatBox label="التحصيل" value={collectionStats.totalAmount > 0 ? `${Math.round((collectionStats.paidAmount / collectionStats.totalAmount) * 100)}%` : "—"} icon={CreditCard} color="bg-cyan-100 text-cyan-700" />
             </div>
 
-            {lowStockItems.length > 0 && (
-              <div className="mb-8 border-2 border-amber-400 rounded-xl p-5 bg-amber-50 dark:bg-amber-950/20 print:break-inside-avoid">
-                <h3 className="text-base font-bold mb-3 flex items-center gap-2 text-amber-800 dark:text-amber-400">
-                  <AlertTriangle className="h-5 w-5" /> تنبيه — مواد تحتاج إعادة تعبئة
-                </h3>
-                <div className="flex flex-wrap gap-2.5">
-                  {lowStockItems.map((item, i) => {
-                    const weeks = item.totalRemaining / (item.avgWeekly || 1);
-                    return (
-                      <span key={i} className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-semibold ${weeks <= 2 ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400" : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"}`}>
-                        {item.material} — {weeks.toFixed(1)} أسبوع
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
             {lastAudit && (
               <div className="mb-8 border-2 border-gray-200 rounded-xl p-5 bg-card flex items-center gap-4 print:break-inside-avoid">
                 <div className="h-10 w-10 rounded-lg bg-pink-100 flex items-center justify-center shrink-0">
@@ -751,20 +737,6 @@ export default function ClientReport() {
                     {lastAuditDate ? new Date(lastAuditDate).toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" }) : "—"}
                     {" · "}عدد الجردات: {audits.length}
                     {" · "}الحالة: <span className={lastAudit.status === "Completed" ? "text-green-700 font-semibold" : "text-amber-700 font-semibold"}>{lastAudit.status === "Completed" ? "مكتمل" : lastAudit.status === "In Progress" ? "قيد التنفيذ" : lastAudit.status}</span>
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {returnsStats.total > 0 && (
-              <div className="mb-8 border-2 border-gray-200 rounded-xl p-5 bg-card flex items-center gap-4 print:break-inside-avoid">
-                <div className="h-10 w-10 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
-                  <RotateCcw className="h-5 w-5 text-rose-700" />
-                </div>
-                <div>
-                  <p className="text-base font-bold text-gray-900">المرتجعات</p>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {returnsStats.total} عملية مرتجع — {returnsStats.totalItems} عنصر — {returnsStats.accepted} مقبول، {returnsStats.pending} معلق
                   </p>
                 </div>
               </div>
@@ -877,35 +849,6 @@ export default function ClientReport() {
               </div>
             )}
 
-            {coverageData.length > 0 && (
-              <div className="mb-8 border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
-                <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
-                  <TrendingDown className="h-5 w-5 text-primary" /> تغطية المخزون (بالأسابيع)
-                </h3>
-                <div style={{ height: `${Math.max(300, coverageData.length * 55)}px` }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={coverageData} layout="vertical" margin={{ top: 10, right: 20, left: 10, bottom: 10 }} barCategoryGap="40%">
-                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-                      <XAxis type="number" tick={AXIS_TICK} stroke="currentColor" />
-                      <YAxis dataKey="name" type="category" width={130} tick={{ fontSize: 10, fill: "currentColor", fontWeight: 600 }} stroke="currentColor" interval={0} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} أسبوع`, "التغطية"]} />
-                      <Bar dataKey="weeks" fill="#22c55e" name="أسابيع" radius={[0, 4, 4, 0]} barSize={14}>
-                        {coverageData.map((entry, i) => (
-                          <Cell key={i} fill={entry.weeks <= 2 ? "#ef4444" : entry.weeks <= 4 ? "#eab308" : "#22c55e"} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-4 border-t border-gray-200 pt-3">
-                  <table className="w-full text-xs">
-                    <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">المادة</th><th className="py-2 px-3 text-end font-bold text-gray-700">التغطية (أسابيع)</th><th className="py-2 px-3 text-center font-bold text-gray-700">الحالة</th></tr></thead>
-                    <tbody>{coverageData.map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.name}</td><td className="py-1.5 px-3 text-end font-semibold">{d.weeks} أسبوع</td><td className="py-1.5 px-3 text-center"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${d.weeks <= 2 ? "bg-red-100 text-red-700" : d.weeks <= 4 ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>{d.weeks <= 2 ? "حرج" : d.weeks <= 4 ? "تحذير" : "آمن"}</span></td></tr>)}</tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
             <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
               <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
                 <Package className="h-5 w-5 text-primary" /> تفاصيل الاستهلاك لكل مادة
@@ -933,7 +876,7 @@ export default function ClientReport() {
                         <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
                           <td className="py-3 px-4 text-gray-600 font-medium">{idx + 1}</td>
                           <td className="py-2 px-4 text-center">{item.imageUrl ? <img src={item.imageUrl} alt={item.material} className="w-10 h-10 object-cover rounded-lg border border-gray-200 mx-auto" /> : <div className="w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center mx-auto"><Package className="h-5 w-5 text-gray-300" /></div>}</td>
-                          <td className="py-3 px-4 font-semibold text-gray-900">{item.material}<br/><span className="text-xs text-gray-500 font-mono">{item.code}</span></td>
+                          <td className="py-3 px-4 font-semibold text-gray-900">{item.material}</td>
                           <td className="py-3 px-4 text-gray-700">{item.unit}</td>
                           <td className="py-3 px-4 text-end text-gray-800 font-medium">{item.sellingPrice > 0 ? `${item.sellingPrice.toLocaleString()} ج.م` : "—"}</td>
                           <td className="py-3 px-4 text-end text-gray-800 font-medium">{item.totalDelivered}</td>
