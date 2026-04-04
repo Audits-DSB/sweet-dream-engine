@@ -69,7 +69,8 @@ function statusColor(status: string) {
 export default function ClientProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const isEn = lang === "en";
   const { profile } = useAuth();
   const _userName = profile?.full_name || "مستخدم";
   const [client, setClient] = useState<Client | null>(null);
@@ -179,11 +180,11 @@ export default function ClientProfile() {
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => navigate(`/clients/${id}/report`)} className="gap-1.5">
             <BarChart3 className="h-3.5 w-3.5" />
-            تقرير الاستهلاك
+            {isEn ? "Client Report" : "تقرير العميل"}
           </Button>
           <Button variant="outline" size="sm" onClick={() => navigate(`/clients/${id}/analysis`)} className="gap-1.5">
             <BarChart3 className="h-3.5 w-3.5" />
-            {t.caTitle}
+            {isEn ? "Internal Analysis" : "تحليل داخلي"}
           </Button>
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>{t.editClient}</Button>
         </div>
