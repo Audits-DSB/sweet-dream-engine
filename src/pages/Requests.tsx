@@ -17,7 +17,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { clientsList } from "@/data/store";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 
@@ -67,9 +66,20 @@ export default function RequestsPage() {
   const [matSearch, setMatSearch] = useState("");
   const [loadingMats, setLoadingMats] = useState(false);
   const [pricesLoaded, setPricesLoaded] = useState(false);
+  const [clientsList, setClientsList] = useState<{ id: string; name: string; city: string; status: string }[]>([]);
   const { user } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const { data } = await supabase.from("clients").select("id, name, city, status");
+        if (data) setClientsList(data);
+      } catch {}
+    };
+    fetchClients();
+  }, []);
 
   // Fetch real prices on mount and update initial requests
   useEffect(() => {
