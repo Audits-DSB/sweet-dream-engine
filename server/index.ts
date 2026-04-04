@@ -335,6 +335,43 @@ async function ensureReturnsTable() {
   }
 }
 
+async function ensureJoinDateColumn() {
+  const url = process.env.VITE_SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const headers: Record<string, string> = { apikey: key, Authorization: `Bearer ${key}`, Accept: "application/json" };
+  try {
+    const checkResp = await fetch(`${url}/rest/v1/clients?select=join_date&limit=1`, { headers });
+    if (checkResp.ok) {
+      console.log("✅ join_date column already exists on clients");
+      return;
+    }
+    let created = false;
+    for (const rpcName of ["exec_sql", "execute_sql", "run_sql"]) {
+      for (const paramName of ["sql_text", "sql", "query"]) {
+        try {
+          const resp = await fetch(`${url}/rest/v1/rpc/${rpcName}`, {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify({ [paramName]: "ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS join_date text DEFAULT '';" }),
+          });
+          if (resp.ok) {
+            console.log(`✅ Added join_date column to clients via RPC ${rpcName}(${paramName})`);
+            await reloadSupabaseSchemaCache();
+            created = true;
+            break;
+          }
+        } catch {}
+      }
+      if (created) break;
+    }
+    if (!created) {
+      console.warn("⚠️ Could not add join_date to clients automatically. Run in Supabase SQL Editor:\n   ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS join_date text DEFAULT '';");
+    }
+  } catch (e: any) {
+    console.warn("⚠️ join_date column check failed:", e.message);
+  }
+}
+
 app.listen(PORT, "0.0.0.0", async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   await reloadSupabaseSchemaCache();
@@ -342,5 +379,6 @@ app.listen(PORT, "0.0.0.0", async () => {
   await ensureDeliveryFeePaidByFounderColumn();
   await ensureOrderCostPaidByFounderColumn();
   await ensureSupplierIdColumn();
+  await ensureJoinDateColumn();
   await seedIfEmpty();
 });
