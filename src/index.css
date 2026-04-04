@@ -177,33 +177,57 @@
 
 @media print {
   .print\:hidden, nav, aside, header, footer,
-  [data-sidebar], [class*="SidebarProvider"] > aside,
-  .fixed { display: none !important; }
-  body {
+  [data-sidebar], [data-sidebar="sidebar"],
+  [class*="SidebarProvider"] > aside,
+  .fixed, [class*="WalkthroughBubble"],
+  .group.peer { display: none !important; width: 0 !important; min-width: 0 !important; flex: 0 !important; }
+
+  html, body {
     background: white !important;
     color: #111 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     font-size: 12pt !important;
     overflow: visible !important;
+    height: auto !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
-  * {
+
+  *, *::before, *::after {
     overflow: visible !important;
     scrollbar-width: none !important;
+    color-scheme: light !important;
   }
   *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
-  html, body, #root, main, [class*="SidebarProvider"], [class*="overflow"] {
+
+  #root, #root > *, #root > * > *,
+  main, [class*="SidebarProvider"],
+  [class*="overflow"], [class*="flex-1"] {
     overflow: visible !important;
     height: auto !important;
     max-height: none !important;
+    min-height: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    position: static !important;
   }
+
+  #root > * > *:has(> aside) > aside,
+  [data-sidebar] { display: none !important; }
+
+  .min-h-screen { min-height: 0 !important; height: auto !important; }
+  .sticky { position: static !important; }
+
   .print\:p-4 { padding: 1rem !important; }
+  .print\:p-0 { padding: 0 !important; }
   .print\:max-w-none { max-width: none !important; }
+  .print\:overflow-visible { overflow: visible !important; }
   .print\:break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
   .print\:mt-4 { margin-top: 1rem !important; }
   .recharts-wrapper { page-break-inside: avoid; break-inside: avoid; }
 
-  * { color-scheme: light !important; }
   .dark { --background: 0 0% 100%; --foreground: 0 0% 5%; --card: 0 0% 100%; --card-foreground: 0 0% 5%; --muted-foreground: 0 0% 30%; --border: 0 0% 75%; }
 
   .print-report-page {
