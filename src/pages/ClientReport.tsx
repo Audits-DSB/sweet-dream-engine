@@ -460,7 +460,7 @@ export default function ClientReport() {
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-3 border-t border-gray-200 pt-3">
+                <div className="mt-3 border-t border-gray-200 pt-3 print:hidden">
                   <table className="w-full text-xs">
                     <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">اليوم</th><th className="py-2 px-3 text-end font-bold text-gray-700">طلبات</th><th className="py-2 px-3 text-end font-bold text-gray-700">توصيلات</th></tr></thead>
                     <tbody>{mDailyData.filter(d => d.orders > 0 || d.deliveries > 0).map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.day}</td><td className="py-1.5 px-3 text-end font-semibold text-orange-600">{d.orders}</td><td className="py-1.5 px-3 text-end font-semibold text-green-600">{d.deliveries}</td></tr>)}</tbody>
@@ -486,7 +486,7 @@ export default function ClientReport() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
+                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1 print:hidden">
                     {mOrderStatusDist.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>{d.name}</span><span className="font-bold text-gray-900">{d.value} طلب</span></div>)}
                   </div>
                 </div>
@@ -509,7 +509,7 @@ export default function ClientReport() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
+                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1 print:hidden">
                     {mCollectionPie.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: i === 0 ? "#22c55e" : "#ef4444" }}></span>{d.name}</span><span className="font-bold text-gray-900">{Number(d.value).toLocaleString()} ج.م</span></div>)}
                   </div>
                 </div>
@@ -531,7 +531,7 @@ export default function ClientReport() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
+                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1 print:hidden">
                     {mMaterialDist.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>{d.name}</span><span className="font-bold text-gray-900">{d.value} وحدة</span></div>)}
                   </div>
                 </div>
@@ -560,7 +560,7 @@ export default function ClientReport() {
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-3 border-t border-gray-200 pt-3">
+                <div className="mt-3 border-t border-gray-200 pt-3 print:hidden">
                   <table className="w-full text-xs">
                     <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">اليوم</th><th className="py-2 px-3 text-end font-bold text-gray-700">القيمة (ج.م)</th></tr></thead>
                     <tbody>{mDailyData.filter(d => d.value > 0).map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.day}</td><td className="py-1.5 px-3 text-end font-semibold text-orange-600">{Number(d.value).toLocaleString()} ج.م</td></tr>)}</tbody>
@@ -795,7 +795,7 @@ export default function ClientReport() {
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="mt-3 border-t border-gray-200 pt-3">
+                  <div className="mt-3 border-t border-gray-200 pt-3 print:hidden">
                     <table className="w-full text-xs">
                       <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">الشهر</th><th className="py-2 px-3 text-end font-bold text-gray-700">طلبات</th><th className="py-2 px-3 text-end font-bold text-gray-700">توصيلات</th></tr></thead>
                       <tbody>{monthlyOverviewData.map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.label}</td><td className="py-1.5 px-3 text-end font-semibold text-orange-600">{d.orders}</td><td className="py-1.5 px-3 text-end font-semibold text-green-600">{d.deliveries}</td></tr>)}</tbody>
@@ -824,7 +824,7 @@ export default function ClientReport() {
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="mt-3 border-t border-gray-200 pt-3">
+                  <div className="mt-3 border-t border-gray-200 pt-3 print:hidden">
                     <table className="w-full text-xs">
                       <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">الشهر</th><th className="py-2 px-3 text-end font-bold text-gray-700">القيمة (ج.م)</th></tr></thead>
                       <tbody>{monthlyOverviewData.map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.label}</td><td className="py-1.5 px-3 text-end font-semibold text-orange-600">{Number(d.value).toLocaleString()} ج.م</td></tr>)}</tbody>
@@ -851,7 +851,7 @@ export default function ClientReport() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
+                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1 print:hidden">
                     {orderStatusDist.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>{d.name}</span><span className="font-bold text-gray-900">{d.value} طلب</span></div>)}
                   </div>
                 </div>
@@ -877,7 +877,7 @@ export default function ClientReport() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
+                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1 print:hidden">
                     <div className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block bg-green-500"></span>محصّل</span><span className="font-bold text-gray-900">{Number(collectionStats.paidAmount).toLocaleString()} ج.م</span></div>
                     <div className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block bg-red-500"></span>متبقي</span><span className="font-bold text-gray-900">{Number(collectionStats.remaining).toLocaleString()} ج.م</span></div>
                     <div className="flex justify-between text-xs border-t border-gray-200 pt-1 mt-1"><span className="font-bold text-gray-800">الإجمالي</span><span className="font-bold text-gray-900">{Number(collectionStats.totalAmount).toLocaleString()} ج.م</span></div>
@@ -901,7 +901,7 @@ export default function ClientReport() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
+                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1 print:hidden">
                     {pieData.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>{d.name}</span><span className="font-bold text-gray-900">{d.value} وحدة</span></div>)}
                   </div>
                 </div>
@@ -926,7 +926,7 @@ export default function ClientReport() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-4 border-t border-gray-200 pt-3">
+                <div className="mt-4 border-t border-gray-200 pt-3 print:hidden">
                   <table className="w-full text-xs">
                     <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">المادة</th><th className="py-2 px-3 text-end font-bold text-gray-700">مستهلك</th><th className="py-2 px-3 text-end font-bold text-gray-700">متبقي</th></tr></thead>
                     <tbody>{barData.map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.name}</td><td className="py-1.5 px-3 text-end font-semibold text-orange-600">{d.consumed}</td><td className="py-1.5 px-3 text-end font-semibold text-blue-600">{d.remaining}</td></tr>)}</tbody>
@@ -955,7 +955,7 @@ export default function ClientReport() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-4 border-t border-gray-200 pt-3">
+                <div className="mt-4 border-t border-gray-200 pt-3 print:hidden">
                   <table className="w-full text-xs">
                     <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">المادة</th><th className="py-2 px-3 text-end font-bold text-gray-700">التغطية (أسابيع)</th><th className="py-2 px-3 text-center font-bold text-gray-700">الحالة</th></tr></thead>
                     <tbody>{coverageData.map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.name}</td><td className="py-1.5 px-3 text-end font-semibold">{d.weeks} أسبوع</td><td className="py-1.5 px-3 text-center"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${d.weeks <= 2 ? "bg-red-100 text-red-700" : d.weeks <= 4 ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>{d.weeks <= 2 ? "حرج" : d.weeks <= 4 ? "تحذير" : "آمن"}</span></td></tr>)}</tbody>
@@ -986,7 +986,7 @@ export default function ClientReport() {
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-3 border-t border-gray-200 pt-3">
+                <div className="mt-3 border-t border-gray-200 pt-3 print:hidden">
                   <table className="w-full text-xs">
                     <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">الشهر</th><th className="py-2 px-3 text-end font-bold text-gray-700">المحصّل (ج.م)</th></tr></thead>
                     <tbody>{monthlyOverviewData.filter(d => d.collections > 0).map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.label}</td><td className="py-1.5 px-3 text-end font-semibold text-green-600">{Number(d.collections).toLocaleString()} ج.م</td></tr>)}</tbody>
