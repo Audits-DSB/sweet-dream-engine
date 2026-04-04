@@ -385,16 +385,53 @@ export default function ClientReport() {
       </div>
 
       <div className="max-w-[900px] mx-auto p-8 print:p-4 print:max-w-none print-report-page">
-        <div className="text-center mb-8 border-b-2 border-gray-300 pb-6">
-          <h1 className="text-3xl font-bold text-primary mb-2 print:text-black">DSB — Dental Smart Box</h1>
-          <h2 className="text-2xl font-bold mb-3 print:text-gray-900">
-            {tab === "monthly" && selectedMonth ? `تقرير ${toFullMonthLabel(selectedMonth)} — ${client.name}` : `تقرير شامل — ${client.name}`}
-          </h2>
-          <div className="flex items-center justify-center gap-6 text-sm text-gray-600 font-medium">
-            {client.city && <span>📍 {client.city}</span>}
-            {client.joinDate && <span>📅 عميل منذ {new Date(client.joinDate).toLocaleDateString("ar-EG", { year: "numeric", month: "long" })}</span>}
+        <div className="mb-8 border-b-2 border-gray-300 pb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <img src="/images/dsb-logo.png" alt="DSB Logo" className="w-14 h-14 object-contain rounded-lg" />
+              <div>
+                <h1 className="text-3xl font-bold text-primary print:text-black">DSB</h1>
+                <p className="text-sm font-semibold text-gray-600 print:text-gray-700">Dental Smart Box</p>
+              </div>
+            </div>
+            <div className="text-left text-xs text-gray-500 font-medium leading-relaxed print:text-gray-600">
+              <p>إدارة مستلزمات طب الأسنان</p>
+              <p dir="ltr">+20 11 0229 7174</p>
+              <p dir="ltr">dsbs.store</p>
+            </div>
           </div>
-          <p className="text-sm text-gray-500 font-medium mt-2">تاريخ التقرير: {reportDate}</p>
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-3 print:text-gray-900">
+              {tab === "monthly" && selectedMonth ? `تقرير ${toFullMonthLabel(selectedMonth)}` : "تقرير شامل"}
+            </h2>
+            <div className="inline-block bg-gray-50 border border-gray-200 rounded-xl px-6 py-3 print:bg-gray-100">
+              <p className="text-lg font-bold text-gray-900">{client.name}</p>
+              <div className="flex items-center justify-center gap-4 text-sm text-gray-600 font-medium mt-1">
+                {client.city && <span>📍 {client.city}</span>}
+                {client.phone && <span>📞 {client.phone}</span>}
+                {client.joinDate && <span>📅 عميل منذ {new Date(client.joinDate).toLocaleDateString("ar-EG", { year: "numeric", month: "long" })}</span>}
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 font-medium mt-3">تاريخ التقرير: {reportDate}</p>
+          </div>
+        </div>
+
+        <div className="mb-8 grid grid-cols-3 gap-4 print:break-inside-avoid">
+          <div className="border-2 border-gray-200 rounded-xl p-4 bg-card text-center">
+            <p className="text-xs text-gray-500 font-medium mb-1">إجمالي المبيعات</p>
+            <p className="text-xl font-bold text-gray-900">{totalOrderValue > 0 ? `${totalOrderValue.toLocaleString()}` : "0"}</p>
+            <p className="text-xs text-gray-500">ج.م</p>
+          </div>
+          <div className="border-2 border-green-200 rounded-xl p-4 bg-green-50 dark:bg-green-950/20 text-center">
+            <p className="text-xs text-green-700 font-medium mb-1">المدفوع</p>
+            <p className="text-xl font-bold text-green-700">{collectionStats.paidAmount > 0 ? `${collectionStats.paidAmount.toLocaleString()}` : "0"}</p>
+            <p className="text-xs text-green-600">ج.م</p>
+          </div>
+          <div className={`border-2 rounded-xl p-4 text-center ${collectionStats.remaining > 0 ? "border-red-200 bg-red-50 dark:bg-red-950/20" : "border-gray-200 bg-card"}`}>
+            <p className={`text-xs font-medium mb-1 ${collectionStats.remaining > 0 ? "text-red-700" : "text-gray-500"}`}>المتبقي</p>
+            <p className={`text-xl font-bold ${collectionStats.remaining > 0 ? "text-red-700" : "text-gray-900"}`}>{collectionStats.remaining > 0 ? `${collectionStats.remaining.toLocaleString()}` : "0"}</p>
+            <p className={`text-xs ${collectionStats.remaining > 0 ? "text-red-600" : "text-gray-500"}`}>ج.م</p>
+          </div>
         </div>
 
         <div className="print:hidden flex items-center gap-2 mb-6">
@@ -1123,8 +1160,10 @@ export default function ClientReport() {
         )}
 
         <div className="text-center text-sm text-gray-500 font-medium border-t-2 border-gray-300 pt-5 mt-8 print:mt-4">
-          <p>تم إنشاء هذا التقرير بواسطة نظام DSB — Dental Smart Box</p>
-          <p className="mt-1">{reportDate}</p>
+          <p className="font-bold text-gray-700">DSB — Dental Smart Box</p>
+          <p className="mt-1">إدارة مستلزمات طب الأسنان &nbsp;|&nbsp; <span dir="ltr">+20 11 0229 7174</span> &nbsp;|&nbsp; <span dir="ltr">dsbs.store</span></p>
+          <p className="mt-1 text-xs text-gray-400">تم إنشاء هذا التقرير بواسطة نظام DSB — {reportDate}</p>
+          <p className="mt-1 text-xs text-gray-400">هذا التقرير مُعد خصيصاً لـ {client.name} — جميع الحقوق محفوظة</p>
         </div>
       </div>
     </div>
