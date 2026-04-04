@@ -79,7 +79,7 @@ export default function ClientProfile() {
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [editForm, setEditForm] = useState({ name: "", contact: "", email: "", phone: "", city: "", status: "Active" });
+  const [editForm, setEditForm] = useState({ name: "", contact: "", email: "", phone: "", city: "", status: "Active", joinDate: "" });
   const [editPhones, setEditPhones] = useState<PhoneEntry[]>([{ name: "", number: "" }]);
 
   useEffect(() => {
@@ -94,7 +94,7 @@ export default function ClientProfile() {
       if (found) {
         const c = mapClient(found);
         setClient(c);
-        setEditForm({ name: c.name, contact: c.contact, email: c.email, phone: c.phone, city: c.city, status: c.status });
+        setEditForm({ name: c.name, contact: c.contact, email: c.email, phone: c.phone, city: c.city, status: c.status, joinDate: c.joinDate || "" });
         const parsed = parsePhones(c.phone);
         setEditPhones(parsed.length > 0 ? parsed : [{ name: "", number: "" }]);
       }
@@ -381,6 +381,7 @@ export default function ClientProfile() {
                 ))}
               </div>
             </div>
+            <div><Label className="text-xs">{t.joinDate}</Label><Input className="h-9 mt-1" type="date" value={editForm.joinDate} onChange={e => setEditForm({ ...editForm, joinDate: e.target.value })} dir="ltr" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">{t.city}</Label><Input className="h-9 mt-1" value={editForm.city} onChange={e => setEditForm({ ...editForm, city: e.target.value })} /></div>
               <div>

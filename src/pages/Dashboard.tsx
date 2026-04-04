@@ -97,6 +97,7 @@ export default function Dashboard() {
   const [companyInventory, setCompanyInventory] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [returnsData, setReturnsData] = useState<any[]>([]);
+  const [savedSnapshots, setSavedSnapshots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -119,6 +120,7 @@ export default function Dashboard() {
       setCompanyInventory(compInv || []);
       setReturnsData(rets || []);
     }).finally(() => setLoading(false));
+    api.get<any[]>("/monthly-snapshots").then(s => setSavedSnapshots(s || [])).catch(() => {});
   }, []);
 
   const returnDeductions = useMemo(() => {
@@ -880,6 +882,7 @@ export default function Dashboard() {
                     });
                     const { toast } = await import("sonner");
                     toast.success(t.snapshotSaved);
+                    api.get<any[]>("/monthly-snapshots").then(s => setSavedSnapshots(s || [])).catch(() => {});
                   } catch (err: any) {
                     const { toast: t2 } = await import("sonner");
                     t2.error(err?.message || "Failed to save snapshot");
@@ -892,6 +895,42 @@ export default function Dashboard() {
           })()}
         </div>
       </div>
+
+      {/* ─── Saved Snapshots History ─── */}
+      {savedSnapshots.length > 0 && (
+        <div className="stat-card">
+          <SectionHeader icon={BarChart3} title={t.savedSnapshots} />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.snapshotMonth}</th>
+                  <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.snapshotRevenue}</th>
+                  <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.snapshotProfit}</th>
+                  <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.snapshotOrders}</th>
+                  <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.snapshotNewClients}</th>
+                  <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.snapshotCollectionRate}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {savedSnapshots.map((snap: any) => {
+                  const ml = ARABIC_MONTHS[snap.month?.slice(5)] || snap.month;
+                  return (
+                    <tr key={snap.month} className="border-b border-border/50 hover:bg-muted/30">
+                      <td className="py-2.5 px-3 font-medium">{ml} {snap.month?.slice(0, 4)}</td>
+                      <td className="py-2.5 px-3 text-end font-medium">{Number(snap.revenue || 0).toLocaleString()}</td>
+                      <td className="py-2.5 px-3 text-end font-medium">{Number(snap.profit || 0).toLocaleString()}</td>
+                      <td className="py-2.5 px-3 text-end">{snap.orders_count || 0}</td>
+                      <td className="py-2.5 px-3 text-end">{snap.new_clients || 0}</td>
+                      <td className="py-2.5 px-3 text-end">{Number(snap.collection_rate || 0).toFixed(1)}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ─── Action Alerts ─── */}
       {(pendingDeliveries > 0 || overdueCollections > 0 || criticalAlerts > 0 || pendingReturns > 0) && (
