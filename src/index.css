@@ -179,12 +179,57 @@
   .print\:hidden, nav, aside, header, footer,
   [data-sidebar], [class*="SidebarProvider"] > aside,
   .fixed { display: none !important; }
-  body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    background: white !important;
+    color: #111 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-size: 12pt !important;
+  }
   .print\:p-4 { padding: 1rem !important; }
   .print\:max-w-none { max-width: none !important; }
-  .print\:break-inside-avoid { break-inside: avoid; }
+  .print\:break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
   .print\:mt-4 { margin-top: 1rem !important; }
-  .recharts-wrapper { page-break-inside: avoid; }
+  .recharts-wrapper { page-break-inside: avoid; break-inside: avoid; }
+
+  * { color-scheme: light !important; }
+  .dark { --background: 0 0% 100%; --foreground: 0 0% 5%; --card: 0 0% 100%; --card-foreground: 0 0% 5%; --muted-foreground: 0 0% 30%; --border: 0 0% 75%; }
+
+  .print-report-page {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .print-report-page table { font-size: 11pt !important; border-collapse: collapse !important; }
+  .print-report-page th { font-weight: 800 !important; color: #000 !important; background: #e5e7eb !important; border-bottom: 2px solid #9ca3af !important; padding: 8px 12px !important; }
+  .print-report-page td { color: #111 !important; padding: 7px 12px !important; border-bottom: 1px solid #d1d5db !important; }
+  .print-report-page tfoot td { font-weight: 700 !important; background: #e5e7eb !important; border-top: 2px solid #9ca3af !important; }
+  .print-report-page h3 { font-size: 14pt !important; font-weight: 800 !important; color: #000 !important; background: #f3f4f6 !important; }
+  .print-report-page .stat-box-print { border: 2px solid #9ca3af !important; background: #f9fafb !important; }
+  .print-report-page .stat-box-print p { color: #000 !important; }
+  .print-report-page .text-muted-foreground { color: #333 !important; }
+  .print-report-page .font-bold, .print-report-page .font-semibold { color: #000 !important; }
+  .print-report-page .text-orange-700 { color: #9a3412 !important; }
+  .print-report-page .text-blue-700 { color: #1d4ed8 !important; }
+  .print-report-page .text-green-700 { color: #047857 !important; }
+  .print-report-page .text-red-700, .print-report-page .text-red-800 { color: #991b1b !important; }
+  .print-report-page .text-amber-700, .print-report-page .text-amber-800 { color: #92400e !important; }
+  .print-report-page .text-cyan-700 { color: #0e7490 !important; }
+  .print-report-page .text-pink-700 { color: #be185d !important; }
+  .print-report-page .text-rose-700 { color: #be123c !important; }
+  .print-report-page .text-gray-900 { color: #000 !important; }
+  .print-report-page .text-gray-800 { color: #1f2937 !important; }
+  .print-report-page .text-gray-700 { color: #374151 !important; }
+  .print-report-page .text-gray-600 { color: #4b5563 !important; }
+  .print-report-page .text-gray-500 { color: #6b7280 !important; }
+
+  .recharts-text, .recharts-cartesian-axis-tick-value {
+    fill: #222 !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+  }
+  .recharts-legend-item-text { fill: #222 !important; font-size: 11px !important; font-weight: 600 !important; }
+  .recharts-label { fill: #111 !important; font-size: 11px !important; font-weight: 700 !important; }
 }
 
 /* RTL Arabic fixes - MUST be after all @layer blocks */

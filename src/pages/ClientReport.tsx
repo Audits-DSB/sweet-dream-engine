@@ -14,9 +14,11 @@ import {
   PieChart, Pie, Cell, Legend, AreaChart, Area, ComposedChart, RadialBarChart, RadialBar,
 } from "recharts";
 
-const COLORS = ["#f97316", "#3b82f6", "#10b981", "#8b5cf6", "#ef4444", "#06b6d4", "#f59e0b", "#ec4899", "#14b8a6", "#6366f1"];
+const COLORS = ["#c2410c", "#1d4ed8", "#047857", "#6d28d9", "#b91c1c", "#0e7490", "#b45309", "#be185d", "#0f766e", "#4338ca"];
 const MONTH_NAMES = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
-const TOOLTIP_STYLE = { backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px", direction: "rtl" as const };
+const TOOLTIP_STYLE = { backgroundColor: "#fff", border: "1.5px solid #d1d5db", borderRadius: "8px", fontSize: "13px", direction: "rtl" as const, color: "#111" };
+const AXIS_TICK = { fontSize: 12, fill: "#222", fontWeight: 600 };
+const GRID_COLOR = "#e5e7eb";
 
 function toMonthLabel(ym: string) {
   const m = parseInt(ym.slice(5));
@@ -364,17 +366,17 @@ export default function ClientReport() {
         </div>
       </div>
 
-      <div className="max-w-[900px] mx-auto p-8 print:p-4 print:max-w-none">
-        <div className="text-center mb-6 border-b pb-5">
-          <h1 className="text-2xl font-bold text-primary mb-1">DSB — Dental Smart Box</h1>
-          <h2 className="text-xl font-semibold mb-2">
+      <div className="max-w-[900px] mx-auto p-8 print:p-4 print:max-w-none print-report-page">
+        <div className="text-center mb-8 border-b-2 border-gray-300 pb-6">
+          <h1 className="text-3xl font-bold text-primary mb-2 print:text-black">DSB — Dental Smart Box</h1>
+          <h2 className="text-2xl font-bold mb-3 print:text-gray-900">
             {tab === "monthly" && selectedMonth ? `تقرير ${toFullMonthLabel(selectedMonth)} — ${client.name}` : `تقرير شامل — ${client.name}`}
           </h2>
-          <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-6 text-sm text-gray-600 font-medium">
             {client.city && <span>📍 {client.city}</span>}
             {client.joinDate && <span>📅 عميل منذ {new Date(client.joinDate).toLocaleDateString("ar-EG", { year: "numeric", month: "long" })}</span>}
           </div>
-          <p className="text-xs text-muted-foreground mt-2">تاريخ التقرير: {reportDate}</p>
+          <p className="text-sm text-gray-500 font-medium mt-2">تاريخ التقرير: {reportDate}</p>
         </div>
 
         <div className="print:hidden flex items-center gap-2 mb-6">
@@ -409,51 +411,51 @@ export default function ClientReport() {
               </Button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-              <StatBox label="الطلبات" value={mStats.ordersCount} icon={ShoppingCart} color="bg-orange-500/10 text-orange-600" />
-              <StatBox label="التوصيلات" value={mStats.deliveriesCount} icon={Truck} color="bg-green-500/10 text-green-600" />
-              <StatBox label="قيمة الطلبات" value={mStats.totalValue > 0 ? `${mStats.totalValue.toLocaleString()} ج.م` : "—"} icon={DollarSign} color="bg-amber-500/10 text-amber-600" />
-              <StatBox label="المحصّل" value={mStats.totalCollected > 0 ? `${mStats.totalCollected.toLocaleString()} ج.م` : "—"} icon={CreditCard} color="bg-cyan-500/10 text-cyan-600" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+              <StatBox label="الطلبات" value={mStats.ordersCount} icon={ShoppingCart} color="bg-orange-100 text-orange-700" />
+              <StatBox label="التوصيلات" value={mStats.deliveriesCount} icon={Truck} color="bg-green-100 text-green-700" />
+              <StatBox label="قيمة الطلبات" value={mStats.totalValue > 0 ? `${mStats.totalValue.toLocaleString()} ج.م` : "—"} icon={DollarSign} color="bg-amber-100 text-amber-700" />
+              <StatBox label="المحصّل" value={mStats.totalCollected > 0 ? `${mStats.totalCollected.toLocaleString()} ج.م` : "—"} icon={CreditCard} color="bg-cyan-100 text-cyan-700" />
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-              <StatBox label="كمية موّردة" value={mStats.deliveredQty > 0 ? mStats.deliveredQty.toLocaleString() : "—"} icon={Package} color="bg-blue-500/10 text-blue-600" />
-              <StatBox label="عمليات تحصيل" value={mStats.collectionsCount} icon={Receipt} color="bg-teal-500/10 text-teal-600" />
-              <StatBox label="مرتجعات" value={mStats.returnsCount} icon={RotateCcw} color="bg-rose-500/10 text-rose-600" />
-              <StatBox label="نسبة التحصيل" value={mStats.totalDue > 0 ? `${Math.round((mStats.totalCollected / mStats.totalDue) * 100)}%` : "—"} icon={PieChartIcon} color="bg-purple-500/10 text-purple-600" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+              <StatBox label="كمية موّردة" value={mStats.deliveredQty > 0 ? mStats.deliveredQty.toLocaleString() : "—"} icon={Package} color="bg-blue-100 text-blue-700" />
+              <StatBox label="عمليات تحصيل" value={mStats.collectionsCount} icon={Receipt} color="bg-teal-100 text-teal-700" />
+              <StatBox label="مرتجعات" value={mStats.returnsCount} icon={RotateCcw} color="bg-rose-100 text-rose-700" />
+              <StatBox label="نسبة التحصيل" value={mStats.totalDue > 0 ? `${Math.round((mStats.totalCollected / mStats.totalDue) * 100)}%` : "—"} icon={PieChartIcon} color="bg-purple-100 text-purple-700" />
             </div>
 
             {mDailyData.length > 0 && (
-              <div className="mb-6 border rounded-xl p-5 bg-card print:break-inside-avoid">
-                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                  <CalendarDays className="h-4 w-4 text-primary" /> الحركة اليومية — {toYMLabel(selectedMonth)}
+              <div className="mb-8 border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
+                <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
+                  <CalendarDays className="h-5 w-5 text-primary" /> الحركة اليومية — {toYMLabel(selectedMonth)}
                 </h3>
-                <div className="h-[220px]">
+                <div className="h-[260px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={mDailyData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="day" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                      <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                      <XAxis dataKey="day" tick={AXIS_TICK} stroke="#555" />
+                      <YAxis tick={AXIS_TICK} stroke="#555" />
                       <Tooltip contentStyle={TOOLTIP_STYLE} />
-                      <Legend wrapperStyle={{ fontSize: "10px" }} />
-                      <Bar dataKey="orders" fill="#f97316" name="طلبات" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="deliveries" fill="#10b981" name="توصيلات" radius={[4, 4, 0, 0]} />
+                      <Legend wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
+                      <Bar dataKey="orders" fill="#c2410c" name="طلبات" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="deliveries" fill="#047857" name="توصيلات" radius={[4, 4, 0, 0]} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
               </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
               {mOrderStatusDist.length > 0 && (
-                <div className="border rounded-xl p-5 bg-card print:break-inside-avoid">
-                  <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                    <ShoppingCart className="h-4 w-4 text-primary" /> حالات الطلبات
+                <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
+                  <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
+                    <ShoppingCart className="h-5 w-5 text-primary" /> حالات الطلبات
                   </h3>
-                  <div className="h-[200px]">
+                  <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={mOrderStatusDist} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={3} dataKey="value"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1 }} style={{ fontSize: "9px" }}>
+                        <Pie data={mOrderStatusDist} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value" strokeWidth={2} stroke="#fff"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 2, stroke: "#666" }} style={{ fontSize: "12px", fontWeight: 600, fill: "#222" }}>
                           {mOrderStatusDist.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} />
@@ -464,17 +466,17 @@ export default function ClientReport() {
               )}
 
               {mCollectionPie.length > 0 && (
-                <div className="border rounded-xl p-5 bg-card print:break-inside-avoid">
-                  <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                    <Receipt className="h-4 w-4 text-primary" /> تحصيل الشهر
+                <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
+                  <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
+                    <Receipt className="h-5 w-5 text-primary" /> تحصيل الشهر
                   </h3>
-                  <div className="h-[200px]">
+                  <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={mCollectionPie} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={4} dataKey="value"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1 }} style={{ fontSize: "10px" }}>
-                          <Cell fill="#22c55e" />
-                          <Cell fill="#ef4444" />
+                        <Pie data={mCollectionPie} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={4} dataKey="value" strokeWidth={2} stroke="#fff"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 2, stroke: "#666" }} style={{ fontSize: "12px", fontWeight: 600, fill: "#222" }}>
+                          <Cell fill="#047857" />
+                          <Cell fill="#b91c1c" />
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, ""]} />
                       </PieChart>
@@ -484,15 +486,15 @@ export default function ClientReport() {
               )}
 
               {mMaterialDist.length > 0 && (
-                <div className="border rounded-xl p-5 bg-card print:break-inside-avoid">
-                  <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                    <Package className="h-4 w-4 text-primary" /> المواد الموّردة
+                <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
+                  <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
+                    <Package className="h-5 w-5 text-primary" /> المواد الموّردة
                   </h3>
-                  <div className="h-[200px]">
+                  <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={mMaterialDist} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={2} dataKey="value"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1 }} style={{ fontSize: "9px" }}>
+                        <Pie data={mMaterialDist} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 2, stroke: "#666" }} style={{ fontSize: "11px", fontWeight: 600, fill: "#222" }}>
                           {mMaterialDist.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} />
@@ -504,24 +506,24 @@ export default function ClientReport() {
             </div>
 
             {mDailyData.length > 0 && mStats.totalValue > 0 && (
-              <div className="mb-6 border rounded-xl p-5 bg-card print:break-inside-avoid">
-                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-primary" /> قيمة الطلبات اليومية — {toYMLabel(selectedMonth)}
+              <div className="mb-8 border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
+                <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
+                  <DollarSign className="h-5 w-5 text-primary" /> قيمة الطلبات اليومية — {toYMLabel(selectedMonth)}
                 </h3>
-                <div className="h-[200px]">
+                <div className="h-[240px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={mDailyData}>
                       <defs>
                         <linearGradient id="mValueGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                          <stop offset="5%" stopColor="#c2410c" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#c2410c" stopOpacity={0} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="day" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                      <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                      <XAxis dataKey="day" tick={AXIS_TICK} stroke="#555" />
+                      <YAxis tick={AXIS_TICK} stroke="#555" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, "القيمة"]} />
-                      <Area type="monotone" dataKey="value" stroke="#f97316" strokeWidth={2} fill="url(#mValueGrad)" name="القيمة" />
+                      <Area type="monotone" dataKey="value" stroke="#c2410c" strokeWidth={3} fill="url(#mValueGrad)" name="القيمة" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -529,38 +531,38 @@ export default function ClientReport() {
             )}
 
             {mMaterialConsumption.length > 0 && (
-              <div className="border rounded-xl overflow-hidden bg-card mb-6 print:break-inside-avoid">
-                <h3 className="text-sm font-semibold p-4 border-b flex items-center gap-2">
-                  <Package className="h-4 w-4 text-primary" /> تفاصيل استهلاك المواد — {toFullMonthLabel(selectedMonth)}
+              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+                <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
+                  <Package className="h-5 w-5 text-primary" /> تفاصيل استهلاك المواد — {toFullMonthLabel(selectedMonth)}
                 </h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-muted/50 border-b">
-                        <th className="py-2.5 px-3 text-start font-semibold">#</th>
-                        <th className="py-2.5 px-3 text-start font-semibold">المادة</th>
-                        <th className="py-2.5 px-3 text-start font-semibold">الكود</th>
-                        <th className="py-2.5 px-3 text-start font-semibold">الوحدة</th>
-                        <th className="py-2.5 px-3 text-end font-semibold">الكمية</th>
-                        <th className="py-2.5 px-3 text-center font-semibold">عدد الأوردرات</th>
+                      <tr className="bg-gray-100 border-b-2 border-gray-300">
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">#</th>
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">المادة</th>
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">الكود</th>
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">الوحدة</th>
+                        <th className="py-3 px-4 text-end font-bold text-gray-900">الكمية</th>
+                        <th className="py-3 px-4 text-center font-bold text-gray-900">عدد الأوردرات</th>
                       </tr>
                     </thead>
                     <tbody>
                       {mMaterialConsumption.map((item, idx) => (
-                        <tr key={idx} className="border-b border-border/50 hover:bg-muted/20">
-                          <td className="py-2 px-3 text-muted-foreground">{idx + 1}</td>
-                          <td className="py-2 px-3 font-medium">{item.materialName}</td>
-                          <td className="py-2 px-3 font-mono text-[10px] text-muted-foreground">{item.materialCode}</td>
-                          <td className="py-2 px-3">{item.unit}</td>
-                          <td className="py-2 px-3 text-end font-medium text-orange-600">{item.totalQty}</td>
-                          <td className="py-2 px-3 text-center">{item.orderCount}</td>
+                        <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
+                          <td className="py-3 px-4 text-gray-600 font-medium">{idx + 1}</td>
+                          <td className="py-3 px-4 font-semibold text-gray-900">{item.materialName}</td>
+                          <td className="py-3 px-4 font-mono text-xs text-gray-600">{item.materialCode}</td>
+                          <td className="py-3 px-4 text-gray-700">{item.unit}</td>
+                          <td className="py-3 px-4 text-end font-bold text-orange-700">{item.totalQty}</td>
+                          <td className="py-3 px-4 text-center font-medium text-gray-700">{item.orderCount}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-muted/30 font-semibold border-t-2">
-                        <td colSpan={4} className="py-2.5 px-3">الإجمالي: {mMaterialConsumption.length} مادة</td>
-                        <td className="py-2.5 px-3 text-end text-orange-600">{mMaterialConsumption.reduce((s, i) => s + i.totalQty, 0)}</td>
+                      <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
+                        <td colSpan={4} className="py-3 px-4 text-gray-900">الإجمالي: {mMaterialConsumption.length} مادة</td>
+                        <td className="py-3 px-4 text-end text-orange-700">{mMaterialConsumption.reduce((s, i) => s + i.totalQty, 0)}</td>
                         <td></td>
                       </tr>
                     </tfoot>
@@ -570,36 +572,36 @@ export default function ClientReport() {
             )}
 
             {mOrders.length > 0 && (
-              <div className="border rounded-xl overflow-hidden bg-card mb-6 print:break-inside-avoid">
-                <h3 className="text-sm font-semibold p-4 border-b flex items-center gap-2">
-                  <ShoppingCart className="h-4 w-4 text-primary" /> سجل الطلبات — {toFullMonthLabel(selectedMonth)}
+              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+                <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
+                  <ShoppingCart className="h-5 w-5 text-primary" /> سجل الطلبات — {toFullMonthLabel(selectedMonth)}
                 </h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-muted/50 border-b">
-                        <th className="py-2.5 px-3 text-start font-semibold">رقم الطلب</th>
-                        <th className="py-2.5 px-3 text-start font-semibold">التاريخ</th>
-                        <th className="py-2.5 px-3 text-center font-semibold">المواد</th>
-                        <th className="py-2.5 px-3 text-end font-semibold">القيمة</th>
-                        <th className="py-2.5 px-3 text-start font-semibold">الحالة</th>
+                      <tr className="bg-gray-100 border-b-2 border-gray-300">
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">رقم الطلب</th>
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">التاريخ</th>
+                        <th className="py-3 px-4 text-center font-bold text-gray-900">المواد</th>
+                        <th className="py-3 px-4 text-end font-bold text-gray-900">القيمة</th>
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">الحالة</th>
                       </tr>
                     </thead>
                     <tbody>
                       {mOrders.map(o => (
-                        <tr key={o.id} className="border-b border-border/50">
-                          <td className="py-2 px-3 font-mono text-[10px]">{o.id}</td>
-                          <td className="py-2 px-3">{o.date}</td>
-                          <td className="py-2 px-3 text-center">{o.lines}</td>
-                          <td className="py-2 px-3 text-end">{o.totalSelling > 0 ? `${o.totalSelling.toLocaleString()} ج.م` : "—"}</td>
-                          <td className="py-2 px-3"><StatusBadge status={o.status} /></td>
+                        <tr key={o.id} className="border-b border-gray-200">
+                          <td className="py-3 px-4 font-mono text-xs text-gray-700">{o.id}</td>
+                          <td className="py-3 px-4 text-gray-800 font-medium">{o.date}</td>
+                          <td className="py-3 px-4 text-center text-gray-700 font-medium">{o.lines}</td>
+                          <td className="py-3 px-4 text-end font-semibold text-gray-900">{o.totalSelling > 0 ? `${o.totalSelling.toLocaleString()} ج.م` : "—"}</td>
+                          <td className="py-3 px-4"><StatusBadge status={o.status} /></td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-muted/30 font-semibold border-t-2">
-                        <td colSpan={3} className="py-2.5 px-3">الإجمالي: {mOrders.length} طلب</td>
-                        <td className="py-2.5 px-3 text-end">{mStats.totalValue.toLocaleString()} ج.م</td>
+                      <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
+                        <td colSpan={3} className="py-3 px-4 text-gray-900">الإجمالي: {mOrders.length} طلب</td>
+                        <td className="py-3 px-4 text-end text-gray-900">{mStats.totalValue.toLocaleString()} ج.م</td>
                         <td></td>
                       </tr>
                     </tfoot>
@@ -609,27 +611,27 @@ export default function ClientReport() {
             )}
 
             {mDeliveries.length > 0 && (
-              <div className="border rounded-xl overflow-hidden bg-card mb-6 print:break-inside-avoid">
-                <h3 className="text-sm font-semibold p-4 border-b flex items-center gap-2">
-                  <Truck className="h-4 w-4 text-primary" /> سجل التوصيلات — {toFullMonthLabel(selectedMonth)}
+              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+                <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
+                  <Truck className="h-5 w-5 text-primary" /> سجل التوصيلات — {toFullMonthLabel(selectedMonth)}
                 </h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-muted/50 border-b">
-                        <th className="py-2.5 px-3 text-start font-semibold">رقم التوصيل</th>
-                        <th className="py-2.5 px-3 text-start font-semibold">رقم الأوردر</th>
-                        <th className="py-2.5 px-3 text-start font-semibold">التاريخ</th>
-                        <th className="py-2.5 px-3 text-start font-semibold">الحالة</th>
+                      <tr className="bg-gray-100 border-b-2 border-gray-300">
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">رقم التوصيل</th>
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">رقم الأوردر</th>
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">التاريخ</th>
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">الحالة</th>
                       </tr>
                     </thead>
                     <tbody>
                       {mDeliveries.map(d => (
-                        <tr key={d.id} className="border-b border-border/50">
-                          <td className="py-2 px-3 font-mono text-[10px]">{d.id}</td>
-                          <td className="py-2 px-3 font-mono text-[10px]">{d.orderId || "—"}</td>
-                          <td className="py-2 px-3">{d.date}</td>
-                          <td className="py-2 px-3"><StatusBadge status={d.status} /></td>
+                        <tr key={d.id} className="border-b border-gray-200">
+                          <td className="py-3 px-4 font-mono text-xs text-gray-700">{d.id}</td>
+                          <td className="py-3 px-4 font-mono text-xs text-gray-700">{d.orderId || "—"}</td>
+                          <td className="py-3 px-4 text-gray-800 font-medium">{d.date}</td>
+                          <td className="py-3 px-4"><StatusBadge status={d.status} /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -650,29 +652,29 @@ export default function ClientReport() {
 
         {tab === "full" && (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-              <StatBox label="عدد المواد" value={stats.materialCount} icon={Package} color="bg-blue-500/10 text-blue-600" />
-              <StatBox label="إجمالي الطلبات" value={orders.length} icon={ShoppingCart} color="bg-orange-500/10 text-orange-600" />
-              <StatBox label="عمليات التوصيل" value={confirmedDeliveries.length} icon={Truck} color="bg-green-500/10 text-green-600" />
-              <StatBox label="نسبة الاستهلاك" value={`${stats.consumptionRate}%`} icon={PieChartIcon} color="bg-purple-500/10 text-purple-600" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+              <StatBox label="عدد المواد" value={stats.materialCount} icon={Package} color="bg-blue-100 text-blue-700" />
+              <StatBox label="إجمالي الطلبات" value={orders.length} icon={ShoppingCart} color="bg-orange-100 text-orange-700" />
+              <StatBox label="عمليات التوصيل" value={confirmedDeliveries.length} icon={Truck} color="bg-green-100 text-green-700" />
+              <StatBox label="نسبة الاستهلاك" value={`${stats.consumptionRate}%`} icon={PieChartIcon} color="bg-purple-100 text-purple-700" />
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-              <StatBox label="الكمية الموّردة" value={stats.totalDelivered.toLocaleString()} icon={BarChart3} color="bg-teal-500/10 text-teal-600" />
-              <StatBox label="المستهلك" value={stats.totalConsumed.toLocaleString()} icon={TrendingDown} color="bg-red-500/10 text-red-600" />
-              <StatBox label="قيمة الطلبات" value={`${totalOrderValue.toLocaleString()} ج.م`} icon={DollarSign} color="bg-amber-500/10 text-amber-600" />
-              <StatBox label="التحصيل" value={collectionStats.totalAmount > 0 ? `${Math.round((collectionStats.paidAmount / collectionStats.totalAmount) * 100)}%` : "—"} icon={CreditCard} color="bg-cyan-500/10 text-cyan-600" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+              <StatBox label="الكمية الموّردة" value={stats.totalDelivered.toLocaleString()} icon={BarChart3} color="bg-teal-100 text-teal-700" />
+              <StatBox label="المستهلك" value={stats.totalConsumed.toLocaleString()} icon={TrendingDown} color="bg-red-100 text-red-700" />
+              <StatBox label="قيمة الطلبات" value={`${totalOrderValue.toLocaleString()} ج.م`} icon={DollarSign} color="bg-amber-100 text-amber-700" />
+              <StatBox label="التحصيل" value={collectionStats.totalAmount > 0 ? `${Math.round((collectionStats.paidAmount / collectionStats.totalAmount) * 100)}%` : "—"} icon={CreditCard} color="bg-cyan-100 text-cyan-700" />
             </div>
 
             {lowStockItems.length > 0 && (
-              <div className="mb-6 border border-amber-300 dark:border-amber-800 rounded-xl p-4 bg-amber-50/50 dark:bg-amber-950/20 print:break-inside-avoid">
-                <h3 className="text-sm font-semibold mb-2 flex items-center gap-2 text-amber-700 dark:text-amber-400">
-                  <AlertTriangle className="h-4 w-4" /> تنبيه — مواد تحتاج إعادة تعبئة
+              <div className="mb-8 border-2 border-amber-400 rounded-xl p-5 bg-amber-50 dark:bg-amber-950/20 print:break-inside-avoid">
+                <h3 className="text-base font-bold mb-3 flex items-center gap-2 text-amber-800 dark:text-amber-400">
+                  <AlertTriangle className="h-5 w-5" /> تنبيه — مواد تحتاج إعادة تعبئة
                 </h3>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2.5">
                   {lowStockItems.map((item, i) => {
                     const weeks = item.totalRemaining / (item.avgWeekly || 1);
                     return (
-                      <span key={i} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${weeks <= 2 ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
+                      <span key={i} className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-semibold ${weeks <= 2 ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400" : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"}`}>
                         {item.material} — {weeks.toFixed(1)} أسبوع
                       </span>
                     );
@@ -682,51 +684,51 @@ export default function ClientReport() {
             )}
 
             {lastAudit && (
-              <div className="mb-6 border rounded-xl p-4 bg-card flex items-center gap-3 print:break-inside-avoid">
-                <div className="h-9 w-9 rounded-lg bg-pink-500/10 flex items-center justify-center shrink-0">
-                  <ClipboardCheck className="h-4 w-4 text-pink-600" />
+              <div className="mb-8 border-2 border-gray-200 rounded-xl p-5 bg-card flex items-center gap-4 print:break-inside-avoid">
+                <div className="h-10 w-10 rounded-lg bg-pink-100 flex items-center justify-center shrink-0">
+                  <ClipboardCheck className="h-5 w-5 text-pink-700" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold">آخر عملية جرد</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-base font-bold text-gray-900">آخر عملية جرد</p>
+                  <p className="text-sm text-gray-600 mt-1">
                     {lastAuditDate ? new Date(lastAuditDate).toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" }) : "—"}
                     {" · "}عدد الجردات: {audits.length}
-                    {" · "}الحالة: <span className={lastAudit.status === "Completed" ? "text-green-600 font-medium" : "text-amber-600 font-medium"}>{lastAudit.status === "Completed" ? "مكتمل" : lastAudit.status === "In Progress" ? "قيد التنفيذ" : lastAudit.status}</span>
+                    {" · "}الحالة: <span className={lastAudit.status === "Completed" ? "text-green-700 font-semibold" : "text-amber-700 font-semibold"}>{lastAudit.status === "Completed" ? "مكتمل" : lastAudit.status === "In Progress" ? "قيد التنفيذ" : lastAudit.status}</span>
                   </p>
                 </div>
               </div>
             )}
 
             {collectionStats.total > 0 && (
-              <div className="mb-6 border rounded-xl p-4 bg-card flex items-center gap-3 print:break-inside-avoid">
-                <div className="h-9 w-9 rounded-lg bg-cyan-500/10 flex items-center justify-center shrink-0">
-                  <Receipt className="h-4 w-4 text-cyan-600" />
+              <div className="mb-8 border-2 border-gray-200 rounded-xl p-5 bg-card flex items-center gap-4 print:break-inside-avoid">
+                <div className="h-10 w-10 rounded-lg bg-cyan-100 flex items-center justify-center shrink-0">
+                  <Receipt className="h-5 w-5 text-cyan-700" />
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold">ملخص التحصيل</p>
-                    <span className={`text-xs font-medium ${collectionStats.remaining > 0 ? "text-red-600" : "text-green-600"}`}>
+                    <p className="text-base font-bold text-gray-900">ملخص التحصيل</p>
+                    <span className={`text-sm font-semibold ${collectionStats.remaining > 0 ? "text-red-700" : "text-green-700"}`}>
                       {collectionStats.remaining > 0 ? `متبقي: ${collectionStats.remaining.toLocaleString()} ج.م` : "تم التحصيل بالكامل ✓"}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 mt-1.5">
-                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                      <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${collectionStats.totalAmount > 0 ? Math.min(100, (collectionStats.paidAmount / collectionStats.totalAmount) * 100) : 0}%` }} />
+                  <div className="flex items-center gap-3 mt-2">
+                    <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-green-600 rounded-full transition-all" style={{ width: `${collectionStats.totalAmount > 0 ? Math.min(100, (collectionStats.paidAmount / collectionStats.totalAmount) * 100) : 0}%` }} />
                     </div>
-                    <span className="text-xs text-muted-foreground">{collectionStats.paidAmount.toLocaleString()} / {collectionStats.totalAmount.toLocaleString()} ج.م</span>
+                    <span className="text-sm text-gray-600 font-medium">{collectionStats.paidAmount.toLocaleString()} / {collectionStats.totalAmount.toLocaleString()} ج.م</span>
                   </div>
                 </div>
               </div>
             )}
 
             {returnsStats.total > 0 && (
-              <div className="mb-6 border rounded-xl p-4 bg-card flex items-center gap-3 print:break-inside-avoid">
-                <div className="h-9 w-9 rounded-lg bg-rose-500/10 flex items-center justify-center shrink-0">
-                  <RotateCcw className="h-4 w-4 text-rose-600" />
+              <div className="mb-8 border-2 border-gray-200 rounded-xl p-5 bg-card flex items-center gap-4 print:break-inside-avoid">
+                <div className="h-10 w-10 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
+                  <RotateCcw className="h-5 w-5 text-rose-700" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold">المرتجعات</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-base font-bold text-gray-900">المرتجعات</p>
+                  <p className="text-sm text-gray-600 mt-1">
                     {returnsStats.total} عملية مرتجع — {returnsStats.totalItems} عنصر — {returnsStats.accepted} مقبول، {returnsStats.pending} معلق
                   </p>
                 </div>
@@ -734,44 +736,44 @@ export default function ClientReport() {
             )}
 
             {monthlyOverviewData.length > 0 && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-                <div className="border rounded-xl p-5 bg-card print:break-inside-avoid">
-                  <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4 text-primary" /> حركة الطلبات والتوصيل الشهرية
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
+                <div className="border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
+                  <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
+                    <CalendarDays className="h-5 w-5 text-primary" /> حركة الطلبات والتوصيل الشهرية
                   </h3>
-                  <div className="h-[220px]">
+                  <div className="h-[260px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={monthlyOverviewData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                        <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                        <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                        <XAxis dataKey="label" tick={AXIS_TICK} stroke="#555" />
+                        <YAxis tick={AXIS_TICK} stroke="#555" />
                         <Tooltip contentStyle={TOOLTIP_STYLE} />
-                        <Legend wrapperStyle={{ fontSize: "10px" }} />
-                        <Bar dataKey="orders" fill="#f97316" name="طلبات" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="deliveries" fill="#10b981" name="توصيلات" radius={[4, 4, 0, 0]} />
+                        <Legend wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
+                        <Bar dataKey="orders" fill="#c2410c" name="طلبات" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="deliveries" fill="#047857" name="توصيلات" radius={[4, 4, 0, 0]} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
 
-                <div className="border rounded-xl p-5 bg-card print:break-inside-avoid">
-                  <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-primary" /> قيمة الطلبات الشهرية
+                <div className="border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
+                  <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
+                    <DollarSign className="h-5 w-5 text-primary" /> قيمة الطلبات الشهرية
                   </h3>
-                  <div className="h-[220px]">
+                  <div className="h-[260px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={monthlyOverviewData}>
                         <defs>
                           <linearGradient id="valueGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                            <stop offset="5%" stopColor="#c2410c" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#c2410c" stopOpacity={0} />
                           </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                        <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                        <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                        <XAxis dataKey="label" tick={AXIS_TICK} stroke="#555" />
+                        <YAxis tick={AXIS_TICK} stroke="#555" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
                         <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, "القيمة"]} />
-                        <Area type="monotone" dataKey="value" stroke="#f97316" strokeWidth={2} fill="url(#valueGrad)" name="القيمة" />
+                        <Area type="monotone" dataKey="value" stroke="#c2410c" strokeWidth={3} fill="url(#valueGrad)" name="القيمة" />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -779,17 +781,17 @@ export default function ClientReport() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
               {orderStatusDist.length > 0 && (
-                <div className="border rounded-xl p-5 bg-card print:break-inside-avoid">
-                  <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                    <ShoppingCart className="h-4 w-4 text-primary" /> حالات الطلبات
+                <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
+                  <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
+                    <ShoppingCart className="h-5 w-5 text-primary" /> حالات الطلبات
                   </h3>
-                  <div className="h-[200px]">
+                  <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={orderStatusDist} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={3} dataKey="value"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1 }} style={{ fontSize: "9px" }}>
+                        <Pie data={orderStatusDist} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value" strokeWidth={2} stroke="#fff"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 2, stroke: "#666" }} style={{ fontSize: "12px", fontWeight: 600, fill: "#222" }}>
                           {orderStatusDist.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [`${v} طلب`, name]} />
@@ -800,20 +802,20 @@ export default function ClientReport() {
               )}
 
               {collectionStats.totalAmount > 0 && (
-                <div className="border rounded-xl p-5 bg-card print:break-inside-avoid">
-                  <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                    <Receipt className="h-4 w-4 text-primary" /> تقدم التحصيل
+                <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
+                  <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
+                    <Receipt className="h-5 w-5 text-primary" /> تقدم التحصيل
                   </h3>
-                  <div className="h-[200px]">
+                  <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={[
                           { name: "محصّل", value: collectionStats.paidAmount },
                           { name: "متبقي", value: collectionStats.remaining },
-                        ].filter(d => d.value > 0)} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={4} dataKey="value"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1 }} style={{ fontSize: "10px" }}>
-                          <Cell fill="#22c55e" />
-                          <Cell fill="#ef4444" />
+                        ].filter(d => d.value > 0)} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={4} dataKey="value" strokeWidth={2} stroke="#fff"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 2, stroke: "#666" }} style={{ fontSize: "12px", fontWeight: 600, fill: "#222" }}>
+                          <Cell fill="#047857" />
+                          <Cell fill="#b91c1c" />
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, ""]} />
                       </PieChart>
@@ -823,15 +825,15 @@ export default function ClientReport() {
               )}
 
               {pieData.length > 0 && (
-                <div className="border rounded-xl p-5 bg-card print:break-inside-avoid">
-                  <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                    <PieChartIcon className="h-4 w-4 text-primary" /> توزيع الاستهلاك
+                <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
+                  <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
+                    <PieChartIcon className="h-5 w-5 text-primary" /> توزيع الاستهلاك
                   </h3>
-                  <div className="h-[200px]">
+                  <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={2} dataKey="value"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1 }} style={{ fontSize: "9px" }}>
+                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={2} dataKey="value" strokeWidth={2} stroke="#fff"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 2, stroke: "#666" }} style={{ fontSize: "11px", fontWeight: 600, fill: "#222" }}>
                           {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} وحدة`, "مستهلك"]} />
@@ -843,20 +845,20 @@ export default function ClientReport() {
             </div>
 
             {barData.length > 0 && (
-              <div className="mb-6 border rounded-xl p-5 bg-card print:break-inside-avoid">
-                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4 text-primary" /> الاستهلاك مقابل المتبقي — أعلى المواد
+              <div className="mb-8 border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
+                <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
+                  <BarChart3 className="h-5 w-5 text-primary" /> الاستهلاك مقابل المتبقي — أعلى المواد
                 </h3>
-                <div className="h-[280px]">
+                <div className="h-[320px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={barData} layout="vertical" margin={{ top: 5, right: 30, left: 5, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis type="number" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                      <YAxis dataKey="name" type="category" width={130} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                      <XAxis type="number" tick={AXIS_TICK} stroke="#555" />
+                      <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 12, fill: "#222", fontWeight: 500 }} stroke="#555" />
                       <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: string) => [v, name === "consumed" ? "مستهلك" : "متبقي"]} />
-                      <Legend wrapperStyle={{ fontSize: "10px" }} />
-                      <Bar dataKey="consumed" fill="#f97316" name="مستهلك" radius={[0, 4, 4, 0]} />
-                      <Bar dataKey="remaining" fill="#3b82f6" name="متبقي" radius={[0, 4, 4, 0]} />
+                      <Legend wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
+                      <Bar dataKey="consumed" fill="#c2410c" name="مستهلك" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="remaining" fill="#1d4ed8" name="متبقي" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -864,20 +866,20 @@ export default function ClientReport() {
             )}
 
             {coverageData.length > 0 && (
-              <div className="mb-6 border rounded-xl p-5 bg-card print:break-inside-avoid">
-                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                  <TrendingDown className="h-4 w-4 text-primary" /> تغطية المخزون (بالأسابيع)
+              <div className="mb-8 border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
+                <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
+                  <TrendingDown className="h-5 w-5 text-primary" /> تغطية المخزون (بالأسابيع)
                 </h3>
-                <div className="h-[250px]">
+                <div className="h-[280px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={coverageData} layout="vertical" margin={{ top: 5, right: 20, left: 5, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis type="number" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                      <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                      <XAxis type="number" tick={AXIS_TICK} stroke="#555" />
+                      <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 12, fill: "#222", fontWeight: 500 }} stroke="#555" />
                       <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${v} أسبوع`, "التغطية"]} />
-                      <Bar dataKey="weeks" fill="#10b981" name="أسابيع" radius={[0, 4, 4, 0]}>
+                      <Bar dataKey="weeks" fill="#047857" name="أسابيع" radius={[0, 4, 4, 0]}>
                         {coverageData.map((entry, i) => (
-                          <Cell key={i} fill={entry.weeks <= 2 ? "#ef4444" : entry.weeks <= 4 ? "#f59e0b" : "#10b981"} />
+                          <Cell key={i} fill={entry.weeks <= 2 ? "#b91c1c" : entry.weeks <= 4 ? "#b45309" : "#047857"} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -887,68 +889,68 @@ export default function ClientReport() {
             )}
 
             {monthlyOverviewData.length > 1 && (
-              <div className="mb-6 border rounded-xl p-5 bg-card print:break-inside-avoid">
-                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-primary" /> التحصيل الشهري
+              <div className="mb-8 border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
+                <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
+                  <CreditCard className="h-5 w-5 text-primary" /> التحصيل الشهري
                 </h3>
-                <div className="h-[220px]">
+                <div className="h-[260px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={monthlyOverviewData}>
                       <defs>
                         <linearGradient id="collGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                          <stop offset="5%" stopColor="#047857" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#047857" stopOpacity={0} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                      <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                      <XAxis dataKey="label" tick={AXIS_TICK} stroke="#555" />
+                      <YAxis tick={AXIS_TICK} stroke="#555" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, "المحصّل"]} />
-                      <Area type="monotone" dataKey="collections" stroke="#22c55e" strokeWidth={2} fill="url(#collGrad)" name="المحصّل" />
+                      <Area type="monotone" dataKey="collections" stroke="#047857" strokeWidth={3} fill="url(#collGrad)" name="المحصّل" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
               </div>
             )}
 
-            <div className="border rounded-xl overflow-hidden bg-card mb-6 print:break-inside-avoid">
-              <h3 className="text-sm font-semibold p-4 border-b flex items-center gap-2">
-                <Package className="h-4 w-4 text-primary" /> تفاصيل الاستهلاك لكل مادة
+            <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+              <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
+                <Package className="h-5 w-5 text-primary" /> تفاصيل الاستهلاك لكل مادة
               </h3>
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-muted/50 border-b">
-                      <th className="py-2.5 px-3 text-start font-semibold">#</th>
-                      <th className="py-2.5 px-3 text-start font-semibold">المادة</th>
-                      <th className="py-2.5 px-3 text-start font-semibold">الوحدة</th>
-                      <th className="py-2.5 px-3 text-end font-semibold">سعر البيع</th>
-                      <th className="py-2.5 px-3 text-end font-semibold">الكمية الموّردة</th>
-                      <th className="py-2.5 px-3 text-end font-semibold">المستهلك</th>
-                      <th className="py-2.5 px-3 text-end font-semibold">المتبقي</th>
-                      <th className="py-2.5 px-3 text-end font-semibold">معدل أسبوعي</th>
-                      <th className="py-2.5 px-3 text-end font-semibold">نسبة الاستهلاك</th>
+                    <tr className="bg-gray-100 border-b-2 border-gray-300">
+                      <th className="py-3 px-4 text-start font-bold text-gray-900">#</th>
+                      <th className="py-3 px-4 text-start font-bold text-gray-900">المادة</th>
+                      <th className="py-3 px-4 text-start font-bold text-gray-900">الوحدة</th>
+                      <th className="py-3 px-4 text-end font-bold text-gray-900">سعر البيع</th>
+                      <th className="py-3 px-4 text-end font-bold text-gray-900">الكمية الموّردة</th>
+                      <th className="py-3 px-4 text-end font-bold text-gray-900">المستهلك</th>
+                      <th className="py-3 px-4 text-end font-bold text-gray-900">المتبقي</th>
+                      <th className="py-3 px-4 text-end font-bold text-gray-900">معدل أسبوعي</th>
+                      <th className="py-3 px-4 text-end font-bold text-gray-900">نسبة الاستهلاك</th>
                     </tr>
                   </thead>
                   <tbody>
                     {aggregated.map((item, idx) => {
                       const rate = item.totalDelivered > 0 ? Math.round((item.totalConsumed / item.totalDelivered) * 100) : 0;
                       return (
-                        <tr key={idx} className="border-b border-border/50 hover:bg-muted/20">
-                          <td className="py-2 px-3 text-muted-foreground">{idx + 1}</td>
-                          <td className="py-2 px-3 font-medium">{item.material}<br/><span className="text-[10px] text-muted-foreground font-mono">{item.code}</span></td>
-                          <td className="py-2 px-3">{item.unit}</td>
-                          <td className="py-2 px-3 text-end">{item.sellingPrice > 0 ? `${item.sellingPrice.toLocaleString()} ج.م` : "—"}</td>
-                          <td className="py-2 px-3 text-end">{item.totalDelivered}</td>
-                          <td className="py-2 px-3 text-end font-medium text-orange-600">{item.totalConsumed}</td>
-                          <td className="py-2 px-3 text-end text-blue-600">{item.totalRemaining}</td>
-                          <td className="py-2 px-3 text-end">{item.avgWeekly > 0 ? item.avgWeekly.toFixed(1) : "—"}</td>
-                          <td className="py-2 px-3 text-end">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full ${rate >= 80 ? "bg-red-500" : rate >= 50 ? "bg-orange-500" : "bg-green-500"}`} style={{ width: `${Math.min(100, rate)}%` }} />
+                        <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
+                          <td className="py-3 px-4 text-gray-600 font-medium">{idx + 1}</td>
+                          <td className="py-3 px-4 font-semibold text-gray-900">{item.material}<br/><span className="text-xs text-gray-500 font-mono">{item.code}</span></td>
+                          <td className="py-3 px-4 text-gray-700">{item.unit}</td>
+                          <td className="py-3 px-4 text-end text-gray-800 font-medium">{item.sellingPrice > 0 ? `${item.sellingPrice.toLocaleString()} ج.م` : "—"}</td>
+                          <td className="py-3 px-4 text-end text-gray-800 font-medium">{item.totalDelivered}</td>
+                          <td className="py-3 px-4 text-end font-bold text-orange-700">{item.totalConsumed}</td>
+                          <td className="py-3 px-4 text-end font-bold text-blue-700">{item.totalRemaining}</td>
+                          <td className="py-3 px-4 text-end text-gray-700 font-medium">{item.avgWeekly > 0 ? item.avgWeekly.toFixed(1) : "—"}</td>
+                          <td className="py-3 px-4 text-end">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="w-16 h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full ${rate >= 80 ? "bg-red-600" : rate >= 50 ? "bg-orange-600" : "bg-green-600"}`} style={{ width: `${Math.min(100, rate)}%` }} />
                               </div>
-                              <span className="text-[10px]">{rate}%</span>
+                              <span className="text-xs font-bold text-gray-800 min-w-[32px] text-end">{rate}%</span>
                             </div>
                           </td>
                         </tr>
@@ -957,14 +959,14 @@ export default function ClientReport() {
                   </tbody>
                   {aggregated.length > 0 && (
                     <tfoot>
-                      <tr className="bg-muted/30 font-semibold border-t-2">
-                        <td colSpan={3} className="py-2.5 px-3">الإجمالي</td>
-                        <td className="py-2.5 px-3 text-end">{stats.totalSellingValue > 0 ? `${stats.totalSellingValue.toLocaleString()} ج.م` : ""}</td>
-                        <td className="py-2.5 px-3 text-end">{stats.totalDelivered}</td>
-                        <td className="py-2.5 px-3 text-end text-orange-600">{stats.totalConsumed}</td>
-                        <td className="py-2.5 px-3 text-end text-blue-600">{stats.totalRemaining}</td>
-                        <td className="py-2.5 px-3 text-end">{stats.avgWeeklyTotal > 0 ? stats.avgWeeklyTotal.toFixed(1) : "—"}</td>
-                        <td className="py-2.5 px-3 text-end">{stats.consumptionRate}%</td>
+                      <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
+                        <td colSpan={3} className="py-3 px-4 text-gray-900">الإجمالي</td>
+                        <td className="py-3 px-4 text-end text-gray-900">{stats.totalSellingValue > 0 ? `${stats.totalSellingValue.toLocaleString()} ج.م` : ""}</td>
+                        <td className="py-3 px-4 text-end text-gray-900">{stats.totalDelivered}</td>
+                        <td className="py-3 px-4 text-end text-orange-700">{stats.totalConsumed}</td>
+                        <td className="py-3 px-4 text-end text-blue-700">{stats.totalRemaining}</td>
+                        <td className="py-3 px-4 text-end text-gray-900">{stats.avgWeeklyTotal > 0 ? stats.avgWeeklyTotal.toFixed(1) : "—"}</td>
+                        <td className="py-3 px-4 text-end text-gray-900">{stats.consumptionRate}%</td>
                       </tr>
                     </tfoot>
                   )}
@@ -973,29 +975,29 @@ export default function ClientReport() {
             </div>
 
             {orders.length > 0 && (
-              <div className="border rounded-xl overflow-hidden bg-card mb-6 print:break-inside-avoid">
-                <h3 className="text-sm font-semibold p-4 border-b flex items-center gap-2">
-                  <ShoppingCart className="h-4 w-4 text-primary" /> سجل الطلبات (آخر 15)
+              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+                <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
+                  <ShoppingCart className="h-5 w-5 text-primary" /> سجل الطلبات (آخر 15)
                 </h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-muted/50 border-b">
-                        <th className="py-2.5 px-3 text-start font-semibold">رقم الطلب</th>
-                        <th className="py-2.5 px-3 text-start font-semibold">التاريخ</th>
-                        <th className="py-2.5 px-3 text-center font-semibold">المواد</th>
-                        <th className="py-2.5 px-3 text-end font-semibold">القيمة</th>
-                        <th className="py-2.5 px-3 text-start font-semibold">الحالة</th>
+                      <tr className="bg-gray-100 border-b-2 border-gray-300">
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">رقم الطلب</th>
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">التاريخ</th>
+                        <th className="py-3 px-4 text-center font-bold text-gray-900">المواد</th>
+                        <th className="py-3 px-4 text-end font-bold text-gray-900">القيمة</th>
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">الحالة</th>
                       </tr>
                     </thead>
                     <tbody>
                       {orders.slice(0, 15).map(o => (
-                        <tr key={o.id} className="border-b border-border/50">
-                          <td className="py-2 px-3 font-mono text-[10px]">{o.id}</td>
-                          <td className="py-2 px-3">{o.date}</td>
-                          <td className="py-2 px-3 text-center">{o.lines}</td>
-                          <td className="py-2 px-3 text-end">{o.totalSelling > 0 ? `${o.totalSelling.toLocaleString()} ج.م` : "—"}</td>
-                          <td className="py-2 px-3"><StatusBadge status={o.status} /></td>
+                        <tr key={o.id} className="border-b border-gray-200">
+                          <td className="py-3 px-4 font-mono text-xs text-gray-700">{o.id}</td>
+                          <td className="py-3 px-4 text-gray-800 font-medium">{o.date}</td>
+                          <td className="py-3 px-4 text-center text-gray-700 font-medium">{o.lines}</td>
+                          <td className="py-3 px-4 text-end font-semibold text-gray-900">{o.totalSelling > 0 ? `${o.totalSelling.toLocaleString()} ج.م` : "—"}</td>
+                          <td className="py-3 px-4"><StatusBadge status={o.status} /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -1005,27 +1007,27 @@ export default function ClientReport() {
             )}
 
             {deliveries.length > 0 && (
-              <div className="border rounded-xl overflow-hidden bg-card mb-6 print:break-inside-avoid">
-                <h3 className="text-sm font-semibold p-4 border-b flex items-center gap-2">
-                  <Truck className="h-4 w-4 text-primary" /> سجل التوصيلات (آخر 15)
+              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+                <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
+                  <Truck className="h-5 w-5 text-primary" /> سجل التوصيلات (آخر 15)
                 </h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-muted/50 border-b">
-                        <th className="py-2.5 px-3 text-start font-semibold">رقم التوصيل</th>
-                        <th className="py-2.5 px-3 text-start font-semibold">رقم الأوردر</th>
-                        <th className="py-2.5 px-3 text-start font-semibold">التاريخ</th>
-                        <th className="py-2.5 px-3 text-start font-semibold">الحالة</th>
+                      <tr className="bg-gray-100 border-b-2 border-gray-300">
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">رقم التوصيل</th>
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">رقم الأوردر</th>
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">التاريخ</th>
+                        <th className="py-3 px-4 text-start font-bold text-gray-900">الحالة</th>
                       </tr>
                     </thead>
                     <tbody>
                       {deliveries.slice(0, 15).map(d => (
-                        <tr key={d.id} className="border-b border-border/50">
-                          <td className="py-2 px-3 font-mono text-[10px]">{d.id}</td>
-                          <td className="py-2 px-3 font-mono text-[10px]">{d.orderId || "—"}</td>
-                          <td className="py-2 px-3">{d.date}</td>
-                          <td className="py-2 px-3"><StatusBadge status={d.status} /></td>
+                        <tr key={d.id} className="border-b border-gray-200">
+                          <td className="py-3 px-4 font-mono text-xs text-gray-700">{d.id}</td>
+                          <td className="py-3 px-4 font-mono text-xs text-gray-700">{d.orderId || "—"}</td>
+                          <td className="py-3 px-4 text-gray-800 font-medium">{d.date}</td>
+                          <td className="py-3 px-4"><StatusBadge status={d.status} /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -1036,7 +1038,7 @@ export default function ClientReport() {
           </>
         )}
 
-        <div className="text-center text-xs text-muted-foreground border-t pt-4 print:mt-4">
+        <div className="text-center text-sm text-gray-500 font-medium border-t-2 border-gray-300 pt-5 mt-8 print:mt-4">
           <p>تم إنشاء هذا التقرير بواسطة نظام DSB — Dental Smart Box</p>
           <p className="mt-1">{reportDate}</p>
         </div>
@@ -1047,12 +1049,12 @@ export default function ClientReport() {
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: any; color: string }) {
   return (
-    <div className="border rounded-xl p-3 bg-card print:break-inside-avoid">
-      <div className={`h-7 w-7 rounded-lg ${color} flex items-center justify-center mb-1.5`}>
-        <Icon className="h-3.5 w-3.5" />
+    <div className="border-2 border-gray-200 rounded-xl p-4 bg-card print:break-inside-avoid stat-box-print">
+      <div className={`h-8 w-8 rounded-lg ${color} flex items-center justify-center mb-2`}>
+        <Icon className="h-4 w-4" />
       </div>
-      <p className="text-[10px] text-muted-foreground">{label}</p>
-      <p className="text-base font-bold mt-0.5">{value}</p>
+      <p className="text-xs text-gray-500 font-medium">{label}</p>
+      <p className="text-lg font-bold mt-1 text-gray-900">{value}</p>
     </div>
   );
 }
@@ -1064,5 +1066,5 @@ function StatusBadge({ status }: { status: string }) {
     : status === "Cancelled"
     ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
     : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
-  return <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${color}`}>{label}</span>;
+  return <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${color}`}>{label}</span>;
 }
