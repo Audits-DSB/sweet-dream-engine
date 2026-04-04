@@ -507,29 +507,7 @@ export default function ClientReport() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
-              {mOrderStatusDist.length > 0 && (
-                <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
-                  <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
-                    <ShoppingCart className="h-5 w-5 text-primary" /> حالات الطلبات
-                  </h3>
-                  <div className="h-[220px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={mOrderStatusDist} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={3} dataKey="value" strokeWidth={2} stroke="#fff">
-                          {mOrderStatusDist.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                        </Pie>
-                        <Tooltip contentStyle={TOOLTIP_STYLE} />
-                        <Legend wrapperStyle={{ fontSize: "11px", fontWeight: 600 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="mt-3 border-t border-gray-200 pt-2 space-y-1">
-                    {mOrderStatusDist.map((d, i) => <div key={i} className="flex justify-between text-xs"><span className="font-medium text-gray-700 flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>{d.name}</span><span className="font-bold text-gray-900">{d.value} طلب</span></div>)}
-                  </div>
-                </div>
-              )}
-
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
               {mCollectionPie.length > 0 && (
                 <div className="border-2 border-gray-200 rounded-xl p-5 bg-card print:break-inside-avoid">
                   <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-gray-900">
