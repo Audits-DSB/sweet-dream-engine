@@ -3,6 +3,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { Outlet } from "react-router-dom";
 import { NotificationBell } from "@/components/NotificationBell";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { GlobalSearch } from "@/components/GlobalSearch";
 import { WalkthroughBubble } from "@/components/WalkthroughBubble";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -26,6 +27,7 @@ export function AppLayout() {
           <header className="h-14 flex items-center justify-between border-b border-border px-4 bg-card/50 backdrop-blur-sm sticky top-0 z-10 print:hidden">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="h-8 w-8" />
+              <GlobalSearch />
             </div>
             <div className="flex items-center gap-2">
               <LanguageToggle />

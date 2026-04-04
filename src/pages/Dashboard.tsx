@@ -41,12 +41,13 @@ function toNum(v: string | number | undefined): number {
   return typeof v === "number" ? v : Number(String(v).replace(/,/g, "")) || 0;
 }
 
-function mapCollection(raw: any): Collection {
+function mapCollection(raw: any): Collection & { dueDate: string } {
   const clientId = raw.clientId || raw.client_id || "";
   return {
     id: raw.id, clientId,
     client: raw.client || raw.clientName || raw.client_name || clientId,
     invoiceDate: raw.invoiceDate || raw.invoice_date || raw.createdAt || "",
+    dueDate: raw.dueDate || raw.due_date || "",
     status: raw.status || "Awaiting Confirmation",
     totalAmount: toNum(raw.totalAmount ?? raw.total_amount),
     paidAmount: toNum(raw.paidAmount ?? raw.paid_amount),
@@ -478,6 +479,70 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ─── Today's Summary + Overdue Clients ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="stat-card">
+          <SectionHeader icon={Zap} title={t.todaySummary} />
+          <div className="grid grid-cols-3 gap-3">
+            {(() => {
+              const today = new Date().toISOString().slice(0, 10);
+              const todayOrders = orders.filter(o => o.date === today && o.clientId !== "company-inventory").length;
+              const dueCols = collections.filter(c => {
+                const dd = (c as any).dueDate || "";
+                return dd && dd <= today && c.status !== "Paid" && c.outstanding > 0;
+              }).length;
+              const lowStockAll = [...inventory.filter(i => i.status === "Low Stock"), ...companyInventory.filter(i => i.status === "Low Stock" || Number(i.remaining || 0) === 0)].length;
+              return (
+                <>
+                  <div className="rounded-xl bg-blue-500/10 p-4 text-center">
+                    <p className="text-2xl font-bold text-blue-600">{todayOrders}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">{t.todayOrders}</p>
+                  </div>
+                  <div className="rounded-xl bg-amber-500/10 p-4 text-center">
+                    <p className="text-2xl font-bold text-amber-600">{dueCols}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">{t.dueTodayCollections}</p>
+                  </div>
+                  <div className="rounded-xl bg-red-500/10 p-4 text-center">
+                    <p className="text-2xl font-bold text-red-600">{lowStockAll}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">{t.lowStockAlerts}</p>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <SectionHeader icon={AlertTriangle} title={t.overdueClients} action={t.viewAll} onAction={() => navigate("/collections?status=Overdue")} />
+          {(() => {
+            const overdue = collections
+              .filter(c => c.status === "Overdue" && c.outstanding > 0)
+              .reduce((acc, c) => {
+                const existing = acc.find(x => x.clientId === c.clientId);
+                if (existing) { existing.amount += c.outstanding; }
+                else { acc.push({ clientId: c.clientId, client: c.client, amount: c.outstanding }); }
+                return acc;
+              }, [] as { clientId: string; client: string; amount: number }[])
+              .sort((a, b) => b.amount - a.amount)
+              .slice(0, 5);
+            if (overdue.length === 0) return <p className="text-sm text-muted-foreground text-center py-6">{t.noOverdue}</p>;
+            return (
+              <div className="space-y-2">
+                {overdue.map((o, i) => (
+                  <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-accent/30 cursor-pointer transition-colors" onClick={() => navigate(`/clients/${o.clientId}`)}>
+                    <div className="flex items-center gap-2">
+                      <div className="h-7 w-7 rounded-full bg-red-500/10 flex items-center justify-center text-xs font-bold text-red-600">{i + 1}</div>
+                      <span className="text-sm font-medium">{o.client}</span>
+                    </div>
+                    <span className="text-sm font-bold text-red-600">{o.amount.toLocaleString()} {t.currency}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+
       {/* ─── Financial Chart + Order Status ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="stat-card lg:col-span-2">
@@ -777,6 +842,51 @@ export default function Dashboard() {
               ))}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* ─── Monthly Snapshot ─── */}
+      <div className="stat-card">
+        <SectionHeader icon={Target} title={t.monthlySnapshot} />
+        <div className="flex flex-wrap items-center gap-3">
+          {(() => {
+            const now = new Date();
+            const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const ym = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}`;
+            const lmOrders = orders.filter(o => o.date?.startsWith(ym) && o.clientId !== "company-inventory");
+            const lmRevenue = lmOrders.filter(o => ["Delivered", "Closed", "Completed"].includes(o.status)).reduce((s, o) => s + toNum(o.totalSelling), 0);
+            const lmCost = lmOrders.filter(o => ["Delivered", "Closed", "Completed"].includes(o.status)).reduce((s, o) => s + toNum(o.totalCost), 0);
+            const lmNewClients = clients.filter(c => (c as any).joinDate?.startsWith(ym) || (c as any).join_date?.startsWith(ym)).length;
+            const lmCols = collections.filter(c => c.invoiceDate?.startsWith(ym));
+            const lmTotalAmt = lmCols.reduce((s, c) => s + c.totalAmount, 0);
+            const lmPaid = lmCols.reduce((s, c) => s + c.paidAmount, 0);
+            const lmRate = lmTotalAmt > 0 ? (lmPaid / lmTotalAmt) * 100 : 0;
+            const lmProfit = lmRevenue - lmCost;
+            const monthLabel = ARABIC_MONTHS[ym.slice(5)] || ym;
+            return (
+              <>
+                <span className="text-sm font-medium text-muted-foreground">{monthLabel} {ym.slice(0, 4)}</span>
+                <span className="text-xs bg-muted px-2 py-1 rounded">{t.snapshotRevenue}: {lmRevenue.toLocaleString()}</span>
+                <span className="text-xs bg-muted px-2 py-1 rounded">{t.snapshotProfit}: {lmProfit.toLocaleString()}</span>
+                <span className="text-xs bg-muted px-2 py-1 rounded">{t.snapshotOrders}: {lmOrders.length}</span>
+                <span className="text-xs bg-muted px-2 py-1 rounded">{t.snapshotNewClients}: {lmNewClients}</span>
+                <span className="text-xs bg-muted px-2 py-1 rounded">{t.snapshotCollectionRate}: {lmRate.toFixed(1)}%</span>
+                <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={async () => {
+                  try {
+                    await (await import("@/lib/api")).api.post("/monthly-snapshots", {
+                      month: ym, revenue: lmRevenue, profit: lmProfit, orders_count: lmOrders.length,
+                      new_clients: lmNewClients, collection_rate: Math.round(lmRate * 10) / 10,
+                      total_collected: lmPaid, total_outstanding: lmTotalAmt - lmPaid,
+                    });
+                    const { toast } = await import("sonner");
+                    toast.success(t.snapshotSaved);
+                  } catch { }
+                }}>
+                  {t.generateSnapshot}
+                </Button>
+              </>
+            );
+          })()}
         </div>
       </div>
 

@@ -88,6 +88,30 @@ Internal company page for analyzing client performance and consumption patterns.
 
 ## Client Report Enhancements
 - **Comparison with Average**: New section comparing client's metrics (orders count, avg order value, collection rate) against all-clients average. Shows trend badges (above/below average) with percentage difference.
+- **Date Filter**: Toggle filter (All / 3 months / 6 months / 1 year) in toolbar to scope report data by time period.
+- **Save PDF Button**: Dedicated "Save PDF" button alongside Print and CSV export.
+
+## Client Profile Enhancements
+- **Last Order Date**: Stats card showing the date of the most recent order (or "No orders yet").
+
+## Global Search (`src/components/GlobalSearch.tsx`)
+- Search bar in the app header (also triggered with Ctrl+K).
+- Searches across clients, orders, and materials with type badges.
+- Click result to navigate directly to the entity page.
+
+## Dashboard Enhancements (`src/pages/Dashboard.tsx`)
+- **Today's Summary**: Cards showing today's new orders, due collections today, and low stock alerts.
+- **Overdue Clients**: Top 5 clients with overdue payments ranked by amount. Clickable to navigate to client profile.
+- **Monthly Snapshot**: Shows last month's metrics (revenue, profit, orders, new clients, collection rate) with a "Generate Snapshot" button to save to database.
+
+## Client Comparison Page (`/client-comparison`)
+- Select two clients and compare side by side across 8 metrics: total orders, revenue, avg order value, collection rate, outstanding, inventory value, last order, join date.
+- Trophy icon highlights the better performer per metric.
+- File: `src/pages/ClientComparison.tsx`. Accessible from sidebar under System group.
+
+## Monthly Snapshots API
+- `GET /api/monthly-snapshots` — List saved snapshots.
+- `POST /api/monthly-snapshots` — Create/update a snapshot for a given month. Table auto-created if missing.
 
 ## Company Analysis Page (`/company-analysis`)
 Company-wide business intelligence report accessible from the sidebar. Features:

@@ -77,6 +77,7 @@ export default function ClientReport() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"full" | "monthly">("full");
   const [selectedMonth, setSelectedMonth] = useState("");
+  const [dateFilter, setDateFilter] = useState<"all" | "3m" | "6m" | "12m">("all");
 
   useEffect(() => {
     if (!id) return;
@@ -164,15 +165,28 @@ export default function ClientReport() {
     }).finally(() => setLoading(false));
   }, [id]);
 
+  const dateCutoff = useMemo(() => {
+    if (dateFilter === "all") return "";
+    const now = new Date();
+    const months = dateFilter === "3m" ? 3 : dateFilter === "6m" ? 6 : 12;
+    now.setMonth(now.getMonth() - months);
+    return now.toISOString().slice(0, 10);
+  }, [dateFilter]);
+
+  const filteredOrders = useMemo(() => dateCutoff ? orders.filter(o => o.date >= dateCutoff) : orders, [orders, dateCutoff]);
+  const filteredDeliveries = useMemo(() => dateCutoff ? deliveries.filter(d => d.date >= dateCutoff) : deliveries, [deliveries, dateCutoff]);
+  const filteredCollections = useMemo(() => dateCutoff ? collections.filter(c => c.date >= dateCutoff) : collections, [collections, dateCutoff]);
+  const filteredReturns = useMemo(() => dateCutoff ? returns.filter(r => r.date >= dateCutoff) : returns, [returns, dateCutoff]);
+
   const availableMonths = useMemo(() => {
     const allDates = [
-      ...orders.map(o => o.date),
-      ...deliveries.map(d => d.date),
-      ...collections.map(c => c.date),
-      ...returns.map(r => r.date),
+      ...filteredOrders.map(o => o.date),
+      ...filteredDeliveries.map(d => d.date),
+      ...filteredCollections.map(c => c.date),
+      ...filteredReturns.map(r => r.date),
     ].filter(Boolean).map(d => d.slice(0, 7));
     return [...new Set(allDates)].sort().reverse();
-  }, [orders, deliveries, collections, returns]);
+  }, [filteredOrders, filteredDeliveries, filteredCollections, filteredReturns]);
 
   const aggregated = useMemo(() => {
     const map = new Map<string, { material: string; code: string; unit: string; totalDelivered: number; totalRemaining: number; totalConsumed: number; avgWeekly: number; sellingPrice: number; count: number; imageUrl: string }>();
@@ -212,47 +226,47 @@ export default function ClientReport() {
   }, [aggregated]);
 
   const collectionStats = useMemo(() => {
-    const totalAmount = collections.reduce((s, c) => s + c.totalAmount, 0);
-    const paidAmount = collections.reduce((s, c) => s + c.paidAmount, 0);
-    return { total: collections.length, totalAmount, paidAmount, remaining: totalAmount - paidAmount };
-  }, [collections]);
+    const totalAmount = filteredCollections.reduce((s, c) => s + c.totalAmount, 0);
+    const paidAmount = filteredCollections.reduce((s, c) => s + c.paidAmount, 0);
+    return { total: filteredCollections.length, totalAmount, paidAmount, remaining: totalAmount - paidAmount };
+  }, [filteredCollections]);
 
   const returnsStats = useMemo(() => {
-    const total = returns.length;
-    const totalItems = returns.reduce((s, r) => s + r.itemCount, 0);
-    const accepted = returns.filter(r => r.status === "Accepted" || r.status === "مقبول").length;
+    const total = filteredReturns.length;
+    const totalItems = filteredReturns.reduce((s, r) => s + r.itemCount, 0);
+    const accepted = filteredReturns.filter(r => r.status === "Accepted" || r.status === "مقبول").length;
     return { total, totalItems, accepted, pending: total - accepted };
-  }, [returns]);
+  }, [filteredReturns]);
 
   const monthlyOverviewData = useMemo(() => {
     const map: Record<string, { ym: string; label: string; orders: number; value: number; deliveries: number; collections: number }> = {};
-    for (const o of orders) {
+    for (const o of filteredOrders) {
       if (!o.date) continue;
       const ym = o.date.slice(0, 7);
       if (!map[ym]) map[ym] = { ym, label: toMonthLabel(ym), orders: 0, value: 0, deliveries: 0, collections: 0 };
       map[ym].orders++;
       map[ym].value += o.totalSelling;
     }
-    for (const d of deliveries) {
+    for (const d of filteredDeliveries) {
       if (!d.date) continue;
       const ym = d.date.slice(0, 7);
       if (!map[ym]) map[ym] = { ym, label: toMonthLabel(ym), orders: 0, value: 0, deliveries: 0, collections: 0 };
       map[ym].deliveries++;
     }
-    for (const c of collections) {
+    for (const c of filteredCollections) {
       if (!c.date) continue;
       const ym = c.date.slice(0, 7);
       if (!map[ym]) map[ym] = { ym, label: toMonthLabel(ym), orders: 0, value: 0, deliveries: 0, collections: 0 };
       map[ym].collections += c.paidAmount;
     }
     return Object.values(map).sort((a, b) => a.ym.localeCompare(b.ym)).slice(-12);
-  }, [orders, deliveries, collections, lang]);
+  }, [filteredOrders, filteredDeliveries, filteredCollections, lang]);
 
   const orderStatusDist = useMemo(() => {
     const map: Record<string, number> = {};
-    for (const o of orders) { const lbl = statusLabel(o.status); map[lbl] = (map[lbl] || 0) + 1; }
+    for (const o of filteredOrders) { const lbl = statusLabel(o.status); map[lbl] = (map[lbl] || 0) + 1; }
     return Object.entries(map).map(([name, value]) => ({ name, value }));
-  }, [orders, lang]);
+  }, [filteredOrders, lang]);
 
   const barData = aggregated.slice(0, 8).map(a => ({
     name: a.material.length > 15 ? a.material.slice(0, 15) + "…" : a.material,
@@ -275,10 +289,10 @@ export default function ClientReport() {
     return (a.totalRemaining / a.avgWeekly) <= 4;
   }).sort((a, b) => (a.totalRemaining / (a.avgWeekly || 1)) - (b.totalRemaining / (b.avgWeekly || 1)));
 
-  const mOrders = useMemo(() => orders.filter(o => o.date?.startsWith(selectedMonth)), [orders, selectedMonth]);
-  const mDeliveries = useMemo(() => deliveries.filter(d => d.date?.startsWith(selectedMonth)), [deliveries, selectedMonth]);
-  const mCollections = useMemo(() => collections.filter(c => c.date?.startsWith(selectedMonth)), [collections, selectedMonth]);
-  const mReturns = useMemo(() => returns.filter(r => r.date?.startsWith(selectedMonth)), [returns, selectedMonth]);
+  const mOrders = useMemo(() => filteredOrders.filter(o => o.date?.startsWith(selectedMonth)), [filteredOrders, selectedMonth]);
+  const mDeliveries = useMemo(() => filteredDeliveries.filter(d => d.date?.startsWith(selectedMonth)), [filteredDeliveries, selectedMonth]);
+  const mCollections = useMemo(() => filteredCollections.filter(c => c.date?.startsWith(selectedMonth)), [filteredCollections, selectedMonth]);
+  const mReturns = useMemo(() => filteredReturns.filter(r => r.date?.startsWith(selectedMonth)), [filteredReturns, selectedMonth]);
   const mInventoryDelivered = useMemo(() => inventory.filter(i => i.deliveryDate?.startsWith(selectedMonth)), [inventory, selectedMonth]);
 
   const mStats = useMemo(() => {
@@ -450,11 +464,11 @@ export default function ClientReport() {
     });
     const avgCollRate = Math.round(collRates.reduce((s, v) => s + v, 0) / collRates.length);
 
-    const myDeliveredOrders = orders.filter(o => DELIVERED.includes(o.status));
+    const myDeliveredOrders = filteredOrders.filter(o => DELIVERED.includes(o.status));
     const myAvgOrderValue = myDeliveredOrders.length > 0
       ? myDeliveredOrders.reduce((s, o) => s + o.totalSelling, 0) / myDeliveredOrders.length
       : 0;
-    const myOrders = orders.length;
+    const myOrders = filteredOrders.length;
     const myCollRate = collectionRate;
 
     return {
@@ -477,9 +491,9 @@ export default function ClientReport() {
   }
 
   const reportDate = new Date().toLocaleDateString(dateLocale, { year: "numeric", month: "long", day: "numeric" });
-  const deliveredOrders = orders.filter(o => ["Delivered", "Closed", "Partially Delivered", "Completed"].includes(o.status));
+  const deliveredOrders = filteredOrders.filter(o => ["Delivered", "Closed", "Partially Delivered", "Completed"].includes(o.status));
   const totalOrderValue = deliveredOrders.reduce((s, o) => s + o.totalSelling, 0);
-  const confirmedDeliveries = deliveries.filter(d => d.status === "Delivered" || d.status === "مُسلَّم");
+  const confirmedDeliveries = filteredDeliveries.filter(d => d.status === "Delivered" || d.status === "مُسلَّم");
   const lastAudit = audits.length > 0 ? audits[0] : null;
   const lastAuditDate = lastAudit ? (lastAudit.date || lastAudit.createdAt || lastAudit.created_at || "") : "";
 
@@ -499,10 +513,10 @@ export default function ClientReport() {
         title: `💰 ${t.crAccountSummary || (isEn ? "Account Summary" : "ملخص الحساب")}`,
         headers: [isEn ? "Metric" : "البند", isEn ? "Value" : "القيمة"],
         rows: [
-          [isEn ? "Total Orders" : "إجمالي الطلبات", orders.length],
+          [isEn ? "Total Orders" : "إجمالي الطلبات", filteredOrders.length],
           [isEn ? "Delivered Orders" : "طلبات مسلّمة", deliveredOrders.length],
           [isEn ? "Total Order Value" : "إجمالي قيمة الطلبات", totalOrderValue],
-          [isEn ? "Total Deliveries" : "إجمالي التوصيلات", deliveries.length],
+          [isEn ? "Total Deliveries" : "إجمالي التوصيلات", filteredDeliveries.length],
           [isEn ? "Total Billed" : "إجمالي المفوتر", collectionStats.totalAmount],
           [isEn ? "Total Paid" : "إجمالي المدفوع", collectionStats.paidAmount],
           [isEn ? "Outstanding" : "المتبقي", collectionStats.remaining],
@@ -609,12 +623,22 @@ export default function ClientReport() {
         <Button variant="ghost" size="sm" onClick={() => navigate(`/clients/${id}`)} className="gap-2">
           <BackArrow className="h-4 w-4" /> {t.crBackToProfile}
         </Button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 bg-muted rounded-lg p-0.5">
+            {(["all", "3m", "6m", "12m"] as const).map((f) => (
+              <button key={f} onClick={() => setDateFilter(f)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${dateFilter === f ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                {f === "all" ? t.crAll : f === "3m" ? t.crLast3Months : f === "6m" ? t.crLast6Months : t.crLast12Months}
+              </button>
+            ))}
+          </div>
           <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-2">
             <Download className="h-4 w-4" /> {t.crExportCsv}
           </Button>
-          <Button size="sm" onClick={() => window.print()} className="gap-2">
+          <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2">
             <Printer className="h-4 w-4" /> {t.crPrint}
+          </Button>
+          <Button size="sm" onClick={() => window.print()} className="gap-2">
+            <FileText className="h-4 w-4" /> {t.crSavePdf}
           </Button>
         </div>
       </div>
@@ -1117,7 +1141,7 @@ export default function ClientReport() {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
               <StatBox label={t.crMaterialCount} value={stats.materialCount} icon={Package} color="bg-blue-100 text-blue-700" />
-              <StatBox label={t.crTotalOrders} value={orders.length} icon={ShoppingCart} color="bg-orange-100 text-orange-700" />
+              <StatBox label={t.crTotalOrders} value={filteredOrders.length} icon={ShoppingCart} color="bg-orange-100 text-orange-700" />
               <StatBox label={t.crDeliveryOps} value={confirmedDeliveries.length} icon={Truck} color="bg-green-100 text-green-700" />
               <StatBox label={t.crQtySupplied} value={stats.totalDelivered.toLocaleString()} icon={BarChart3} color="bg-teal-100 text-teal-700" />
               <StatBox label={t.crConsRate} value={`${stats.consumptionRate}%`} icon={PieChartIcon} color="bg-purple-100 text-purple-700" />
@@ -1320,7 +1344,7 @@ export default function ClientReport() {
               </div>
             </div>
 
-            {orders.length > 0 && (
+            {filteredOrders.length > 0 && (
               <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
                 <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
                   <ShoppingCart className="h-5 w-5 text-primary" /> {t.crOrdersLog} ({t.crLast15})
@@ -1337,7 +1361,7 @@ export default function ClientReport() {
                       </tr>
                     </thead>
                     <tbody>
-                      {orders.slice(0, 15).map(o => (
+                      {filteredOrders.slice(0, 15).map(o => (
                         <tr key={o.id} className="border-b border-gray-200 print:even:bg-gray-50">
                           <td className="py-3 px-4 font-mono text-xs text-gray-700">{o.id}</td>
                           <td className="py-3 px-4 text-gray-800 font-medium">{o.date}</td>
@@ -1352,7 +1376,7 @@ export default function ClientReport() {
               </div>
             )}
 
-            {deliveries.length > 0 && (
+            {filteredDeliveries.length > 0 && (
               <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
                 <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
                   <Truck className="h-5 w-5 text-primary" /> {t.crDeliveriesLog} ({t.crLast15})
@@ -1368,7 +1392,7 @@ export default function ClientReport() {
                       </tr>
                     </thead>
                     <tbody>
-                      {deliveries.slice(0, 15).map(d => (
+                      {filteredDeliveries.slice(0, 15).map(d => (
                         <tr key={d.id} className="border-b border-gray-200 print:even:bg-gray-50">
                           <td className="py-3 px-4 font-mono text-xs text-gray-700">{d.id}</td>
                           <td className="py-3 px-4 font-mono text-xs text-gray-700">{d.orderId || "—"}</td>

@@ -50,6 +50,7 @@ import ReturnDetailsPage from "./pages/ReturnDetails";
 import ClientReport from "./pages/ClientReport";
 import ClientAnalysis from "./pages/ClientAnalysis";
 import CompanyAnalysis from "./pages/CompanyAnalysis";
+import ClientComparison from "./pages/ClientComparison";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -109,6 +110,7 @@ const App = () => (
                 <Route path="/activity" element={<ActivityPage />} />
                 <Route path="/monthly/:year/:month" element={<MonthlyDetailPage />} />
                 <Route path="/company-analysis" element={<CompanyAnalysis />} />
+                <Route path="/client-comparison" element={<ClientComparison />} />
                 <Route path="/company-inventory" element={<CompanyInventoryPage />} />
                 <Route path="/company-inventory/:id" element={<InventoryLotDetail />} />
               </Route>

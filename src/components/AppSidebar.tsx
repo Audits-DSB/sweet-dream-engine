@@ -49,6 +49,7 @@ function useNavItems() {
   const systemItems = [
     { title: t.alerts, url: "/alerts", icon: Bell },
     { title: t.coCompanyAnalysis, url: "/company-analysis", icon: PieChart },
+    { title: t.clientComparison, url: "/client-comparison", icon: Users },
     { title: t.reports, url: "/reports", icon: BarChart3 },
     { title: "سجل الأنشطة", url: "/activity", icon: History },
     { title: t.userManagement, url: "/user-management", icon: ShieldCheck },

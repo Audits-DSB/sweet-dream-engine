@@ -161,11 +161,14 @@ export default function ClientProfile() {
 
   const inventoryValue = inventory.reduce((sum, lot) => sum + lot.remaining * lot.sellingPrice, 0);
   const lowStockCount = inventory.filter(l => l.status === "Low Stock" || l.status === "Depleted").length;
+  const lastOrderDate = orders.length > 0
+    ? [...orders].sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0]?.date || ""
+    : "";
 
   const stats = [
     { label: t.totalOrders, value: orders.length, icon: Package },
+    { label: t.lastOrderDate, value: lastOrderDate || t.noOrdersYet, icon: Calendar },
     { label: t.outstanding, value: `${client.outstanding.toLocaleString()} ${t.currency}`, icon: TrendingUp },
-    { label: t.totalPaid, value: `${inventory.length} ${t.materialCol || "صنف"}`, icon: Receipt },
     { label: t.inventoryValue, value: `${inventoryValue.toLocaleString()} ${t.currency}`, icon: ClipboardCheck },
   ];
 
