@@ -928,37 +928,6 @@ export default function ClientReport() {
               </div>
             )}
 
-            {monthlyOverviewData.length > 1 && (
-              <div className="mb-8 border-2 border-gray-200 rounded-xl p-6 bg-card print:break-inside-avoid">
-                <h3 className="text-base font-bold mb-5 flex items-center gap-2 text-gray-900">
-                  <CreditCard className="h-5 w-5 text-primary" /> التحصيل الشهري
-                </h3>
-                <div className="h-[260px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={monthlyOverviewData}>
-                      <defs>
-                        <linearGradient id="collGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-                      <XAxis dataKey="label" tick={AXIS_TICK} stroke="currentColor" />
-                      <YAxis tick={AXIS_TICK} stroke="currentColor" tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${Number(v).toLocaleString()} ج.م`, "المحصّل"]} />
-                      <Area type="monotone" dataKey="collections" stroke="#22c55e" strokeWidth={3} fill="url(#collGrad)" name="المحصّل" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-3 border-t border-gray-200 pt-3">
-                  <table className="w-full text-xs">
-                    <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="py-2 px-3 text-start font-bold text-gray-700">الشهر</th><th className="py-2 px-3 text-end font-bold text-gray-700">المحصّل (ج.م)</th></tr></thead>
-                    <tbody>{monthlyOverviewData.filter(d => d.collections > 0).map((d, i) => <tr key={i} className="border-b border-gray-100"><td className="py-1.5 px-3 font-medium text-gray-800">{d.label}</td><td className="py-1.5 px-3 text-end font-semibold text-green-600">{Number(d.collections).toLocaleString()} ج.م</td></tr>)}</tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
             <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
               <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
                 <Package className="h-5 w-5 text-primary" /> تفاصيل الاستهلاك لكل مادة
