@@ -396,6 +396,19 @@
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+  .print-report-page tbody tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .print-report-page thead {
+    display: table-header-group;
+  }
+  .print-report-page .overflow-hidden {
+    overflow: visible !important;
+  }
+  .print-report-page .overflow-x-auto {
+    overflow: visible !important;
+  }
   .print-report-page td {
     color: #111 !important;
     padding: 3px 3px !important;

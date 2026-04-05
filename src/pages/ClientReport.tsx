@@ -863,7 +863,7 @@ export default function ClientReport() {
             )}
 
             {mBarData.length > 0 && (
-              <div className="mb-8 border-2 border-gray-200 rounded-xl overflow-hidden bg-card print:break-inside-avoid">
+              <div className="mb-8 border-2 border-gray-200 rounded-xl overflow-hidden bg-card">
                 <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
                   <BarChart3 className="h-5 w-5 text-primary" /> {t.crConsVsRemain} — {toFullMonthLabel(selectedMonth)}
                 </h3>
@@ -888,7 +888,7 @@ export default function ClientReport() {
             )}
 
             {mAggregated.length > 0 && (
-              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8">
                 <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
                   <Package className="h-5 w-5 text-primary" /> {t.crMaterialDetails} — {toFullMonthLabel(selectedMonth)}
                 </h3>
@@ -959,7 +959,7 @@ export default function ClientReport() {
             )}
 
             {mMaterialConsumption.length > 0 && (
-              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8">
                 <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
                   <ClipboardCheck className="h-5 w-5 text-primary" /> {t.crOrderedMaterials} — {toFullMonthLabel(selectedMonth)}
                 </h3>
@@ -1010,7 +1010,7 @@ export default function ClientReport() {
             )}
 
             {mOrders.length > 0 && (
-              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8">
                 <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
                   <ShoppingCart className="h-5 w-5 text-primary" /> {t.crOrdersLog} — {toFullMonthLabel(selectedMonth)}
                 </h3>
@@ -1047,7 +1047,7 @@ export default function ClientReport() {
             )}
 
             {mDeliveries.length > 0 && (
-              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8">
                 <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
                   <Truck className="h-5 w-5 text-primary" /> {t.crDeliveriesLog} — {toFullMonthLabel(selectedMonth)}
                 </h3>
@@ -1196,7 +1196,7 @@ export default function ClientReport() {
             )}
 
             {barData.length > 0 && (
-              <div className="mb-8 border-2 border-gray-200 rounded-xl overflow-hidden bg-card print:break-inside-avoid">
+              <div className="mb-8 border-2 border-gray-200 rounded-xl overflow-hidden bg-card">
                 <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
                   <BarChart3 className="h-5 w-5 text-primary" /> {t.crConsVsRemain}
                 </h3>
@@ -1220,7 +1220,7 @@ export default function ClientReport() {
               </div>
             )}
 
-            <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+            <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8">
               <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
                 <Package className="h-5 w-5 text-primary" /> {t.crMaterialDetails}
               </h3>
@@ -1294,7 +1294,7 @@ export default function ClientReport() {
             </div>
 
             {filteredOrders.length > 0 && (
-              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8">
                 <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
                   <ShoppingCart className="h-5 w-5 text-primary" /> {t.crOrdersLog} ({t.crLast15})
                 </h3>
@@ -1326,7 +1326,7 @@ export default function ClientReport() {
             )}
 
             {filteredDeliveries.length > 0 && (
-              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8">
                 <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
                   <Truck className="h-5 w-5 text-primary" /> {t.crDeliveriesLog} ({t.crLast15})
                 </h3>
