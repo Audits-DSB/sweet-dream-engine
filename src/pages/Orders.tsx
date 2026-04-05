@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { DataToolbar } from "@/components/DataToolbar";
 import { exportToCsv } from "@/lib/exportCsv";
@@ -561,23 +561,26 @@ export default function OrdersPage() {
 
   const removeItem = (index: number) => setOrderItems(orderItems.filter((_, i) => i !== index));
 
+  const autoFillRef = useRef(new Set<string>());
   useEffect(() => {
     if (Object.keys(bestSuppliers).length === 0 || orderItems.length === 0) return;
     let changed = false;
     const updated = orderItems.map(item => {
       if (item.fromInventory) return item;
+      if (autoFillRef.current.has(item.materialCode)) return item;
       const bs = bestSuppliers[item.materialCode];
       if (!bs || !bs.bestSupplierId) return item;
       const needsCost = item.costPrice === 0 && bs.bestPrice > 0;
       const needsSupplier = !item.supplierId && bs.bestSupplierId;
       if (needsCost || needsSupplier) {
         changed = true;
+        autoFillRef.current.add(item.materialCode);
         return { ...item, costPrice: needsCost ? bs.bestPrice : item.costPrice, supplierId: needsSupplier ? bs.bestSupplierId : item.supplierId };
       }
       return item;
     });
     if (changed) setOrderItems(updated);
-  }, [bestSuppliers]);
+  }, [bestSuppliers, orderItems]);
 
   const orderSupplierComparison = (() => {
     const nonInv = orderItems.filter(i => !i.fromInventory && i.materialCode);
@@ -1052,7 +1055,7 @@ export default function OrdersPage() {
         loading={deleting}
       />
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (open) { api.get<Record<string, any>>("/material-best-suppliers").then(d => setBestSuppliers(d || {})).catch(() => {}); } else { setOrderItems([]); setSelectedClient(""); setSelectedSupplier(""); setMaterialSearch(""); setOrderType("client"); setShowInventoryPicker(false); setInventorySearch(""); setBestSuppliers({}); setShowCompareCard(null); } }}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (open) { api.get<Record<string, any>>("/material-best-suppliers").then(d => setBestSuppliers(d || {})).catch(() => {}); } else { setOrderItems([]); setSelectedClient(""); setSelectedSupplier(""); setMaterialSearch(""); setOrderType("client"); setShowInventoryPicker(false); setInventorySearch(""); setBestSuppliers({}); setShowCompareCard(null); autoFillRef.current.clear(); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader><DialogTitle>{t.newOrder}</DialogTitle></DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-2">
