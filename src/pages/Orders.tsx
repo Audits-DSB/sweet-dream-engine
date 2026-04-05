@@ -1268,7 +1268,15 @@ export default function OrdersPage() {
                                 ✓ أفضل مورد لهذه المادة
                               </span>
                             )}
-                            {priceDiff !== 0 && currentPrice > 0 && (
+                            {priceDiff > 20 && currentPrice > 0 && (
+                              <div className="flex items-center gap-2 p-1.5 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                                <span className="text-red-600 text-sm">⚠️</span>
+                                <span className="text-[10px] text-red-700 dark:text-red-300 font-medium">
+                                  تحذير: السعر أعلى بـ {priceDiff}% من أفضل سعر ({bs.bestPrice.toLocaleString()} ج.م) — فرق {((currentPrice - bs.bestPrice) * item.quantity).toLocaleString()} ج.م
+                                </span>
+                              </div>
+                            )}
+                            {priceDiff !== 0 && priceDiff <= 20 && currentPrice > 0 && (
                               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${priceDiff > 0 ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"}`}>
                                 {priceDiff > 0 ? "↑" : "↓"} {Math.abs(priceDiff)}% عن أفضل سعر
                               </span>
@@ -1330,9 +1338,21 @@ export default function OrdersPage() {
 
               {orderSupplierComparison && orderSupplierComparison.length > 0 && orderItems.filter(i => !i.fromInventory).length >= 1 && (
                 <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10 p-3 space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-blue-800 dark:text-blue-200">
-                    <Package className="h-4 w-4" />
-                    <span>مقارنة تكلفة الأوردر الكلية حسب المورد</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-blue-800 dark:text-blue-200">
+                      <Package className="h-4 w-4" />
+                      <span>مقارنة تكلفة الأوردر الكلية حسب المورد</span>
+                    </div>
+                    {orderSupplierComparison.length >= 2 && (() => {
+                      const cheapest = orderSupplierComparison[0].totalCost;
+                      const mostExpensive = orderSupplierComparison[orderSupplierComparison.length - 1].totalCost;
+                      const saving = mostExpensive - cheapest;
+                      return saving > 0 ? (
+                        <span className="text-[10px] font-bold text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded">
+                          وفّر حتى {saving.toLocaleString()} ج.م باختيار الأفضل
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                   <div className="space-y-1.5">
                     {orderSupplierComparison.map((comp, ci) => (
@@ -1720,6 +1740,36 @@ export default function OrdersPage() {
                         </span>
                       )}
                     </div>
+                    {s.priceHistory && s.priceHistory.length >= 2 && (() => {
+                      const sorted = [...s.priceHistory].reverse();
+                      const prices = sorted.map((h: any) => h.costPrice || 0).filter((p: number) => p > 0);
+                      if (prices.length < 2) return null;
+                      const maxP = Math.max(...prices);
+                      const minP = Math.min(...prices);
+                      const range = maxP - minP || 1;
+                      return (
+                        <div className="mt-1 border-t border-border pt-1.5">
+                          <div className="text-[10px] font-medium text-muted-foreground mb-1">تطور السعر:</div>
+                          <div className="flex items-end gap-0.5 h-10">
+                            {sorted.map((h: any, i: number) => {
+                              const p = h.costPrice || 0;
+                              const pct = range > 0 ? ((p - minP) / range) * 70 + 30 : 50;
+                              const isLast = i === sorted.length - 1;
+                              return (
+                                <div key={i} className="flex-1 flex flex-col items-center gap-0.5" title={`${h.date}: ${p.toLocaleString()} ج.م`}>
+                                  <div className={`w-full rounded-t ${isLast ? "bg-primary" : "bg-primary/40"}`} style={{ height: `${pct}%` }} />
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="flex justify-between text-[8px] text-muted-foreground mt-0.5">
+                            <span>{sorted[0]?.date?.slice(5) || ""}</span>
+                            <span>{minP.toLocaleString()} — {maxP.toLocaleString()} ج.م</span>
+                            <span>{sorted[sorted.length - 1]?.date?.slice(5) || ""}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     {s.priceHistory && s.priceHistory.length > 0 && (
                       <div className="mt-1 border-t border-border pt-1.5">
                         <div className="text-[10px] font-medium text-muted-foreground mb-1">سجل التوريدات:</div>

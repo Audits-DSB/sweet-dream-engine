@@ -243,17 +243,20 @@ npx tsx server/index.ts   # starts Express on 5000, spawns Vite on 5001
 ## Supplier Intelligence System
 - **`supplier_ratings` table**: Created via pgPool (direct PostgreSQL), NOT through Supabase PostgREST (schema cache issue). All CRUD uses `pgPool` in `server/routes.ts`.
 - **API Endpoints**:
-  - `GET /api/material-supplier-history/:code` — Full supplier history per material (prices, dates, ratings)
+  - `GET /api/material-supplier-history/:code` — Full supplier history per material (prices, dates, order IDs, sorted priceHistory)
   - `GET /api/material-best-suppliers` — Best supplier (lowest price) for all materials with all supplier comparisons
   - `GET /api/supplier-bundle-check?codes=a,b,c` — Single-supplier bundles for multiple materials
   - `GET /api/supplier-ratings` / `GET /api/supplier-ratings/:supplierId` — Rating records
   - `POST /api/supplier-ratings` — Create rating (quality/delivery/quantity 0-5, auto-computes overall)
   - `DELETE /api/supplier-ratings/:id` — Remove rating
-  - `GET /api/supplier-ranking` — Ranked supplier list (score = avgRating*20 + priceBeatPercent + min(orders,10)*2)
+  - `GET /api/supplier-ranking` — Ranked supplier list with auto-rating (price 40% + delivery rate 30% + price stability 20% + order volume 10%)
+  - `GET /api/supplier-monthly-report` — Monthly spending per supplier with order counts and material counts
+  - `GET /api/material-savings` — Top savings opportunities: materials where choosing cheapest supplier saves most
 - **Frontend**:
+  - `Orders.tsx` (New Order dialog): bestSuppliers loaded via useEffect, auto-fill supplier/price, ⭐ best supplier badge, ↑↓ price diff arrows, price spike warning (>20% alert with cost difference), per-material supplier comparison card, order-level supplier cost comparison panel with bundle savings message, per-line supplier dropdown, supplier history dialog with price trend chart and full supply log
   - `OrderDetails.tsx`: Best supplier badge on line items, price comparison popup card (all suppliers with last/min/avg price, ↑↓ arrows, star ratings), auto-select best supplier button, bundle suggestion panel
   - `SupplierProfile.tsx`: "Ratings" tab with star-based rating form, avg rating display, history list with delete
-  - `Suppliers.tsx`: "ترتيب الموردين" ranking view with gold/silver/bronze medals, orders/materials/purchases stats
+  - `Suppliers.tsx`: "تقرير أداء الموردين" — auto-rating (blue ★), delivery rate %, price stability %, price beat %. "تقرير شهري" — monthly spending bars per supplier. "فرص التوفير" — top 10 materials with highest potential savings + total saving summary
 
 ## Delivery-Order Sync System
 - **Per-line delivery tracking**: OrderDetails.tsx computes delivered/remaining quantities per order line from all linked deliveries

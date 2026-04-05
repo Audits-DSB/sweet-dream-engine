@@ -891,6 +891,31 @@ router.get("/supplier-ranking", async (_req, res) => {
       }
       const priceBeatPercent = priceCount > 0 ? Math.round(priceScore / priceCount * 100) : 0;
 
+      const deliveredCount = Array.from(stats.orderIds).filter(oid => (orderStatusMap[oid] || "").toLowerCase() === "delivered").length;
+      const deliveryRate = stats.orderIds.size > 0 ? Math.round(deliveredCount / stats.orderIds.size * 100) : 0;
+
+      const supMats = supMatPrices[sid] || {};
+      let priceStability = 100;
+      let stabCount = 0;
+      for (const prices of Object.values(supMats)) {
+        const valid = prices.filter(p => p > 0);
+        if (valid.length >= 2) {
+          const avg = valid.reduce((a, b) => a + b, 0) / valid.length;
+          const variance = valid.reduce((sum, p) => sum + Math.pow(p - avg, 2), 0) / valid.length;
+          const cv = avg > 0 ? Math.sqrt(variance) / avg * 100 : 0;
+          priceStability += Math.max(0, 100 - cv * 10);
+          stabCount++;
+        } else {
+          priceStability += 100;
+          stabCount++;
+        }
+      }
+      priceStability = stabCount > 0 ? Math.round((priceStability - 100) / stabCount) : 100;
+
+      const priceScoreNorm = Math.max(0, Math.min(100, 50 + priceBeatPercent * 2));
+      const orderScore = Math.min(100, stats.orderIds.size * 10);
+      const autoRating = Math.round((priceScoreNorm * 0.4 + deliveryRate * 0.3 + priceStability * 0.2 + orderScore * 0.1) / 20 * 10) / 10;
+
       return {
         supplierId: sid,
         supplierName: supMap[sid]?.name || "",
@@ -903,10 +928,13 @@ router.get("/supplier-ranking", async (_req, res) => {
         avgRating: ratingAvg[sid] || null,
         ratingCount: ratingCnt[sid] || 0,
         priceBeatPercent,
+        autoRating,
+        deliveryRate,
+        priceStability,
       };
     }).sort((a, b) => {
-      const scoreA = (a.avgRating || 3) * 20 + a.priceBeatPercent + Math.min(a.totalOrders, 10) * 2;
-      const scoreB = (b.avgRating || 3) * 20 + b.priceBeatPercent + Math.min(b.totalOrders, 10) * 2;
+      const scoreA = (a.avgRating || a.autoRating || 3) * 20 + a.priceBeatPercent + Math.min(a.totalOrders, 10) * 2;
+      const scoreB = (b.avgRating || b.autoRating || 3) * 20 + b.priceBeatPercent + Math.min(b.totalOrders, 10) * 2;
       return scoreB - scoreA;
     });
 
@@ -914,6 +942,113 @@ router.get("/supplier-ranking", async (_req, res) => {
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
+});
+
+router.get("/supplier-monthly-report", async (_req, res) => {
+  try {
+    const [suppliersRes, linesRes, ordersRes] = await Promise.all([
+      supabaseAdmin.from("suppliers").select("id, name"),
+      supabaseAdmin.from("order_lines").select("supplier_id, cost_price, quantity, line_cost, order_id"),
+      supabaseAdmin.from("orders").select("id, date, supplier_id"),
+    ]);
+    const supMap: Record<string, string> = {};
+    (suppliersRes.data || []).forEach((s: any) => { supMap[s.id] = s.name; });
+    const orderMap: Record<string, any> = {};
+    (ordersRes.data || []).forEach((o: any) => { orderMap[o.id] = o; });
+
+    const monthly: Record<string, Record<string, { total: number; orders: number; materials: Set<string> }>> = {};
+    for (const l of (linesRes.data || [])) {
+      const sid = l.supplier_id || orderMap[l.order_id]?.supplier_id;
+      if (!sid || !supMap[sid]) continue;
+      const oDate = orderMap[l.order_id]?.date || "";
+      const month = oDate.slice(0, 7);
+      if (!month) continue;
+      if (!monthly[month]) monthly[month] = {};
+      if (!monthly[month][sid]) monthly[month][sid] = { total: 0, orders: 0, materials: new Set() };
+      monthly[month][sid].total += Number(l.line_cost) || (Number(l.cost_price) * Number(l.quantity)) || 0;
+      monthly[month][sid].materials.add(l.material_code || "");
+    }
+    const ordersByMonth: Record<string, Record<string, Set<string>>> = {};
+    for (const l of (linesRes.data || [])) {
+      const sid = l.supplier_id || orderMap[l.order_id]?.supplier_id;
+      if (!sid || !supMap[sid]) continue;
+      const oDate = orderMap[l.order_id]?.date || "";
+      const month = oDate.slice(0, 7);
+      if (!month) continue;
+      if (!ordersByMonth[month]) ordersByMonth[month] = {};
+      if (!ordersByMonth[month][sid]) ordersByMonth[month][sid] = new Set();
+      ordersByMonth[month][sid].add(l.order_id);
+    }
+
+    const result = Object.entries(monthly).sort((a, b) => b[0].localeCompare(a[0])).map(([month, suppliers]) => ({
+      month,
+      suppliers: Object.entries(suppliers).map(([sid, data]) => ({
+        supplierId: sid,
+        supplierName: supMap[sid] || "",
+        totalSpent: Math.round(data.total),
+        orderCount: ordersByMonth[month]?.[sid]?.size || 0,
+        materialCount: data.materials.size,
+      })).sort((a, b) => b.totalSpent - a.totalSpent),
+      totalSpent: Math.round(Object.values(suppliers).reduce((s, d) => s + d.total, 0)),
+    }));
+    res.json(result);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get("/material-savings", async (_req, res) => {
+  try {
+    const [linesRes, ordersRes, suppliersRes] = await Promise.all([
+      supabaseAdmin.from("order_lines").select("material_code, material_name, supplier_id, cost_price, quantity, order_id"),
+      supabaseAdmin.from("orders").select("id, supplier_id"),
+      supabaseAdmin.from("suppliers").select("id, name"),
+    ]);
+    const orderMap: Record<string, any> = {};
+    (ordersRes.data || []).forEach((o: any) => { orderMap[o.id] = o; });
+    const supMap: Record<string, string> = {};
+    (suppliersRes.data || []).forEach((s: any) => { supMap[s.id] = s.name; });
+
+    const matData: Record<string, { name: string; prices: { price: number; qty: number; sid: string }[] }> = {};
+    for (const l of (linesRes.data || [])) {
+      const price = Number(l.cost_price) || 0;
+      if (price <= 0) continue;
+      const sid = l.supplier_id || orderMap[l.order_id]?.supplier_id || "";
+      if (!matData[l.material_code]) matData[l.material_code] = { name: l.material_name || "", prices: [] };
+      matData[l.material_code].prices.push({ price, qty: Number(l.quantity) || 1, sid });
+    }
+
+    const savings = Object.entries(matData)
+      .filter(([_, d]) => d.prices.length >= 2)
+      .map(([code, d]) => {
+        const allPrices = d.prices.map(p => p.price);
+        const minPrice = Math.min(...allPrices);
+        const maxPrice = Math.max(...allPrices);
+        const avgPrice = allPrices.reduce((a, b) => a + b, 0) / allPrices.length;
+        const totalQty = d.prices.reduce((s, p) => s + p.qty, 0);
+        const actualSpent = d.prices.reduce((s, p) => s + p.price * p.qty, 0);
+        const idealSpent = minPrice * totalQty;
+        const potentialSaving = Math.round(actualSpent - idealSpent);
+        const cheapestSid = d.prices.reduce((best, p) => p.price < best.price ? p : best).sid;
+        return {
+          materialCode: code,
+          materialName: d.name,
+          minPrice,
+          maxPrice,
+          avgPrice: Math.round(avgPrice * 100) / 100,
+          totalQuantity: totalQty,
+          actualSpent: Math.round(actualSpent),
+          idealSpent: Math.round(idealSpent),
+          potentialSaving,
+          savingPercent: actualSpent > 0 ? Math.round(potentialSaving / actualSpent * 100) : 0,
+          cheapestSupplier: supMap[cheapestSid] || "",
+          cheapestSupplierId: cheapestSid,
+          supplierCount: new Set(d.prices.map(p => p.sid).filter(Boolean)).size,
+        };
+      })
+      .filter(s => s.potentialSaving > 0)
+      .sort((a, b) => b.potentialSaving - a.potentialSaving);
+
+    res.json(savings);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── FOUNDERS ─────────────────────────────────────────────────────────────────

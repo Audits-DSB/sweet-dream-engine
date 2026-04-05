@@ -98,6 +98,12 @@ export default function SuppliersPage() {
   const [showRanking, setShowRanking] = useState(false);
   const [rankingData, setRankingData] = useState<any[]>([]);
   const [rankingLoading, setRankingLoading] = useState(false);
+  const [monthlyReport, setMonthlyReport] = useState<any[]>([]);
+  const [monthlyLoading, setMonthlyLoading] = useState(false);
+  const [showMonthly, setShowMonthly] = useState(false);
+  const [savingsData, setSavingsData] = useState<any[]>([]);
+  const [savingsLoading, setSavingsLoading] = useState(false);
+  const [showSavings, setShowSavings] = useState(false);
 
   useEffect(() => {
     loadSuppliers();
@@ -295,6 +301,26 @@ export default function SuppliersPage() {
               <ShoppingCart className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />
               تقرير أداء الموردين
             </Button>
+            <Button size="sm" variant={showMonthly ? "default" : "outline"} className="h-9" onClick={() => {
+              setShowMonthly(v => !v);
+              if (!showMonthly && monthlyReport.length === 0) {
+                setMonthlyLoading(true);
+                api.get<any[]>("/supplier-monthly-report").then(d => setMonthlyReport(d || [])).catch(() => {}).finally(() => setMonthlyLoading(false));
+              }
+            }}>
+              <Calendar className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />
+              تقرير شهري
+            </Button>
+            <Button size="sm" variant={showSavings ? "default" : "outline"} className="h-9" onClick={() => {
+              setShowSavings(v => !v);
+              if (!showSavings && savingsData.length === 0) {
+                setSavingsLoading(true);
+                api.get<any[]>("/material-savings").then(d => setSavingsData(d || [])).catch(() => {}).finally(() => setSavingsLoading(false));
+              }
+            }}>
+              <Wallet className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />
+              فرص التوفير
+            </Button>
             <Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addSupplier}</Button>
           </div>
         }
@@ -329,9 +355,13 @@ export default function SuppliersPage() {
                         {r.country && <div className="text-[10px] text-muted-foreground">{r.country}</div>}
                       </div>
                     </div>
-                    {r.avgRating && (
-                      <span className="text-amber-500 font-bold text-sm">★ {r.avgRating}</span>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {r.avgRating ? (
+                        <span className="text-amber-500 font-bold text-sm" title="تقييم يدوي">★ {r.avgRating}</span>
+                      ) : r.autoRating ? (
+                        <span className="text-blue-500 font-bold text-sm" title="تقييم تلقائي">★ {r.autoRating}</span>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-[11px]">
                     <div className="text-center">
@@ -347,15 +377,113 @@ export default function SuppliersPage() {
                       <div className="text-muted-foreground">مشتريات</div>
                     </div>
                   </div>
+                  <div className="grid grid-cols-3 gap-1.5 text-[10px] pt-1 border-t border-border/50">
+                    <div className="text-center">
+                      <div className="font-medium">{r.deliveryRate ?? 0}%</div>
+                      <div className="text-muted-foreground">نسبة التسليم</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium">{r.priceStability ?? 0}%</div>
+                      <div className="text-muted-foreground">ثبات السعر</div>
+                    </div>
+                    <div className="text-center">
+                      <div className={`font-medium ${r.priceBeatPercent > 0 ? "text-green-600" : r.priceBeatPercent < 0 ? "text-red-500" : ""}`}>
+                        {r.priceBeatPercent > 0 ? `${r.priceBeatPercent}%-` : r.priceBeatPercent < 0 ? `${Math.abs(r.priceBeatPercent)}%+` : "0%"}
+                      </div>
+                      <div className="text-muted-foreground">فرق السعر</div>
+                    </div>
+                  </div>
                   <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-border/50">
-                    <span>تقييمات: {r.ratingCount || 0}</span>
-                    <span className={r.priceBeatPercent > 0 ? "text-green-600" : r.priceBeatPercent < 0 ? "text-red-500" : ""}>
-                      {r.priceBeatPercent > 0 ? `أرخص ${r.priceBeatPercent}% من المتوسط` : r.priceBeatPercent < 0 ? `أغلى ${Math.abs(r.priceBeatPercent)}% من المتوسط` : "متوسط السعر"}
-                    </span>
+                    {r.autoRating && !r.avgRating && <span className="text-blue-500">تقييم تلقائي</span>}
+                    {r.avgRating && <span>تقييمات: {r.ratingCount || 0}</span>}
                     {r.lastOrderDate && <span>آخر طلب: {r.lastOrderDate}</span>}
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {showMonthly && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold flex items-center gap-2"><Calendar className="h-4 w-4" />تقرير المشتريات الشهري</h3>
+            <Button variant="ghost" size="sm" onClick={() => setShowMonthly(false)}><X className="h-3.5 w-3.5" /></Button>
+          </div>
+          {monthlyLoading ? (
+            <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground text-sm"><Loader2 className="h-4 w-4 animate-spin" /><span>جاري التحميل...</span></div>
+          ) : monthlyReport.length === 0 ? (
+            <p className="text-center py-8 text-muted-foreground text-sm">لا توجد بيانات شهرية</p>
+          ) : (
+            <div className="space-y-4">
+              {monthlyReport.slice(0, 6).map((m: any) => (
+                <div key={m.month} className="rounded-lg border border-border p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sm">{m.month}</span>
+                    <span className="font-bold text-sm text-primary">{m.totalSpent?.toLocaleString()} ج.م</span>
+                  </div>
+                  <div className="space-y-1">
+                    {m.suppliers?.map((s: any) => {
+                      const pct = m.totalSpent > 0 ? Math.round(s.totalSpent / m.totalSpent * 100) : 0;
+                      return (
+                        <div key={s.supplierId} className="flex items-center gap-2 text-xs">
+                          <span className="w-24 truncate font-medium">{s.supplierName}</span>
+                          <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full bg-primary/70 rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-muted-foreground w-20 text-left">{s.totalSpent.toLocaleString()} ({pct}%)</span>
+                          <span className="text-muted-foreground w-16 text-left">{s.orderCount} طلب</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {showSavings && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold flex items-center gap-2"><Wallet className="h-4 w-4" />فرص التوفير — أفضل المواد للتوفير</h3>
+            <Button variant="ghost" size="sm" onClick={() => setShowSavings(false)}><X className="h-3.5 w-3.5" /></Button>
+          </div>
+          {savingsLoading ? (
+            <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground text-sm"><Loader2 className="h-4 w-4 animate-spin" /><span>جاري التحميل...</span></div>
+          ) : savingsData.length === 0 ? (
+            <p className="text-center py-8 text-muted-foreground text-sm">لا توجد فرص توفير حالياً</p>
+          ) : (
+            <div className="space-y-2">
+              <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-900/10 p-3 text-center">
+                <div className="text-2xl font-bold text-green-700 dark:text-green-300">{savingsData.reduce((s: number, d: any) => s + d.potentialSaving, 0).toLocaleString()} ج.م</div>
+                <div className="text-xs text-muted-foreground">إجمالي التوفير المحتمل</div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {savingsData.slice(0, 10).map((s: any, i: number) => (
+                  <div key={s.materialCode} className={`rounded-lg border p-3 space-y-1.5 ${i < 3 ? "border-green-300 dark:border-green-700 bg-green-50/30 dark:bg-green-900/10" : "border-border"}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {i < 3 && <span className="text-green-600 font-bold">#{i + 1}</span>}
+                        <span className="font-medium text-sm">{s.materialName || s.materialCode}</span>
+                      </div>
+                      <span className="font-bold text-green-700 dark:text-green-300 text-sm">{s.potentialSaving.toLocaleString()} ج.م</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1 text-[10px]">
+                      <div className="text-center"><div className="font-medium">{s.minPrice?.toLocaleString()}</div><div className="text-muted-foreground">أقل سعر</div></div>
+                      <div className="text-center"><div className="font-medium">{s.maxPrice?.toLocaleString()}</div><div className="text-muted-foreground">أعلى سعر</div></div>
+                      <div className="text-center"><div className="font-medium">{s.avgPrice?.toLocaleString()}</div><div className="text-muted-foreground">متوسط</div></div>
+                      <div className="text-center"><div className="font-medium text-green-600">{s.savingPercent}%</div><div className="text-muted-foreground">نسبة التوفير</div></div>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-border/50">
+                      <span>أفضل مورد: <span className="font-medium text-foreground">{s.cheapestSupplier}</span></span>
+                      <span>{s.supplierCount} موردين · {s.totalQuantity} وحدة</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
