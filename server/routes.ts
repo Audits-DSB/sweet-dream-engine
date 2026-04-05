@@ -601,6 +601,12 @@ router.get("/material-supplier-history/:code", async (req, res) => {
         const sortedDates = data.dates.filter(Boolean).sort().reverse();
         const prevPrice = prices.length > 1 ? prices[1] : lastPrice;
         const priceChangePercent = prevPrice > 0 ? Math.round((lastPrice - prevPrice) / prevPrice * 100) : 0;
+        const history = data.orders.map((ordId, i) => ({
+            orderId: ordId,
+            date: data.dates[i] || "",
+            costPrice: data.prices[i],
+            orderStatus: orderMap[ordId]?.status || "",
+          })).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
         return {
           supplierId: sid,
           supplierName: supMap[sid]?.name || "",
@@ -612,15 +618,11 @@ router.get("/material-supplier-history/:code", async (req, res) => {
           avgPrice,
           priceChangePercent,
           supplyCount: data.count,
-          lastOrderDate: sortedDates[0] || "",
+          lastOrderDate: history[0]?.date || "",
+          lastOrderId: history[0]?.orderId || "",
           rating: ratingMap[sid]?.avg || null,
           ratingCount: ratingMap[sid]?.count || 0,
-          priceHistory: data.orders.map((ordId, i) => ({
-            orderId: ordId,
-            date: data.dates[i],
-            costPrice: data.prices[i],
-            orderStatus: orderMap[ordId]?.status || "",
-          })),
+          priceHistory: history,
         };
       })
       .sort((a, b) => a.avgPrice - b.avgPrice);

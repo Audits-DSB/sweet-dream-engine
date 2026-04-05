@@ -1713,13 +1713,28 @@ export default function OrdersPage() {
                       </div>
                     </div>
                     <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span>آخر توريد: {s.lastDate || "—"}</span>
+                      <span>آخر توريد: {s.lastOrderDate || "—"}{s.lastOrderId ? ` (${s.lastOrderId})` : ""}</span>
                       {s.priceChangePercent !== 0 && (
                         <span className={`font-medium ${s.priceChangePercent > 0 ? "text-red-500" : "text-green-500"}`}>
                           {s.priceChangePercent > 0 ? "↑" : "↓"} {Math.abs(s.priceChangePercent)}% عن السعر السابق
                         </span>
                       )}
                     </div>
+                    {s.priceHistory && s.priceHistory.length > 0 && (
+                      <div className="mt-1 border-t border-border pt-1.5">
+                        <div className="text-[10px] font-medium text-muted-foreground mb-1">سجل التوريدات:</div>
+                        <div className="space-y-0.5">
+                          {s.priceHistory.slice(0, 5).map((h: any, hi: number) => (
+                            <div key={hi} className="flex items-center justify-between text-[10px] text-muted-foreground">
+                              <span className="font-mono">{h.orderId}</span>
+                              <span>{h.date || "—"}</span>
+                              <span className="font-medium text-foreground">{h.costPrice?.toLocaleString()} ج.م</span>
+                              <span className={`px-1 py-0.5 rounded text-[9px] ${h.orderStatus?.toLowerCase() === "delivered" ? "bg-green-100 text-green-700" : h.orderStatus?.toLowerCase() === "pending" || h.orderStatus?.toLowerCase() === "processing" ? "bg-yellow-100 text-yellow-700" : h.orderStatus?.toLowerCase() === "cancelled" ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>{h.orderStatus || "—"}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
