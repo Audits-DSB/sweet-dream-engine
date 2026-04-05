@@ -10,6 +10,42 @@ const supabaseAdmin = createClient(
 
 const router = Router();
 
+async function stampMissingProfitPct() {
+  try {
+    const [{ data: rules }, { data: allContribs }] = await Promise.all([
+      supabaseAdmin.from("business_rules").select("company_profit_percentage").limit(1).single(),
+      supabaseAdmin.from("order_founder_contributions").select("order_id,contributions"),
+    ]);
+    const globalPct = Number(rules?.company_profit_percentage ?? 40);
+    let stampedCount = 0;
+
+    for (const row of (allContribs || [])) {
+      const contribs: any[] = row.contributions || [];
+      if (contribs.length === 0) continue;
+      if (contribs[0]?.companyProfitPercentage !== undefined) continue;
+      const updated = contribs.map((c: any) => ({ ...c, companyProfitPercentage: globalPct }));
+      await supabaseAdmin.from("order_founder_contributions")
+        .update({ contributions: updated, updated_at: new Date().toISOString() })
+        .eq("order_id", row.order_id);
+      stampedCount++;
+    }
+
+    const { data: allOrders } = await supabaseAdmin.from("orders").select("id");
+    const ordersWithContribs = new Set((allContribs || []).map((r: any) => r.order_id));
+    for (const order of (allOrders || [])) {
+      if (ordersWithContribs.has(order.id)) continue;
+      await supabaseAdmin.from("order_founder_contributions").upsert(
+        { order_id: order.id, contributions: [{ companyProfitPercentage: globalPct }], updated_at: new Date().toISOString() },
+        { onConflict: "order_id" }
+      );
+      stampedCount++;
+    }
+
+    if (stampedCount > 0) console.log(`✅ Stamped companyProfitPercentage (${globalPct}%) on ${stampedCount} orders`);
+  } catch (e: any) { console.warn("[stamp-pct] error:", e.message); }
+}
+stampMissingProfitPct();
+
 router.post("/migrate/company-inventory", async (_req, res) => {
   const results: string[] = [];
 
