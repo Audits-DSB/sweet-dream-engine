@@ -1055,7 +1055,7 @@ export default function OrdersPage() {
         loading={deleting}
       />
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (open) { api.get<Record<string, any>>("/material-best-suppliers").then(d => setBestSuppliers(d || {})).catch(() => {}); } else { setOrderItems([]); setSelectedClient(""); setSelectedSupplier(""); setMaterialSearch(""); setOrderType("client"); setShowInventoryPicker(false); setInventorySearch(""); setBestSuppliers({}); setShowCompareCard(null); autoFillRef.current.clear(); } }}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (open) { api.get<Record<string, any>>("/material-best-suppliers").then(d => { console.log("[bestSuppliers] loaded:", Object.keys(d || {}).length); setBestSuppliers(d || {}); }).catch(e => { console.error("[bestSuppliers] FAILED:", e); }); } else { setOrderItems([]); setSelectedClient(""); setSelectedSupplier(""); setMaterialSearch(""); setOrderType("client"); setShowInventoryPicker(false); setInventorySearch(""); setBestSuppliers({}); setShowCompareCard(null); autoFillRef.current.clear(); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader><DialogTitle>{t.newOrder}</DialogTitle></DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-2">
