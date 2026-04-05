@@ -1247,6 +1247,7 @@ export default function OrdersPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
+                          <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700" title="تاريخ الموردين" onClick={(e) => { e.stopPropagation(); openSupplierHistory(item.materialCode, item.name); }}><Clock className="h-3.5 w-3.5" /></Button>
                           <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => removeItem(idx)}><Trash2 className="h-3.5 w-3.5" /></Button>
                         </div>
                       </div>
@@ -1735,8 +1736,7 @@ export default function OrdersPage() {
       <Dialog open={historyDialog.open} onOpenChange={(open) => { if (!open) setHistoryDialog({ open: false, code: "", name: "", data: null, loading: false }); }}>
         <DialogContent className="max-w-lg max-h-[80vh]" dir="rtl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
+            <DialogTitle>
               تاريخ الموردين — {historyDialog.name}
             </DialogTitle>
           </DialogHeader>
