@@ -384,6 +384,7 @@
     font-size: 9pt !important;
     border-collapse: collapse !important;
     background: white !important;
+    table-layout: auto !important;
   }
   .print-report-page th {
     font-weight: 700 !important;
@@ -403,11 +404,15 @@
   .print-report-page thead {
     display: table-header-group;
   }
-  .print-report-page .overflow-hidden {
+  .print-report-page .overflow-hidden,
+  .print-report-page .overflow-x-auto,
+  .print-report-page [class*="overflow"] {
     overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
   }
-  .print-report-page .overflow-x-auto {
-    overflow: visible !important;
+  .print-report-page .rounded-xl.overflow-hidden {
+    border-radius: 0 !important;
   }
   .print-report-page td {
     color: #111 !important;
