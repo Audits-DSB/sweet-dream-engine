@@ -293,7 +293,7 @@ export default function SuppliersPage() {
               }
             }}>
               <ShoppingCart className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />
-              ترتيب الموردين
+              تقرير أداء الموردين
             </Button>
             <Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addSupplier}</Button>
           </div>
@@ -303,7 +303,7 @@ export default function SuppliersPage() {
       {showRanking && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">ترتيب أفضل الموردين</h3>
+            <h3 className="text-sm font-semibold">تقرير أداء الموردين</h3>
             <Button variant="ghost" size="sm" onClick={() => setShowRanking(false)}>
               <X className="h-3.5 w-3.5" />
             </Button>
