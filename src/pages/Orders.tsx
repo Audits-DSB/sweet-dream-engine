@@ -579,24 +579,50 @@ export default function OrdersPage() {
     if (changed) setOrderItems(updated);
   }, [bestSuppliers]);
 
-  const bundleSuggestion = (() => {
+  const orderSupplierComparison = (() => {
     const nonInv = orderItems.filter(i => !i.fromInventory && i.materialCode);
-    if (nonInv.length < 2) return null;
-    const supplierMats: Record<string, { name: string; mats: string[]; totalCost: number }> = {};
+    if (nonInv.length === 0 || Object.keys(bestSuppliers).length === 0) return null;
+    const allSupplierIds = new Set<string>();
+    const supplierNames: Record<string, string> = {};
     for (const item of nonInv) {
       const bs = bestSuppliers[item.materialCode];
       if (!bs?.allSuppliers) continue;
       for (const s of bs.allSuppliers) {
-        if (!supplierMats[s.supplierId]) supplierMats[s.supplierId] = { name: s.supplierName, mats: [], totalCost: 0 };
-        if (!supplierMats[s.supplierId].mats.includes(item.materialCode)) {
-          supplierMats[s.supplierId].mats.push(item.materialCode);
-          supplierMats[s.supplierId].totalCost += (s.avgPrice || s.lastPrice || 0) * item.quantity;
-        }
+        allSupplierIds.add(s.supplierId);
+        supplierNames[s.supplierId] = s.supplierName;
       }
     }
-    const best = Object.entries(supplierMats).filter(([, v]) => v.mats.length >= 2).sort((a, b) => b[1].mats.length - a[1].mats.length)[0];
-    if (!best) return null;
-    return { supplierId: best[0], supplierName: best[1].name, materialsCount: best[1].mats.length, estimatedCost: best[1].totalCost };
+    if (allSupplierIds.size === 0) return null;
+    const results: { supplierId: string; supplierName: string; totalCost: number; coveredCount: number; missingCount: number; missingMats: string[]; isCheapest: boolean; details: { matCode: string; matName: string; price: number; available: boolean }[] }[] = [];
+    for (const sid of allSupplierIds) {
+      let totalCost = 0;
+      let coveredCount = 0;
+      let missingCount = 0;
+      const missingMats: string[] = [];
+      const details: { matCode: string; matName: string; price: number; available: boolean }[] = [];
+      for (const item of nonInv) {
+        const bs = bestSuppliers[item.materialCode];
+        const supData = bs?.allSuppliers?.find((s: any) => s.supplierId === sid);
+        if (supData) {
+          const price = supData.lastPrice || supData.avgPrice || 0;
+          totalCost += price * item.quantity;
+          coveredCount++;
+          details.push({ matCode: item.materialCode, matName: item.name, price, available: true });
+        } else {
+          totalCost += item.costPrice * item.quantity;
+          missingCount++;
+          missingMats.push(item.name);
+          details.push({ matCode: item.materialCode, matName: item.name, price: item.costPrice, available: false });
+        }
+      }
+      results.push({ supplierId: sid, supplierName: supplierNames[sid], totalCost, coveredCount, missingCount, missingMats, isCheapest: false, details });
+    }
+    results.sort((a, b) => {
+      if (a.missingCount !== b.missingCount) return a.missingCount - b.missingCount;
+      return a.totalCost - b.totalCost;
+    });
+    if (results.length > 0) results[0].isCheapest = true;
+    return results;
   })();
 
   const totalSelling = orderItems.reduce((sum, i) => sum + i.sellingPrice * i.quantity, 0);
@@ -1291,27 +1317,46 @@ export default function OrdersPage() {
                 </div>
               )}
 
-              {bundleSuggestion && orderItems.length >= 2 && (
-                <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-2.5">
-                  <div className="flex items-center gap-2 text-xs">
-                    <Package className="h-4 w-4 text-blue-600 shrink-0" />
-                    <div className="flex-1">
-                      <span className="font-medium text-blue-800 dark:text-blue-200">ترشيح مورد واحد: </span>
-                      <span className="text-blue-700 dark:text-blue-300">{bundleSuggestion.supplierName} يوفر {bundleSuggestion.materialsCount} مواد</span>
-                      <span className="text-blue-600/70 dark:text-blue-400/70 mr-1"> — تكلفة تقديرية: {bundleSuggestion.estimatedCost.toLocaleString()} ج.م</span>
-                    </div>
-                    <button type="button" className="text-[10px] text-blue-700 hover:underline font-medium whitespace-nowrap" onClick={() => {
-                      setOrderItems(prev => prev.map(item => {
-                        if (item.fromInventory) return item;
-                        const bs = bestSuppliers[item.materialCode];
-                        const supData = bs?.allSuppliers?.find((s: any) => s.supplierId === bundleSuggestion.supplierId);
-                        if (supData) return { ...item, supplierId: bundleSuggestion.supplierId, costPrice: supData.minPrice || supData.lastPrice || item.costPrice };
-                        return item;
-                      }));
-                      toast.success(`تم اختيار "${bundleSuggestion.supplierName}" لجميع المواد المتاحة`);
-                    }}>
-                      تطبيق
-                    </button>
+              {orderSupplierComparison && orderSupplierComparison.length > 0 && orderItems.filter(i => !i.fromInventory).length >= 1 && (
+                <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10 p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-blue-800 dark:text-blue-200">
+                    <Package className="h-4 w-4" />
+                    <span>مقارنة تكلفة الأوردر الكلية حسب المورد</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {orderSupplierComparison.map((comp, ci) => (
+                      <div key={comp.supplierId} className={`rounded-md border p-2 text-xs ${comp.isCheapest ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20" : "border-border bg-background"}`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {comp.isCheapest && <span className="text-green-600 text-sm">⭐</span>}
+                            {ci === 0 && <span className="bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-200 px-1.5 py-0.5 rounded text-[10px] font-bold">الأفضل</span>}
+                            <span className="font-semibold truncate">{comp.supplierName}</span>
+                            <span className="text-muted-foreground">({comp.coveredCount}/{orderItems.filter(i => !i.fromInventory).length} مادة)</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className={`font-bold text-sm ${comp.isCheapest ? "text-green-700 dark:text-green-300" : ""}`}>{comp.totalCost.toLocaleString()} ج.م</span>
+                            <button type="button" className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700" onClick={() => {
+                              setOrderItems(prev => prev.map(item => {
+                                if (item.fromInventory) return item;
+                                const bs = bestSuppliers[item.materialCode];
+                                const supData = bs?.allSuppliers?.find((s: any) => s.supplierId === comp.supplierId);
+                                if (supData) return { ...item, supplierId: comp.supplierId, costPrice: supData.lastPrice || supData.avgPrice || item.costPrice };
+                                return { ...item, supplierId: comp.supplierId };
+                              }));
+                              toast.success(`تم اختيار "${comp.supplierName}" لجميع المواد`);
+                            }}>
+                              اختيار
+                            </button>
+                          </div>
+                        </div>
+                        {comp.missingCount > 0 && (
+                          <div className="mt-1.5 flex items-start gap-1 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded px-1.5 py-1">
+                            <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                            <span>غير متوفر عنده: {comp.missingMats.join("، ")} — سيتم استخدام السعر الحالي لهذه المواد</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
