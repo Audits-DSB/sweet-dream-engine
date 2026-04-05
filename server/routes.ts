@@ -2293,13 +2293,28 @@ router.delete("/treasury/transactions/all", async (req, res) => {
     .not("tx_type", "in", `(${FOUNDER_TYPES.map(t => `"${t}"`).join(",")})`);
   const ids = (txns || []).map((t: any) => t.id);
   if (ids.length === 0) return res.json({ deleted: 0 });
+
   const { error } = await supabaseAdmin.from("treasury_transactions").delete().in("id", ids);
   if (error) return res.status(500).json({ error: error.message });
+
+  const balanceAdj: Record<string, number> = {};
+  for (const tx of (txns || [])) {
+    if (tx.account_id && tx.amount !== null) {
+      balanceAdj[tx.account_id] = (balanceAdj[tx.account_id] || 0) - Number(tx.amount);
+    }
+  }
+  for (const [accId, adj] of Object.entries(balanceAdj)) {
+    try {
+      const { data: acc } = await supabaseAdmin.from("treasury_accounts").select("balance").eq("id", accId).single();
+      if (acc) {
+        await supabaseAdmin.from("treasury_accounts").update({ balance: Number(acc.balance) + adj, updated_at: new Date().toISOString() }).eq("id", accId);
+      }
+    } catch (e: any) { console.error("[delete-all-txns] balance revert error:", e.message); }
+  }
   res.json({ deleted: ids.length });
 });
 
 router.delete("/treasury/transactions/:id", async (req, res) => {
-  // Fetch the transaction first to reverse its balance effect
   const { data: tx, error: fetchErr } = await supabaseAdmin
     .from("treasury_transactions")
     .select("*")
@@ -2476,14 +2491,6 @@ router.get("/company-profit-summary", async (_req, res) => {
 
     const netProfit = Math.round(totalCompanyProfit) - totalExpenses;
 
-    const { data: companyAcc } = await supabaseAdmin
-      .from("treasury_accounts").select("id,balance").eq("name", "حساب الشركة").maybeSingle();
-    if (companyAcc && Number(companyAcc.balance) !== netProfit) {
-      await supabaseAdmin.from("treasury_accounts")
-        .update({ balance: netProfit, updated_at: new Date().toISOString() })
-        .eq("id", companyAcc.id);
-    }
-
     res.json({ totalCompanyProfit: Math.round(totalCompanyProfit), totalExpenses, netProfit });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -2542,48 +2549,73 @@ router.get("/founder-balances", async (_req, res) => {
       };
     });
 
+    const getColOrderPct = (oid: string): number => {
+      const o = orderMap[oid];
+      if (!o) return globalPct;
+      const ca = Array.isArray(o.founder_contributions) ? o.founder_contributions : [];
+      return ca[0]?.companyProfitPercentage ?? globalPct;
+    };
+
     const autoCapital: Record<string, number> = {};
     const autoProfit: Record<string, number> = {};
     const autoDeliveryReimb: Record<string, number> = {};
     fList.forEach(f => { autoCapital[f.id] = 0; autoProfit[f.id] = 0; autoDeliveryReimb[f.id] = 0; });
     colList.forEach(col => {
-      const order = orderMap[col.order_id];
-      if (!order) return;
       const paid = Number(col.paid_amount ?? 0);
-      const totalSelling = Number(order.total_selling ?? 0);
-      const totalCost = Number(order.total_cost ?? 0);
-      if (totalSelling <= 0 || paid <= 0) return;
-      let contribs: any[] = [];
-      const rawC = order.founder_contributions;
-      if (Array.isArray(rawC)) contribs = rawC;
-      else if (typeof rawC === "string") { try { contribs = JSON.parse(rawC); } catch { contribs = []; } }
-      const companyPct = globalPct;
-      const delFeeDeduction = order.delivery_fee_bearer === "company" ? Number(order.delivery_fee || 0) : 0;
-      const qp = quickProfit({ orderTotal: totalSelling, totalCost, paidValue: paid, companyProfitPct: companyPct, deliveryFeeDeduction: delFeeDeduction });
-      const capitalReturn = Math.round(qp.recoveredCapital);
-      const foundersProfit = qp.foundersProfit;
-      const sm = order.split_mode || "equal";
-      const isWeighted = sm.includes("مساهمة") || sm.toLowerCase().includes("contribution") || sm === "weighted";
-      const splits = founderSplit(foundersProfit, capitalReturn, contribs, isWeighted ? "weighted" : "equal");
+      if (paid <= 0) return;
+      const primaryOrderId = col.order_id || "";
 
-      const delReimb = qp.deliveryFeeReimbursement || 0;
-      const paidByFounder = order.delivery_fee_paid_by_founder || "";
+      let notesMeta: any = {};
+      try { notesMeta = typeof col.notes === "object" ? (col.notes || {}) : JSON.parse(col.notes || "{}"); } catch {}
 
-      fList.forEach(f => {
-        let capShare = 0;
-        let profShare = 0;
-        if (contribs.length > 0) {
-          const match = splits.find((s: any) => s.id === f.id || s.name === f.name);
-          if (match) { capShare = match.capitalShare; profShare = match.profit; }
-        } else {
-          capShare = capitalReturn / (fList.length || 1);
-          profShare = foundersProfit / (fList.length || 1);
-        }
-        if (capShare > 0) autoCapital[f.id] = (autoCapital[f.id] || 0) + Math.round(capShare);
-        if (profShare > 0) autoProfit[f.id] = (autoProfit[f.id] || 0) + Math.round(profShare);
-        if (delReimb > 0 && paidByFounder === f.id) {
-          autoDeliveryReimb[f.id] = (autoDeliveryReimb[f.id] || 0) + Math.round(delReimb);
-        }
+      const srcOrders: string[] = (notesMeta.sourceOrders?.length > 0
+        ? notesMeta.sourceOrders.filter((oid: string) => orderMap[oid])
+        : (primaryOrderId && orderMap[primaryOrderId] ? [primaryOrderId] : []));
+      if (srcOrders.length === 0) return;
+
+      let allSelling = 0;
+      srcOrders.forEach((oid: string) => { allSelling += Number(orderMap[oid].total_selling || 0); });
+
+      srcOrders.forEach((oid: string) => {
+        const order = orderMap[oid];
+        const oSelling = Number(order.total_selling || 0);
+        const oCost = Number(order.total_cost || 0);
+        const share = allSelling > 0 ? oSelling / allSelling : 1 / srcOrders.length;
+        const oPaid = paid * share;
+        if (oSelling <= 0 || oPaid <= 0) return;
+
+        let contribs: any[] = [];
+        const rawC = order.founder_contributions;
+        if (Array.isArray(rawC)) contribs = rawC;
+        else if (typeof rawC === "string") { try { contribs = JSON.parse(rawC); } catch { contribs = []; } }
+        const companyPct = getColOrderPct(oid);
+        const delFeeDeduction = order.delivery_fee_bearer === "company" ? Number(order.delivery_fee || 0) : 0;
+        const qp = quickProfit({ orderTotal: oSelling, totalCost: oCost, paidValue: oPaid, companyProfitPct: companyPct, deliveryFeeDeduction: delFeeDeduction });
+        const capitalReturn = Math.round(qp.recoveredCapital);
+        const foundersProfit = qp.foundersProfit;
+        const sm = order.split_mode || "equal";
+        const isWeighted = sm.includes("مساهمة") || sm.toLowerCase().includes("contribution") || sm === "weighted";
+        const splits = founderSplit(foundersProfit, capitalReturn, contribs, isWeighted ? "weighted" : "equal");
+
+        const delReimb = qp.deliveryFeeReimbursement || 0;
+        const paidByFounder = order.delivery_fee_paid_by_founder || "";
+
+        fList.forEach(f => {
+          let capShare = 0;
+          let profShare = 0;
+          if (contribs.length > 0) {
+            const match = splits.find((s: any) => s.id === f.id || s.name === f.name);
+            if (match) { capShare = match.capitalShare; profShare = match.profit; }
+          } else {
+            capShare = capitalReturn / (fList.length || 1);
+            profShare = foundersProfit / (fList.length || 1);
+          }
+          if (capShare > 0) autoCapital[f.id] = (autoCapital[f.id] || 0) + Math.round(capShare);
+          if (profShare > 0) autoProfit[f.id] = (autoProfit[f.id] || 0) + Math.round(profShare);
+          if (delReimb > 0 && paidByFounder === f.id) {
+            autoDeliveryReimb[f.id] = (autoDeliveryReimb[f.id] || 0) + Math.round(delReimb);
+          }
+        });
       });
     });
 
@@ -3538,7 +3570,7 @@ router.post("/returns/:id/accept", async (req, res) => {
       }
     }
 
-    // 3. Adjust collection outstanding
+    // 3. Adjust collection outstanding — distribute across all collections
     const totalReturnValue = items.reduce((s: number, it: any) => s + (Number(it.sellingPrice || 0) * Number(it.quantity || 0)), 0);
     const { data: cols } = await supabaseAdmin.from("collections")
       .select("*")
@@ -3547,19 +3579,25 @@ router.post("/returns/:id/accept", async (req, res) => {
 
     let creditAmount = 0;
     if (cols && cols.length > 0) {
-      const col = cols[0];
-      const currentTotal = Number(col.total_amount || 0);
-      const currentPaid = Number(col.paid_amount || 0);
-      const newTotal = Math.max(currentTotal - totalReturnValue, 0);
-      const newOutstanding = Math.max(newTotal - currentPaid, 0);
-      if (currentPaid > newTotal) {
-        creditAmount = currentPaid - newTotal;
+      let remainingDeduction = totalReturnValue;
+      for (const col of cols) {
+        if (remainingDeduction <= 0) break;
+        const currentTotal = Number(col.total_amount || 0);
+        if (currentTotal <= 0) continue;
+        const deduction = Math.min(remainingDeduction, currentTotal);
+        const currentPaid = Number(col.paid_amount || 0);
+        const newTotal = Math.max(currentTotal - deduction, 0);
+        const newOutstanding = Math.max(newTotal - currentPaid, 0);
+        if (currentPaid > newTotal) {
+          creditAmount += currentPaid - newTotal;
+        }
+        await supabaseAdmin.from("collections").update({
+          total_amount: newTotal,
+          outstanding: newOutstanding,
+          status: newOutstanding <= 0 ? "Paid" : col.status,
+        }).eq("id", col.id);
+        remainingDeduction -= deduction;
       }
-      await supabaseAdmin.from("collections").update({
-        total_amount: newTotal,
-        outstanding: newOutstanding,
-        status: newOutstanding <= 0 ? "Paid" : col.status,
-      }).eq("id", col.id);
     }
 
     // 4. Update order status

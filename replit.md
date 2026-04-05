@@ -138,6 +138,13 @@ Company-wide business intelligence report accessible from the sidebar. Features:
 - File: `src/pages/CompanyAnalysis.tsx`. Fully bilingual (AR/EN) via `co*` translation keys. Print-ready. CSV export with 7 sections.
 - Sidebar: Under "System" group with PieChart icon.
 
+## Accounting Logic Fixes (Applied)
+- **DELETE /treasury/transactions/all**: Deletes transactions first, then reverses account balances (safe ordering — if delete fails, no balance touched)
+- **DELETE /treasury/transactions/:id**: Same safe ordering — delete first, then reverse balance
+- **GET /founder-balances**: Handles multi-order collections via `notes.sourceOrders`, distributes paid amount proportionally across orders, uses per-order `companyProfitPercentage` instead of global percentage
+- **GET /company-profit-summary**: Read-only endpoint — removed side-effect that was auto-updating `treasury_accounts` balance on every GET
+- **POST /returns/:id/accept**: Return value deduction now distributes across ALL collections for the order (not just the most recent one)
+
 ## Key API Endpoints (server/routes.ts)
 - `/api/clients`, `/api/suppliers`, `/api/materials`, `/api/founders` — CRUD
 - `/api/orders`, `/api/orders/next-id` — Orders CRUD + auto-increment ID
