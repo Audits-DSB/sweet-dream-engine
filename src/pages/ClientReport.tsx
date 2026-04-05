@@ -585,13 +585,15 @@ export default function ClientReport() {
           <BackArrow className="h-4 w-4" /> {t.crBackToProfile}
         </Button>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 bg-muted rounded-lg p-0.5">
-            {(["all", "3m", "6m", "12m"] as const).map((f) => (
-              <button key={f} onClick={() => setDateFilter(f)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${dateFilter === f ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-                {f === "all" ? t.crAll : f === "3m" ? t.crLast3Months : f === "6m" ? t.crLast6Months : t.crLast12Months}
-              </button>
-            ))}
-          </div>
+          {tab === "full" && (
+            <div className="flex items-center gap-1.5 bg-muted rounded-lg p-0.5">
+              {(["all", "3m", "6m", "12m"] as const).map((f) => (
+                <button key={f} onClick={() => setDateFilter(f)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${dateFilter === f ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                  {f === "all" ? t.crAll : f === "3m" ? t.crLast3Months : f === "6m" ? t.crLast6Months : t.crLast12Months}
+                </button>
+              ))}
+            </div>
+          )}
           <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-2">
             <Download className="h-4 w-4" /> {t.crExportCsv}
           </Button>
