@@ -4,6 +4,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { exportMultiSectionCsv } from "@/lib/exportCsv";
+import { getPrimaryPhone } from "@/lib/phoneUtils";
 import {
   Printer, ArrowRight, ArrowLeft, Package, BarChart3, PieChart as PieChartIcon,
   ShoppingCart, Truck, ClipboardCheck, CalendarDays, DollarSign, Download,
@@ -466,7 +467,7 @@ export default function ClientReport() {
         rows: [
           [isEn ? "Name" : "الاسم", client.name],
           [isEn ? "City" : "المدينة", client.city || "—"],
-          [isEn ? "Phone" : "الهاتف", client.phone || "—"],
+          [isEn ? "Phone" : "الهاتف", getPrimaryPhone(client.phone) || "—"],
           [isEn ? "Report Date" : "تاريخ التقرير", new Date().toLocaleDateString(dateLocale)],
         ] as (string | number)[][],
       },
@@ -631,7 +632,7 @@ export default function ClientReport() {
             <h2 className="text-2xl font-bold text-gray-900 mb-2">{client.name}</h2>
             <div className="flex items-center justify-center gap-4 text-sm text-gray-500 font-medium flex-wrap">
               {client.city && <span className="flex items-center gap-1"><span className="text-orange-400">●</span> {client.city}</span>}
-              {client.phone && <span className="flex items-center gap-1" dir="ltr"><span className="text-orange-400">●</span> {client.phone}</span>}
+              {getPrimaryPhone(client.phone) && <span className="flex items-center gap-1" dir="ltr"><span className="text-orange-400">●</span> {getPrimaryPhone(client.phone)}</span>}
               {client.joinDate && <span className="flex items-center gap-1"><span className="text-orange-400">●</span> {t.crClientSince} {new Date(client.joinDate).toLocaleDateString(dateLocale, { year: "numeric", month: "long" })}</span>}
             </div>
             <p className="text-xs text-gray-400 mt-2">{reportDate}</p>
@@ -660,7 +661,7 @@ export default function ClientReport() {
             <p className="text-lg font-bold text-gray-900">{client.name}</p>
             <div className="flex items-center justify-center gap-3 text-xs text-gray-500 font-medium mt-1">
               {client.city && <span>📍 {client.city}</span>}
-              {client.phone && <span dir="ltr">📞 {client.phone}</span>}
+              {getPrimaryPhone(client.phone) && <span dir="ltr">📞 {getPrimaryPhone(client.phone)}</span>}
               {client.joinDate && <span>📅 {t.crClientSince} {new Date(client.joinDate).toLocaleDateString(dateLocale, { year: "numeric", month: "long" })}</span>}
             </div>
             <p className="text-[9px] text-gray-400 mt-1">{reportDate}</p>
