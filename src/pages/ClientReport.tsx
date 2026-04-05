@@ -344,6 +344,17 @@ export default function ClientReport() {
     return map;
   }, [inventory]);
 
+  const inventoryPriceMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const item of inventory) {
+      if (item.sellingPrice > 0) {
+        if (item.code && !map[item.code]) map[item.code] = item.sellingPrice;
+        if (item.material && !map[item.material.toLowerCase().trim()]) map[item.material.toLowerCase().trim()] = item.sellingPrice;
+      }
+    }
+    return map;
+  }, [inventory]);
+
   const mMaterialConsumption = useMemo(() => {
     const mOrderIds = new Set(mOrders.map(o => o.id));
     const lines = orderLines.filter(l => mOrderIds.has(l.orderId));
@@ -358,11 +369,15 @@ export default function ClientReport() {
         map.set(key, { materialName: l.materialName, materialCode: l.materialCode, unit: l.unit, totalQty: l.quantity, orderIds: new Set([l.orderId]) });
       }
     }
-    return [...map.values()].map(v => ({
-      materialName: v.materialName, materialCode: v.materialCode, unit: v.unit, totalQty: v.totalQty, orderCount: v.orderIds.size,
-      imageUrl: inventoryImageMap[v.materialCode] || inventoryImageMap[v.materialName.toLowerCase().trim()] || "",
-    })).sort((a, b) => b.totalQty - a.totalQty);
-  }, [mOrders, orderLines, inventoryImageMap]);
+    return [...map.values()].map(v => {
+      const sellingPrice = inventoryPriceMap[v.materialCode] || inventoryPriceMap[v.materialName.toLowerCase().trim()] || 0;
+      return {
+        materialName: v.materialName, materialCode: v.materialCode, unit: v.unit, totalQty: v.totalQty, orderCount: v.orderIds.size,
+        sellingPrice,
+        imageUrl: inventoryImageMap[v.materialCode] || inventoryImageMap[v.materialName.toLowerCase().trim()] || "",
+      };
+    }).sort((a, b) => b.totalQty - a.totalQty);
+  }, [mOrders, orderLines, inventoryImageMap, inventoryPriceMap]);
 
   const mAggregated = useMemo(() => {
     const map = new Map<string, { material: string; code: string; unit: string; totalDelivered: number; totalRemaining: number; totalConsumed: number; sellingPrice: number; imageUrl: string }>();
@@ -937,6 +952,57 @@ export default function ClientReport() {
                           <td className="py-3 px-4 text-end text-gray-900">{mConsumptionRate}%</td>
                         </tr>
                       )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {mMaterialConsumption.length > 0 && (
+              <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-card mb-8 print:break-inside-avoid">
+                <h3 className="text-base font-bold p-5 border-b-2 border-gray-200 flex items-center gap-2 text-gray-900 bg-gray-50">
+                  <ClipboardCheck className="h-5 w-5 text-primary" /> {t.crOrderedMaterials} — {toFullMonthLabel(selectedMonth)}
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm table-fixed">
+                    <colgroup>
+                      <col className="w-[30px]" />
+                      <col className="w-[45px]" />
+                      <col />
+                      <col className="w-[50px]" />
+                      <col className="w-[70px]" />
+                      <col className="w-[60px]" />
+                      <col className="w-[60px]" />
+                    </colgroup>
+                    <thead>
+                      <tr className="bg-gray-100 border-b-2 border-gray-300">
+                        <th className="py-2 px-1 text-start font-bold text-gray-900 text-[9px] print:text-[8px]">#</th>
+                        <th className="py-2 px-1 text-center font-bold text-gray-900 text-[9px] print:text-[8px]">{t.crImage}</th>
+                        <th className="py-2 px-1 text-start font-bold text-gray-900 text-[9px] print:text-[8px]">{t.crMaterial}</th>
+                        <th className="py-2 px-1 text-start font-bold text-gray-900 text-[9px] print:text-[8px] w-10">{t.crUnit}</th>
+                        <th className="py-2 px-1 text-end font-bold text-gray-900 text-[9px] print:text-[8px] w-14">{t.crSellingPrice}</th>
+                        <th className="py-2 px-1 text-end font-bold text-gray-900 text-[9px] print:text-[8px] w-12">{t.crQtyOrdered}</th>
+                        <th className="py-2 px-1 text-end font-bold text-gray-900 text-[9px] print:text-[8px] w-12">{t.crOrderCount}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mMaterialConsumption.map((item, idx) => (
+                        <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50 print:even:bg-gray-50">
+                          <td className="py-2 px-2 text-gray-600 font-medium">{idx + 1}</td>
+                          <td className="py-1 px-2 text-center">{renderMaterialImage(item.imageUrl, item.materialName)}</td>
+                          <td className="py-2 px-2 font-semibold text-gray-900 text-xs overflow-hidden text-ellipsis whitespace-nowrap" title={item.materialName}>{item.materialName}</td>
+                          <td className="py-2 px-2 text-gray-700 text-xs">{item.unit}</td>
+                          <td className="py-2 px-2 text-end text-gray-800 font-medium text-xs">{item.sellingPrice > 0 ? `${item.sellingPrice.toLocaleString()}` : "—"}</td>
+                          <td className="py-2 px-2 text-end font-bold text-orange-700">{item.totalQty}</td>
+                          <td className="py-2 px-2 text-end font-medium text-gray-700">{item.orderCount}</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
+                        <td colSpan={4} className="py-3 px-4 text-gray-900">{t.crTotalLabel}</td>
+                        <td className="py-3 px-4 text-end text-gray-900">{mMaterialConsumption.reduce((s, i) => s + (i.sellingPrice * i.totalQty), 0) > 0 ? cur(mMaterialConsumption.reduce((s, i) => s + (i.sellingPrice * i.totalQty), 0)) : ""}</td>
+                        <td className="py-3 px-4 text-end text-orange-700">{mMaterialConsumption.reduce((s, i) => s + i.totalQty, 0)}</td>
+                        <td></td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
