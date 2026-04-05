@@ -561,6 +561,14 @@ export default function OrdersPage() {
 
   const removeItem = (index: number) => setOrderItems(orderItems.filter((_, i) => i !== index));
 
+  useEffect(() => {
+    if (!dialogOpen) return;
+    fetch("/api/material-best-suppliers")
+      .then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+      .then(d => setBestSuppliers(d || {}))
+      .catch(() => {});
+  }, [dialogOpen]);
+
   const autoFillRef = useRef(new Set<string>());
   useEffect(() => {
     if (Object.keys(bestSuppliers).length === 0 || orderItems.length === 0) return;
@@ -1055,7 +1063,7 @@ export default function OrdersPage() {
         loading={deleting}
       />
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (open) { api.get<Record<string, any>>("/material-best-suppliers").then(d => { console.log("[bestSuppliers] loaded:", Object.keys(d || {}).length); setBestSuppliers(d || {}); }).catch(e => { console.error("[bestSuppliers] FAILED:", e); }); } else { setOrderItems([]); setSelectedClient(""); setSelectedSupplier(""); setMaterialSearch(""); setOrderType("client"); setShowInventoryPicker(false); setInventorySearch(""); setBestSuppliers({}); setShowCompareCard(null); autoFillRef.current.clear(); } }}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setOrderItems([]); setSelectedClient(""); setSelectedSupplier(""); setMaterialSearch(""); setOrderType("client"); setShowInventoryPicker(false); setInventorySearch(""); setBestSuppliers({}); setShowCompareCard(null); autoFillRef.current.clear(); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader><DialogTitle>{t.newOrder}</DialogTitle></DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-2">
@@ -1187,7 +1195,6 @@ export default function OrdersPage() {
                 </div>
               )}
 
-              <div className="text-[9px] text-red-500 bg-red-50 p-1 rounded">DEBUG: bestSuppliers keys={Object.keys(bestSuppliers).length}, items={orderItems.length}, comparison={orderSupplierComparison ? orderSupplierComparison.length : 'null'}</div>
               {orderItems.length === 0 ? (
                 <div className="text-center py-6 border border-dashed border-border rounded-md text-muted-foreground text-xs">{t.noItemsAdded}</div>
               ) : (
