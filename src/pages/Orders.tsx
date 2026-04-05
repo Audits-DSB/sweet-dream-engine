@@ -542,8 +542,14 @@ export default function OrdersPage() {
   };
 
   const addMaterialDirectly = (mat: MaterialItem) => {
-    setOrderItems([{ materialCode: mat.code, name: mat.name, quantity: 1, sellingPrice: orderType === "inventory" ? 0 : mat.sellingPrice, costPrice: mat.storeCost, imageUrl: mat.imageUrl, unit: mat.unit, supplierId: selectedSupplier || "" }, ...orderItems]);
+    const bs = bestSuppliers[mat.code];
+    const autoSupplierId = bs?.bestSupplierId || selectedSupplier || "";
+    const autoCostPrice = bs?.bestPrice && bs.bestPrice > 0 ? bs.bestPrice : mat.storeCost;
+    setOrderItems([{ materialCode: mat.code, name: mat.name, quantity: 1, sellingPrice: orderType === "inventory" ? 0 : mat.sellingPrice, costPrice: autoCostPrice, imageUrl: mat.imageUrl, unit: mat.unit, supplierId: autoSupplierId }, ...orderItems]);
     setMaterialSearch("");
+    if (bs?.bestSupplierId && bs.bestSupplierName) {
+      toast.success(`تم اختيار "${bs.bestSupplierName}" كأفضل مورد بسعر ${bs.bestPrice} ج.م`);
+    }
   };
 
   const updateItem = (index: number, field: keyof OrderItem, value: string | number) => {
@@ -1143,7 +1149,21 @@ export default function OrdersPage() {
                         <div><Label className="text-[10px] text-muted-foreground">{t.sellingPrice}</Label><Input className={`h-7 text-xs mt-0.5 ${orderType === "inventory" ? "opacity-50" : ""}`} type="number" value={orderType === "inventory" ? 0 : item.sellingPrice} onChange={(e) => updateItem(idx, "sellingPrice", parseFloat(e.target.value) || 0)} disabled={orderType === "inventory"} /></div>
                         <div><Label className="text-[10px] text-muted-foreground">{t.costPrice}</Label><Input className={`h-7 text-xs mt-0.5 ${item.fromInventory ? "opacity-50" : ""}`} type="number" value={item.costPrice} onChange={(e) => updateItem(idx, "costPrice", parseFloat(e.target.value) || 0)} disabled={!!item.fromInventory} /></div>
                       </div>
-                      {item.supplierId && suppliers.find(s => s.id === item.supplierId) && (
+                      {!item.fromInventory && (
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground">المورد</Label>
+                          <Select value={item.supplierId || "__none__"} onValueChange={(v) => updateItem(idx, "supplierId", v === "__none__" ? "" : v)}>
+                            <SelectTrigger className="h-7 text-xs mt-0.5">
+                              <SelectValue placeholder="اختر المورد" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">— بدون مورد —</SelectItem>
+                              {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      {item.fromInventory && item.supplierId && suppliers.find(s => s.id === item.supplierId) && (
                         <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
                           <Factory className="h-3 w-3" />
                           <span>{suppliers.find(s => s.id === item.supplierId)?.name}</span>
