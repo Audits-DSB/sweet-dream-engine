@@ -397,29 +397,45 @@
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .print-report-page table {
-    page-break-inside: auto !important;
-    break-inside: auto !important;
+  .print-report-page table:not(.print-account-block table) {
+    display: block !important;
+    width: 100% !important;
   }
-  .print-report-page tbody tr {
+  .print-report-page table:not(.print-account-block table) colgroup {
+    display: none !important;
+  }
+  .print-report-page table:not(.print-account-block table) thead {
+    display: table !important;
+    width: 100% !important;
+    table-layout: fixed !important;
+  }
+  .print-report-page table:not(.print-account-block table) thead tr {
+    display: table-row !important;
+  }
+  .print-report-page table:not(.print-account-block table) thead th {
+    display: table-cell !important;
+  }
+  .print-report-page table:not(.print-account-block table) tbody {
+    display: block !important;
+    width: 100% !important;
+  }
+  .print-report-page table:not(.print-account-block table) tbody tr {
+    display: table !important;
+    width: 100% !important;
+    table-layout: fixed !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
-  .print-report-page td {
-    vertical-align: middle !important;
+  .print-report-page table:not(.print-account-block table) tbody td {
+    display: table-cell !important;
   }
   .print-report-page td img {
     width: 18px !important;
     height: 18px !important;
-    min-width: 18px !important;
   }
   .print-report-page td .w-8.h-8 {
     width: 18px !important;
     height: 18px !important;
-    min-width: 18px !important;
-  }
-  .print-report-page thead {
-    display: table-header-group;
   }
   .print-report-page .overflow-hidden,
   .print-report-page .overflow-x-auto,
