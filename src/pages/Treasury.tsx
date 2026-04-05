@@ -31,37 +31,46 @@ export default function TreasuryDashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  const [companyNetProfit, setCompanyNetProfit] = useState<number | null>(null);
+
   const fetchData = async () => {
     setLoading(true);
-    const [accData, txData] = await Promise.all([
+    const [accData, txData, profitData] = await Promise.all([
       api.get<Account[]>("/treasury/accounts"),
       api.get<Tx[]>("/treasury/transactions"),
+      api.get<{ netProfit: number }>("/company-profit-summary").catch(() => null),
     ]);
     setAccounts(accData.filter((a: Account) => a.isActive));
     setTransactions(txData.slice(0, 20));
+    if (profitData) setCompanyNetProfit(profitData.netProfit);
     setLoading(false);
   };
 
   const accountName = (id: string) => accounts.find(a => a.id === id)?.name ?? "—";
 
-  const totalBalance = useMemo(() => accounts.reduce((s, a) => s + Number(a.balance), 0), [accounts]);
+  const totalBalance = useMemo(() => accounts.reduce((s, a) => {
+    if (a.name === "حساب الشركة" && companyNetProfit !== null) return s + companyNetProfit;
+    return s + Number(a.balance);
+  }, 0), [accounts, companyNetProfit]);
   const totalInflows = useMemo(() => transactions.filter(t => t.txType === "inflow" || t.txType === "transfer_in").reduce((s, t) => s + Number(t.amount), 0), [transactions]);
   const totalOutflows = useMemo(() => transactions.filter(t => t.txType === "withdrawal" || t.txType === "expense" || t.txType === "transfer_out").reduce((s, t) => s + Number(t.amount), 0), [transactions]);
+
+  const getAccBalance = (a: Account) => (a.name === "حساب الشركة" && companyNetProfit !== null) ? companyNetProfit : Number(a.balance);
 
   const byTypeData = useMemo(() => {
     const map: Record<string, number> = {};
     accounts.forEach(a => {
       const label = t[("treasury_" + a.accountType) as keyof typeof t] as string || a.accountType;
-      map[label] = (map[label] || 0) + Number(a.balance);
+      map[label] = (map[label] || 0) + getAccBalance(a);
     });
     return Object.entries(map).map(([name, value]) => ({ name, value }));
-  }, [accounts, t]);
+  }, [accounts, t, companyNetProfit]);
 
   const byCustodianData = useMemo(() => {
     const map: Record<string, number> = {};
-    accounts.forEach(a => { map[a.custodianName] = (map[a.custodianName] || 0) + Number(a.balance); });
+    accounts.forEach(a => { map[a.custodianName] = (map[a.custodianName] || 0) + getAccBalance(a); });
     return Object.entries(map).map(([name, value]) => ({ name, value }));
-  }, [accounts]);
+  }, [accounts, companyNetProfit]);
 
   const byCategoryData = useMemo(() => {
     const map: Record<string, number> = {};
@@ -186,7 +195,7 @@ export default function TreasuryDashboard() {
                     <td className="py-2 px-3 font-medium">{a.name}</td>
                     <td className="py-2 px-3"><Badge variant="outline">{t[("treasury_" + a.accountType) as keyof typeof t] as string || a.accountType}</Badge></td>
                     <td className="py-2 px-3 text-muted-foreground">{a.custodianName}</td>
-                    <td className="py-2 px-3 font-semibold">{fmtMoney(Number(a.balance))} {t.egp}</td>
+                    <td className="py-2 px-3 font-semibold">{fmtMoney(getAccBalance(a))} {t.egp}</td>
                   </tr>
                 ))}
               </tbody>

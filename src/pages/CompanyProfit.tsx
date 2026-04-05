@@ -121,10 +121,18 @@ export default function CompanyProfitPage() {
     queryFn: () => api.get<any[]>("/founders"),
   });
 
+  const { data: companyProfitSummary } = useQuery<{ totalCompanyProfit: number; totalExpenses: number; netProfit: number }>({
+    queryKey: ["company_profit_summary"],
+    queryFn: () => api.get("/company-profit-summary"),
+  });
+
   const totalBalance = useMemo(() => {
     if (!accounts) return 0;
-    return accounts.reduce((sum, a) => sum + parseAmount(a.balance), 0);
-  }, [accounts]);
+    return accounts.reduce((sum, a) => {
+      if (a.name === "حساب الشركة" && companyProfitSummary) return sum + companyProfitSummary.netProfit;
+      return sum + parseAmount(a.balance);
+    }, 0);
+  }, [accounts, companyProfitSummary]);
 
   const { data: returnsData } = useQuery({
     queryKey: ["returns"],

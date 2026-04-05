@@ -145,6 +145,11 @@ Company-wide business intelligence report accessible from the sidebar. Features:
 - **GET /company-profit-summary**: Read-only endpoint — removed side-effect that was auto-updating `treasury_accounts` balance on every GET
 - **POST /returns/:id/accept**: Return value deduction now distributes across ALL collections for the order (not just the most recent one)
 
+## Data Sync Architecture
+- **Company Account Balance ("حساب الشركة")**: Always computed live from `/company-profit-summary` (netProfit = totalCompanyProfit - totalExpenses). The DB `treasury_accounts.balance` is NOT used for display — all frontend pages (Treasury.tsx, TreasuryAccounts.tsx, CompanyProfit.tsx, FinancialReport.tsx) override the company account's displayed balance with the computed value.
+- **Founder Balances**: Computed by server `/founder-balances` endpoint (source of truth). Pages that need quick access (FounderFunding, OrderDetails, TreasuryAccounts) call this API. Founders.tsx computes locally using the same `quickProfit`/`founderSplit` from `orderProfit.ts`.
+- **Per-Order Profit Percentage**: All pages and server endpoints use per-order `companyProfitPercentage` from `founder_contributions[0].companyProfitPercentage`, falling back to global `rules.companyProfitPercentage`.
+
 ## Key API Endpoints (server/routes.ts)
 - `/api/clients`, `/api/suppliers`, `/api/materials`, `/api/founders` — CRUD
 - `/api/orders`, `/api/orders/next-id` — Orders CRUD + auto-increment ID

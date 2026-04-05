@@ -222,12 +222,17 @@ export default function FoundersPage() {
       (a.invoiceDate || "").localeCompare(b.invoiceDate || "")
     );
 
+    const getOrderPct = (oid: string): number => {
+      const order = orders[oid];
+      if (!order) return rules.companyProfitPercentage ?? 40;
+      const contribs = Array.isArray(order.founderContributions) ? order.founderContributions : [];
+      return contribs[0]?.companyProfitPercentage ?? (rules.companyProfitPercentage ?? 40);
+    };
+
     sortedCollections.forEach(col => {
       if (col.paidAmount <= 0) return;
       const srcOrders = col.sourceOrders.filter(oid => orders[oid] && !fullReturnOrderIds.has(oid));
       if (srcOrders.length === 0) return;
-
-      const companyPct = rules.companyProfitPercentage ?? 40;
 
       let allSelling = 0;
       srcOrders.forEach(oid => {
@@ -255,7 +260,7 @@ export default function FoundersPage() {
         const isWeighted = splitMode.includes("مساهمة") || splitMode.toLowerCase().includes("contribution");
 
         const delFeeDeduction = (order.deliveryFeeBearer || (order as any).delivery_fee_bearer) === "company" ? toNum(order.deliveryFee ?? (order as any).delivery_fee) : 0;
-        const qp = quickProfit({ orderTotal: oSelling, totalCost: oCost, paidValue: oPaid, companyProfitPct: companyPct, deliveryFeeDeduction: delFeeDeduction });
+        const qp = quickProfit({ orderTotal: oSelling, totalCost: oCost, paidValue: oPaid, companyProfitPct: getOrderPct(oid), deliveryFeeDeduction: delFeeDeduction });
         const capitalReturn = Math.round(qp.recoveredCapital);
         totalFoundersProfit += qp.foundersProfit;
         totalCapitalReturn += capitalReturn;

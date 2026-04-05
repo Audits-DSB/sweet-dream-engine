@@ -248,7 +248,7 @@ export default function TreasuryAccountsPage() {
                   <td className="py-3 px-3"><Badge variant="outline">{t[("treasury_" + a.account_type) as keyof typeof t] as string || a.account_type}</Badge></td>
                   <td className="py-3 px-3">{a.custodian_name}</td>
                   <td className="py-3 px-3 text-muted-foreground">{a.bank_name ? `${a.bank_name} ${a.account_number ? "- " + a.account_number : ""}` : "—"}</td>
-                  <td className="py-3 px-3 font-semibold">{fmtMoney(Number(a.balance))} {t.egp}</td>
+                  <td className="py-3 px-3 font-semibold">{fmtMoney(a.name === "حساب الشركة" && companyProfit !== null ? companyProfit.netProfit : Number(a.balance))} {t.egp}</td>
                   <td className="py-3 px-3"><Badge variant={a.is_active ? "default" : "secondary"}>{a.is_active ? t.active : t.inactive}</Badge></td>
                   {canManage && (
                     <td className="py-3 px-3">
@@ -296,7 +296,7 @@ export default function TreasuryAccountsPage() {
               </div>
             </div>
             <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <RefreshCw className="h-3 w-3" />يتزامن تلقائياً مع رصيد حساب الشركة
+              <RefreshCw className="h-3 w-3" />محسوب تلقائياً من التحصيلات والمصروفات
             </span>
           </div>
         </div>

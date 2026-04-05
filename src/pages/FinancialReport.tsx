@@ -160,6 +160,11 @@ export default function FinancialReportPage() {
     queryFn: () => api.get<any[]>("/returns"),
   });
 
+  const { data: companyProfitSummary } = useQuery<{ totalCompanyProfit: number; totalExpenses: number; netProfit: number }>({
+    queryKey: ["company_profit_summary"],
+    queryFn: () => api.get("/company-profit-summary"),
+  });
+
   const returnDeductions = useMemo(() => {
     const map: Record<string, { returnedSelling: number; returnedCost: number }> = {};
     returnsData.forEach((ret: any) => {
@@ -185,7 +190,10 @@ export default function FinancialReportPage() {
   const cutoff = useMemo(() => subMonths(new Date(), monthCount), [monthCount]);
 
   const activeAccounts = useMemo(() => (accounts || []).filter((a) => a.isActive !== false), [accounts]);
-  const treasuryBalance = useMemo(() => activeAccounts.reduce((s, a) => s + parseAmount(a.balance), 0), [activeAccounts]);
+  const treasuryBalance = useMemo(() => activeAccounts.reduce((s, a) => {
+    if (a.name === "حساب الشركة" && companyProfitSummary) return s + companyProfitSummary.netProfit;
+    return s + parseAmount(a.balance);
+  }, 0), [activeAccounts, companyProfitSummary]);
 
   const { monthlyPnL, totals } = useMemo(() => {
     const monthlyData: Record<string, { revenue: number; cost: number; orderCount: number }> = {};
@@ -1084,7 +1092,8 @@ export default function FinancialReportPage() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {activeAccounts.map((a, i) => {
-                  const pct = treasuryBalance > 0 ? (parseAmount(a.balance) / treasuryBalance * 100) : 0;
+                  const accBal = (a.name === "حساب الشركة" && companyProfitSummary) ? companyProfitSummary.netProfit : parseAmount(a.balance);
+                  const pct = treasuryBalance > 0 ? (accBal / treasuryBalance * 100) : 0;
                   return (
                     <div
                       key={a.id}
@@ -1100,7 +1109,7 @@ export default function FinancialReportPage() {
                           <Wallet className="h-4 w-4" style={{ color: COLORS[i % COLORS.length] }} />
                         </div>
                       </div>
-                      <p className="text-lg font-bold">{fmtMoney(parseAmount(a.balance))} <span className="text-xs font-normal text-muted-foreground">{cur}</span></p>
+                      <p className="text-lg font-bold">{fmtMoney(accBal)} <span className="text-xs font-normal text-muted-foreground">{cur}</span></p>
                       <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
                         <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, background: COLORS[i % COLORS.length] }} />
                       </div>
