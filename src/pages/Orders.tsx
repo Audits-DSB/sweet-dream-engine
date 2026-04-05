@@ -593,7 +593,6 @@ export default function OrdersPage() {
   const orderSupplierComparison = (() => {
     const nonInv = orderItems.filter(i => !i.fromInventory && i.materialCode);
     if (nonInv.length === 0 || Object.keys(bestSuppliers).length === 0) return null;
-    const totalSell = nonInv.reduce((s, i) => s + i.sellingPrice * i.quantity, 0);
     const allSupplierIds = new Set<string>();
     const supplierNames: Record<string, string> = {};
     for (const item of nonInv) {
@@ -625,15 +624,12 @@ export default function OrdersPage() {
       }
     }
 
-    const results: { supplierId: string; supplierName: string; totalCost: number; totalProfit: number; profitPercent: number; coveredCount: number; missingCount: number; missingMats: string[]; isBest: boolean; isOptimalMix: boolean; optimalDetails?: typeof optimalDetails; details: { matCode: string; matName: string; price: number; available: boolean }[] }[] = [];
+    const results: { supplierId: string; supplierName: string; totalCost: number; coveredCount: number; missingCount: number; missingMats: string[]; isBest: boolean; isOptimalMix: boolean; optimalDetails?: typeof optimalDetails; details: { matCode: string; matName: string; price: number; available: boolean }[] }[] = [];
 
-    const optimalProfit = totalSell - optimalCost;
     results.push({
       supplierId: "__optimal__",
       supplierName: "التوزيع الأمثل",
       totalCost: optimalCost,
-      totalProfit: optimalProfit,
-      profitPercent: totalSell > 0 ? Math.round(optimalProfit / totalSell * 100) : 0,
       coveredCount: optCovered,
       missingCount: optMissing,
       missingMats: optMissingMats,
@@ -664,11 +660,10 @@ export default function OrdersPage() {
           details.push({ matCode: item.materialCode, matName: item.name, price: item.costPrice, available: false });
         }
       }
-      const profit = totalSell - totalCost;
-      results.push({ supplierId: sid, supplierName: supplierNames[sid], totalCost, totalProfit: profit, profitPercent: totalSell > 0 ? Math.round(profit / totalSell * 100) : 0, coveredCount, missingCount, missingMats, isBest: false, isOptimalMix: false, details });
+      results.push({ supplierId: sid, supplierName: supplierNames[sid], totalCost, coveredCount, missingCount, missingMats, isBest: false, isOptimalMix: false, details });
     }
 
-    results.sort((a, b) => b.totalProfit - a.totalProfit);
+    results.sort((a, b) => a.totalCost - b.totalCost);
     if (results.length > 0) results[0].isBest = true;
     return results;
   })();
@@ -1376,15 +1371,15 @@ export default function OrdersPage() {
                 <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10 p-3 space-y-2">
                   <div className="flex items-center gap-2 text-xs font-semibold text-blue-800 dark:text-blue-200">
                     <Package className="h-4 w-4" />
-                    <span>مقارنة الربح حسب المورد</span>
+                    <span>مقارنة تكلفة الموردين</span>
                   </div>
                   {orderSupplierComparison.length >= 2 && (() => {
-                    const best = orderSupplierComparison[0];
-                    const worst = orderSupplierComparison[orderSupplierComparison.length - 1];
-                    const saving = best.totalProfit - worst.totalProfit;
+                    const cheapest = orderSupplierComparison[0].totalCost;
+                    const mostExpensive = orderSupplierComparison[orderSupplierComparison.length - 1].totalCost;
+                    const saving = mostExpensive - cheapest;
                     return saving > 0 ? (
                       <div className="text-[10px] font-bold text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded text-center">
-                        فرق الربح بين الأفضل والأغلى: {saving.toLocaleString()} ج.م
+                        وفّر حتى {saving.toLocaleString()} ج.م باختيار الأرخص
                       </div>
                     ) : null;
                   })()}
@@ -1394,15 +1389,18 @@ export default function OrdersPage() {
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 min-w-0">
                             {comp.isBest && <span className="text-green-600 text-sm">⭐</span>}
-                            {comp.isBest && <span className="bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-200 px-1.5 py-0.5 rounded text-[10px] font-bold">أعلى ربح</span>}
+                            {comp.isBest && <span className="bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-200 px-1.5 py-0.5 rounded text-[10px] font-bold">الأرخص</span>}
                             {comp.isOptimalMix && !comp.isBest && <span className="bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200 px-1.5 py-0.5 rounded text-[10px] font-bold">توزيع أمثل</span>}
                             <span className="font-semibold truncate">{comp.supplierName}</span>
                             <span className="text-muted-foreground">({comp.coveredCount}/{orderItems.filter(i => !i.fromInventory).length} مادة)</span>
                           </div>
                           <div className="flex items-center gap-3 flex-shrink-0">
                             <div className="text-left">
-                              <div className={`font-bold ${comp.isBest ? "text-green-700 dark:text-green-300" : ""}`}>ربح: {comp.totalProfit.toLocaleString()} ج.م</div>
-                              <div className="text-[9px] text-muted-foreground">تكلفة: {comp.totalCost.toLocaleString()} · هامش {comp.profitPercent}%</div>
+                              <span className={`font-bold text-sm ${comp.isBest ? "text-green-700 dark:text-green-300" : ""}`}>{comp.totalCost.toLocaleString()} ج.م</span>
+                              {!comp.isBest && orderSupplierComparison![0] && (() => {
+                                const diff = comp.totalCost - orderSupplierComparison![0].totalCost;
+                                return diff > 0 ? <div className="text-[9px] text-red-500">+{diff.toLocaleString()} ج.م من الأرخص</div> : null;
+                              })()}
                             </div>
                             <button type="button" className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700" onClick={() => {
                               if (comp.isOptimalMix && comp.optimalDetails) {
