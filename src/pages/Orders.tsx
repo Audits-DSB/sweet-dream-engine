@@ -514,9 +514,16 @@ export default function OrdersPage() {
     }
   };
 
+  const [actualInventoryValue, setActualInventoryValue] = useState(0);
+  useEffect(() => {
+    fetch("/api/company-inventory").then(r => r.json()).then((lots: any[]) => {
+      const val = (lots || []).filter((l: any) => parseFloat(l.remaining) > 0).reduce((s: number, l: any) => s + parseFloat(l.remaining) * parseFloat(l.cost_price || l.costPrice || 0), 0);
+      setActualInventoryValue(val);
+    }).catch(() => {});
+  }, [orders]);
+
   const totalStats = useMemo(() => {
     const clientOrders = filtered.filter(o => o.clientId !== "company-inventory");
-    const inventoryOrders = filtered.filter(o => o.clientId === "company-inventory");
     const totalSelling = clientOrders.reduce((s, o) => s + Number(o.totalSelling), 0);
     const totalCost = clientOrders.reduce((s, o) => s + Number(o.totalCost), 0);
     const activeCount = filtered.filter(o => ["Processing", "Draft", "Confirmed", "Ready for Delivery", "Awaiting Purchase"].includes(o.status)).length;
@@ -524,9 +531,8 @@ export default function OrdersPage() {
     const totalCollPaid = allClientOrders.reduce((s, o) => s + (collectionsMap[o.id]?.paid || 0), 0);
     const allOrdersSelling = allClientOrders.reduce((s, o) => s + Number(o.totalSelling), 0);
     const collPct = allOrdersSelling > 0 ? Math.round((totalCollPaid / allOrdersSelling) * 100) : 0;
-    const inventoryValue = inventoryOrders.reduce((s, o) => s + Number(o.totalCost), 0);
-    return { totalSelling, totalCost, profit: totalSelling - totalCost, activeCount, collPct, totalCollPaid, allOrdersSelling, inventoryValue };
-  }, [filtered, orders, collectionsMap]);
+    return { totalSelling, totalCost, profit: totalSelling - totalCost, activeCount, collPct, totalCollPaid, allOrdersSelling, inventoryValue: actualInventoryValue };
+  }, [filtered, orders, collectionsMap, actualInventoryValue]);
 
   const usedMaterialCodes = orderItems.map(i => i.materialCode);
   const filteredMaterials = useMemo(() => realMaterials.filter(m => {
