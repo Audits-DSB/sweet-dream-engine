@@ -224,6 +224,12 @@
   .print\:p-0 { padding: 0 !important; }
   .print\:max-w-none { max-width: none !important; }
   .print\:overflow-visible { overflow: visible !important; overflow-x: visible !important; overflow-y: visible !important; }
+  .print-report-page,
+  .print-report-page * {
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+  }
   .print\:break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
   .print\:mt-4 { margin-top: 1rem !important; }
   .recharts-wrapper { page-break-inside: avoid; break-inside: avoid; }
