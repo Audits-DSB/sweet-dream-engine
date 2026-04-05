@@ -1450,6 +1450,101 @@ export default function OrdersPage() {
                 </div>
               )}
 
+              {orderSupplierComparison && orderSupplierComparison.length > 1 && (() => {
+                const nonInv = orderItems.filter(i => !i.fromInventory && i.materialCode);
+                if (nonInv.length < 1) return null;
+                const singleSuppliers = orderSupplierComparison.filter(c => !c.isOptimalMix);
+                if (singleSuppliers.length === 0) return null;
+
+                type SupRank = { supplierId: string; supplierName: string; bestInMats: { matCode: string; matName: string; qty: number; sellPrice: number; costPrice: number; profit: number; totalProfit: number }[]; bestInScore: number; bestInCount: number; totalCost: number; coveredCount: number; missingCount: number };
+                const ranked: SupRank[] = [];
+                for (const comp of singleSuppliers) {
+                  const bestInMats: SupRank["bestInMats"] = [];
+                  for (const d of comp.details) {
+                    if (!d.available) continue;
+                    const item = nonInv.find(i => i.materialCode === d.matCode);
+                    if (!item) continue;
+                    const bs = bestSuppliers[d.matCode];
+                    const isBest = bs && bs.bestPrice > 0 && d.price <= bs.bestPrice;
+                    if (isBest) {
+                      const profit = item.sellingPrice - d.price;
+                      bestInMats.push({ matCode: d.matCode, matName: d.matName, qty: item.quantity, sellPrice: item.sellingPrice, costPrice: d.price, profit, totalProfit: profit * item.quantity });
+                    }
+                  }
+                  const bestInScore = bestInMats.reduce((s, m) => s + m.totalProfit, 0);
+                  ranked.push({ supplierId: comp.supplierId, supplierName: comp.supplierName, bestInMats, bestInScore, bestInCount: bestInMats.length, totalCost: comp.totalCost, coveredCount: comp.coveredCount, missingCount: comp.missingCount });
+                }
+                ranked.sort((a, b) => b.bestInScore - a.bestInScore);
+                if (ranked.length === 0 || ranked[0].bestInCount === 0) return null;
+                const winner = ranked[0];
+
+                return (
+                  <div className="rounded-md border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-900/10 p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-green-800 dark:text-green-200">
+                      <ShoppingCart className="h-4 w-4" />
+                      <span>ترشيح مورد واحد للأوردر كامل</span>
+                    </div>
+                    <div className="rounded-md border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-600 text-sm">⭐</span>
+                          <span className="font-bold text-sm">{winner.supplierName}</span>
+                          <span className="text-[10px] bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-200 px-1.5 py-0.5 rounded font-bold">الأفضل</span>
+                        </div>
+                        <button type="button" className="text-[10px] bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700" onClick={() => {
+                          setOrderItems(prev => prev.map(item => {
+                            if (item.fromInventory) return item;
+                            const bs2 = bestSuppliers[item.materialCode];
+                            const supData = bs2?.allSuppliers?.find((s: any) => s.supplierId === winner.supplierId);
+                            if (supData) return { ...item, supplierId: winner.supplierId, costPrice: supData.lastPrice || supData.avgPrice || item.costPrice };
+                            return { ...item, supplierId: winner.supplierId };
+                          }));
+                          toast.success(`تم اختيار "${winner.supplierName}" لجميع المواد`);
+                        }}>
+                          اختيار
+                        </button>
+                      </div>
+
+                      <div className="mt-2 text-[10px] font-medium text-green-800 dark:text-green-200">أفضل سعر في {winner.bestInCount} من {nonInv.length} مادة — إجمالي ربح من المواد دي: {winner.bestInScore.toLocaleString()} ج.م</div>
+
+                      <div className="mt-1 space-y-0.5">
+                        {winner.bestInMats.map((m, mi) => (
+                          <div key={mi} className="flex items-center justify-between text-[10px] bg-green-100/50 dark:bg-green-900/30 rounded px-1.5 py-0.5">
+                            <span className="text-muted-foreground">{m.matName} <span className="font-mono">×{m.qty}</span></span>
+                            <span className="flex items-center gap-2">
+                              <span className="text-muted-foreground">شراء: {m.costPrice.toLocaleString()}</span>
+                              <span className="text-muted-foreground">بيع: {m.sellPrice.toLocaleString()}</span>
+                              <span className="font-bold text-green-700 dark:text-green-300">ربح: {m.totalProfit.toLocaleString()} ج.م</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {ranked.length > 1 && (
+                        <div className="mt-2 border-t border-green-200 dark:border-green-700 pt-1.5">
+                          <div className="text-[10px] font-medium text-muted-foreground mb-1">مقارنة بباقي الموردين:</div>
+                          <div className="space-y-0.5">
+                            {ranked.slice(1, 4).map((r, ri) => {
+                              const diff = winner.bestInScore - r.bestInScore;
+                              return (
+                                <div key={ri} className="flex items-center justify-between text-[10px] bg-muted/30 rounded px-1.5 py-0.5">
+                                  <span className="font-medium">{r.supplierName}</span>
+                                  <span className="flex items-center gap-2">
+                                    <span className="text-muted-foreground">أفضل في {r.bestInCount} مادة</span>
+                                    <span className="text-muted-foreground">ربح: {r.bestInScore.toLocaleString()} ج.م</span>
+                                    {diff > 0 && <span className="text-red-500 font-medium">−{diff.toLocaleString()} ج.م</span>}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {orderItems.length > 0 && (
                 <div className="bg-muted/40 rounded-md p-3 text-xs space-y-1">
                   <div className="flex justify-between"><span className="text-muted-foreground">{t.totalSelling}:</span><span className="font-medium">{totalSelling.toLocaleString()} {t.currency}</span></div>
