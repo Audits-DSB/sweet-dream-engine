@@ -1187,6 +1187,7 @@ export default function OrdersPage() {
                 </div>
               )}
 
+              <div className="text-[9px] text-red-500 bg-red-50 p-1 rounded">DEBUG: bestSuppliers keys={Object.keys(bestSuppliers).length}, items={orderItems.length}, comparison={orderSupplierComparison ? orderSupplierComparison.length : 'null'}</div>
               {orderItems.length === 0 ? (
                 <div className="text-center py-6 border border-dashed border-border rounded-md text-muted-foreground text-xs">{t.noItemsAdded}</div>
               ) : (
