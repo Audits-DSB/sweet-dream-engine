@@ -561,6 +561,44 @@ export default function OrdersPage() {
 
   const removeItem = (index: number) => setOrderItems(orderItems.filter((_, i) => i !== index));
 
+  useEffect(() => {
+    if (Object.keys(bestSuppliers).length === 0 || orderItems.length === 0) return;
+    let changed = false;
+    const updated = orderItems.map(item => {
+      if (item.fromInventory) return item;
+      const bs = bestSuppliers[item.materialCode];
+      if (!bs || !bs.bestSupplierId) return item;
+      const needsCost = item.costPrice === 0 && bs.bestPrice > 0;
+      const needsSupplier = !item.supplierId && bs.bestSupplierId;
+      if (needsCost || needsSupplier) {
+        changed = true;
+        return { ...item, costPrice: needsCost ? bs.bestPrice : item.costPrice, supplierId: needsSupplier ? bs.bestSupplierId : item.supplierId };
+      }
+      return item;
+    });
+    if (changed) setOrderItems(updated);
+  }, [bestSuppliers]);
+
+  const bundleSuggestion = (() => {
+    const nonInv = orderItems.filter(i => !i.fromInventory && i.materialCode);
+    if (nonInv.length < 2) return null;
+    const supplierMats: Record<string, { name: string; mats: string[]; totalCost: number }> = {};
+    for (const item of nonInv) {
+      const bs = bestSuppliers[item.materialCode];
+      if (!bs?.allSuppliers) continue;
+      for (const s of bs.allSuppliers) {
+        if (!supplierMats[s.supplierId]) supplierMats[s.supplierId] = { name: s.supplierName, mats: [], totalCost: 0 };
+        if (!supplierMats[s.supplierId].mats.includes(item.materialCode)) {
+          supplierMats[s.supplierId].mats.push(item.materialCode);
+          supplierMats[s.supplierId].totalCost += (s.avgPrice || s.lastPrice || 0) * item.quantity;
+        }
+      }
+    }
+    const best = Object.entries(supplierMats).filter(([, v]) => v.mats.length >= 2).sort((a, b) => b[1].mats.length - a[1].mats.length)[0];
+    if (!best) return null;
+    return { supplierId: best[0], supplierName: best[1].name, materialsCount: best[1].mats.length, estimatedCost: best[1].totalCost };
+  })();
+
   const totalSelling = orderItems.reduce((sum, i) => sum + i.sellingPrice * i.quantity, 0);
   const totalCost = orderItems.reduce((sum, i) => sum + i.costPrice * i.quantity, 0);
   const nonInventoryCostDisplay = orderItems.filter(i => !i.fromInventory).reduce((sum, i) => sum + i.costPrice * i.quantity, 0);
@@ -1250,6 +1288,31 @@ export default function OrdersPage() {
                       )}
                     </div>
                   ))}
+                </div>
+              )}
+
+              {bundleSuggestion && orderItems.length >= 2 && (
+                <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-2.5">
+                  <div className="flex items-center gap-2 text-xs">
+                    <Package className="h-4 w-4 text-blue-600 shrink-0" />
+                    <div className="flex-1">
+                      <span className="font-medium text-blue-800 dark:text-blue-200">ترشيح مورد واحد: </span>
+                      <span className="text-blue-700 dark:text-blue-300">{bundleSuggestion.supplierName} يوفر {bundleSuggestion.materialsCount} مواد</span>
+                      <span className="text-blue-600/70 dark:text-blue-400/70 mr-1"> — تكلفة تقديرية: {bundleSuggestion.estimatedCost.toLocaleString()} ج.م</span>
+                    </div>
+                    <button type="button" className="text-[10px] text-blue-700 hover:underline font-medium whitespace-nowrap" onClick={() => {
+                      setOrderItems(prev => prev.map(item => {
+                        if (item.fromInventory) return item;
+                        const bs = bestSuppliers[item.materialCode];
+                        const supData = bs?.allSuppliers?.find((s: any) => s.supplierId === bundleSuggestion.supplierId);
+                        if (supData) return { ...item, supplierId: bundleSuggestion.supplierId, costPrice: supData.minPrice || supData.lastPrice || item.costPrice };
+                        return item;
+                      }));
+                      toast.success(`تم اختيار "${bundleSuggestion.supplierName}" لجميع المواد المتاحة`);
+                    }}>
+                      تطبيق
+                    </button>
+                  </div>
                 </div>
               )}
 
