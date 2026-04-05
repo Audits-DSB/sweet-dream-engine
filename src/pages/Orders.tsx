@@ -1809,14 +1809,14 @@ export default function OrdersPage() {
                       return (
                         <div className="mt-1 border-t border-border pt-1.5">
                           <div className="text-[10px] font-medium text-muted-foreground mb-1">تطور السعر:</div>
-                          <div className="flex items-end gap-0.5 h-10">
+                          <div style={{ display: "flex", alignItems: "flex-end", gap: "3px", height: "40px" }}>
                             {sorted.map((h: any, i: number) => {
                               const p = h.costPrice || 0;
-                              const pct = range > 0 ? ((p - minP) / range) * 70 + 30 : 50;
+                              const barH = range > 0 ? Math.round(((p - minP) / range) * 28 + 12) : 20;
                               const isLast = i === sorted.length - 1;
                               return (
-                                <div key={i} className="flex-1 flex flex-col items-center gap-0.5" title={`${h.date}: ${p.toLocaleString()} ج.م`}>
-                                  <div className={`w-full rounded-t ${isLast ? "bg-primary" : "bg-primary/40"}`} style={{ height: `${pct}%` }} />
+                                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }} title={`${h.date}: ${p.toLocaleString()} ج.م`}>
+                                  <div style={{ width: "100%", height: `${barH}px`, borderRadius: "3px 3px 0 0", backgroundColor: isLast ? "#f97316" : "rgba(249,115,22,0.4)" }} />
                                 </div>
                               );
                             })}
