@@ -109,6 +109,7 @@ export default function OrdersPage() {
   const [showInventoryPicker, setShowInventoryPicker] = useState(false);
   const [bestSuppliers, setBestSuppliers] = useState<Record<string, { materialName: string; supplierCount: number; bestSupplierId: string; bestSupplierName: string; bestPrice: number; allSuppliers: any[] }>>({});
   const [showCompareCard, setShowCompareCard] = useState<string | null>(null);
+  const [historyDialog, setHistoryDialog] = useState<{ open: boolean; code: string; name: string; data: any | null; loading: boolean }>({ open: false, code: "", name: "", data: null, loading: false });
   const [selectedFounders, setSelectedFounders] = useState<string[]>([]);
   const [founderPcts, setFounderPcts] = useState<Record<string, number>>({});
   const [collectionsMap, setCollectionsMap] = useState<Record<string, { paid: number; total: number; collectionId: string; status: string; date: string }>>({});
@@ -532,6 +533,13 @@ export default function OrdersPage() {
     if (!materialSearch) return true;
     return m.name.toLowerCase().includes(materialSearch.toLowerCase()) || m.code.toLowerCase().includes(materialSearch.toLowerCase()) || m.category.toLowerCase().includes(materialSearch.toLowerCase());
   }), [materialSearch, usedMaterialCodes, realMaterials]);
+
+  const openSupplierHistory = (code: string, name: string) => {
+    setHistoryDialog({ open: true, code, name, data: null, loading: true });
+    api.get<any>(`/material-supplier-history/${code}`)
+      .then(d => setHistoryDialog(prev => ({ ...prev, data: d, loading: false })))
+      .catch(() => setHistoryDialog(prev => ({ ...prev, loading: false })));
+  };
 
   const addMaterialDirectly = (mat: MaterialItem) => {
     setOrderItems([{ materialCode: mat.code, name: mat.name, quantity: 1, sellingPrice: orderType === "inventory" ? 0 : mat.sellingPrice, costPrice: mat.storeCost, imageUrl: mat.imageUrl, unit: mat.unit, supplierId: selectedSupplier || "" }, ...orderItems]);
@@ -1125,7 +1133,10 @@ export default function OrdersPage() {
                             <span className="font-mono text-muted-foreground">{item.materialCode}</span>
                           </div>
                         </div>
-                        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => removeItem(idx)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        <div className="flex items-center gap-1">
+                          <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700" title="تاريخ الموردين" onClick={(e) => { e.stopPropagation(); openSupplierHistory(item.materialCode, item.name); }}><Clock className="h-3.5 w-3.5" /></Button>
+                          <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => removeItem(idx)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        </div>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <div><Label className="text-[10px] text-muted-foreground">{t.quantity}</Label><Input className="h-7 text-xs mt-0.5" type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", parseInt(e.target.value) || 1)} /></div>
@@ -1503,6 +1514,77 @@ export default function OrdersPage() {
                 </p>
               )}
             </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={historyDialog.open} onOpenChange={(open) => { if (!open) setHistoryDialog({ open: false, code: "", name: "", data: null, loading: false }); }}>
+        <DialogContent className="max-w-lg max-h-[80vh]" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              تاريخ الموردين — {historyDialog.name}
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+            {historyDialog.loading ? (
+              <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>جاري التحميل...</span>
+              </div>
+            ) : !historyDialog.data || (historyDialog.data.suppliers || []).length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Package className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                <div className="text-sm">لا يوجد تاريخ موردين لهذه المادة</div>
+                <div className="text-xs mt-1">ستظهر البيانات بعد إضافة موردين للطلبات</div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {historyDialog.data.bestSupplierId && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-xs">
+                    <span className="text-green-600 font-bold">⭐</span>
+                    <span>أفضل مورد: <span className="font-semibold">{historyDialog.data.suppliers.find((s: any) => s.supplierId === historyDialog.data.bestSupplierId)?.supplierName || ""}</span></span>
+                  </div>
+                )}
+                {historyDialog.data.suppliers.map((s: any) => (
+                  <div key={s.supplierId} className={`rounded-lg border p-3 space-y-2 ${s.supplierId === historyDialog.data.bestSupplierId ? "border-green-300 bg-green-50/30 dark:bg-green-900/10" : "border-border"}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {s.supplierId === historyDialog.data.bestSupplierId && <span className="text-green-600">⭐</span>}
+                        <span className="font-semibold text-sm">{s.supplierName}</span>
+                        {s.country && <span className="text-[10px] text-muted-foreground">({s.country})</span>}
+                      </div>
+                      {s.avgRating > 0 && <span className="text-amber-500 font-bold text-xs">★ {s.avgRating}</span>}
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 text-[11px]">
+                      <div className="text-center p-1.5 rounded bg-muted/50">
+                        <div className="font-semibold">{s.lastPrice?.toLocaleString()}</div>
+                        <div className="text-muted-foreground">آخر سعر</div>
+                      </div>
+                      <div className="text-center p-1.5 rounded bg-muted/50">
+                        <div className="font-semibold text-green-600">{s.minPrice?.toLocaleString()}</div>
+                        <div className="text-muted-foreground">أقل سعر</div>
+                      </div>
+                      <div className="text-center p-1.5 rounded bg-muted/50">
+                        <div className="font-semibold">{s.avgPrice?.toLocaleString()}</div>
+                        <div className="text-muted-foreground">متوسط</div>
+                      </div>
+                      <div className="text-center p-1.5 rounded bg-muted/50">
+                        <div className="font-semibold">{s.supplyCount}</div>
+                        <div className="text-muted-foreground">مرات</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>آخر توريد: {s.lastDate || "—"}</span>
+                      {s.priceChangePercent !== 0 && (
+                        <span className={`font-medium ${s.priceChangePercent > 0 ? "text-red-500" : "text-green-500"}`}>
+                          {s.priceChangePercent > 0 ? "↑" : "↓"} {Math.abs(s.priceChangePercent)}% عن السعر السابق
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </ScrollArea>
         </DialogContent>
       </Dialog>
