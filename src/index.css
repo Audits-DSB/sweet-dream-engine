@@ -397,9 +397,22 @@
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+  .print-report-page table {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
   .print-report-page tbody tr {
-    break-inside: avoid;
-    page-break-inside: avoid;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  .print-report-page table.table-fixed colgroup col:nth-child(2),
+  .print-report-page table.table-fixed thead th:nth-child(2),
+  .print-report-page table.table-fixed tbody td:nth-child(2) {
+    display: none !important;
+  }
+  .print-report-page td {
+    vertical-align: middle !important;
+    line-height: 1.2 !important;
   }
   .print-report-page thead {
     display: table-header-group;
