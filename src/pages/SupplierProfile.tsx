@@ -115,6 +115,11 @@ export default function SupplierProfile() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const [ratings, setRatings] = useState<any[]>([]);
+  const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
+  const [ratingForm, setRatingForm] = useState({ qualityRating: 5, deliveryRating: 5, quantityRating: 5, notes: "", orderId: "" });
+  const [ratingSaving, setRatingSaving] = useState(false);
+
   const loadProfile = () => {
     if (!id) return;
     setLoading(true);
@@ -130,7 +135,39 @@ export default function SupplierProfile() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadProfile(); }, [id]);
+  const loadRatings = () => {
+    if (!id) return;
+    api.get<any[]>(`/supplier-ratings/${id}`).then(data => setRatings(data || [])).catch(() => {});
+  };
+
+  const handleSubmitRating = async () => {
+    if (!id) return;
+    setRatingSaving(true);
+    try {
+      await api.post("/supplier-ratings", { supplierId: id, ...ratingForm, ratedBy: _userName });
+      toast.success("تم حفظ التقييم");
+      setRatingDialogOpen(false);
+      setRatingForm({ qualityRating: 5, deliveryRating: 5, quantityRating: 5, notes: "", orderId: "" });
+      loadRatings();
+    } catch { toast.error("فشل حفظ التقييم"); }
+    finally { setRatingSaving(false); }
+  };
+
+  const handleDeleteRating = async (rId: string) => {
+    try {
+      await api.delete(`/supplier-ratings/${rId}`);
+      toast.success("تم حذف التقييم");
+      loadRatings();
+    } catch { toast.error("فشل حذف التقييم"); }
+  };
+
+  const avgRating = useMemo(() => {
+    if (ratings.length === 0) return null;
+    const avg = ratings.reduce((s, r) => s + Number(r.overallRating || 0), 0) / ratings.length;
+    return Math.round(avg * 10) / 10;
+  }, [ratings]);
+
+  useEffect(() => { loadProfile(); loadRatings(); }, [id]);
 
   const handleOpenEdit = () => {
     if (!supplier) return;
@@ -354,6 +391,11 @@ export default function SupplierProfile() {
           <TabsTrigger value="analytics" className="gap-1.5">
             <BarChart3 className="h-3.5 w-3.5" />
             التحليلات
+          </TabsTrigger>
+          <TabsTrigger value="ratings" className="gap-1.5">
+            <TrendingUp className="h-3.5 w-3.5" />
+            التقييمات
+            {avgRating !== null && <Badge variant="secondary" className="h-4 text-[10px] px-1">★{avgRating}</Badge>}
           </TabsTrigger>
         </TabsList>
 
@@ -623,7 +665,118 @@ export default function SupplierProfile() {
             </>
           )}
         </TabsContent>
+
+        <TabsContent value="ratings" className="space-y-4 mt-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {avgRating !== null && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                  <span className="text-2xl font-bold text-amber-600">{avgRating}</span>
+                  <div className="text-xs text-muted-foreground">
+                    <div className="text-amber-500">{"★".repeat(Math.round(avgRating))}</div>
+                    <div>{ratings.length} تقييم</div>
+                  </div>
+                </div>
+              )}
+              {avgRating !== null && (
+                <div className="grid grid-cols-3 gap-3 text-[11px]">
+                  <div className="text-center">
+                    <div className="font-semibold">{(ratings.reduce((s, r) => s + Number(r.qualityRating || 0), 0) / ratings.length).toFixed(1)}</div>
+                    <div className="text-muted-foreground">الجودة</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-semibold">{(ratings.reduce((s, r) => s + Number(r.deliveryRating || 0), 0) / ratings.length).toFixed(1)}</div>
+                    <div className="text-muted-foreground">التوصيل</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-semibold">{(ratings.reduce((s, r) => s + Number(r.quantityRating || 0), 0) / ratings.length).toFixed(1)}</div>
+                    <div className="text-muted-foreground">الكميات</div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <Button size="sm" onClick={() => setRatingDialogOpen(true)}>
+              <TrendingUp className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />
+              إضافة تقييم
+            </Button>
+          </div>
+          {ratings.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              <TrendingUp className="h-10 w-10 mx-auto mb-2 opacity-30" />
+              <div>لا توجد تقييمات بعد</div>
+              <div className="text-xs">أضف تقييمك الأول لهذا المورد</div>
+            </div>
+          )}
+          <div className="space-y-2">
+            {ratings.map((r: any) => (
+              <div key={r.id} className="rounded-lg border border-border p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-500 font-bold">★ {Number(r.overallRating || 0).toFixed(1)}</span>
+                    {r.orderId && <Link to={`/orders/${r.orderId}`} className="text-[10px] text-blue-600 hover:underline">طلب {r.orderId}</Link>}
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                    <span>{r.ratedBy}</span>
+                    <span>{(r.createdAt || "").split("T")[0]}</span>
+                    <button className="text-destructive hover:underline" onClick={() => handleDeleteRating(r.id)}>حذف</button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 text-[11px]">
+                  <span>الجودة: <span className="font-medium">{r.qualityRating}/5</span></span>
+                  <span>التوصيل: <span className="font-medium">{r.deliveryRating}/5</span></span>
+                  <span>الكميات: <span className="font-medium">{r.quantityRating}/5</span></span>
+                </div>
+                {r.notes && <div className="text-xs text-muted-foreground">{r.notes}</div>}
+              </div>
+            ))}
+          </div>
+        </TabsContent>
       </Tabs>
+
+      <Dialog open={ratingDialogOpen} onOpenChange={setRatingDialogOpen}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader><DialogTitle>تقييم المورد</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">الطلب (اختياري)</Label>
+              <Select value={ratingForm.orderId || "__none__"} onValueChange={v => setRatingForm(f => ({ ...f, orderId: v === "__none__" ? "" : v }))}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="اختر طلب" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— بدون طلب محدد —</SelectItem>
+                  {orders.map(o => <SelectItem key={o.id} value={o.id}>{o.id} - {o.client}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {[
+              { key: "qualityRating", label: "جودة البضاعة" },
+              { key: "deliveryRating", label: "سرعة التوريد" },
+              { key: "quantityRating", label: "الالتزام بالكميات" },
+            ].map(({ key, label }) => (
+              <div key={key} className="space-y-1.5">
+                <Label className="text-xs">{label}</Label>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map(v => (
+                    <button key={v} type="button" className={`text-xl ${v <= (ratingForm as any)[key] ? "text-amber-400" : "text-gray-300"}`} onClick={() => setRatingForm(f => ({ ...f, [key]: v }))}>
+                      ★
+                    </button>
+                  ))}
+                  <span className="text-xs text-muted-foreground mr-2">{(ratingForm as any)[key]}/5</span>
+                </div>
+              </div>
+            ))}
+            <div className="space-y-1.5">
+              <Label className="text-xs">ملاحظات</Label>
+              <Input className="h-9" value={ratingForm.notes} onChange={e => setRatingForm(f => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات إضافية..." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRatingDialogOpen(false)}>إلغاء</Button>
+            <Button onClick={handleSubmitRating} disabled={ratingSaving}>
+              {ratingSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "حفظ التقييم"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-lg" dir="rtl">

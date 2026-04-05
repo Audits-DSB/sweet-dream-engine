@@ -240,6 +240,21 @@ npx tsx server/index.ts   # starts Express on 5000, spawns Vite on 5001
 - **Server endpoint**: `GET /api/material-last-suppliers` returns `{ materials: {code → {supplierId, supplierName, lastCostPrice, lastOrderDate}}, pending: {code → orderIds[]} }`
 - **Per-line supplier editing**: OrderDetails edit mode now has supplier dropdown on each existing and new line item
 
+## Supplier Intelligence System
+- **`supplier_ratings` table**: Created via pgPool (direct PostgreSQL), NOT through Supabase PostgREST (schema cache issue). All CRUD uses `pgPool` in `server/routes.ts`.
+- **API Endpoints**:
+  - `GET /api/material-supplier-history/:code` — Full supplier history per material (prices, dates, ratings)
+  - `GET /api/material-best-suppliers` — Best supplier (lowest price) for all materials with all supplier comparisons
+  - `GET /api/supplier-bundle-check?codes=a,b,c` — Single-supplier bundles for multiple materials
+  - `GET /api/supplier-ratings` / `GET /api/supplier-ratings/:supplierId` — Rating records
+  - `POST /api/supplier-ratings` — Create rating (quality/delivery/quantity 0-5, auto-computes overall)
+  - `DELETE /api/supplier-ratings/:id` — Remove rating
+  - `GET /api/supplier-ranking` — Ranked supplier list (score = avgRating*20 + priceBeatPercent + min(orders,10)*2)
+- **Frontend**:
+  - `OrderDetails.tsx`: Best supplier badge on line items, price comparison popup card (all suppliers with last/min/avg price, ↑↓ arrows, star ratings), auto-select best supplier button, bundle suggestion panel
+  - `SupplierProfile.tsx`: "Ratings" tab with star-based rating form, avg rating display, history list with delete
+  - `Suppliers.tsx`: "ترتيب الموردين" ranking view with gold/silver/bronze medals, orders/materials/purchases stats
+
 ## Delivery-Order Sync System
 - **Per-line delivery tracking**: OrderDetails.tsx computes delivered/remaining quantities per order line from all linked deliveries
 - **Partial delivery items**: Stored as JSON in delivery `notes` field: `{ type: "جزئي", items: [{ lineId, materialCode, materialName, qty, unit }] }`

@@ -156,6 +156,9 @@ export default function OrderDetails() {
   const [companyLots, setCompanyLots] = useState<{ id: string; materialCode: string; materialName: string; unit: string; remaining: number; costPrice: number; supplierId?: string; sourceOrder?: string }[]>([]);
   const [showEditInventoryPicker, setShowEditInventoryPicker] = useState(false);
   const [editInventorySearch, setEditInventorySearch] = useState("");
+  const [bestSuppliers, setBestSuppliers] = useState<Record<string, { materialName: string; supplierCount: number; bestSupplierId: string; bestSupplierName: string; bestPrice: number; bestLastPrice: number; allSuppliers: any[]; reorderAlert: any }>>({});
+  const [showCompareCard, setShowCompareCard] = useState<string | null>(null);
+  const [bundleSuggestions, setBundleSuggestions] = useState<any[]>([]);
 
   const loadOrder = () =>
     Promise.all([
@@ -535,6 +538,7 @@ export default function OrderDetails() {
     setEditDeletedLineIds([]);
     setEditMatSearch("");
     setEditOpen(true);
+    api.get<Record<string, any>>("/material-best-suppliers").then(data => setBestSuppliers(data || {})).catch(() => {});
   };
 
   const usedCodesInEdit = useMemo(() => {
@@ -542,6 +546,13 @@ export default function OrderDetails() {
     const newCodes = editNewItems.map(i => i.materialCode);
     return [...existing, ...newCodes];
   }, [editLines, editDeletedLineIds, editNewItems]);
+
+  useEffect(() => {
+    if (!editOpen) return;
+    const codes = [...editLines.filter(l => !editDeletedLineIds.includes(l.id)).map(l => l.materialCode), ...editNewItems.map(i => i.materialCode)].filter(Boolean);
+    if (codes.length < 2) { setBundleSuggestions([]); return; }
+    api.post<{ bundles: any[] }>("/supplier-bundle-check", { materialCodes: codes }).then(r => setBundleSuggestions(r?.bundles || [])).catch(() => setBundleSuggestions([]));
+  }, [editOpen, editLines.length, editNewItems.length, editDeletedLineIds.length]);
 
   const filteredEditMaterials = useMemo(() => extMaterials.filter(m => {
     if (usedCodesInEdit.includes(m.sku)) return false;
@@ -1053,6 +1064,73 @@ export default function OrderDetails() {
                             ))}
                           </SelectContent>
                         </Select>
+                        {(() => {
+                          const bs = bestSuppliers[el.materialCode];
+                          if (!bs || bs.supplierCount < 1) return null;
+                          const currentSid = el._supplierId || "";
+                          const isBest = currentSid === bs.bestSupplierId;
+                          const currentSupData = bs.allSuppliers?.find((s: any) => s.supplierId === currentSid);
+                          const priceChange = currentSupData?.priceChangePercent || 0;
+                          return (
+                            <div className="space-y-1.5 mt-1">
+                              {bs.supplierCount > 1 && !isBest && bs.bestSupplierName && (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                                    ⭐ أفضل سعر: {bs.bestPrice.toLocaleString()} ج.م عند {bs.bestSupplierName}
+                                  </span>
+                                  <button type="button" className="text-[10px] text-blue-600 hover:underline" onClick={() => { const realIdx = editLines.findIndex(p => p.id === el.id); setEditLines(prev => prev.map((p, i) => i === realIdx ? { ...p, _supplierId: bs.bestSupplierId, _cost: String(bs.bestPrice) } : p)); }}>
+                                    اختيار تلقائي
+                                  </button>
+                                </div>
+                              )}
+                              {isBest && bs.supplierCount > 1 && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                  ✓ أفضل مورد لهذه المادة
+                                </span>
+                              )}
+                              {priceChange !== 0 && (
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${priceChange > 0 ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"}`}>
+                                  {priceChange > 0 ? "↑" : "↓"} {Math.abs(priceChange)}% عن آخر طلب
+                                </span>
+                              )}
+                              {bs.supplierCount > 1 && (
+                                <button type="button" className="text-[10px] text-blue-600 hover:underline block" onClick={() => setShowCompareCard(showCompareCard === el.materialCode ? null : el.materialCode)}>
+                                  {showCompareCard === el.materialCode ? "إخفاء المقارنة" : `مقارنة ${bs.supplierCount} موردين`}
+                                </button>
+                              )}
+                              {showCompareCard === el.materialCode && bs.allSuppliers && (
+                                <div className="rounded-md border border-border bg-muted/30 p-2 mt-1">
+                                  <div className="text-[10px] font-semibold mb-1.5">مقارنة أسعار الموردين</div>
+                                  <div className="space-y-1">
+                                    {bs.allSuppliers.map((s: any) => (
+                                      <div key={s.supplierId} className={`flex items-center justify-between gap-2 text-[10px] p-1 rounded ${s.supplierId === bs.bestSupplierId ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : ""}`}>
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          {s.supplierId === bs.bestSupplierId && <span className="text-green-600">⭐</span>}
+                                          <span className="truncate font-medium">{s.supplierName}</span>
+                                          {s.rating && <span className="text-amber-500">★{s.rating}</span>}
+                                        </div>
+                                        <div className="flex items-center gap-2 text-muted-foreground flex-shrink-0">
+                                          <span>آخر: {s.lastPrice?.toLocaleString()}</span>
+                                          <span>أقل: <span className="text-green-600 font-medium">{s.minPrice?.toLocaleString()}</span></span>
+                                          <span>متوسط: {s.avgPrice?.toLocaleString()}</span>
+                                          <span>({s.supplyCount}x)</span>
+                                          {s.priceChangePercent !== 0 && (
+                                            <span className={s.priceChangePercent > 0 ? "text-red-500" : "text-green-500"}>
+                                              {s.priceChangePercent > 0 ? "↑" : "↓"}{Math.abs(s.priceChangePercent)}%
+                                            </span>
+                                          )}
+                                          <button type="button" className="text-blue-600 hover:underline" onClick={() => { const realIdx = editLines.findIndex(p => p.id === el.id); setEditLines(prev => prev.map((p, i) => i === realIdx ? { ...p, _supplierId: s.supplierId, _cost: String(s.minPrice) } : p)); setShowCompareCard(null); }}>
+                                            اختيار
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
                         <span>إجمالي البيع: <span className="font-semibold text-foreground">{((Number(el._qty) || 0) * (Number(el._sell) || 0)).toLocaleString()}</span></span>
@@ -1104,6 +1182,59 @@ export default function OrderDetails() {
                               ))}
                             </SelectContent>
                           </Select>
+                          {(() => {
+                            const bs = bestSuppliers[ni.materialCode];
+                            if (!bs || bs.supplierCount < 1) return null;
+                            const currentSid = ni.supplierId || "";
+                            const isBest = currentSid === bs.bestSupplierId;
+                            return (
+                              <div className="space-y-1.5 mt-1">
+                                {bs.supplierCount > 1 && !isBest && bs.bestSupplierName && (
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                                      ⭐ أفضل سعر: {bs.bestPrice.toLocaleString()} ج.م عند {bs.bestSupplierName}
+                                    </span>
+                                    <button type="button" className="text-[10px] text-blue-600 hover:underline" onClick={() => setEditNewItems(prev => prev.map((p, i) => i === idx ? { ...p, supplierId: bs.bestSupplierId, costPrice: bs.bestPrice } : p))}>
+                                      اختيار تلقائي
+                                    </button>
+                                  </div>
+                                )}
+                                {isBest && bs.supplierCount > 1 && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                    ✓ أفضل مورد لهذه المادة
+                                  </span>
+                                )}
+                                {bs.supplierCount > 1 && (
+                                  <button type="button" className="text-[10px] text-blue-600 hover:underline block" onClick={() => setShowCompareCard(showCompareCard === `new-${idx}` ? null : `new-${idx}`)}>
+                                    {showCompareCard === `new-${idx}` ? "إخفاء المقارنة" : `مقارنة ${bs.supplierCount} موردين`}
+                                  </button>
+                                )}
+                                {showCompareCard === `new-${idx}` && bs.allSuppliers && (
+                                  <div className="rounded-md border border-border bg-muted/30 p-2 mt-1">
+                                    <div className="text-[10px] font-semibold mb-1.5">مقارنة أسعار الموردين</div>
+                                    <div className="space-y-1">
+                                      {bs.allSuppliers.map((s: any) => (
+                                        <div key={s.supplierId} className={`flex items-center justify-between gap-2 text-[10px] p-1 rounded ${s.supplierId === bs.bestSupplierId ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : ""}`}>
+                                          <div className="flex items-center gap-1.5 min-w-0">
+                                            {s.supplierId === bs.bestSupplierId && <span className="text-green-600">⭐</span>}
+                                            <span className="truncate font-medium">{s.supplierName}</span>
+                                            {s.rating && <span className="text-amber-500">★{s.rating}</span>}
+                                          </div>
+                                          <div className="flex items-center gap-2 text-muted-foreground flex-shrink-0">
+                                            <span>أقل: <span className="text-green-600 font-medium">{s.minPrice?.toLocaleString()}</span></span>
+                                            <span>({s.supplyCount}x)</span>
+                                            <button type="button" className="text-blue-600 hover:underline" onClick={() => { setEditNewItems(prev => prev.map((p, i) => i === idx ? { ...p, supplierId: s.supplierId, costPrice: s.minPrice } : p)); setShowCompareCard(null); }}>
+                                              اختيار
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
                       {(ni as any).fromInventory && (
@@ -1230,6 +1361,27 @@ export default function OrderDetails() {
               </div>
             </div>
           </ScrollArea>
+          {bundleSuggestions.length > 0 && (
+            <div className="px-6 py-3 border-t border-border bg-blue-50/50 dark:bg-blue-950/20">
+              <div className="flex items-center gap-2 mb-2">
+                <Factory className="h-4 w-4 text-blue-600" />
+                <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">اقتراح مورد واحد</span>
+              </div>
+              <div className="space-y-1.5">
+                {bundleSuggestions.map((b: any) => (
+                  <div key={b.supplierId} className="flex items-center justify-between gap-2 text-[11px] p-2 rounded-md bg-white dark:bg-card border border-blue-200 dark:border-blue-800">
+                    <div>
+                      <span className="font-medium">{b.supplierName}</span>
+                      <span className="text-muted-foreground mr-2"> يورد {b.materialsCovered} من {b.totalMaterials} مواد ({b.coveragePercent}%)</span>
+                    </div>
+                    <div className="text-muted-foreground">
+                      تكلفة تقديرية: <span className="font-medium text-foreground">{b.estimatedTotalCost.toLocaleString()} ج.م</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="px-6 py-4 border-t border-border flex justify-end gap-3 shrink-0">
             <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving} data-testid="button-edit-cancel">إلغاء</Button>
             <Button onClick={handleSaveEdit} disabled={editSaving} data-testid="button-edit-save">

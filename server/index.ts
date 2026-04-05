@@ -372,6 +372,17 @@ async function ensureJoinDateColumn() {
   }
 }
 
+async function ensureSupplierRatingsTable() {
+  try {
+    const pg = await import("pg");
+    const pool = new pg.default.Pool({ connectionString: process.env.DATABASE_URL });
+    await pool.query(`CREATE TABLE IF NOT EXISTS supplier_ratings (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, supplier_id text NOT NULL, order_id text, quality_rating numeric DEFAULT 0, delivery_rating numeric DEFAULT 0, quantity_rating numeric DEFAULT 0, overall_rating numeric DEFAULT 0, notes text DEFAULT '', rated_by text DEFAULT '', created_at timestamptz DEFAULT now())`);
+    await pool.end();
+    console.log("✅ supplier_ratings table ready");
+    await reloadSupabaseSchemaCache();
+  } catch (e: any) { console.warn("⚠️ supplier_ratings check:", e.message); }
+}
+
 app.listen(PORT, "0.0.0.0", async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   await reloadSupabaseSchemaCache();
@@ -380,5 +391,6 @@ app.listen(PORT, "0.0.0.0", async () => {
   await ensureOrderCostPaidByFounderColumn();
   await ensureSupplierIdColumn();
   await ensureJoinDateColumn();
+  await ensureSupplierRatingsTable();
   await seedIfEmpty();
 });

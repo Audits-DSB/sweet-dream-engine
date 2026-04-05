@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { quickProfit, founderSplit } from "../src/lib/orderProfit";
+import pg from "pg";
+const pgPool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
 const supabaseAdmin = createClient(
   process.env.VITE_SUPABASE_URL!,
@@ -546,6 +548,368 @@ router.get("/material-last-suppliers", async (_req, res) => {
     pending[code] = [...ids];
   }
   res.json({ materials: result, pending });
+});
+
+// ─── MATERIAL SUPPLIER HISTORY (all suppliers for a specific material) ───────
+router.get("/material-supplier-history/:code", async (req, res) => {
+  try {
+    const materialCode = req.params.code;
+    const [linesRes, suppliersRes, ordersRes, ratingsRes] = await Promise.all([
+      supabaseAdmin.from("order_lines").select("material_code, material_name, supplier_id, cost_price, quantity, line_cost, order_id, id").eq("material_code", materialCode).order("id", { ascending: false }),
+      supabaseAdmin.from("suppliers").select("id, name, country, status"),
+      supabaseAdmin.from("orders").select("id, date, status, client_id"),
+      pgRatingsQuery("SELECT * FROM supplier_ratings"),
+    ]);
+    const lines = linesRes.data || [];
+    if (lines.length === 0) return res.json({ materialCode, materialName: "", suppliers: [] });
+
+    const supMap: Record<string, any> = {};
+    (suppliersRes.data || []).forEach((s: any) => { supMap[s.id] = s; });
+    const orderMap: Record<string, any> = {};
+    (ordersRes.data || []).forEach((o: any) => { orderMap[o.id] = o; });
+
+    const ratingMap: Record<string, { avg: number; count: number }> = {};
+    const ratings = ratingsRes || [];
+    for (const r of ratings) {
+      if (!ratingMap[r.supplier_id]) ratingMap[r.supplier_id] = { avg: 0, count: 0 };
+      ratingMap[r.supplier_id].avg += Number(r.overall_rating || 0);
+      ratingMap[r.supplier_id].count++;
+    }
+    for (const [sid, v] of Object.entries(ratingMap)) {
+      if (v.count > 0) v.avg = Math.round((v.avg / v.count) * 10) / 10;
+    }
+
+    const bySupplier: Record<string, { prices: number[]; dates: string[]; count: number; orders: string[] }> = {};
+    for (const l of lines) {
+      const sid = l.supplier_id || "__none__";
+      if (!bySupplier[sid]) bySupplier[sid] = { prices: [], dates: [], count: 0, orders: [] };
+      bySupplier[sid].prices.push(Number(l.cost_price) || 0);
+      const oDate = orderMap[l.order_id]?.date || "";
+      bySupplier[sid].dates.push(oDate);
+      bySupplier[sid].count++;
+      bySupplier[sid].orders.push(l.order_id);
+    }
+
+    const suppliers = Object.entries(bySupplier)
+      .filter(([sid]) => sid !== "__none__" && supMap[sid])
+      .map(([sid, data]) => {
+        const prices = data.prices.filter(p => p > 0);
+        const lastPrice = prices[0] || 0;
+        const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+        const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
+        const avgPrice = prices.length > 0 ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length * 100) / 100 : 0;
+        const sortedDates = data.dates.filter(Boolean).sort().reverse();
+        const prevPrice = prices.length > 1 ? prices[1] : lastPrice;
+        const priceChangePercent = prevPrice > 0 ? Math.round((lastPrice - prevPrice) / prevPrice * 100) : 0;
+        return {
+          supplierId: sid,
+          supplierName: supMap[sid]?.name || "",
+          country: supMap[sid]?.country || "",
+          status: supMap[sid]?.status || "Active",
+          lastPrice,
+          minPrice,
+          maxPrice,
+          avgPrice,
+          priceChangePercent,
+          supplyCount: data.count,
+          lastOrderDate: sortedDates[0] || "",
+          rating: ratingMap[sid]?.avg || null,
+          ratingCount: ratingMap[sid]?.count || 0,
+          priceHistory: data.orders.map((ordId, i) => ({
+            orderId: ordId,
+            date: data.dates[i],
+            costPrice: data.prices[i],
+            orderStatus: orderMap[ordId]?.status || "",
+          })),
+        };
+      })
+      .sort((a, b) => a.avgPrice - b.avgPrice);
+
+    const bestSupplier = suppliers.length > 0 ? suppliers[0] : null;
+    for (const s of suppliers) { (s as any).isBest = s.supplierId === bestSupplier?.supplierId; }
+
+    res.json({ materialCode, materialName: lines[0]?.material_name || "", suppliers, bestSupplierId: bestSupplier?.supplierId || "" });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── MATERIAL BEST SUPPLIERS (best supplier for each material) ───────────────
+router.get("/material-best-suppliers", async (_req, res) => {
+  try {
+    const [linesRes, suppliersRes, ordersRes, ratingsRes] = await Promise.all([
+      supabaseAdmin.from("order_lines").select("material_code, material_name, supplier_id, cost_price, quantity, order_id, id").order("id", { ascending: false }),
+      supabaseAdmin.from("suppliers").select("id, name"),
+      supabaseAdmin.from("orders").select("id, date"),
+      pgRatingsQuery("SELECT supplier_id, overall_rating FROM supplier_ratings"),
+    ]);
+    const lines = linesRes.data || [];
+    const supMap: Record<string, string> = {};
+    (suppliersRes.data || []).forEach((s: any) => { supMap[s.id] = s.name; });
+    const orderDateMap: Record<string, string> = {};
+    (ordersRes.data || []).forEach((o: any) => { orderDateMap[o.id] = o.date || ""; });
+
+    const ratingAvg: Record<string, number> = {};
+    const ratingCnt: Record<string, number> = {};
+    for (const r of (ratingsRes || [])) {
+      ratingAvg[r.supplier_id] = (ratingAvg[r.supplier_id] || 0) + Number(r.overall_rating || 0);
+      ratingCnt[r.supplier_id] = (ratingCnt[r.supplier_id] || 0) + 1;
+    }
+    for (const sid of Object.keys(ratingAvg)) { ratingAvg[sid] = Math.round(ratingAvg[sid] / ratingCnt[sid] * 10) / 10; }
+
+    const matSuppliers: Record<string, Record<string, { prices: number[]; count: number; lastDate: string; lastPrice: number }>> = {};
+    const matNames: Record<string, string> = {};
+    for (const l of lines) {
+      if (!l.supplier_id || !supMap[l.supplier_id]) continue;
+      const code = l.material_code;
+      if (!matSuppliers[code]) matSuppliers[code] = {};
+      if (!matSuppliers[code][l.supplier_id]) matSuppliers[code][l.supplier_id] = { prices: [], count: 0, lastDate: "", lastPrice: 0 };
+      const price = Number(l.cost_price) || 0;
+      matSuppliers[code][l.supplier_id].prices.push(price);
+      matSuppliers[code][l.supplier_id].count++;
+      if (!matSuppliers[code][l.supplier_id].lastPrice) matSuppliers[code][l.supplier_id].lastPrice = price;
+      const oDate = orderDateMap[l.order_id] || "";
+      if (oDate > matSuppliers[code][l.supplier_id].lastDate) matSuppliers[code][l.supplier_id].lastDate = oDate;
+      if (!matNames[code]) matNames[code] = l.material_name || "";
+    }
+
+    const reorderAlerts: Record<string, { lastOrderDate: string; daysSince: number; avgIntervalDays: number }> = {};
+    const matDatesAll: Record<string, string[]> = {};
+    for (const l of lines) {
+      const code = l.material_code;
+      const d = orderDateMap[l.order_id] || "";
+      if (!d) continue;
+      if (!matDatesAll[code]) matDatesAll[code] = [];
+      matDatesAll[code].push(d);
+    }
+    const now = Date.now();
+    for (const [code, dates] of Object.entries(matDatesAll)) {
+      const sorted = [...new Set(dates)].sort().reverse();
+      if (sorted.length < 2) continue;
+      const intervals: number[] = [];
+      for (let i = 0; i < sorted.length - 1; i++) {
+        const diff = (new Date(sorted[i]).getTime() - new Date(sorted[i + 1]).getTime()) / 86400000;
+        if (diff > 0) intervals.push(diff);
+      }
+      if (intervals.length === 0) continue;
+      const avgInterval = Math.round(intervals.reduce((a, b) => a + b, 0) / intervals.length);
+      const daysSince = Math.round((now - new Date(sorted[0]).getTime()) / 86400000);
+      if (daysSince >= avgInterval * 0.8) {
+        reorderAlerts[code] = { lastOrderDate: sorted[0], daysSince, avgIntervalDays: avgInterval };
+      }
+    }
+
+    const result: Record<string, any> = {};
+    for (const [code, suppliers] of Object.entries(matSuppliers)) {
+      const entries = Object.entries(suppliers).map(([sid, d]) => {
+        const avg = d.prices.length > 0 ? Math.round(d.prices.reduce((a, b) => a + b, 0) / d.prices.length * 100) / 100 : 0;
+        const min = d.prices.length > 0 ? Math.min(...d.prices) : 0;
+        const prevPrice = d.prices.length > 1 ? d.prices[1] : d.lastPrice;
+        const priceChange = prevPrice > 0 ? Math.round((d.lastPrice - prevPrice) / prevPrice * 100) : 0;
+        return {
+          supplierId: sid, supplierName: supMap[sid] || "", lastPrice: d.lastPrice,
+          minPrice: min, avgPrice: avg, supplyCount: d.count, lastDate: d.lastDate,
+          priceChangePercent: priceChange, rating: ratingAvg[sid] || null,
+        };
+      }).sort((a, b) => a.minPrice - b.minPrice);
+
+      const best = entries[0];
+      result[code] = {
+        materialName: matNames[code] || "",
+        supplierCount: entries.length,
+        bestSupplierId: best?.supplierId || "",
+        bestSupplierName: best?.supplierName || "",
+        bestPrice: best?.minPrice || 0,
+        bestLastPrice: best?.lastPrice || 0,
+        allSuppliers: entries,
+        reorderAlert: reorderAlerts[code] || null,
+      };
+    }
+
+    res.json(result);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── SUPPLIER BUNDLE SUGGESTIONS ─────────────────────────────────────────────
+router.post("/supplier-bundle-check", async (req, res) => {
+  try {
+    const { materialCodes } = req.body;
+    if (!Array.isArray(materialCodes) || materialCodes.length === 0) return res.json({ bundles: [] });
+
+    const [linesRes, suppliersRes] = await Promise.all([
+      supabaseAdmin.from("order_lines").select("material_code, supplier_id, cost_price").in("material_code", materialCodes),
+      supabaseAdmin.from("suppliers").select("id, name"),
+    ]);
+    const supMap: Record<string, string> = {};
+    (suppliersRes.data || []).forEach((s: any) => { supMap[s.id] = s.name; });
+
+    const supMaterials: Record<string, Record<string, number[]>> = {};
+    for (const l of (linesRes.data || [])) {
+      if (!l.supplier_id || !supMap[l.supplier_id]) continue;
+      if (!supMaterials[l.supplier_id]) supMaterials[l.supplier_id] = {};
+      if (!supMaterials[l.supplier_id][l.material_code]) supMaterials[l.supplier_id][l.material_code] = [];
+      supMaterials[l.supplier_id][l.material_code].push(Number(l.cost_price) || 0);
+    }
+
+    const bundles = Object.entries(supMaterials)
+      .filter(([, mats]) => {
+        const matched = Object.keys(mats).filter(c => materialCodes.includes(c));
+        return matched.length >= 2;
+      })
+      .map(([sid, mats]) => {
+        const matchedCodes = Object.keys(mats).filter(c => materialCodes.includes(c));
+        const totalMinCost = matchedCodes.reduce((s, c) => {
+          const prices = mats[c].filter(p => p > 0);
+          return s + (prices.length > 0 ? Math.min(...prices) : 0);
+        }, 0);
+        return {
+          supplierId: sid,
+          supplierName: supMap[sid] || "",
+          materialsCovered: matchedCodes.length,
+          totalMaterials: materialCodes.length,
+          coveragePercent: Math.round(matchedCodes.length / materialCodes.length * 100),
+          materials: matchedCodes,
+          estimatedTotalCost: totalMinCost,
+        };
+      })
+      .filter(b => b.materialsCovered >= 2)
+      .sort((a, b) => b.materialsCovered - a.materialsCovered || a.estimatedTotalCost - b.estimatedTotalCost);
+
+    res.json({ bundles: bundles.slice(0, 5) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── SUPPLIER RATINGS (uses pgPool directly since table not in Supabase schema cache) ──
+async function pgRatingsQuery(sql: string, params: any[] = []): Promise<any[]> {
+  try { const r = await pgPool.query(sql, params); return r.rows; } catch { return []; }
+}
+
+router.get("/supplier-ratings", async (_req, res) => {
+  const rows = await pgRatingsQuery("SELECT * FROM supplier_ratings ORDER BY created_at DESC");
+  res.json(camelizeKeys(rows));
+});
+
+router.get("/supplier-ratings/:supplierId", async (req, res) => {
+  const rows = await pgRatingsQuery("SELECT * FROM supplier_ratings WHERE supplier_id = $1 ORDER BY created_at DESC", [req.params.supplierId]);
+  res.json(camelizeKeys(rows));
+});
+
+router.post("/supplier-ratings", async (req, res) => {
+  try {
+    const { supplierId, orderId, qualityRating, deliveryRating, quantityRating, notes, ratedBy } = req.body;
+    if (!supplierId) return res.status(400).json({ error: "supplierId is required" });
+    const q = Number(qualityRating), d = Number(deliveryRating), qn = Number(quantityRating);
+    if ([q, d, qn].some(v => isNaN(v) || v < 0 || v > 5)) return res.status(400).json({ error: "ratings must be 0-5" });
+    const overall = Math.round(((q + d + qn) / 3) * 10) / 10;
+    const r = await pgPool.query(
+      `INSERT INTO supplier_ratings (supplier_id, order_id, quality_rating, delivery_rating, quantity_rating, overall_rating, notes, rated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [supplierId, orderId || null, Number(qualityRating), Number(deliveryRating), Number(quantityRating), overall, notes || "", ratedBy || ""]
+    );
+    res.json(camelizeKeys(r.rows[0]));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.delete("/supplier-ratings/:id", async (req, res) => {
+  try {
+    await pgPool.query("DELETE FROM supplier_ratings WHERE id = $1", [req.params.id]);
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── SUPPLIER RANKING (best suppliers report) ───────────────────────────────
+router.get("/supplier-ranking", async (_req, res) => {
+  try {
+    const [suppliersRes, linesRes, ordersRes, ratingsRes] = await Promise.all([
+      supabaseAdmin.from("suppliers").select("*"),
+      supabaseAdmin.from("order_lines").select("supplier_id, material_code, cost_price, line_cost, order_id"),
+      supabaseAdmin.from("orders").select("id, date, status"),
+      pgRatingsQuery("SELECT supplier_id, overall_rating FROM supplier_ratings"),
+    ]);
+
+    const supMap: Record<string, any> = {};
+    (suppliersRes.data || []).forEach((s: any) => { supMap[s.id] = s; });
+    const orderDateMap: Record<string, string> = {};
+    const orderStatusMap: Record<string, string> = {};
+    (ordersRes.data || []).forEach((o: any) => { orderDateMap[o.id] = o.date || ""; orderStatusMap[o.id] = o.status || ""; });
+
+    const ratingAvg: Record<string, number> = {};
+    const ratingCnt: Record<string, number> = {};
+    for (const r of (ratingsRes || [])) {
+      ratingAvg[r.supplier_id] = (ratingAvg[r.supplier_id] || 0) + Number(r.overall_rating || 0);
+      ratingCnt[r.supplier_id] = (ratingCnt[r.supplier_id] || 0) + 1;
+    }
+    for (const sid of Object.keys(ratingAvg)) { ratingAvg[sid] = Math.round(ratingAvg[sid] / ratingCnt[sid] * 10) / 10; }
+
+    const supStats: Record<string, { orderIds: Set<string>; materials: Set<string>; totalCost: number; lastDate: string; priceDiffs: number[] }> = {};
+    for (const l of (linesRes.data || [])) {
+      if (!l.supplier_id || !supMap[l.supplier_id]) continue;
+      if (!supStats[l.supplier_id]) supStats[l.supplier_id] = { orderIds: new Set(), materials: new Set(), totalCost: 0, lastDate: "", priceDiffs: [] };
+      supStats[l.supplier_id].orderIds.add(l.order_id);
+      supStats[l.supplier_id].materials.add(l.material_code);
+      supStats[l.supplier_id].totalCost += Number(l.line_cost) || 0;
+      const oDate = orderDateMap[l.order_id] || "";
+      if (oDate > supStats[l.supplier_id].lastDate) supStats[l.supplier_id].lastDate = oDate;
+    }
+
+    const globalMatPrices: Record<string, number[]> = {};
+    for (const l of (linesRes.data || [])) {
+      if (!l.material_code) continue;
+      if (!globalMatPrices[l.material_code]) globalMatPrices[l.material_code] = [];
+      globalMatPrices[l.material_code].push(Number(l.cost_price) || 0);
+    }
+    const globalAvg: Record<string, number> = {};
+    for (const [code, prices] of Object.entries(globalMatPrices)) {
+      const valid = prices.filter(p => p > 0);
+      globalAvg[code] = valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
+    }
+
+    const supMatPrices: Record<string, Record<string, number[]>> = {};
+    for (const l of (linesRes.data || [])) {
+      if (!l.supplier_id) continue;
+      if (!supMatPrices[l.supplier_id]) supMatPrices[l.supplier_id] = {};
+      if (!supMatPrices[l.supplier_id][l.material_code]) supMatPrices[l.supplier_id][l.material_code] = [];
+      supMatPrices[l.supplier_id][l.material_code].push(Number(l.cost_price) || 0);
+    }
+
+    const ranking = Object.entries(supStats).map(([sid, stats]) => {
+      let priceScore = 0; let priceCount = 0;
+      const matPrices = supMatPrices[sid] || {};
+      for (const [code, prices] of Object.entries(matPrices)) {
+        const avg = prices.filter(p => p > 0).reduce((a, b) => a + b, 0) / (prices.filter(p => p > 0).length || 1);
+        const gAvg = globalAvg[code] || 0;
+        if (gAvg > 0) { priceScore += (gAvg - avg) / gAvg; priceCount++; }
+      }
+      const priceBeatPercent = priceCount > 0 ? Math.round(priceScore / priceCount * 100) : 0;
+
+      return {
+        supplierId: sid,
+        supplierName: supMap[sid]?.name || "",
+        country: supMap[sid]?.country || "",
+        status: supMap[sid]?.status || "",
+        totalOrders: stats.orderIds.size,
+        totalMaterials: stats.materials.size,
+        totalPurchases: Math.round(stats.totalCost),
+        lastOrderDate: stats.lastDate,
+        avgRating: ratingAvg[sid] || null,
+        ratingCount: ratingCnt[sid] || 0,
+        priceBeatPercent,
+      };
+    }).sort((a, b) => {
+      const scoreA = (a.avgRating || 3) * 20 + a.priceBeatPercent + Math.min(a.totalOrders, 10) * 2;
+      const scoreB = (b.avgRating || 3) * 20 + b.priceBeatPercent + Math.min(b.totalOrders, 10) * 2;
+      return scoreB - scoreA;
+    });
+
+    res.json(ranking);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ─── FOUNDERS ─────────────────────────────────────────────────────────────────

@@ -95,6 +95,10 @@ export default function SuppliersPage() {
   const [matDetail, setMatDetail] = useState<CatalogMaterial | null>(null);
   const [matImgErrors, setMatImgErrors] = useState<Set<string>>(new Set());
 
+  const [showRanking, setShowRanking] = useState(false);
+  const [rankingData, setRankingData] = useState<any[]>([]);
+  const [rankingLoading, setRankingLoading] = useState(false);
+
   useEffect(() => {
     loadSuppliers();
     loadCatalog();
@@ -279,8 +283,83 @@ export default function SuppliersPage() {
         filterValues={{}}
         onFilterChange={() => {}}
         onExport={() => exportToCsv("suppliers", [t.code, t.name, t.country, t.email, t.phone], filtered.map(s => [s.id, s.name, s.country, s.email, s.phone]))}
-        actions={<Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addSupplier}</Button>}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant={showRanking ? "default" : "outline"} className="h-9" onClick={() => {
+              setShowRanking(v => !v);
+              if (!showRanking && rankingData.length === 0) {
+                setRankingLoading(true);
+                api.get<any[]>("/supplier-ranking").then(d => setRankingData(d || [])).catch(() => {}).finally(() => setRankingLoading(false));
+              }
+            }}>
+              <ShoppingCart className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />
+              ترتيب الموردين
+            </Button>
+            <Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}><Plus className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.addSupplier}</Button>
+          </div>
+        }
       />
+
+      {showRanking && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">ترتيب أفضل الموردين</h3>
+            <Button variant="ghost" size="sm" onClick={() => setShowRanking(false)}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          {rankingLoading ? (
+            <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>جاري تحميل الترتيب...</span>
+            </div>
+          ) : rankingData.length === 0 ? (
+            <p className="text-center py-8 text-muted-foreground text-sm">لا توجد بيانات كافية للترتيب</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {rankingData.map((r: any, idx: number) => (
+                <div key={r.supplierId} className={`rounded-lg border p-3 space-y-2 cursor-pointer hover:shadow-md transition-shadow ${idx === 0 ? "border-amber-400 bg-amber-50/50 dark:bg-amber-900/10" : idx === 1 ? "border-gray-300 bg-gray-50/50 dark:bg-gray-800/20" : idx === 2 ? "border-orange-300 bg-orange-50/30 dark:bg-orange-900/10" : "border-border"}`} onClick={() => navigate(`/suppliers/${r.supplierId}`)}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-lg font-bold ${idx === 0 ? "text-amber-500" : idx === 1 ? "text-gray-400" : idx === 2 ? "text-orange-400" : "text-muted-foreground"}`}>
+                        #{idx + 1}
+                      </span>
+                      <div>
+                        <div className="font-medium text-sm">{r.supplierName}</div>
+                        {r.country && <div className="text-[10px] text-muted-foreground">{r.country}</div>}
+                      </div>
+                    </div>
+                    {r.avgRating && (
+                      <span className="text-amber-500 font-bold text-sm">★ {r.avgRating}</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-[11px]">
+                    <div className="text-center">
+                      <div className="font-semibold">{r.totalOrders}</div>
+                      <div className="text-muted-foreground">طلبات</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-semibold">{r.totalMaterials}</div>
+                      <div className="text-muted-foreground">مواد</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-semibold">{r.totalPurchases.toLocaleString()}</div>
+                      <div className="text-muted-foreground">مشتريات</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-border/50">
+                    <span>تقييمات: {r.ratingCount || 0}</span>
+                    <span className={r.priceBeatPercent > 0 ? "text-green-600" : r.priceBeatPercent < 0 ? "text-red-500" : ""}>
+                      {r.priceBeatPercent > 0 ? `أرخص ${r.priceBeatPercent}% من المتوسط` : r.priceBeatPercent < 0 ? `أغلى ${Math.abs(r.priceBeatPercent)}% من المتوسط` : "متوسط السعر"}
+                    </span>
+                    {r.lastOrderDate && <span>آخر طلب: {r.lastOrderDate}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground text-sm">
