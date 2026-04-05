@@ -110,6 +110,7 @@ export default function OrdersPage() {
   const [bestSuppliers, setBestSuppliers] = useState<Record<string, { materialName: string; supplierCount: number; bestSupplierId: string; bestSupplierName: string; bestPrice: number; allSuppliers: any[] }>>({});
   const [showCompareCard, setShowCompareCard] = useState<string | null>(null);
   const [historyDialog, setHistoryDialog] = useState<{ open: boolean; code: string; name: string; data: any | null; loading: boolean }>({ open: false, code: "", name: "", data: null, loading: false });
+  const [compFilterFullCoverage, setCompFilterFullCoverage] = useState(false);
   const [selectedFounders, setSelectedFounders] = useState<string[]>([]);
   const [founderPcts, setFounderPcts] = useState<Record<string, number>>({});
   const [collectionsMap, setCollectionsMap] = useState<Record<string, { paid: number; total: number; collectionId: string; status: string; date: string }>>({});
