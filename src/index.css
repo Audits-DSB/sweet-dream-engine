@@ -223,7 +223,7 @@
   .print\:p-4 { padding: 1rem !important; }
   .print\:p-0 { padding: 0 !important; }
   .print\:max-w-none { max-width: none !important; }
-  .print\:overflow-visible { overflow: visible !important; }
+  .print\:overflow-visible { overflow: visible !important; overflow-x: visible !important; overflow-y: visible !important; }
   .print\:break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
   .print\:mt-4 { margin-top: 1rem !important; }
   .recharts-wrapper { page-break-inside: avoid; break-inside: avoid; }
@@ -397,37 +397,12 @@
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .print-report-page table:not(.print-account-block table) {
-    display: block !important;
-    width: 100% !important;
+  .print-report-page thead {
+    display: table-header-group !important;
   }
-  .print-report-page table:not(.print-account-block table) colgroup {
-    display: none !important;
-  }
-  .print-report-page table:not(.print-account-block table) thead {
-    display: table !important;
-    width: 100% !important;
-    table-layout: fixed !important;
-  }
-  .print-report-page table:not(.print-account-block table) thead tr {
-    display: table-row !important;
-  }
-  .print-report-page table:not(.print-account-block table) thead th {
-    display: table-cell !important;
-  }
-  .print-report-page table:not(.print-account-block table) tbody {
-    display: block !important;
-    width: 100% !important;
-  }
-  .print-report-page table:not(.print-account-block table) tbody tr {
-    display: table !important;
-    width: 100% !important;
-    table-layout: fixed !important;
+  .print-report-page tbody tr {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
-  }
-  .print-report-page table:not(.print-account-block table) tbody td {
-    display: table-cell !important;
   }
   .print-report-page td img {
     width: 18px !important;
@@ -436,16 +411,6 @@
   .print-report-page td .w-8.h-8 {
     width: 18px !important;
     height: 18px !important;
-  }
-  .print-report-page .overflow-hidden,
-  .print-report-page .overflow-x-auto,
-  .print-report-page [class*="overflow"] {
-    overflow: visible !important;
-    overflow-x: visible !important;
-    overflow-y: visible !important;
-  }
-  .print-report-page .rounded-xl.overflow-hidden {
-    border-radius: 0 !important;
   }
   .print-report-page td {
     color: #111 !important;
