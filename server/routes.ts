@@ -556,8 +556,8 @@ router.get("/material-supplier-history/:code", async (req, res) => {
     const materialCode = req.params.code;
     const [linesRes, suppliersRes, ordersRes, ratingsRes] = await Promise.all([
       supabaseAdmin.from("order_lines").select("material_code, material_name, supplier_id, cost_price, quantity, line_cost, order_id, id").eq("material_code", materialCode).order("id", { ascending: false }),
-      supabaseAdmin.from("suppliers").select("id, name, country, status"),
-      supabaseAdmin.from("orders").select("id, date, status, client_id"),
+      supabaseAdmin.from("suppliers").select("id, name, country"),
+      supabaseAdmin.from("orders").select("id, date, status, client_id, supplier_id"),
       pgRatingsQuery("SELECT * FROM supplier_ratings"),
     ]);
     const lines = linesRes.data || [];
@@ -581,7 +581,7 @@ router.get("/material-supplier-history/:code", async (req, res) => {
 
     const bySupplier: Record<string, { prices: number[]; dates: string[]; count: number; orders: string[] }> = {};
     for (const l of lines) {
-      const sid = l.supplier_id || "__none__";
+      const sid = l.supplier_id || orderMap[l.order_id]?.supplier_id || "__none__";
       if (!bySupplier[sid]) bySupplier[sid] = { prices: [], dates: [], count: 0, orders: [] };
       bySupplier[sid].prices.push(Number(l.cost_price) || 0);
       const oDate = orderMap[l.order_id]?.date || "";
@@ -605,7 +605,7 @@ router.get("/material-supplier-history/:code", async (req, res) => {
           supplierId: sid,
           supplierName: supMap[sid]?.name || "",
           country: supMap[sid]?.country || "",
-          status: supMap[sid]?.status || "Active",
+          status: "Active",
           lastPrice,
           minPrice,
           maxPrice,
@@ -640,14 +640,15 @@ router.get("/material-best-suppliers", async (_req, res) => {
     const [linesRes, suppliersRes, ordersRes, ratingsRes] = await Promise.all([
       supabaseAdmin.from("order_lines").select("material_code, material_name, supplier_id, cost_price, quantity, order_id, id").order("id", { ascending: false }),
       supabaseAdmin.from("suppliers").select("id, name"),
-      supabaseAdmin.from("orders").select("id, date"),
+      supabaseAdmin.from("orders").select("id, date, supplier_id"),
       pgRatingsQuery("SELECT supplier_id, overall_rating FROM supplier_ratings"),
     ]);
     const lines = linesRes.data || [];
     const supMap: Record<string, string> = {};
     (suppliersRes.data || []).forEach((s: any) => { supMap[s.id] = s.name; });
     const orderDateMap: Record<string, string> = {};
-    (ordersRes.data || []).forEach((o: any) => { orderDateMap[o.id] = o.date || ""; });
+    const orderSupMap: Record<string, string> = {};
+    (ordersRes.data || []).forEach((o: any) => { orderDateMap[o.id] = o.date || ""; orderSupMap[o.id] = o.supplier_id || ""; });
 
     const ratingAvg: Record<string, number> = {};
     const ratingCnt: Record<string, number> = {};
@@ -660,16 +661,17 @@ router.get("/material-best-suppliers", async (_req, res) => {
     const matSuppliers: Record<string, Record<string, { prices: number[]; count: number; lastDate: string; lastPrice: number }>> = {};
     const matNames: Record<string, string> = {};
     for (const l of lines) {
-      if (!l.supplier_id || !supMap[l.supplier_id]) continue;
+      const effectiveSid = l.supplier_id || orderSupMap[l.order_id] || "";
+      if (!effectiveSid || !supMap[effectiveSid]) continue;
       const code = l.material_code;
       if (!matSuppliers[code]) matSuppliers[code] = {};
-      if (!matSuppliers[code][l.supplier_id]) matSuppliers[code][l.supplier_id] = { prices: [], count: 0, lastDate: "", lastPrice: 0 };
+      if (!matSuppliers[code][effectiveSid]) matSuppliers[code][effectiveSid] = { prices: [], count: 0, lastDate: "", lastPrice: 0 };
       const price = Number(l.cost_price) || 0;
-      matSuppliers[code][l.supplier_id].prices.push(price);
-      matSuppliers[code][l.supplier_id].count++;
-      if (!matSuppliers[code][l.supplier_id].lastPrice) matSuppliers[code][l.supplier_id].lastPrice = price;
+      matSuppliers[code][effectiveSid].prices.push(price);
+      matSuppliers[code][effectiveSid].count++;
+      if (!matSuppliers[code][effectiveSid].lastPrice) matSuppliers[code][effectiveSid].lastPrice = price;
       const oDate = orderDateMap[l.order_id] || "";
-      if (oDate > matSuppliers[code][l.supplier_id].lastDate) matSuppliers[code][l.supplier_id].lastDate = oDate;
+      if (oDate > matSuppliers[code][effectiveSid].lastDate) matSuppliers[code][effectiveSid].lastDate = oDate;
       if (!matNames[code]) matNames[code] = l.material_name || "";
     }
 
