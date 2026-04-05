@@ -107,6 +107,8 @@ export default function OrdersPage() {
   const [companyLots, setCompanyLots] = useState<CompanyLot[]>([]);
   const [inventorySearch, setInventorySearch] = useState("");
   const [showInventoryPicker, setShowInventoryPicker] = useState(false);
+  const [bestSuppliers, setBestSuppliers] = useState<Record<string, { materialName: string; supplierCount: number; bestSupplierId: string; bestSupplierName: string; bestPrice: number; allSuppliers: any[] }>>({});
+  const [showCompareCard, setShowCompareCard] = useState<string | null>(null);
   const [selectedFounders, setSelectedFounders] = useState<string[]>([]);
   const [founderPcts, setFounderPcts] = useState<Record<string, number>>({});
   const [collectionsMap, setCollectionsMap] = useState<Record<string, { paid: number; total: number; collectionId: string; status: string; date: string }>>({});
@@ -972,7 +974,7 @@ export default function OrdersPage() {
         loading={deleting}
       />
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setOrderItems([]); setSelectedClient(""); setSelectedSupplier(""); setMaterialSearch(""); setOrderType("client"); setShowInventoryPicker(false); setInventorySearch(""); } }}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (open) { api.get<Record<string, any>>("/material-best-suppliers").then(d => setBestSuppliers(d || {})).catch(() => {}); } else { setOrderItems([]); setSelectedClient(""); setSelectedSupplier(""); setMaterialSearch(""); setOrderType("client"); setShowInventoryPicker(false); setInventorySearch(""); setBestSuppliers({}); setShowCompareCard(null); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader><DialogTitle>{t.newOrder}</DialogTitle></DialogHeader>
           <ScrollArea className="max-h-[70vh] pr-2">
@@ -1136,6 +1138,73 @@ export default function OrdersPage() {
                           <span>{suppliers.find(s => s.id === item.supplierId)?.name}</span>
                         </div>
                       )}
+                      {!item.fromInventory && (() => {
+                        const bs = bestSuppliers[item.materialCode];
+                        if (!bs || bs.supplierCount < 1) return null;
+                        const currentSid = item.supplierId || selectedSupplier;
+                        const isBest = currentSid === bs.bestSupplierId;
+                        const currentPrice = item.costPrice;
+                        const priceDiff = currentPrice > 0 && bs.bestPrice > 0 ? Math.round((currentPrice - bs.bestPrice) / bs.bestPrice * 100) : 0;
+                        return (
+                          <div className="space-y-1">
+                            {bs.supplierCount > 1 && !isBest && bs.bestSupplierName && (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                                  ⭐ أفضل سعر: {bs.bestPrice.toLocaleString()} ج.م عند {bs.bestSupplierName}
+                                </span>
+                                <button type="button" className="text-[10px] text-blue-600 hover:underline" onClick={() => setOrderItems(prev => prev.map((p, i2) => i2 === idx ? { ...p, costPrice: bs.bestPrice, supplierId: bs.bestSupplierId } : p))}>
+                                  اختيار أفضل مورد
+                                </button>
+                              </div>
+                            )}
+                            {isBest && bs.supplierCount > 1 && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                                ✓ أفضل مورد لهذه المادة
+                              </span>
+                            )}
+                            {priceDiff !== 0 && currentPrice > 0 && (
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${priceDiff > 0 ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"}`}>
+                                {priceDiff > 0 ? "↑" : "↓"} {Math.abs(priceDiff)}% عن أفضل سعر
+                              </span>
+                            )}
+                            {bs.supplierCount > 1 && (
+                              <button type="button" className="text-[10px] text-blue-600 hover:underline block" onClick={() => setShowCompareCard(showCompareCard === item.materialCode ? null : item.materialCode)}>
+                                {showCompareCard === item.materialCode ? "إخفاء المقارنة" : `مقارنة ${bs.supplierCount} موردين`}
+                              </button>
+                            )}
+                            {showCompareCard === item.materialCode && bs.allSuppliers && (
+                              <div className="rounded-md border border-border bg-muted/30 p-2 mt-1">
+                                <div className="text-[10px] font-semibold mb-1.5">مقارنة أسعار الموردين</div>
+                                <div className="space-y-1">
+                                  {bs.allSuppliers.map((s: any) => (
+                                    <div key={s.supplierId} className={`flex items-center justify-between gap-2 text-[10px] p-1 rounded ${s.supplierId === bs.bestSupplierId ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : ""}`}>
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        {s.supplierId === bs.bestSupplierId && <span className="text-green-600">⭐</span>}
+                                        <span className="truncate font-medium">{s.supplierName}</span>
+                                        {s.rating && <span className="text-amber-500">★{s.rating}</span>}
+                                      </div>
+                                      <div className="flex items-center gap-2 text-muted-foreground flex-shrink-0">
+                                        <span>آخر: {s.lastPrice?.toLocaleString()}</span>
+                                        <span>أقل: <span className="text-green-600 font-medium">{s.minPrice?.toLocaleString()}</span></span>
+                                        <span>متوسط: {s.avgPrice?.toLocaleString()}</span>
+                                        <span>({s.supplyCount}x)</span>
+                                        {s.priceChangePercent !== 0 && (
+                                          <span className={s.priceChangePercent > 0 ? "text-red-500" : "text-green-500"}>
+                                            {s.priceChangePercent > 0 ? "↑" : "↓"}{Math.abs(s.priceChangePercent)}%
+                                          </span>
+                                        )}
+                                        <button type="button" className="text-blue-600 hover:underline" onClick={() => { setOrderItems(prev => prev.map((p, i2) => i2 === idx ? { ...p, costPrice: s.minPrice, supplierId: s.supplierId } : p)); setShowCompareCard(null); }}>
+                                          اختيار
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                       {item.fromInventory && (
                         <div className="rounded-md bg-primary/5 border border-primary/20 px-2 py-1.5 space-y-0.5">
                           <div className="flex items-center gap-1.5 text-[10px] text-primary font-medium">
