@@ -402,10 +402,10 @@ export default function FinancialReportPage() {
   }, [collections, orders, cutoff]);
 
   const founderAnalysis = useMemo(() => {
-    const fundingByFounder: Record<string, { paid: number; owed: number; withdrawals: number; contributions: number; name: string }> = {};
+    const fundingByFounder: Record<string, { totalFunding: number; owedFromSettlements: number; withdrawals: number; contributions: number; name: string }> = {};
 
     (founders || []).forEach(f => {
-      fundingByFounder[f.id] = { paid: 0, owed: 0, withdrawals: 0, contributions: 0, name: f.name };
+      fundingByFounder[f.id] = { totalFunding: 0, owedFromSettlements: 0, withdrawals: 0, contributions: 0, name: f.name };
     });
 
     (orders || []).forEach((o) => {
@@ -413,18 +413,49 @@ export default function FinancialReportPage() {
       if (dateStr) {
         try { if (parseISO(dateStr) < cutoff) return; } catch { }
       }
-      const contribs = o.founderContributions;
-      if (!Array.isArray(contribs)) return;
+      const contribs = Array.isArray(o.founderContributions) ? o.founderContributions : [];
+      if (contribs.length === 0) return;
+
       contribs.forEach((c: any) => {
         const fId = c.founderId || c.founder_id;
         if (!fId || !fundingByFounder[fId]) return;
-        const amt = parseAmount(c.amount);
-        if (c.paid) {
-          fundingByFounder[fId].paid += amt;
-        } else {
-          fundingByFounder[fId].owed += amt;
-        }
+        fundingByFounder[fId].totalFunding += parseAmount(c.amount);
       });
+
+      let costPaidMap: Record<string, number> = {};
+      try {
+        const raw = o.orderCostPaidByFounder ?? o.order_cost_paid_by_founder;
+        costPaidMap = typeof raw === "object" && raw !== null ? raw : JSON.parse(raw || "{}");
+      } catch {}
+
+      const entries = contribs.map((c: any) => {
+        const fId = c.founderId || c.founder_id || "";
+        const initialPaid = costPaidMap[fId] || 0;
+        const share = parseAmount(c.amount);
+        const paidAmt = parseAmount(c.paidAmount ?? c.paid_amount);
+        return { id: fId, share, diff: initialPaid - share, paidAmt };
+      }).filter(e => e.id);
+
+      const overpayers = entries.filter(e => e.diff > 0);
+      const underpayers = entries.filter(e => e.diff < 0);
+      if (overpayers.length === 0 || underpayers.length === 0) return;
+
+      const oRemain = overpayers.map(e => e.diff);
+      const uRemain = underpayers.map(e => Math.abs(e.diff));
+      let oi = 0, ui = 0;
+      while (oi < overpayers.length && ui < underpayers.length) {
+        const transfer = Math.min(oRemain[oi], uRemain[ui]);
+        if (transfer > 0) {
+          const fromSettled = underpayers[ui].paidAmt >= underpayers[ui].share;
+          if (!fromSettled && fundingByFounder[underpayers[ui].id]) {
+            fundingByFounder[underpayers[ui].id].owedFromSettlements += Math.round(transfer);
+          }
+        }
+        oRemain[oi] -= transfer;
+        uRemain[ui] -= transfer;
+        if (oRemain[oi] <= 0) oi++;
+        if (uRemain[ui] <= 0) ui++;
+      }
     });
 
     (founderTxs || []).forEach((tx: any) => {
@@ -441,9 +472,9 @@ export default function FinancialReportPage() {
     const data = Object.entries(fundingByFounder).map(([id, d]) => ({
       id,
       name: d.name,
-      paid: d.paid,
-      owed: d.owed,
-      total: d.paid + d.owed,
+      paid: Math.max(0, d.totalFunding - d.owedFromSettlements),
+      owed: d.owedFromSettlements,
+      total: d.totalFunding,
       withdrawals: d.withdrawals,
       contributions: d.contributions,
     }));

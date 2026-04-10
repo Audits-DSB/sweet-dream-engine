@@ -172,14 +172,15 @@ export default function FounderProfile({
   }, [capital, profits, capitalWithdrawals]);
 
   const fundingPieData = useMemo(() => {
-    const paid = paidFunding.reduce((s, e) => s + e.originalAmount, 0);
-    const unpaid = unpaidFunding.reduce((s, e) => s + e.amount, 0);
-    if (paid === 0 && unpaid === 0) return [];
+    const settled = settlementsOwed.filter(s => s.settled).reduce((s, e) => s + e.amount, 0);
+    const unsettled = unsettledOwedTop.reduce((s, e) => s + e.amount, 0);
+    const paidPortion = Math.max(0, totalOrderFunding - unsettled);
+    if (paidPortion === 0 && unsettled === 0) return [];
     const result = [];
-    if (paid > 0) result.push({ name: "ممول", value: Math.round(paid) });
-    if (unpaid > 0) result.push({ name: "متبقي", value: Math.round(unpaid) });
+    if (paidPortion > 0) result.push({ name: "ممول", value: Math.round(paidPortion) });
+    if (unsettled > 0) result.push({ name: "متبقي", value: Math.round(unsettled) });
     return result;
-  }, [paidFunding, unpaidFunding]);
+  }, [settlementsOwed, unsettledOwedTop, totalOrderFunding]);
 
   const capitalBreakdownData = useMemo(() => {
     const items = [];

@@ -207,13 +207,56 @@ export default function ReportsPage() {
   }, [inventory]);
 
   const founderStats = useMemo(() => {
-    return (founders || []).map((f: any) => ({
-      name: f.name || f.id,
-      contributed: Number(f.totalContributed || f.total_contributed || 0),
-      withdrawn: Number(f.totalWithdrawn || f.total_withdrawn || 0),
-      balance: Number(f.balance || 0),
-    }));
-  }, [founders]);
+    return (founders || []).map((f: any) => {
+      let totalFunding = 0;
+      let owedFromSettlements = 0;
+      (orders || []).forEach((o: any) => {
+        const contribs = Array.isArray(o.founderContributions) ? o.founderContributions : [];
+        const myContrib = contribs.find((c: any) => (c.founderId || c.founder_id) === f.id);
+        if (!myContrib) return;
+        totalFunding += Number(myContrib.amount || 0);
+
+        let costPaidMap: Record<string, number> = {};
+        try {
+          const raw = o.orderCostPaidByFounder ?? o.order_cost_paid_by_founder;
+          costPaidMap = typeof raw === "object" && raw !== null ? raw : JSON.parse(raw || "{}");
+        } catch {}
+        const entries = contribs.map((c: any) => {
+          const fId = c.founderId || c.founder_id || "";
+          const initialPaid = costPaidMap[fId] || 0;
+          const share = Number(c.amount || 0);
+          const paidAmt = Number(c.paidAmount ?? c.paid_amount ?? 0);
+          return { id: fId, share, diff: initialPaid - share, paidAmt };
+        }).filter((e: any) => e.id);
+        const overpayers = entries.filter((e: any) => e.diff > 0);
+        const underpayers = entries.filter((e: any) => e.diff < 0);
+        if (overpayers.length === 0 || underpayers.length === 0) return;
+        const oRemain = overpayers.map((e: any) => e.diff);
+        const uRemain = underpayers.map((e: any) => Math.abs(e.diff));
+        let oi = 0, ui = 0;
+        while (oi < overpayers.length && ui < underpayers.length) {
+          const transfer = Math.min(oRemain[oi], uRemain[ui]);
+          if (transfer > 0) {
+            const fromSettled = underpayers[ui].paidAmt >= underpayers[ui].share;
+            if (!fromSettled && underpayers[ui].id === f.id) {
+              owedFromSettlements += Math.round(transfer);
+            }
+          }
+          oRemain[oi] -= transfer;
+          uRemain[ui] -= transfer;
+          if (oRemain[oi] <= 0) oi++;
+          if (uRemain[ui] <= 0) ui++;
+        }
+      });
+      const withdrawn = Number(f.totalWithdrawn || f.total_withdrawn || 0);
+      return {
+        name: f.name || f.id,
+        contributed: Math.max(0, totalFunding - owedFromSettlements),
+        withdrawn,
+        balance: Math.max(0, totalFunding - owedFromSettlements) - withdrawn,
+      };
+    });
+  }, [founders, orders]);
 
   const treasuryStats = useMemo(() => {
     let totalBalance = 0;
