@@ -830,6 +830,14 @@ export default function OrderDetails() {
       ? order.legacyLines.reduce((s: number, l: any) => s + toNum(l.lineCost), 0)
       : toNum(order.totalCost);
 
+  const fundingCostTotal = order.orderType === "inventory" ? costTotal : (
+    hasDetailedLines
+      ? lines.filter(l => !l.fromInventory).reduce((s, l) => s + toNum(l.lineCost), 0)
+      : hasLegacyLines
+        ? order.legacyLines.filter((l: any) => !l.fromInventory).reduce((s: number, l: any) => s + toNum(l.lineCost), 0)
+        : costTotal
+  );
+
   const subVal = order.subscription?.value || 0;
   const subscriptionAmt = order.subscription?.type === "percentage" ? linesTotal * subVal / 100 : subVal;
   const operatingRevenue = linesTotal + subscriptionAmt;
@@ -1966,7 +1974,7 @@ export default function OrderDetails() {
                   {subVal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">{t.subscriptionLabel} ({subVal}%)</span><span className="font-medium">{subscriptionAmt.toLocaleString()} {t.currency}</span></div>}
                   <div className="border-t border-border pt-2 flex justify-between font-semibold"><span>الإيراد التشغيلي</span><span>{operatingRevenue.toLocaleString()} {t.currency}</span></div>
                   <div className="flex justify-between text-muted-foreground"><span>إجمالي التكلفة</span><span className="text-destructive">- {costTotal.toLocaleString()} {t.currency}</span></div>
-                  {costTotal > 0 && (() => {
+                  {fundingCostTotal > 0 && (() => {
                     let costPaidMap: Record<string, number> = {};
                     try { const raw = order.orderCostPaidByFounder; costPaidMap = typeof raw === "object" && raw !== null ? raw : JSON.parse(raw || "{}"); } catch {}
                     const payerEntries = Object.entries(costPaidMap).filter(([, v]) => v > 0);
@@ -2487,8 +2495,8 @@ export default function OrderDetails() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-lg bg-muted/50 p-3">
-              <span className="text-sm text-muted-foreground">إجمالي التكلفة</span>
-              <span className="text-sm font-bold">{costTotal.toLocaleString()} {t.currency}</span>
+              <span className="text-sm text-muted-foreground">التكلفة المبدأية (بدون المخزون)</span>
+              <span className="text-sm font-bold">{fundingCostTotal.toLocaleString()} {t.currency}</span>
             </div>
             <div className="space-y-2.5">
               {founderPayments.map((fp, idx) => {
@@ -2512,7 +2520,7 @@ export default function OrderDetails() {
                         onChange={e => {
                           const v = Math.max(0, Number(e.target.value) || 0);
                           const otherIds = founderPayments.filter((_, i) => i !== idx).map(f => f.founderId || f.founder);
-                          const remaining = Math.max(0, costTotal - v);
+                          const remaining = Math.max(0, fundingCostTotal - v);
                           if (otherIds.length === 1) {
                             setCostPayerEditing(prev => ({ ...prev, [fId]: v, [otherIds[0]]: Math.round(remaining * 100) / 100 }));
                           } else {
@@ -2541,19 +2549,19 @@ export default function OrderDetails() {
             </div>
             {(() => {
               const total = Object.values(costPayerEditing).reduce((s, v) => s + (v || 0), 0);
-              const diff = total - costTotal;
+              const diff = total - fundingCostTotal;
               const isMatch = Math.abs(diff) < 0.01;
               return (
                 <div className={`flex items-center justify-between rounded-lg p-3 text-sm font-medium ${isMatch ? "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400" : diff > 0 ? "bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400" : "bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400"}`}>
                   <span>إجمالي المدفوع</span>
-                  <span>{total.toLocaleString()} / {costTotal.toLocaleString()} {t.currency}</span>
+                  <span>{total.toLocaleString()} / {fundingCostTotal.toLocaleString()} {t.currency}</span>
                 </div>
               );
             })()}
           </div>
           <div className="flex gap-2 pt-2">
             <Button variant="outline" className="flex-1" onClick={() => setCostPayerEditOpen(false)}>إلغاء</Button>
-            <Button className="flex-1" disabled={costPayerSaving || Math.abs(Object.values(costPayerEditing).reduce((s, v) => s + (v || 0), 0) - costTotal) >= 0.01} onClick={handleSaveCostPayers}>
+            <Button className="flex-1" disabled={costPayerSaving || Math.abs(Object.values(costPayerEditing).reduce((s, v) => s + (v || 0), 0) - fundingCostTotal) >= 0.01} onClick={handleSaveCostPayers}>
               {costPayerSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "حفظ التعديلات"}
             </Button>
           </div>
