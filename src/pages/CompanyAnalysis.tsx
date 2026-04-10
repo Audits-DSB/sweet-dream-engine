@@ -89,7 +89,9 @@ export default function CompanyAnalysis() {
       setReturns((ret || []).map((r: any) => ({
         id: r.id, date: r.date || r.createdAt || r.created_at || "",
         clientId: r.clientId || r.client_id || "", clientName: r.clientName || r.client_name || "",
+        orderId: r.orderId || r.order_id || "",
         status: r.status || "",
+        items: Array.isArray(r.items) ? r.items : [],
         itemCount: Array.isArray(r.items) ? r.items.length : Number(r.itemsCount || r.items_count || 1),
         totalValue: Number(r.totalValue ?? r.total_value ?? 0),
       })));

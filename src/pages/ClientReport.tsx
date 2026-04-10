@@ -453,8 +453,7 @@ export default function ClientReport() {
   }
 
   const reportDate = new Date().toLocaleDateString(dateLocale, { year: "numeric", month: "long", day: "numeric" });
-  const deliveredOrders = filteredOrders.filter(o => ["Delivered", "Closed", "Partially Delivered", "Completed"].includes(o.status));
-  const totalOrderValue = deliveredOrders.reduce((s, o) => s + o.totalSelling, 0);
+  const totalOrderValue = filteredOrders.reduce((s, o) => s + o.totalSelling, 0);
   const confirmedDeliveries = filteredDeliveries.filter(d => d.status === "Delivered" || d.status === "مُسلَّم");
   const lastAudit = audits.length > 0 ? audits[0] : null;
   const lastAuditDate = lastAudit ? (lastAudit.date || lastAudit.createdAt || lastAudit.created_at || "") : "";
@@ -476,7 +475,7 @@ export default function ClientReport() {
         headers: [isEn ? "Metric" : "البند", isEn ? "Value" : "القيمة"],
         rows: [
           [isEn ? "Total Orders" : "إجمالي الطلبات", filteredOrders.length],
-          [isEn ? "Delivered Orders" : "طلبات مسلّمة", deliveredOrders.length],
+          [isEn ? "Delivered Orders" : "طلبات مسلّمة", filteredOrders.filter(o => ["Delivered", "Closed", "Partially Delivered", "Completed", "مُسلَّم", "مغلق", "مكتمل"].includes(o.status)).length],
           [isEn ? "Total Order Value" : "إجمالي قيمة الطلبات", totalOrderValue],
           [isEn ? "Total Deliveries" : "إجمالي التوصيلات", filteredDeliveries.length],
           [isEn ? "Total Billed" : "إجمالي المفوتر", collectionStats.totalAmount],
@@ -607,7 +606,7 @@ export default function ClientReport() {
         </div>
       </div>
 
-      <div className="max-w-[900px] mx-auto p-8 print:p-0 print:pt-10 print:max-w-none print-report-page">
+      <div className="max-w-[900px] mx-auto p-8 print:p-0 print:pt-2 print:max-w-none print-report-page">
         {/* === SCREEN HEADER === */}
         <div className="report-header mb-8 rounded-2xl overflow-hidden border border-orange-100 print:hidden">
           <div className="bg-gradient-to-l from-orange-500 via-orange-400 to-amber-400 px-8 py-6 flex items-center justify-between">

@@ -231,8 +231,6 @@
   .print-report-page .h-\[240px\] { height: 140px !important; }
   .print-report-page .h-\[220px\] { height: 130px !important; }
 
-  @page { margin: 8mm 10mm; }
-
   :root, .dark {
     --background: 0 0% 100% !important;
     --foreground: 0 0% 5% !important;
@@ -251,8 +249,13 @@
   [class*="bg-card"], [class*="bg-background"] { background-color: white !important; }
 
   @page {
-    margin-top: 18mm;
-    margin-bottom: 14mm;
+    margin-top: 12mm;
+    margin-bottom: 10mm;
+    margin-left: 8mm;
+    margin-right: 8mm;
+  }
+  @page :first {
+    margin-top: 6mm;
   }
   .print-report-page {
     max-width: 100% !important;
