@@ -580,22 +580,6 @@ export default function CompanyAnalysis() {
 
   return (
     <div dir={dir} className="min-h-screen bg-background print-report-page">
-      <div className="hidden print:block print-fixed-header">
-        <div className="flex items-center justify-between px-4 py-1 text-xs">
-          <div className="flex items-center gap-2">
-            <img src="/images/dsb-logo.png" alt="DSB" className="h-6" />
-            <span className="font-bold">Dental Smart Box</span>
-          </div>
-          <span>{t.coTitle} — {new Date().toLocaleDateString(dateLocale)}</span>
-        </div>
-      </div>
-      <div className="hidden print:block print-fixed-footer">
-        <div className="flex items-center justify-between px-4 py-1 text-[10px] text-muted-foreground">
-          <span>dsbs.store | +20 11 0229 7174</span>
-          <span>{isEn ? "Confidential — Internal Use Only" : "سري — للاستخدام الداخلي فقط"}</span>
-        </div>
-      </div>
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-3 print:hidden">
           <div>

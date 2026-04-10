@@ -592,26 +592,6 @@ export default function ClientReport() {
 
   return (
     <div className="min-h-screen bg-background print:bg-white" dir={dir}>
-      {/* PRINT REPEATING HEADER */}
-      <div className="hidden print:block print-fixed-header">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <img src="/images/dsb-logo.png" alt="DSB" className="w-6 h-6 object-contain" />
-            <span className="text-[9px] font-bold text-gray-700">Dental Smart Box</span>
-          </div>
-          <span className="text-[9px] font-semibold text-gray-600">{client.name} — {reportTypeLabel}</span>
-          <span className="text-[9px] text-gray-400">{reportDate}</span>
-        </div>
-      </div>
-
-      {/* PRINT REPEATING FOOTER */}
-      <div className="hidden print:block print-fixed-footer">
-        <div className="flex items-center justify-between border-t border-gray-300 pt-1">
-          <span className="text-[8px] text-gray-400">DSB — {t.crDentalMgmt}</span>
-          <span className="text-[8px] text-gray-400" dir="ltr">+20 11 0229 7174 | dsbs.store</span>
-        </div>
-      </div>
-
       {/* SCREEN TOOLBAR */}
       <div className="print:hidden sticky top-0 z-10 bg-card border-b px-6 py-3 flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={() => navigate(`/clients/${id}`)} className="gap-2">
@@ -639,7 +619,7 @@ export default function ClientReport() {
         </div>
       </div>
 
-      <div className="max-w-[900px] mx-auto p-8 print:p-0 print:pt-2 print:max-w-none print-report-page">
+      <div className="max-w-[900px] mx-auto p-8 print:p-0 print:max-w-none print-report-page">
         {/* === SCREEN HEADER === */}
         <div className="report-header mb-8 rounded-2xl overflow-hidden border border-orange-100 print:hidden">
           <div className="bg-gradient-to-l from-orange-500 via-orange-400 to-amber-400 px-8 py-6 flex items-center justify-between">
@@ -1141,7 +1121,7 @@ export default function ClientReport() {
                   <p className="text-sm text-gray-600 mt-1">
                     {lastAuditDate ? new Date(lastAuditDate).toLocaleDateString(dateLocale, { year: "numeric", month: "long", day: "numeric" }) : "—"}
                     {" · "}{t.crAuditCount}: {audits.length}
-                    {" · "}{t.crStatusLabel}: <span className={lastAudit.status === "Completed" ? "text-green-700 font-semibold" : "text-amber-700 font-semibold"}>{lastAudit.status === "Completed" ? t.crCompleted : lastAudit.status === "In Progress" ? t.crInProgress : lastAudit.status}</span>
+                    {" · "}{t.crStatusLabel}: <span className={lastAudit.status === "Completed" ? "text-green-700 font-semibold" : lastAudit.status === "Discrepancy" ? "text-red-700 font-semibold" : "text-amber-700 font-semibold"}>{{ "Completed": t.crCompleted, "In Progress": t.crInProgress, "Scheduled": isEn ? "Scheduled" : "مُجدول", "Discrepancy": isEn ? "Discrepancy" : "يوجد فرق" }[lastAudit.status] || lastAudit.status}</span>
                   </p>
                 </div>
               </div>

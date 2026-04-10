@@ -249,13 +249,7 @@
   [class*="bg-card"], [class*="bg-background"] { background-color: white !important; }
 
   @page {
-    margin-top: 12mm;
-    margin-bottom: 10mm;
-    margin-left: 8mm;
-    margin-right: 8mm;
-  }
-  @page :first {
-    margin-top: 6mm;
+    margin: 8mm 10mm;
   }
   .print-report-page {
     max-width: 100% !important;
@@ -270,32 +264,6 @@
     page-break-before: always;
   }
 
-  .print-fixed-header {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    background: white;
-    padding: 4px 10mm;
-    border-bottom: 1px solid #e5e7eb;
-    z-index: 9999;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-    height: 28px;
-    box-sizing: content-box;
-  }
-
-  .print-fixed-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: white;
-    padding: 2px 10mm 4px;
-    z-index: 9999;
-    height: 20px;
-    box-sizing: content-box;
-  }
 
   .print-exec-summary .border-2 {
     border: 2px solid #fed7aa !important;
