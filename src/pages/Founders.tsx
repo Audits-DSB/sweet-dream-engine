@@ -762,19 +762,20 @@ export default function FoundersPage() {
 
   const globalStats = useMemo(() => {
     const allEntries = founders.flatMap(f => orderFundingByFounder[f.id] || []);
-    const totalPaidAmt = allEntries.reduce((s, e) => {
-      const pa = e.paidAmount || 0;
-      return s + (pa > 0 ? pa : (e.paid ? e.amount : 0));
-    }, 0);
     const totalAmount = allEntries.reduce((s, e) => s + e.amount, 0);
+    const unsettledOwed = orderCostSettlements.filter(s => !s.settled).reduce((s, e) => s + e.amount, 0);
+    const settledAmount = orderCostSettlements.filter(s => s.settled).reduce((s, e) => s + e.amount, 0);
+    const totalPaidAmt = Math.max(0, totalAmount - unsettledOwed);
+    const unsettledCount = orderCostSettlements.filter(s => !s.settled).length;
+    const settledCount = orderCostSettlements.filter(s => s.settled).length;
     return {
-      totalOwed: Math.max(0, totalAmount - totalPaidAmt),
+      totalOwed: unsettledOwed,
       totalPaid: totalPaidAmt,
-      unpaidCount: allEntries.filter(e => !e.paid).length,
-      paidCount: allEntries.filter(e => e.paid).length,
+      unpaidCount: unsettledCount,
+      paidCount: settledCount,
       totalEntries: allEntries.length,
     };
-  }, [founders, orderFundingByFounder]);
+  }, [founders, orderFundingByFounder, orderCostSettlements]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
