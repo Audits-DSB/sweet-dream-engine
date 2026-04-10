@@ -890,13 +890,16 @@ export default function FoundersPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {founders.map((f, fIdx) => {
             const myOrderFunding = orderFundingByFounder[f.id] || [];
-            const unpaidFunding = myOrderFunding.filter(e => !e.paid);
-            const paidFunding = myOrderFunding.filter(e => e.paid);
-            const totalOwed = unpaidFunding.reduce((s, e) => s + e.amount, 0);
-            const totalPaidFunding = paidFunding.reduce((s, e) => s + e.amount, 0);
             const totalOrderFunding = myOrderFunding.reduce((s, e) => s + e.amount, 0);
+
+            const mySettlementsOwed = orderCostSettlements.filter(s => s.fromId === f.id && !s.settled);
+            const mySettlementsOwing = orderCostSettlements.filter(s => s.toId === f.id && !s.settled);
+            const totalOwed = mySettlementsOwed.reduce((s, e) => s + e.amount, 0);
+            const totalOwedFromOthers = mySettlementsOwing.reduce((s, e) => s + e.amount, 0);
+            const settledTotal = orderCostSettlements.filter(s => s.fromId === f.id && s.settled).reduce((s, e) => s + e.amount, 0);
+            const paymentPct = totalOrderFunding > 0 ? ((totalOrderFunding - totalOwed) / totalOrderFunding) * 100 : 0;
+
             const capitalBalance = founderCapitalBalance(f.id);
-            const paymentPct = totalOrderFunding > 0 ? (totalPaidFunding / totalOrderFunding) * 100 : 0;
 
             const avatarColors = [
               "from-blue-500 to-indigo-600", "from-emerald-500 to-teal-600",
@@ -926,8 +929,8 @@ export default function FoundersPage() {
                         </div>
                       </div>
                     </div>
-                    {unpaidFunding.length > 0 && (
-                      <Badge variant="destructive" className="text-[10px] h-5">{unpaidFunding.length}</Badge>
+                    {mySettlementsOwed.length > 0 && (
+                      <Badge variant="destructive" className="text-[10px] h-5">{mySettlementsOwed.length}</Badge>
                     )}
                   </div>
 
