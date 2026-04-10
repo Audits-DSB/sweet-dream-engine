@@ -185,7 +185,7 @@ export default function ClientReport() {
   }, [filteredOrders, filteredDeliveries, filteredCollections, filteredReturns]);
 
   const aggregated = useMemo(() => {
-    const invMap = new Map<string, { totalDelivered: number; totalRemaining: number; avgWeekly: number; sellingPrice: number; imageUrl: string }>();
+    const invMap = new Map<string, { totalDelivered: number; totalRemaining: number; avgWeekly: number; sellingPrice: number; weightedSellingValue: number; weightedRemainingValue: number; imageUrl: string }>();
     for (const item of inventory) {
       const key = item.code || item.material;
       const existing = invMap.get(key);
@@ -193,18 +193,22 @@ export default function ClientReport() {
         existing.totalDelivered += item.delivered;
         existing.totalRemaining += item.remaining;
         existing.avgWeekly = Math.max(existing.avgWeekly, item.avgWeeklyUsage);
+        existing.weightedSellingValue += item.sellingPrice * item.delivered;
+        existing.weightedRemainingValue += item.sellingPrice * item.remaining;
         if (item.sellingPrice > 0) existing.sellingPrice = item.sellingPrice;
         if (item.imageUrl && !existing.imageUrl) existing.imageUrl = item.imageUrl;
       } else {
         invMap.set(key, {
           totalDelivered: item.delivered, totalRemaining: item.remaining,
           avgWeekly: item.avgWeeklyUsage, sellingPrice: item.sellingPrice,
+          weightedSellingValue: item.sellingPrice * item.delivered,
+          weightedRemainingValue: item.sellingPrice * item.remaining,
           imageUrl: item.imageUrl || "",
         });
       }
     }
 
-    const map = new Map<string, { material: string; code: string; unit: string; totalOrdered: number; totalDelivered: number; totalRemaining: number; totalConsumed: number; avgWeekly: number; sellingPrice: number; count: number; imageUrl: string }>();
+    const map = new Map<string, { material: string; code: string; unit: string; totalOrdered: number; totalDelivered: number; totalRemaining: number; totalConsumed: number; avgWeekly: number; sellingPrice: number; weightedSellingValue: number; weightedRemainingValue: number; count: number; imageUrl: string }>();
     for (const line of orderLines) {
       const key = line.materialCode || line.materialName;
       const existing = map.get(key);
@@ -216,7 +220,8 @@ export default function ClientReport() {
         map.set(key, {
           material: line.materialName, code: line.materialCode, unit: line.unit,
           totalOrdered: line.quantity, totalDelivered: 0, totalRemaining: 0,
-          totalConsumed: 0, avgWeekly: 0, sellingPrice: line.sellingPrice, count: 1, imageUrl: "",
+          totalConsumed: 0, avgWeekly: 0, sellingPrice: line.sellingPrice,
+          weightedSellingValue: 0, weightedRemainingValue: 0, count: 1, imageUrl: "",
         });
       }
     }
@@ -228,6 +233,8 @@ export default function ClientReport() {
         entry.totalRemaining = inv.totalRemaining;
         entry.totalConsumed = Math.max(0, inv.totalDelivered - inv.totalRemaining);
         entry.avgWeekly = inv.avgWeekly;
+        entry.weightedSellingValue = inv.weightedSellingValue;
+        entry.weightedRemainingValue = inv.weightedRemainingValue;
         if (inv.sellingPrice > 0) entry.sellingPrice = inv.sellingPrice;
         if (inv.imageUrl) entry.imageUrl = inv.imageUrl;
       } else {
@@ -235,7 +242,10 @@ export default function ClientReport() {
           material: key, code: key, unit: "unit",
           totalOrdered: 0, totalDelivered: inv.totalDelivered, totalRemaining: inv.totalRemaining,
           totalConsumed: Math.max(0, inv.totalDelivered - inv.totalRemaining),
-          avgWeekly: inv.avgWeekly, sellingPrice: inv.sellingPrice, count: 1, imageUrl: inv.imageUrl,
+          avgWeekly: inv.avgWeekly, sellingPrice: inv.sellingPrice,
+          weightedSellingValue: inv.weightedSellingValue,
+          weightedRemainingValue: inv.weightedRemainingValue,
+          count: 1, imageUrl: inv.imageUrl,
         });
       }
     }
@@ -249,7 +259,7 @@ export default function ClientReport() {
     const totalConsumed = aggregated.reduce((s, i) => s + i.totalConsumed, 0);
     const consumptionRate = totalDelivered > 0 ? Math.round((totalConsumed / totalDelivered) * 100) : 0;
     const avgWeeklyTotal = aggregated.reduce((s, i) => s + i.avgWeekly, 0);
-    const totalSellingValue = aggregated.reduce((s, i) => s + (i.sellingPrice * i.totalDelivered), 0);
+    const totalSellingValue = aggregated.reduce((s, i) => s + i.weightedSellingValue, 0);
     return { totalDelivered, totalRemaining, totalConsumed, consumptionRate, avgWeeklyTotal, materialCount: aggregated.length, totalSellingValue };
   }, [aggregated]);
 
@@ -392,29 +402,30 @@ export default function ClientReport() {
   const mMaterialConsumption = useMemo(() => {
     const mOrderIds = new Set(mOrders.map(o => o.id));
     const lines = orderLines.filter(l => mOrderIds.has(l.orderId));
-    const map = new Map<string, { materialName: string; materialCode: string; unit: string; totalQty: number; orderIds: Set<string> }>();
+    const map = new Map<string, { materialName: string; materialCode: string; unit: string; totalQty: number; weightedValue: number; orderIds: Set<string> }>();
     for (const l of lines) {
       const key = l.materialCode || l.materialName;
       const existing = map.get(key);
       if (existing) {
         existing.totalQty += l.quantity;
+        existing.weightedValue += l.sellingPrice * l.quantity;
         existing.orderIds.add(l.orderId);
       } else {
-        map.set(key, { materialName: l.materialName, materialCode: l.materialCode, unit: l.unit, totalQty: l.quantity, orderIds: new Set([l.orderId]) });
+        map.set(key, { materialName: l.materialName, materialCode: l.materialCode, unit: l.unit, totalQty: l.quantity, weightedValue: l.sellingPrice * l.quantity, orderIds: new Set([l.orderId]) });
       }
     }
     return [...map.values()].map(v => {
-      const sellingPrice = inventoryPriceMap[v.materialCode] || inventoryPriceMap[v.materialName.toLowerCase().trim()] || 0;
+      const sellingPrice = v.totalQty > 0 ? Math.round(v.weightedValue / v.totalQty * 100) / 100 : (inventoryPriceMap[v.materialCode] || inventoryPriceMap[v.materialName.toLowerCase().trim()] || 0);
       return {
         materialName: v.materialName, materialCode: v.materialCode, unit: v.unit, totalQty: v.totalQty, orderCount: v.orderIds.size,
-        sellingPrice,
+        sellingPrice, weightedValue: v.weightedValue,
         imageUrl: inventoryImageMap[v.materialCode] || inventoryImageMap[v.materialName.toLowerCase().trim()] || "",
       };
     }).sort((a, b) => b.totalQty - a.totalQty);
   }, [mOrders, orderLines, inventoryImageMap, inventoryPriceMap]);
 
   const mAggregated = useMemo(() => {
-    const map = new Map<string, { material: string; code: string; unit: string; totalDelivered: number; totalRemaining: number; totalConsumed: number; sellingPrice: number; imageUrl: string }>();
+    const map = new Map<string, { material: string; code: string; unit: string; totalDelivered: number; totalRemaining: number; totalConsumed: number; sellingPrice: number; weightedSellingValue: number; weightedRemainingValue: number; imageUrl: string }>();
     for (const item of mInventoryDelivered) {
       const key = item.code || item.material;
       const consumed = Math.max(0, item.delivered - item.remaining);
@@ -423,6 +434,8 @@ export default function ClientReport() {
         existing.totalDelivered += item.delivered;
         existing.totalRemaining += item.remaining;
         existing.totalConsumed += consumed;
+        existing.weightedSellingValue += item.sellingPrice * item.delivered;
+        existing.weightedRemainingValue += item.sellingPrice * item.remaining;
         if (item.sellingPrice > 0) existing.sellingPrice = item.sellingPrice;
         if (item.imageUrl && !existing.imageUrl) existing.imageUrl = item.imageUrl;
       } else {
@@ -430,6 +443,8 @@ export default function ClientReport() {
           material: item.material, code: item.code, unit: item.unit,
           totalDelivered: item.delivered, totalRemaining: item.remaining,
           totalConsumed: consumed, sellingPrice: item.sellingPrice,
+          weightedSellingValue: item.sellingPrice * item.delivered,
+          weightedRemainingValue: item.sellingPrice * item.remaining,
           imageUrl: item.imageUrl || "",
         });
       }
@@ -960,7 +975,7 @@ export default function ClientReport() {
                       {mAggregated.length > 0 && (
                         <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
                           <td colSpan={4} className="py-3 px-4 text-gray-900">{t.crTotalLabel}</td>
-                          <td className="py-3 px-4 text-end text-gray-900">{mAggregated.reduce((s, i) => s + (i.sellingPrice * i.totalRemaining), 0) > 0 ? cur(mAggregated.reduce((s, i) => s + (i.sellingPrice * i.totalRemaining), 0)) : ""}</td>
+                          <td className="py-3 px-4 text-end text-gray-900">{mAggregated.reduce((s, i) => s + i.weightedRemainingValue, 0) > 0 ? cur(mAggregated.reduce((s, i) => s + i.weightedRemainingValue, 0)) : ""}</td>
                           <td className="py-3 px-4 text-end text-gray-900">{mTotalDelivered}</td>
                           <td className="py-3 px-4 text-end text-orange-700">{mTotalConsumed}</td>
                           <td className="py-3 px-4 text-end text-blue-700">{mAggregated.reduce((s, i) => s + i.totalRemaining, 0)}</td>
@@ -1014,7 +1029,7 @@ export default function ClientReport() {
                       ))}
                       <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
                         <td colSpan={4} className="py-3 px-4 text-gray-900">{t.crTotalLabel}</td>
-                        <td className="py-3 px-4 text-end text-gray-900">{mMaterialConsumption.reduce((s, i) => s + (i.sellingPrice * i.totalQty), 0) > 0 ? cur(mMaterialConsumption.reduce((s, i) => s + (i.sellingPrice * i.totalQty), 0)) : ""}</td>
+                        <td className="py-3 px-4 text-end text-gray-900">{mMaterialConsumption.reduce((s, i) => s + i.weightedValue, 0) > 0 ? cur(mMaterialConsumption.reduce((s, i) => s + i.weightedValue, 0)) : ""}</td>
                         <td className="py-3 px-4 text-end text-orange-700">{mMaterialConsumption.reduce((s, i) => s + i.totalQty, 0)}</td>
                         <td></td>
                       </tr>
