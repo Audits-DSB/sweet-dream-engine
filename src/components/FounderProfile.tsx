@@ -456,8 +456,8 @@ export default function FounderProfile({
                         {Object.entries(owingByPerson).length > 0 && (
                           <div className="mt-2 space-y-1">
                             {Object.entries(owingByPerson).map(([pid, p]) => (
-                              <div key={pid} className="flex justify-between text-xs">
-                                <span className="text-muted-foreground">{p.name} عليه ليه</span>
+                              <div key={pid} className="flex justify-between text-xs items-center">
+                                <span className="text-muted-foreground">عليه ليه: <bdi className="font-semibold text-foreground">{p.name}</bdi></span>
                                 <span className="font-semibold text-emerald-600">{p.total.toLocaleString()}</span>
                               </div>
                             ))}
@@ -476,8 +476,8 @@ export default function FounderProfile({
                         {Object.entries(owedByPerson).length > 0 && (
                           <div className="mt-2 space-y-1">
                             {Object.entries(owedByPerson).map(([pid, p]) => (
-                              <div key={pid} className="flex justify-between text-xs">
-                                <span className="text-muted-foreground">عليه لـ {p.name}</span>
+                              <div key={pid} className="flex justify-between text-xs items-center">
+                                <span className="text-muted-foreground">عليه لـ: <bdi className="font-semibold text-foreground">{p.name}</bdi></span>
                                 <span className="font-semibold text-red-600">{p.total.toLocaleString()}</span>
                               </div>
                             ))}
@@ -503,9 +503,9 @@ export default function FounderProfile({
                         {netByPerson.filter(p => p.net !== 0).length > 0 && (
                           <div className="mt-2 space-y-1">
                             {netByPerson.filter(p => p.net !== 0).map(p => (
-                              <div key={p.id} className="flex justify-between text-xs">
+                              <div key={p.id} className="flex justify-between text-xs items-center">
                                 <span className="text-muted-foreground">
-                                  {p.net > 0 ? `${p.name} يحول ليه` : `يحول لـ ${p.name}`}
+                                  {p.net > 0 ? <>يحول ليه من: <bdi className="font-semibold text-foreground">{p.name}</bdi></> : <>يحول لـ: <bdi className="font-semibold text-foreground">{p.name}</bdi></>}
                                 </span>
                                 <span className={`font-semibold ${p.net > 0 ? "text-emerald-600" : "text-red-600"}`}>
                                   {Math.abs(p.net).toLocaleString()}
@@ -529,18 +529,24 @@ export default function FounderProfile({
                           const isPositive = person.net > 0;
                           return (
                             <div key={person.id} className="border-b border-border/30 last:border-b-0">
-                              <div className={`px-4 py-2.5 flex items-center justify-between ${isPositive ? "bg-emerald-50/30 dark:bg-emerald-950/10" : "bg-red-50/30 dark:bg-red-950/10"}`}>
+                              <div dir="rtl" className={`px-4 py-2.5 flex items-center justify-between ${isPositive ? "bg-emerald-50/30 dark:bg-emerald-950/10" : "bg-red-50/30 dark:bg-red-950/10"}`}>
                                 <span className={`text-xs font-bold ${isPositive ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
-                                  {isPositive ? `${person.name} يحول لـ ${f.name}` : `${f.name} يحول لـ ${person.name}`}
+                                  {isPositive
+                                    ? <><bdi>{person.name}</bdi>{" ← يحول لـ ← "}<bdi>{f.name}</bdi></>
+                                    : <><bdi>{f.name}</bdi>{" ← يحول لـ ← "}<bdi>{person.name}</bdi></>
+                                  }
                                 </span>
                                 <span className={`text-sm font-bold ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
                                   {Math.abs(person.net).toLocaleString()} {t.currency}
                                 </span>
                               </div>
 
-                              <div className="px-4 py-2 bg-muted/10">
-                                <p className="text-[10px] text-muted-foreground font-semibold mb-1 uppercase tracking-wide">
-                                  {isPositive ? `${person.name} عليه لـ ${f.name} (من الأوردرات)` : `${f.name} عليه لـ ${person.name} (من الأوردرات)`}
+                              <div dir="rtl" className="px-4 py-2 bg-muted/10">
+                                <p className="text-[10px] text-muted-foreground font-semibold mb-1 tracking-wide">
+                                  {isPositive
+                                    ? <>أوردرات <bdi>{person.name}</bdi> عليه فيها لـ <bdi>{f.name}</bdi></>
+                                    : <>أوردرات <bdi>{f.name}</bdi> عليه فيها لـ <bdi>{person.name}</bdi></>
+                                  }
                                 </p>
                                 {(isPositive ? person.owingEntries : person.owedEntries).length > 0 ? (
                                   <div className="divide-y divide-border/20">
@@ -568,9 +574,12 @@ export default function FounderProfile({
                               </div>
 
                               {(isPositive ? person.owedEntries : person.owingEntries).length > 0 && (
-                                <div className="px-4 py-2 bg-muted/10 border-t border-border/20">
-                                  <p className="text-[10px] text-muted-foreground font-semibold mb-1 uppercase tracking-wide">
-                                    يُخصم منها ({isPositive ? `${f.name} عليه لـ ${person.name}` : `${person.name} عليه لـ ${f.name}`})
+                                <div dir="rtl" className="px-4 py-2 bg-muted/10 border-t border-border/20">
+                                  <p className="text-[10px] text-muted-foreground font-semibold mb-1 tracking-wide">
+                                    {isPositive
+                                      ? <>يُخصم منها — أوردرات <bdi>{f.name}</bdi> عليه فيها لـ <bdi>{person.name}</bdi></>
+                                      : <>يُخصم منها — أوردرات <bdi>{person.name}</bdi> عليه فيها لـ <bdi>{f.name}</bdi></>
+                                    }
                                   </p>
                                   <div className="divide-y divide-border/20">
                                     {(isPositive ? person.owedEntries : person.owingEntries)
@@ -594,11 +603,13 @@ export default function FounderProfile({
                                 </div>
                               )}
 
-                              <div className={`px-4 py-2 border-t border-border/30 flex items-center justify-between ${isPositive ? "bg-emerald-50/20 dark:bg-emerald-950/5" : "bg-red-50/20 dark:bg-red-950/5"}`}>
+                              <div dir="rtl" className={`px-4 py-2 border-t border-border/30 flex items-center justify-between ${isPositive ? "bg-emerald-50/20 dark:bg-emerald-950/5" : "bg-red-50/20 dark:bg-red-950/5"}`}>
                                 <span className="text-xs font-semibold text-muted-foreground">الصافي بعد المقاصة</span>
                                 <span className={`text-xs font-bold ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
-                                  {isPositive ? `${person.name} يحول ` : `يحول لـ ${person.name} `}
-                                  {Math.abs(person.net).toLocaleString()} {t.currency}
+                                  {isPositive
+                                    ? <><bdi>{person.name}</bdi> يحول {Math.abs(person.net).toLocaleString()} {t.currency}</>
+                                    : <>يحول لـ <bdi>{person.name}</bdi> {Math.abs(person.net).toLocaleString()} {t.currency}</>
+                                  }
                                 </span>
                               </div>
                             </div>
