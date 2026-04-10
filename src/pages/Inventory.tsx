@@ -94,7 +94,7 @@ export default function InventoryPage() {
     queryFn: () => api.get<{ id: string; name: string }[]>("/clients"),
   });
 
-  const lots: InventoryLot[] = rawLots.map(l => ({
+  const allLots: InventoryLot[] = rawLots.map(l => ({
     ...l,
     delivered: Number(l.delivered),
     remaining: Number(l.remaining),
@@ -103,7 +103,9 @@ export default function InventoryPage() {
     avgWeeklyUsage: Number(l.avgWeeklyUsage),
     leadTimeWeeks: Number(l.leadTimeWeeks),
     safetyStock: Number(l.safetyStock),
-  })).filter(l => l.status !== "Returned" && l.remaining > 0);
+  }));
+
+  const lots: InventoryLot[] = allLots.filter(l => l.status !== "Returned" && l.remaining > 0);
 
   const addMutation = useMutation({
     mutationFn: async (data: Partial<InventoryLot>) => {
@@ -153,6 +155,14 @@ export default function InventoryPage() {
     });
     return groups;
   }, [filtered]);
+
+  const clientDeliveredTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    allLots.filter(l => l.status !== "Returned").forEach(l => {
+      totals[l.clientName] = (totals[l.clientName] || 0) + l.delivered * l.sellingPrice;
+    });
+    return totals;
+  }, [allLots]);
 
   const lowStockCount = lots.filter(l => l.status === "Low Stock").length;
   const expiredCount = lots.filter(l => l.status === "Expired").length;
@@ -271,6 +281,7 @@ export default function InventoryPage() {
         <div className="space-y-3">
           {Object.entries(clientGroups).map(([clientName, group]) => {
             const isExpanded = expandedClient === clientName;
+            const totalDelivered = clientDeliveredTotals[clientName] || 0;
             const totalRemaining = group.items.reduce((s, l) => s + l.remaining * l.sellingPrice, 0);
             const hasWarning = group.items.some(l => l.status === "Low Stock" || l.status === "Expired" || l.status === "Depleted");
             const canConvert = getClientItems(clientName).length > 0;
@@ -284,7 +295,7 @@ export default function InventoryPage() {
                         <h3 className="font-semibold text-sm cursor-pointer hover:text-primary" onClick={(e) => { e.stopPropagation(); navigate(`/clients/${group.clientId}`); }}>{clientName}</h3>
                         {hasWarning && <AlertTriangle className="h-3.5 w-3.5 text-warning" />}
                       </div>
-                      <p className="text-xs text-muted-foreground">{group.items.length} {t.materialsCount} · {t.remainingValue}: {totalRemaining.toLocaleString()} {t.currency}</p>
+                      <p className="text-xs text-muted-foreground">{group.items.length} {t.materialsCount} · إجمالي المبيعات: {totalDelivered.toLocaleString()} {t.currency}{totalRemaining !== totalDelivered ? ` · ${t.remainingValue}: ${totalRemaining.toLocaleString()} ${t.currency}` : ""}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -314,7 +325,7 @@ export default function InventoryPage() {
                     <div className="border-t border-border divide-y divide-border/50">
                       {Object.entries(orderGroups).map(([orderId, orderItems]) => {
                         const orderDate = orderItems[0]?.deliveryDate || "";
-                        const orderTotal = orderItems.reduce((s, l) => s + l.remaining * l.sellingPrice, 0);
+                        const orderTotal = orderItems.reduce((s, l) => s + l.delivered * l.sellingPrice, 0);
                         return (
                           <div key={orderId}>
                             <div className="flex items-center gap-3 px-4 py-2.5 bg-muted/20">
@@ -327,7 +338,7 @@ export default function InventoryPage() {
                               </div>
                               {orderDate && <span className="text-xs text-muted-foreground">{t.deliveryDate || "تاريخ التسليم"}: {orderDate}</span>}
                               <span className="text-xs text-muted-foreground">{orderItems.length} {t.materialsCount || "مادة"}</span>
-                              <span className="text-xs font-medium text-primary mr-auto">{t.remainingValue || "قيمة المتبقي"}: {orderTotal.toLocaleString()} {t.currency}</span>
+                              <span className="text-xs font-medium text-primary mr-auto">إجمالي المبيعات: {orderTotal.toLocaleString()} {t.currency}</span>
                             </div>
                             <table className="w-full text-sm">
                               <thead>
