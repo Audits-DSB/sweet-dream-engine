@@ -39,6 +39,8 @@ type ComparisonRow = {
   lots?: LotPrice[];
 };
 
+const normalize = (s: string) => s.toLowerCase().replace(/[-_\s]/g, "");
+
 function calcFifoValue(lots: LotPrice[] | undefined, consumed: number, field: "sellingPrice" | "storeCost", fallbackPrice?: number): number {
   if (!lots || lots.length === 0) return consumed * (fallbackPrice || 0);
   let left = consumed;
@@ -158,10 +160,32 @@ export default function AuditsPage() {
     return ids;
   }, [collections]);
 
-  const audits: AuditRecord[] = rawAudits.map(a => ({
-    ...a,
-    comparison: Array.isArray(a.comparison) ? a.comparison : [],
-  }));
+  const audits: AuditRecord[] = useMemo(() => {
+    const allLots = rawLots.map(l => ({
+      ...l,
+      remaining: Number(l.remaining || 0),
+      delivered: Number((l as any).delivered ?? l.remaining ?? 0),
+      sellingPrice: Number(l.sellingPrice || 0),
+      storeCost: Number(l.storeCost || 0),
+    }));
+    return rawAudits.map(a => {
+      const comp = Array.isArray(a.comparison) ? a.comparison : [];
+      const needsEnrich = comp.length > 0 && comp.some(r => !r.lots || r.lots.length === 0);
+      if (!needsEnrich) return { ...a, comparison: comp };
+      const clientLots = allLots
+        .filter(l => l.clientId === a.clientId)
+        .sort((x, y) => new Date(x.createdAt || 0).getTime() - new Date(y.createdAt || 0).getTime());
+      const enriched = comp.map(r => {
+        if (r.lots && r.lots.length > 0) return r;
+        const key = normalize(r.code);
+        const matchingLots = clientLots.filter(l => normalize(l.code) === key);
+        if (matchingLots.length === 0) return r;
+        const lotPrices: LotPrice[] = matchingLots.map(l => ({ remaining: l.delivered, sellingPrice: l.sellingPrice, storeCost: l.storeCost }));
+        return { ...r, lots: lotPrices };
+      });
+      return { ...a, comparison: enriched };
+    });
+  }, [rawAudits, rawLots]);
 
   const lots: InventoryLot[] = rawLots.map(l => ({
     ...l,
@@ -242,7 +266,6 @@ export default function AuditsPage() {
     e.target.value = "";
   };
 
-  const normalize = (s: string) => s.toLowerCase().replace(/[-_\s]/g, "");
 
   const buildComparison = (uploadedData: { code: string; name: string; actual: number }[]) => {
     // ── Step 1: merge uploaded CSV rows by code (sum actuals for duplicate codes) ──
