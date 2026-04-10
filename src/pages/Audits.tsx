@@ -24,7 +24,7 @@ import { api } from "@/lib/api";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { logAudit } from "@/lib/auditLog";
 
-type LotPrice = { remaining: number; sellingPrice: number; storeCost: number };
+type LotPrice = { remaining: number; sellingPrice: number; storeCost: number; sourceOrder?: string };
 type ComparisonRow = {
   material: string;
   code: string;
@@ -180,7 +180,7 @@ export default function AuditsPage() {
         const key = normalize(r.code);
         const matchingLots = clientLots.filter(l => normalize(l.code) === key);
         if (matchingLots.length === 0) return r;
-        const lotPrices: LotPrice[] = matchingLots.map(l => ({ remaining: l.delivered, sellingPrice: l.sellingPrice, storeCost: l.storeCost }));
+        const lotPrices: LotPrice[] = matchingLots.map(l => ({ remaining: l.delivered, sellingPrice: l.sellingPrice, storeCost: l.storeCost, sourceOrder: l.sourceOrder }));
         return { ...r, lots: lotPrices };
       });
       return { ...a, comparison: enriched };
@@ -315,7 +315,7 @@ export default function AuditsPage() {
       const diff = actual - inv.expected;
       const result: ComparisonRow["result"] = diff === 0 ? "matched" : diff < 0 ? "shortage" : "surplus";
       // Use original code (not normalized) from first lot
-      const sortedLots: LotPrice[] = inv.lots.map(l => ({ remaining: l.remaining, sellingPrice: l.sellingPrice, storeCost: l.storeCost }));
+      const sortedLots: LotPrice[] = inv.lots.map(l => ({ remaining: l.remaining, sellingPrice: l.sellingPrice, storeCost: l.storeCost, sourceOrder: l.sourceOrder }));
       rows.push({ material: inv.material, code: inv.lots[0].code, unit: inv.unit, expected: inv.expected, actual, diff, result, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost, imageUrl: inv.lots[0].imageUrl || "", lots: sortedLots });
     }
 
@@ -454,7 +454,11 @@ export default function AuditsPage() {
       });
 
       // Only include orders that actually have shortage items (not all client orders)
-      const relevantOrderIds = [...new Set(shortages.map(r => codeToSourceOrder[r.code]).filter(Boolean))];
+      // Include orders from individual lots (each lot may come from a different order)
+      const relevantOrderIds = [...new Set([
+        ...shortages.map(r => codeToSourceOrder[r.code]).filter(Boolean),
+        ...shortages.flatMap(r => (r.lots || []).map(l => l.sourceOrder).filter(Boolean)),
+      ])];
 
       // Fetch companyProfitPercentage snapshot per relevant order
       const orderPctMap: Record<string, number> = {};
@@ -478,9 +482,7 @@ export default function AuditsPage() {
 
       const lineItems: any[] = [];
       for (const r of shortages) {
-        const srcOrd = codeToSourceOrder[r.code] || "";
-        const companyProfitPct = orderPctMap[srcOrd] ?? 40;
-        const delInfo = orderDeliveryInfoMap[srcOrd];
+        const fallbackSrcOrd = codeToSourceOrder[r.code] || "";
         const consumed = Math.abs(r.diff);
 
         if (r.lots && r.lots.length > 0) {
@@ -488,6 +490,9 @@ export default function AuditsPage() {
           for (const lot of r.lots) {
             if (left <= 0) break;
             const take = Math.min(left, lot.remaining);
+            const lotSrcOrd = lot.sourceOrder || fallbackSrcOrd;
+            const companyProfitPct = orderPctMap[lotSrcOrd] ?? 40;
+            const delInfo = orderDeliveryInfoMap[lotSrcOrd];
             lineItems.push({
               code: r.code, material: r.material,
               imageUrl: imgMap[r.code] || "",
@@ -496,7 +501,7 @@ export default function AuditsPage() {
               costPrice: lot.storeCost,
               lineTotal: take * lot.sellingPrice,
               lineCostTotal: take * lot.storeCost,
-              sourceOrderId: srcOrd,
+              sourceOrderId: lotSrcOrd,
               companyProfitPct,
               deliveryFeePaidByFounder: delInfo?.deliveryFeePaidByFounder || "",
             });
@@ -504,6 +509,9 @@ export default function AuditsPage() {
           }
           if (left > 0) {
             const lastLot = r.lots[r.lots.length - 1];
+            const lastSrcOrd = lastLot.sourceOrder || fallbackSrcOrd;
+            const companyProfitPct = orderPctMap[lastSrcOrd] ?? 40;
+            const delInfo = orderDeliveryInfoMap[lastSrcOrd];
             lineItems.push({
               code: r.code, material: r.material,
               imageUrl: imgMap[r.code] || "",
@@ -512,12 +520,14 @@ export default function AuditsPage() {
               costPrice: lastLot.storeCost,
               lineTotal: left * lastLot.sellingPrice,
               lineCostTotal: left * lastLot.storeCost,
-              sourceOrderId: srcOrd,
+              sourceOrderId: lastSrcOrd,
               companyProfitPct,
               deliveryFeePaidByFounder: delInfo?.deliveryFeePaidByFounder || "",
             });
           }
         } else {
+          const companyProfitPct = orderPctMap[fallbackSrcOrd] ?? 40;
+          const delInfo = orderDeliveryInfoMap[fallbackSrcOrd];
           lineItems.push({
             code: r.code, material: r.material,
             imageUrl: imgMap[r.code] || "",
@@ -526,7 +536,7 @@ export default function AuditsPage() {
             costPrice: r.storeCost || 0,
             lineTotal: consumed * r.sellingPrice,
             lineCostTotal: consumed * (r.storeCost || 0),
-            sourceOrderId: srcOrd,
+            sourceOrderId: fallbackSrcOrd,
             companyProfitPct,
             deliveryFeePaidByFounder: delInfo?.deliveryFeePaidByFounder || "",
           });
