@@ -24,6 +24,7 @@ import { api } from "@/lib/api";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { logAudit } from "@/lib/auditLog";
 
+type LotPrice = { remaining: number; sellingPrice: number; storeCost: number };
 type ComparisonRow = {
   material: string;
   code: string;
@@ -35,7 +36,24 @@ type ComparisonRow = {
   sellingPrice: number;
   storeCost: number;
   imageUrl?: string;
+  lots?: LotPrice[];
 };
+
+function calcFifoValue(lots: LotPrice[], consumed: number, field: "sellingPrice" | "storeCost"): number {
+  if (!lots || lots.length === 0) return 0;
+  let left = consumed;
+  let total = 0;
+  for (const lot of lots) {
+    if (left <= 0) break;
+    const take = Math.min(left, lot.remaining);
+    total += take * lot[field];
+    left -= take;
+  }
+  if (left > 0 && lots.length > 0) {
+    total += left * lots[lots.length - 1][field];
+  }
+  return total;
+}
 
 type AuditRecord = {
   id: string;
@@ -65,6 +83,7 @@ type InventoryLot = {
   storeCost: number;
   imageUrl?: string;
   sourceOrder?: string;
+  createdAt?: string;
 };
 
 function parseCsvText(text: string): { code: string; name: string; actual: number }[] {
@@ -198,7 +217,8 @@ export default function AuditsPage() {
 
   const clientInventory = useMemo(() => {
     if (!selectedClientId) return [];
-    return lots.filter(l => l.clientId === selectedClientId && l.status !== "Returned" && Number(l.remaining) > 0);
+    return lots.filter(l => l.clientId === selectedClientId && l.status !== "Returned" && Number(l.remaining) > 0)
+      .sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
   }, [selectedClientId, lots]);
 
   const filtered = audits.filter((a) => {
@@ -250,6 +270,11 @@ export default function AuditsPage() {
       }
     }
 
+    // Sort lots oldest-first within each merged group for FIFO
+    for (const [, inv] of invMerged.entries()) {
+      inv.lots.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+    }
+
     // ── Step 3: build one ComparisonRow per unique material code ──
     const rows: ComparisonRow[] = [];
     for (const [normCode, inv] of invMerged.entries()) {
@@ -267,7 +292,8 @@ export default function AuditsPage() {
       const diff = actual - inv.expected;
       const result: ComparisonRow["result"] = diff === 0 ? "matched" : diff < 0 ? "shortage" : "surplus";
       // Use original code (not normalized) from first lot
-      rows.push({ material: inv.material, code: inv.lots[0].code, unit: inv.unit, expected: inv.expected, actual, diff, result, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost, imageUrl: inv.lots[0].imageUrl || "" });
+      const sortedLots: LotPrice[] = inv.lots.map(l => ({ remaining: l.remaining, sellingPrice: l.sellingPrice, storeCost: l.storeCost }));
+      rows.push({ material: inv.material, code: inv.lots[0].code, unit: inv.unit, expected: inv.expected, actual, diff, result, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost, imageUrl: inv.lots[0].imageUrl || "", lots: sortedLots });
     }
 
     setComparisonRows(rows);
@@ -431,13 +457,17 @@ export default function AuditsPage() {
         const srcOrd = codeToSourceOrder[r.code] || "";
         const companyProfitPct = orderPctMap[srcOrd] ?? 40;
         const delInfo = orderDeliveryInfoMap[srcOrd];
+        const consumed = Math.abs(r.diff);
+        const fifoSelling = r.lots && r.lots.length > 1 ? calcFifoValue(r.lots, consumed, "sellingPrice") : consumed * r.sellingPrice;
+        const fifoCost = r.lots && r.lots.length > 1 ? calcFifoValue(r.lots, consumed, "storeCost") : consumed * r.storeCost;
         return {
           code: r.code, material: r.material,
           imageUrl: imgMap[r.code] || "",
-          unit: r.unit, quantity: Math.abs(r.diff),
+          unit: r.unit, quantity: consumed,
           sellingPrice: r.sellingPrice,
           costPrice: r.storeCost || 0,
-          lineTotal: Math.abs(r.diff) * r.sellingPrice,
+          lineTotal: fifoSelling,
+          lineCostTotal: fifoCost,
           sourceOrderId: srcOrd,
           companyProfitPct,
           deliveryFeePaidByFounder: delInfo?.deliveryFeePaidByFounder || "",
@@ -521,12 +551,12 @@ export default function AuditsPage() {
         b64Map[r.code]
           ? `<img src="${b64Map[r.code]}" class="item-img" alt="${r.material}" />`
           : `<div style="width:42px;height:42px;background:#f1f5f9;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:18px;">📦</div>`,
-        r.material, r.code, r.unit, Math.abs(r.diff), r.sellingPrice,
-        (Math.abs(r.diff) * r.sellingPrice).toLocaleString(),
+        r.material, r.code, r.unit, Math.abs(r.diff), r.lots && r.lots.length > 1 ? Math.round(calcFifoValue(r.lots, Math.abs(r.diff), "sellingPrice") / Math.abs(r.diff)) : r.sellingPrice,
+        (r.lots && r.lots.length > 1 ? calcFifoValue(r.lots, Math.abs(r.diff), "sellingPrice") : Math.abs(r.diff) * r.sellingPrice).toLocaleString(),
       ]),
       totals: [
         { label: t.totalShortageItems, value: String(shortages.length) },
-        { label: t.totalCostForClient, value: `${shortages.reduce((s, r) => s + Math.abs(r.diff) * r.sellingPrice, 0).toLocaleString()} ${t.currency}` },
+        { label: t.totalCostForClient, value: `${shortages.reduce((s, r) => s + (r.lots && r.lots.length > 1 ? calcFifoValue(r.lots, Math.abs(r.diff), "sellingPrice") : Math.abs(r.diff) * r.sellingPrice), 0).toLocaleString()} ${t.currency}` },
       ],
       footer: `${t.auditor}: ${audit.auditor} — ${audit.date}`,
     });
@@ -537,7 +567,7 @@ export default function AuditsPage() {
     if (shortages.length === 0) { toast.info(t.noResults); return; }
     exportToCsv(`purchase_list_${audit.id}`,
       [t.material, t.codeCol, t.unit, t.qtyRequired, `${t.storeCostColon} (${t.currency})`, `${t.total} (${t.currency})`, t.client],
-      shortages.map(r => [r.material, r.code, r.unit, Math.abs(r.diff), r.storeCost, (Math.abs(r.diff) * r.storeCost).toLocaleString(), audit.clientName])
+      shortages.map(r => [r.material, r.code, r.unit, Math.abs(r.diff), r.lots && r.lots.length > 1 ? Math.round(calcFifoValue(r.lots, Math.abs(r.diff), "storeCost") / Math.abs(r.diff)) : r.storeCost, (r.lots && r.lots.length > 1 ? calcFifoValue(r.lots, Math.abs(r.diff), "storeCost") : Math.abs(r.diff) * r.storeCost).toLocaleString(), audit.clientName])
     );
     toast.success(t.purchaseListExported);
   };
@@ -644,20 +674,21 @@ export default function AuditsPage() {
   const initManualEntry = () => {
     if (clientInventory.length === 0) { toast.error(t.noInventoryForClient); return; }
     // Merge lots with the same code — show one row per unique material
-    const merged = new Map<string, { material: string; unit: string; expected: number; sellingPrice: number; storeCost: number; code: string; imageUrl: string }>();
+    const merged = new Map<string, { material: string; unit: string; expected: number; sellingPrice: number; storeCost: number; code: string; imageUrl: string; lots: LotPrice[] }>();
     for (const inv of clientInventory) {
       const key = normalize(inv.code);
       if (merged.has(key)) {
         merged.get(key)!.expected += inv.remaining;
+        merged.get(key)!.lots.push({ remaining: inv.remaining, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost });
       } else {
-        merged.set(key, { material: inv.material, code: inv.code, unit: inv.unit, expected: inv.remaining, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost, imageUrl: imageByCode[inv.code] || inv.imageUrl || "" });
+        merged.set(key, { material: inv.material, code: inv.code, unit: inv.unit, expected: inv.remaining, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost, imageUrl: imageByCode[inv.code] || inv.imageUrl || "", lots: [{ remaining: inv.remaining, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost }] });
       }
     }
     setComparisonRows(Array.from(merged.values()).map(inv => ({
       material: inv.material, code: inv.code, unit: inv.unit,
       expected: inv.expected, actual: inv.expected, diff: 0,
       result: "matched" as const, sellingPrice: inv.sellingPrice, storeCost: inv.storeCost,
-      imageUrl: inv.imageUrl,
+      imageUrl: inv.imageUrl, lots: inv.lots,
     })));
     setStep("compare");
   };
@@ -780,8 +811,8 @@ export default function AuditsPage() {
                 {(() => {
                   const details = selectedAudit.comparison;
                   const shortages = details.filter(r => r.result === "shortage");
-                  const shortageTotal = shortages.reduce((s, r) => s + Math.abs(r.diff) * r.sellingPrice, 0);
-                  const purchaseTotal = shortages.reduce((s, r) => s + Math.abs(r.diff) * r.storeCost, 0);
+                  const shortageTotal = shortages.reduce((s, r) => s + (r.lots && r.lots.length > 1 ? calcFifoValue(r.lots, Math.abs(r.diff), "sellingPrice") : Math.abs(r.diff) * r.sellingPrice), 0);
+                  const purchaseTotal = shortages.reduce((s, r) => s + (r.lots && r.lots.length > 1 ? calcFifoValue(r.lots, Math.abs(r.diff), "storeCost") : Math.abs(r.diff) * r.storeCost), 0);
                   return (
                     <>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
