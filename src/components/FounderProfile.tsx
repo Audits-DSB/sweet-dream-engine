@@ -406,6 +406,142 @@ export default function FounderProfile({
                   <p className="text-xs text-muted-foreground mt-1">ستظهر الرسوم البيانية تلقائياً عند تسجيل تحصيلات وأوردرات</p>
                 </div>
               )}
+
+              {(settlementsOwed.length > 0 || settlementsOwing.length > 0) && (() => {
+                const totalOwedToOthers = settlementsOwed.reduce((s, e) => s + e.amount, 0);
+                const totalOwedFromOthers = settlementsOwing.reduce((s, e) => s + e.amount, 0);
+                const netSettlement = totalOwedFromOthers - totalOwedToOthers;
+
+                const owedByPerson: Record<string, { name: string; total: number; entries: typeof settlementsOwed }> = {};
+                settlementsOwed.forEach(s => {
+                  if (!owedByPerson[s.toId]) owedByPerson[s.toId] = { name: s.to, total: 0, entries: [] };
+                  owedByPerson[s.toId].total += s.amount;
+                  owedByPerson[s.toId].entries.push(s);
+                });
+
+                const owingByPerson: Record<string, { name: string; total: number; entries: typeof settlementsOwing }> = {};
+                settlementsOwing.forEach(s => {
+                  if (!owingByPerson[s.fromId]) owingByPerson[s.fromId] = { name: s.from, total: 0, entries: [] };
+                  owingByPerson[s.fromId].total += s.amount;
+                  owingByPerson[s.fromId].entries.push(s);
+                });
+
+                return (
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold flex items-center gap-2">
+                      <Receipt className="h-4 w-4 text-amber-500" />
+                      التسويات بين المؤسسين
+                    </h3>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                      <div className={`rounded-xl border p-4 ${totalOwedFromOthers > 0 ? "border-emerald-200/50 dark:border-emerald-800/30 bg-emerald-50/50 dark:bg-emerald-950/10" : "border-border bg-muted/30"}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <ArrowDownLeft className="h-4 w-4 text-emerald-600" />
+                          <span className="text-xs font-semibold text-muted-foreground">ليه عند غيره</span>
+                        </div>
+                        <p className={`text-lg font-bold ${totalOwedFromOthers > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                          {totalOwedFromOthers > 0 ? `${totalOwedFromOthers.toLocaleString()} ${t.currency}` : "—"}
+                        </p>
+                      </div>
+
+                      <div className={`rounded-xl border p-4 ${totalOwedToOthers > 0 ? "border-red-200/50 dark:border-red-800/30 bg-red-50/50 dark:bg-red-950/10" : "border-border bg-muted/30"}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <ArrowUpRight className="h-4 w-4 text-red-600" />
+                          <span className="text-xs font-semibold text-muted-foreground">عليه لغيره</span>
+                        </div>
+                        <p className={`text-lg font-bold ${totalOwedToOthers > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
+                          {totalOwedToOthers > 0 ? `${totalOwedToOthers.toLocaleString()} ${t.currency}` : "—"}
+                        </p>
+                      </div>
+
+                      <div className={`rounded-xl border p-4 ${netSettlement !== 0 ? (netSettlement > 0 ? "border-emerald-200/50 dark:border-emerald-800/30 bg-emerald-50/50 dark:bg-emerald-950/10" : "border-red-200/50 dark:border-red-800/30 bg-red-50/50 dark:bg-red-950/10") : "border-border bg-muted/30"}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Coins className="h-4 w-4 text-amber-600" />
+                          <span className="text-xs font-semibold text-muted-foreground">إجمالي الخصم</span>
+                        </div>
+                        <p className={`text-lg font-bold ${netSettlement > 0 ? "text-emerald-600 dark:text-emerald-400" : netSettlement < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
+                          {netSettlement !== 0 ? (
+                            <>
+                              {netSettlement > 0 ? "+" : ""}{netSettlement.toLocaleString()} {t.currency}
+                              <span className="text-xs font-normal text-muted-foreground mr-1">
+                                {netSettlement > 0 ? "(ليه)" : "(عليه)"}
+                              </span>
+                            </>
+                          ) : "متساوي ✓"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {Object.keys(owingByPerson).length > 0 && (
+                      <div className="rounded-xl border border-emerald-200/50 dark:border-emerald-800/30 overflow-hidden">
+                        <div className="px-4 py-2.5 bg-emerald-50/50 dark:bg-emerald-950/20 border-b border-emerald-200/30 dark:border-emerald-800/20">
+                          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                            <ArrowDownLeft className="h-3.5 w-3.5" />
+                            تفاصيل: ليه عند غيره
+                          </span>
+                        </div>
+                        {Object.entries(owingByPerson).map(([personId, person]) => (
+                          <div key={personId} className="border-b border-border/30 last:border-b-0">
+                            <div className="px-4 py-2 bg-muted/20 flex items-center justify-between">
+                              <span className="text-xs font-semibold">{person.name} عليه ليه</span>
+                              <span className="text-xs font-bold text-emerald-600">{person.total.toLocaleString()} {t.currency}</span>
+                            </div>
+                            <div className="divide-y divide-border/20">
+                              {person.entries.sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date)).map((entry, i) => (
+                                <div key={`oi-${entry.orderId}-${i}`} className="flex items-center justify-between px-4 py-2 text-xs hover:bg-muted/10">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <button className="font-mono text-primary hover:underline flex-shrink-0" onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                      {entry.orderId}
+                                    </button>
+                                    <span className="text-muted-foreground truncate">{entry.clientName}</span>
+                                    <span className="text-muted-foreground flex-shrink-0">{entry.paidAt || entry.date}</span>
+                                    {entry.settled && <CheckCircle2 className="h-3 w-3 text-emerald-500 flex-shrink-0" />}
+                                  </div>
+                                  <span className="font-semibold text-emerald-600 flex-shrink-0">+{entry.amount.toLocaleString()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {Object.keys(owedByPerson).length > 0 && (
+                      <div className="rounded-xl border border-red-200/50 dark:border-red-800/30 overflow-hidden">
+                        <div className="px-4 py-2.5 bg-red-50/50 dark:bg-red-950/20 border-b border-red-200/30 dark:border-red-800/20">
+                          <span className="text-xs font-semibold text-red-700 dark:text-red-400 flex items-center gap-1.5">
+                            <ArrowUpRight className="h-3.5 w-3.5" />
+                            تفاصيل: عليه لغيره
+                          </span>
+                        </div>
+                        {Object.entries(owedByPerson).map(([personId, person]) => (
+                          <div key={personId} className="border-b border-border/30 last:border-b-0">
+                            <div className="px-4 py-2 bg-muted/20 flex items-center justify-between">
+                              <span className="text-xs font-semibold">عليه لـ {person.name}</span>
+                              <span className="text-xs font-bold text-red-600">{person.total.toLocaleString()} {t.currency}</span>
+                            </div>
+                            <div className="divide-y divide-border/20">
+                              {person.entries.sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date)).map((entry, i) => (
+                                <div key={`oo-${entry.orderId}-${i}`} className="flex items-center justify-between px-4 py-2 text-xs hover:bg-muted/10">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <button className="font-mono text-primary hover:underline flex-shrink-0" onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                      {entry.orderId}
+                                    </button>
+                                    <span className="text-muted-foreground truncate">{entry.clientName}</span>
+                                    <span className="text-muted-foreground flex-shrink-0">{entry.paidAt || entry.date}</span>
+                                    {entry.settled && <CheckCircle2 className="h-3 w-3 text-emerald-500 flex-shrink-0" />}
+                                  </div>
+                                  <span className="font-semibold text-red-600 flex-shrink-0">-{entry.amount.toLocaleString()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
