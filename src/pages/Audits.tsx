@@ -962,7 +962,7 @@ export default function AuditsPage() {
                         <input type="file" ref={fileInputRef} className="hidden" accept=".csv,.txt" onChange={handleFileUpload} />
                         <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}><Upload className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.uploadCsv}</Button>
                         <Button variant="outline" size="sm" onClick={initManualEntry}><ClipboardCheck className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.manualEntryBtn}</Button>
-                        <Button variant="outline" size="sm" onClick={() => { exportToCsv(`audit_template_${selectedClientId}`, [t.codeCol, t.material, t.actual], clientInventory.map(inv => [inv.code, inv.material, ""])); toast.success(t.templateExported); }}>
+                        <Button variant="outline" size="sm" onClick={() => { const merged = new Map<string, { code: string; material: string; expected: number }>(); for (const inv of clientInventory) { const key = normalize(inv.code); if (merged.has(key)) { merged.get(key)!.expected += inv.remaining; } else { merged.set(key, { code: inv.code, material: inv.material, expected: inv.remaining }); } } exportToCsv(`audit_template_${selectedClientId}`, [t.codeCol, t.material, t.actual], Array.from(merged.values()).map(m => [m.code, m.material, ""])); toast.success(t.templateExported); }}>
                           <Download className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />{t.downloadTemplate}
                         </Button>
                       </div>
