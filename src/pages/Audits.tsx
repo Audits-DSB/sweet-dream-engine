@@ -569,14 +569,18 @@ export default function AuditsPage() {
     printInvoice({
       title: "فاتورة مواد جديدة للعميل", companyName: "DSB", subtitle: `جرد ${audit.id} — مواد مطلوب توصيلها`,
       clientName: audit.clientName, invoiceNumber: `INV-${audit.id}`, date: audit.date,
-      columns: ["الصورة", t.material, t.codeCol, t.unit, t.qtyRequired, `${t.priceColon} (${t.currency})`, `${t.total} (${t.currency})`],
-      rows: shortages.map(r => [
-        b64Map[r.code]
-          ? `<img src="${b64Map[r.code]}" class="item-img" alt="${r.material}" />`
-          : `<div style="width:42px;height:42px;background:#f1f5f9;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:18px;">📦</div>`,
-        r.material, r.code, r.unit, Math.abs(r.diff),
-        calcFifoValue(r.lots, Math.abs(r.diff), "sellingPrice", r.sellingPrice).toLocaleString(),
-      ]),
+      columns: ["الصورة", t.material, t.codeCol, t.unit, t.qtyRequired, `${t.total} (${t.currency})`],
+      rows: shortages.map(r => {
+        const qty = Math.abs(r.diff);
+        const totalVal = calcFifoValue(r.lots, qty, "sellingPrice", r.sellingPrice);
+        return [
+          b64Map[r.code]
+            ? `<img src="${b64Map[r.code]}" class="item-img" alt="${r.material}" />`
+            : `<div style="width:42px;height:42px;background:#f1f5f9;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:18px;">📦</div>`,
+          r.material, r.code, r.unit, qty,
+          totalVal.toLocaleString(),
+        ];
+      }),
       totals: [
         { label: t.totalShortageItems, value: String(shortages.length) },
         { label: t.totalCostForClient, value: `${shortages.reduce((s, r) => s + calcFifoValue(r.lots, Math.abs(r.diff), "sellingPrice", r.sellingPrice), 0).toLocaleString()} ${t.currency}` },
