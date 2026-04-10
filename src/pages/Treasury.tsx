@@ -41,12 +41,14 @@ export default function TreasuryDashboard() {
       api.get<{ netProfit: number }>("/company-profit-summary").catch(() => null),
     ]);
     setAccounts(accData.filter((a: Account) => a.isActive));
-    setTransactions(txData.slice(0, 20));
+    setTransactions(txData);
     if (profitData) setCompanyNetProfit(profitData.netProfit);
     setLoading(false);
   };
 
   const accountName = (id: string) => accounts.find(a => a.id === id)?.name ?? "—";
+
+  const recentTransactions = useMemo(() => transactions.slice(0, 20), [transactions]);
 
   const totalBalance = useMemo(() => accounts.reduce((s, a) => {
     if (a.name === "حساب الشركة" && companyNetProfit !== null) return s + companyNetProfit;
@@ -209,11 +211,11 @@ export default function TreasuryDashboard() {
           <h3 className="text-sm font-semibold">{t.treasuryRecentActivity}</h3>
           <Button variant="ghost" size="sm" onClick={() => navigate("/treasury/transactions")}>{t.viewAll}</Button>
         </div>
-        {transactions.length === 0 ? (
+        {recentTransactions.length === 0 ? (
           <p className="text-center py-8 text-muted-foreground text-sm">{t.treasuryNoTx}</p>
         ) : (
           <div className="divide-y divide-border/50">
-            {transactions.slice(0, 10).map(tx => {
+            {recentTransactions.slice(0, 10).map(tx => {
               const isOut = ["withdrawal", "expense", "transfer_out"].includes(tx.txType);
               const isReturn = tx.category === "return_refund" || (tx.description || "").includes("مرتجع");
               const isFunding = tx.txType === "order_funding";
