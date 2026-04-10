@@ -483,12 +483,14 @@ export default function AuditsPage() {
         const consumed = Math.abs(r.diff);
         const fifoSelling = calcFifoValue(r.lots, consumed, "sellingPrice", r.sellingPrice);
         const fifoCost = calcFifoValue(r.lots, consumed, "storeCost", r.storeCost);
+        const effectiveUnitPrice = consumed > 0 ? Math.round(fifoSelling / consumed * 100) / 100 : r.sellingPrice;
+        const effectiveUnitCost = consumed > 0 ? Math.round(fifoCost / consumed * 100) / 100 : (r.storeCost || 0);
         return {
           code: r.code, material: r.material,
           imageUrl: imgMap[r.code] || "",
           unit: r.unit, quantity: consumed,
-          sellingPrice: r.sellingPrice,
-          costPrice: r.storeCost || 0,
+          sellingPrice: effectiveUnitPrice,
+          costPrice: effectiveUnitCost,
           lineTotal: fifoSelling,
           lineCostTotal: fifoCost,
           sourceOrderId: srcOrd,

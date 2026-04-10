@@ -244,8 +244,7 @@ export default function CompanyProfitPage() {
           const itemSelling = parseAmount(li.sellingPrice ?? li.selling_price ?? 0);
           const itemCost = parseAmount(li.costPrice ?? li.cost_price ?? li.cost ?? 0);
           const qty = parseAmount(li.quantity ?? 1);
-          const lineSelling = itemSelling * qty;
-          const lineCost = itemCost * qty;
+          const lineSelling = li.lineTotal != null ? parseAmount(li.lineTotal) : itemSelling * qty;
           totalItemsSelling += lineSelling;
         });
 
@@ -258,8 +257,8 @@ export default function CompanyProfitPage() {
           const itemSelling = parseAmount(li.sellingPrice ?? li.selling_price ?? 0);
           const itemCost = parseAmount(li.costPrice ?? li.cost_price ?? li.cost ?? 0);
           const qty = parseAmount(li.quantity ?? 1);
-          const lineSelling = itemSelling * qty;
-          const lineCost = itemCost * qty;
+          const lineSelling = li.lineTotal != null ? parseAmount(li.lineTotal) : itemSelling * qty;
+          const lineCost = li.lineCostTotal != null ? parseAmount(li.lineCostTotal) : itemCost * qty;
           const pct = getOrderPct(oid);
           const normPct = pct >= 2 ? pct / 100 : pct;
 
