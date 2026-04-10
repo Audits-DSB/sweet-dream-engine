@@ -110,11 +110,16 @@ export default function FounderProfile({
 
   const unpaidFunding = orderFunding.filter(e => !e.paid);
   const paidFunding = orderFunding.filter(e => e.paid);
-  const totalOwed = unpaidFunding.reduce((s, e) => s + e.amount, 0);
   const totalPaidFunding = paidFunding.reduce((s, e) => s + e.amount, 0);
   const totalOrderFunding = orderFunding.reduce((s, e) => s + e.amount, 0);
-  const txContribTotal = [...contributions, ...fundings].reduce((s, tx) => s + tx.amount, 0);
-  const displayTotal = txContribTotal > 0 ? txContribTotal : f.totalContributed;
+
+  const unsettledOwedTop = settlementsOwed.filter(s => !s.settled);
+  const unsettledOwingTop = settlementsOwing.filter(s => !s.settled);
+  const totalOwedToOthersTop = unsettledOwedTop.reduce((s, e) => s + e.amount, 0);
+  const totalOwedFromOthersTop = unsettledOwingTop.reduce((s, e) => s + e.amount, 0);
+  const totalOwed = totalOwedToOthersTop;
+
+  const displayTotal = totalOrderFunding;
   const manualCapitalTotal = capitalReturns.reduce((s, tx) => s + tx.amount, 0);
   const returnRefundsTotal = returnRefunds.reduce((s, tx) => s + tx.amount, 0);
   const capitalWithdrawnTotal = capitalWithdrawals.reduce((s, tx) => s + tx.amount, 0);
@@ -232,9 +237,9 @@ export default function FounderProfile({
 
         {/* Stats Row */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-6">
-          <StatMini label="إجمالي المساهمات" value={displayTotal} color="blue" currency={t.currency} />
+          <StatMini label="إجمالي التمويل" value={displayTotal} color="blue" currency={t.currency} />
           <StatMini label="عليه فلوس" value={totalOwed} color={totalOwed > 0 ? "red" : "green"} currency={t.currency} suffix={totalOwed <= 0 ? "✓" : undefined} />
-          <StatMini label="مساهمات مدفوعة" value={totalPaidFunding} color="green" currency={t.currency} />
+          <StatMini label="ليه عند غيره" value={totalOwedFromOthersTop} color={totalOwedFromOthersTop > 0 ? "emerald" : "gray"} currency={t.currency} />
           <StatMini label="أرباح محصّلة" value={autoProfitTotal} color="blue" currency={t.currency} />
           <StatMini label="رأس مال متاح" value={capitalBalance} color={capitalBalance > 0 ? "indigo" : "gray"} currency={t.currency} />
           <StatMini label="مصاريف توصيل" value={delPaidTotal} color={delPaidTotal > 0 ? "orange" : "gray"} currency={t.currency} />
