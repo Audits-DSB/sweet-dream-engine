@@ -1121,7 +1121,7 @@ export default function ClientReport() {
                   <p className="text-sm text-gray-600 mt-1">
                     {lastAuditDate ? new Date(lastAuditDate).toLocaleDateString(dateLocale, { year: "numeric", month: "long", day: "numeric" }) : "—"}
                     {" · "}{t.crAuditCount}: {audits.length}
-                    {" · "}{t.crStatusLabel}: <span className={lastAudit.status === "Completed" ? "text-green-700 font-semibold" : lastAudit.status === "Discrepancy" ? "text-red-700 font-semibold" : "text-amber-700 font-semibold"}>{{ "Completed": t.crCompleted, "In Progress": t.crInProgress, "Scheduled": isEn ? "Scheduled" : "مُجدول", "Discrepancy": isEn ? "Discrepancy" : "يوجد فرق" }[lastAudit.status] || lastAudit.status}</span>
+                    {" · "}{t.crStatusLabel}: <span className={lastAudit.status === "Completed" || lastAudit.status === "تم التحصيل" ? "text-green-700 font-semibold" : lastAudit.status === "Discrepancy" ? "text-red-700 font-semibold" : "text-amber-700 font-semibold"}>{{ "Completed": t.crCompleted, "تم التحصيل": t.crCompleted, "In Progress": t.crInProgress, "Scheduled": isEn ? "Scheduled" : "مُجدول", "Discrepancy": isEn ? "Discrepancy" : "يوجد فرق" }[lastAudit.status] || lastAudit.status}</span>
                   </p>
                 </div>
               </div>
