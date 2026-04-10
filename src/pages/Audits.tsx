@@ -453,11 +453,22 @@ export default function AuditsPage() {
         if (code && srcOrd && !codeToSourceOrder[code]) codeToSourceOrder[code] = srcOrd;
       });
 
+      // Build lots from inventory for relevantOrderIds (needed before we build lineItems)
+      const invLotsByCodePre: Record<string, { sourceOrder: string }[]> = {};
+      (clientInvData || []).forEach((i: any) => {
+        const code = normalize(i.materialCode || i.material_code || i.code || "");
+        const srcOrd = i.sourceOrder || i.source_order || "";
+        if (!code || !srcOrd) return;
+        if (!invLotsByCodePre[code]) invLotsByCodePre[code] = [];
+        invLotsByCodePre[code].push({ sourceOrder: srcOrd });
+      });
+
       // Only include orders that actually have shortage items (not all client orders)
-      // Include orders from individual lots (each lot may come from a different order)
+      // Include orders from individual lots AND inventory lots
       const relevantOrderIds = [...new Set([
         ...shortages.map(r => codeToSourceOrder[r.code]).filter(Boolean),
         ...shortages.flatMap(r => (r.lots || []).map(l => l.sourceOrder).filter(Boolean)),
+        ...shortages.flatMap(r => (invLotsByCodePre[normalize(r.code)] || []).map(l => l.sourceOrder).filter(Boolean)),
       ])];
 
       // Fetch companyProfitPercentage snapshot per relevant order
@@ -480,14 +491,33 @@ export default function AuditsPage() {
         } catch { orderPctMap[ordId] = 40; }
       }));
 
+      // Build lots from client inventory for materials missing lots in comparison
+      const invLotsByCode: Record<string, { remaining: number; sellingPrice: number; storeCost: number; sourceOrder: string }[]> = {};
+      (clientInvData || [])
+        .sort((a: any, b: any) => new Date(a.createdAt || a.created_at || 0).getTime() - new Date(b.createdAt || b.created_at || 0).getTime())
+        .forEach((i: any) => {
+          const code = normalize(i.materialCode || i.material_code || i.code || "");
+          if (!code) return;
+          if (!invLotsByCode[code]) invLotsByCode[code] = [];
+          invLotsByCode[code].push({
+            remaining: Number((i as any).delivered ?? i.remaining ?? 0),
+            sellingPrice: Number(i.sellingPrice || i.selling_price || 0),
+            storeCost: Number(i.storeCost || i.store_cost || 0),
+            sourceOrder: i.sourceOrder || i.source_order || "",
+          });
+        });
+
       const lineItems: any[] = [];
       for (const r of shortages) {
         const fallbackSrcOrd = codeToSourceOrder[r.code] || "";
         const consumed = Math.abs(r.diff);
 
-        if (r.lots && r.lots.length > 0) {
+        // Use lots from comparison row, or build from inventory if missing
+        const lotsToUse = (r.lots && r.lots.length > 0) ? r.lots : (invLotsByCode[normalize(r.code)] || []);
+
+        if (lotsToUse.length > 0) {
           let left = consumed;
-          for (const lot of r.lots) {
+          for (const lot of lotsToUse) {
             if (left <= 0) break;
             const take = Math.min(left, lot.remaining);
             const lotSrcOrd = lot.sourceOrder || fallbackSrcOrd;
@@ -508,7 +538,7 @@ export default function AuditsPage() {
             left -= take;
           }
           if (left > 0) {
-            const lastLot = r.lots[r.lots.length - 1];
+            const lastLot = lotsToUse[lotsToUse.length - 1];
             const lastSrcOrd = lastLot.sourceOrder || fallbackSrcOrd;
             const companyProfitPct = orderPctMap[lastSrcOrd] ?? 40;
             const delInfo = orderDeliveryInfoMap[lastSrcOrd];

@@ -2441,6 +2441,86 @@ router.delete("/deliveries/:id", async (req, res) => {
 });
 
 // ─── COLLECTIONS ──────────────────────────────────────────────────────────────
+router.post("/collections/regenerate-from-audit/:colId", async (req, res) => {
+  try {
+    const { data: col } = await supabaseAdmin.from("collections").select("*").eq("id", req.params.colId).single();
+    if (!col) return res.status(404).json({ error: "Collection not found" });
+    let notesMeta: any = {};
+    try { notesMeta = typeof col.notes === "string" ? JSON.parse(col.notes) : (col.notes || {}); } catch {}
+    const auditId = notesMeta.auditId;
+    if (!auditId) return res.status(400).json({ error: "No audit linked" });
+
+    const { data: audit } = await supabaseAdmin.from("audits").select("*").eq("id", auditId).single();
+    if (!audit) return res.status(404).json({ error: "Audit not found" });
+
+    const clientId = col.client_id || audit.client_id;
+    const { data: invLots } = await supabaseAdmin.from("client_inventory").select("*").eq("client_id", clientId).order("created_at", { ascending: true });
+
+    const normalize = (s: string) => (s || "").toLowerCase().replace(/[-_\s]/g, "");
+    const lotsByCode: Record<string, any[]> = {};
+    (invLots || []).forEach((i: any) => {
+      const code = normalize(i.material_code || i.code || "");
+      if (!code) return;
+      if (!lotsByCode[code]) lotsByCode[code] = [];
+      lotsByCode[code].push({
+        remaining: Number(i.delivered ?? i.remaining ?? 0),
+        sellingPrice: Number(i.selling_price ?? 0),
+        storeCost: Number(i.store_cost ?? 0),
+        sourceOrder: i.source_order || "",
+      });
+    });
+
+    const comparison = Array.isArray(audit.comparison) ? audit.comparison : [];
+    const shortages = comparison.filter((r: any) => r.result === "shortage");
+
+    const lineItems: any[] = [];
+    for (const r of shortages) {
+      const consumed = Math.abs(r.diff);
+      const lots = lotsByCode[normalize(r.code)] || [];
+      if (lots.length > 0) {
+        let left = consumed;
+        for (const lot of lots) {
+          if (left <= 0) break;
+          const take = Math.min(left, lot.remaining);
+          lineItems.push({
+            code: r.code, material: r.material, imageUrl: "", unit: r.unit,
+            quantity: take, sellingPrice: lot.sellingPrice, costPrice: lot.storeCost,
+            lineTotal: take * lot.sellingPrice, lineCostTotal: take * lot.storeCost,
+            sourceOrderId: lot.sourceOrder,
+          });
+          left -= take;
+        }
+        if (left > 0) {
+          const last = lots[lots.length - 1];
+          lineItems.push({
+            code: r.code, material: r.material, imageUrl: "", unit: r.unit,
+            quantity: left, sellingPrice: last.sellingPrice, costPrice: last.storeCost,
+            lineTotal: left * last.sellingPrice, lineCostTotal: left * last.storeCost,
+            sourceOrderId: last.sourceOrder,
+          });
+        }
+      } else {
+        lineItems.push({
+          code: r.code, material: r.material, imageUrl: "", unit: r.unit,
+          quantity: consumed, sellingPrice: r.sellingPrice || 0, costPrice: r.storeCost || 0,
+          lineTotal: consumed * (r.sellingPrice || 0), lineCostTotal: consumed * (r.storeCost || 0),
+          sourceOrderId: "",
+        });
+      }
+    }
+    const newTotal = lineItems.reduce((s: number, l: any) => s + l.lineTotal, 0);
+    const paid = Number(col.paid_amount || 0);
+    notesMeta.lineItems = lineItems;
+    notesMeta.sourceOrders = [...new Set(lineItems.map((l: any) => l.sourceOrderId).filter(Boolean))];
+    await supabaseAdmin.from("collections").update({
+      notes: JSON.stringify(notesMeta),
+      total_amount: newTotal,
+      outstanding: Math.max(newTotal - paid, 0),
+    }).eq("id", req.params.colId);
+    res.json({ ok: true, newTotal, lineItemsCount: lineItems.length });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 router.get("/collections", async (_req, res) => {
   sbOk(res, await supabaseAdmin.from("collections").select("*").order("created_at", { ascending: false }));
 });
