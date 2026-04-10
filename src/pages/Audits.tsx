@@ -54,7 +54,7 @@ function calcFifoValue(lots: LotPrice[] | undefined, consumed: number, field: "s
   if (left > 0) {
     total += left * lots[lots.length - 1][field];
   }
-  return Math.round(total * 100) / 100;
+  return total;
 }
 
 type AuditRecord = {
@@ -476,28 +476,62 @@ export default function AuditsPage() {
         } catch { orderPctMap[ordId] = 40; }
       }));
 
-      const lineItems = shortages.map(r => {
+      const lineItems: any[] = [];
+      for (const r of shortages) {
         const srcOrd = codeToSourceOrder[r.code] || "";
         const companyProfitPct = orderPctMap[srcOrd] ?? 40;
         const delInfo = orderDeliveryInfoMap[srcOrd];
         const consumed = Math.abs(r.diff);
-        const fifoSelling = calcFifoValue(r.lots, consumed, "sellingPrice", r.sellingPrice);
-        const fifoCost = calcFifoValue(r.lots, consumed, "storeCost", r.storeCost);
-        const effectiveUnitPrice = consumed > 0 ? Math.round(fifoSelling / consumed * 100) / 100 : r.sellingPrice;
-        const effectiveUnitCost = consumed > 0 ? Math.round(fifoCost / consumed * 100) / 100 : (r.storeCost || 0);
-        return {
-          code: r.code, material: r.material,
-          imageUrl: imgMap[r.code] || "",
-          unit: r.unit, quantity: consumed,
-          sellingPrice: effectiveUnitPrice,
-          costPrice: effectiveUnitCost,
-          lineTotal: fifoSelling,
-          lineCostTotal: fifoCost,
-          sourceOrderId: srcOrd,
-          companyProfitPct,
-          deliveryFeePaidByFounder: delInfo?.deliveryFeePaidByFounder || "",
-        };
-      });
+
+        if (r.lots && r.lots.length > 0) {
+          let left = consumed;
+          for (const lot of r.lots) {
+            if (left <= 0) break;
+            const take = Math.min(left, lot.remaining);
+            lineItems.push({
+              code: r.code, material: r.material,
+              imageUrl: imgMap[r.code] || "",
+              unit: r.unit, quantity: take,
+              sellingPrice: lot.sellingPrice,
+              costPrice: lot.storeCost,
+              lineTotal: take * lot.sellingPrice,
+              lineCostTotal: take * lot.storeCost,
+              sourceOrderId: srcOrd,
+              companyProfitPct,
+              deliveryFeePaidByFounder: delInfo?.deliveryFeePaidByFounder || "",
+            });
+            left -= take;
+          }
+          if (left > 0) {
+            const lastLot = r.lots[r.lots.length - 1];
+            lineItems.push({
+              code: r.code, material: r.material,
+              imageUrl: imgMap[r.code] || "",
+              unit: r.unit, quantity: left,
+              sellingPrice: lastLot.sellingPrice,
+              costPrice: lastLot.storeCost,
+              lineTotal: left * lastLot.sellingPrice,
+              lineCostTotal: left * lastLot.storeCost,
+              sourceOrderId: srcOrd,
+              companyProfitPct,
+              deliveryFeePaidByFounder: delInfo?.deliveryFeePaidByFounder || "",
+            });
+          }
+        } else {
+          lineItems.push({
+            code: r.code, material: r.material,
+            imageUrl: imgMap[r.code] || "",
+            unit: r.unit, quantity: consumed,
+            sellingPrice: r.sellingPrice,
+            costPrice: r.storeCost || 0,
+            lineTotal: consumed * r.sellingPrice,
+            lineCostTotal: consumed * (r.storeCost || 0),
+            sourceOrderId: srcOrd,
+            companyProfitPct,
+            deliveryFeePaidByFounder: delInfo?.deliveryFeePaidByFounder || "",
+          });
+        }
+      }
 
       // sourceOrders = only orders that appear in shortages
       const sourceOrders = [...new Set(lineItems.map(l => l.sourceOrderId).filter(Boolean))];
@@ -596,7 +630,7 @@ export default function AuditsPage() {
     if (shortages.length === 0) { toast.info(t.noResults); return; }
     exportToCsv(`purchase_list_${audit.id}`,
       [t.material, t.codeCol, t.unit, t.qtyRequired, `${t.storeCostColon} (${t.currency})`, `${t.total} (${t.currency})`, t.client],
-      shortages.map(r => [r.material, r.code, r.unit, Math.abs(r.diff), Math.round(calcFifoValue(r.lots, Math.abs(r.diff), "storeCost", r.storeCost) / Math.abs(r.diff)), calcFifoValue(r.lots, Math.abs(r.diff), "storeCost", r.storeCost).toLocaleString(), audit.clientName])
+      shortages.map(r => { const qty = Math.abs(r.diff); const costTotal = calcFifoValue(r.lots, qty, "storeCost", r.storeCost); return [r.material, r.code, r.unit, qty, qty > 0 ? (costTotal / qty) : 0, costTotal.toLocaleString(), audit.clientName]; })
     );
     toast.success(t.purchaseListExported);
   };
