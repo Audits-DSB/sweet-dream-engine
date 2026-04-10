@@ -2712,6 +2712,57 @@ router.delete("/audits/:id", async (req, res) => {
   const { data: snap } = await supabaseAdmin.from("audits").select("*").eq("id", auditId).single();
   if (snap) await softDelete("audit", auditId, `${auditId} — ${snap.client_name || ""}`, snap);
 
+  if (snap) {
+    try {
+      const comparison: any[] = Array.isArray(snap.comparison) ? snap.comparison : [];
+      const clientId = snap.client_id || "";
+      if (comparison.length > 0 && clientId) {
+        const { data: clientLots } = await supabaseAdmin
+          .from("client_inventory")
+          .select("*")
+          .eq("client_id", clientId)
+          .order("created_at", { ascending: true });
+        const allLots = clientLots || [];
+        const norm = (s: string) => s.toLowerCase().replace(/[-_\s]/g, "");
+        for (const row of comparison) {
+          if (row.result === "matched") continue;
+          const code = row.code || "";
+          const expected = Number(row.expected ?? 0);
+          const materialLots = allLots.filter((l: any) => norm(l.code || "") === norm(code));
+          if (materialLots.length === 0) continue;
+          if (materialLots.length === 1) {
+            await supabaseAdmin.from("client_inventory").update({
+              remaining: expected,
+              status: expected > 0 ? "In Stock" : "Depleted",
+              shortage_qty: 0,
+            }).eq("id", materialLots[0].id);
+          } else {
+            let remainingToDistribute = expected;
+            for (let idx = 0; idx < materialLots.length; idx++) {
+              const lot = materialLots[idx];
+              const lotDelivered = Number(lot.delivered ?? 0);
+              let lotQty: number;
+              if (idx < materialLots.length - 1) {
+                lotQty = Math.min(remainingToDistribute, lotDelivered);
+                remainingToDistribute = Math.max(0, remainingToDistribute - lotDelivered);
+              } else {
+                lotQty = remainingToDistribute;
+              }
+              await supabaseAdmin.from("client_inventory").update({
+                remaining: lotQty,
+                status: lotQty > 0 ? "In Stock" : "Depleted",
+                shortage_qty: 0,
+              }).eq("id", lot.id);
+            }
+          }
+        }
+        console.log(`[delete-audit] Restored client inventory for ${comparison.filter((r: any) => r.result !== "matched").length} items`);
+      }
+    } catch (e: any) {
+      console.warn("[delete-audit] client inventory restore error:", e.message);
+    }
+  }
+
   try {
     const { data: allCols } = await supabaseAdmin.from("collections").select("id, notes");
     const linkedCol = (allCols || []).find((c: any) => {
@@ -2723,7 +2774,6 @@ router.delete("/audits/:id", async (req, res) => {
     if (linkedCol) {
       const { data: colSnap } = await supabaseAdmin.from("collections").select("*").eq("id", linkedCol.id).single();
 
-      // Clean up treasury transactions linked to this collection before deleting it
       try {
         const { data: allTxs } = await supabaseAdmin.from("treasury_transactions").select("*");
         const linkedTxs = (allTxs || []).filter((tx: any) => {

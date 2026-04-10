@@ -14,7 +14,7 @@ import { StatCard } from "@/components/StatCard";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Plus, Eye, MoreHorizontal, ClipboardCheck, AlertTriangle, CheckCircle2, XCircle,
-  Upload, FileSpreadsheet, Printer, Download, FileText, Package, Loader2, Trash2, Receipt,
+  Upload, FileSpreadsheet, Printer, Download, FileText, Package, Loader2, Trash2, Receipt, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -117,6 +117,10 @@ export default function AuditsPage() {
   const [step, setStep] = useState<"form" | "compare">("form");
   const [saving, setSaving] = useState(false);
   const [creatingCollection, setCreatingCollection] = useState<string | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<AuditRecord | null>(null);
+  const [editRows, setEditRows] = useState<ComparisonRow[]>([]);
+  const [editSaving, setEditSaving] = useState(false);
 
   const { data: rawAudits = [], isLoading } = useQuery<AuditRecord[]>({ queryKey: ["/api/audits"], queryFn: () => api.get<AuditRecord[]>("/audits") });
   const { data: clients = [] } = useQuery<{ id: string; name: string; city: string }[]>({ queryKey: ["/api/clients"], queryFn: () => api.get("/clients") });
@@ -184,9 +188,10 @@ export default function AuditsPage() {
       }
       qc.invalidateQueries({ queryKey: ["/api/audits"] });
       qc.invalidateQueries({ queryKey: ["/api/collections"] });
+      qc.invalidateQueries({ queryKey: ["/api/client-inventory"] });
       setDeleteTarget(null);
       setDeleteLinkedCollection(null);
-      toast.success("تم حذف الجرد");
+      toast.success("تم حذف الجرد وتم إرجاع المخزون");
     },
     onError: () => toast.error("فشل الحذف"),
   });
@@ -540,6 +545,102 @@ export default function AuditsPage() {
   const resultLabel = (r: string) => r === "matched" ? t.matched : r === "shortage" ? t.shortage : t.surplus;
   const statusLabel = (s: string) => ({ "Completed": t.completed, "Discrepancy": t.discrepancy, "Scheduled": t.scheduled, "In Progress": t.inProgress, "تم التحصيل": "تم التحصيل" }[s] || s);
 
+  const handleEditClick = (audit: AuditRecord) => {
+    setEditTarget(audit);
+    setEditRows((audit.comparison || []).map(r => ({ ...r })));
+    setEditDialogOpen(true);
+  };
+
+  const handleEditActual = (idx: number, value: number) => {
+    setEditRows(prev => prev.map((r, i) => {
+      if (i !== idx) return r;
+      const diff = value - r.expected;
+      return { ...r, actual: value, diff, result: diff === 0 ? "matched" : diff < 0 ? "shortage" : "surplus" };
+    }));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editTarget) return;
+    setEditSaving(true);
+    try {
+      const matchedCount = editRows.filter(r => r.result === "matched").length;
+      const shortageCount = editRows.filter(r => r.result === "shortage").length;
+      const surplusCount = editRows.filter(r => r.result === "surplus").length;
+      const status = shortageCount > 0 || surplusCount > 0 ? "Discrepancy" : "Completed";
+
+      await api.patch(`/audits/${editTarget.id}`, {
+        comparison: editRows,
+        matched: matchedCount,
+        shortage: shortageCount,
+        surplus: surplusCount,
+        totalItems: editRows.length,
+        status,
+      });
+
+      const clientLots = (rawLots as any[])
+        .filter(l => l.clientId === editTarget.clientId || l.client_id === editTarget.clientId)
+        .sort((a, b) => new Date(a.createdAt || a.created_at || 0).getTime() - new Date(b.createdAt || b.created_at || 0).getTime());
+
+      let inventoryFailed = false;
+      if (clientLots.length > 0) {
+        const results = await Promise.allSettled(editRows.map(async (r) => {
+          const materialLots = clientLots.filter(l => normalize(l.code || "") === normalize(r.code));
+          if (materialLots.length === 0) return;
+
+          if (materialLots.length === 1) {
+            const patch: Record<string, unknown> = { remaining: r.actual };
+            patch.status = r.result === "shortage" ? "Needs Refill" : "In Stock";
+            patch.shortageQty = r.result === "shortage" ? Math.abs(r.diff) : 0;
+            await api.patch(`/client-inventory/${materialLots[0].id}`, patch);
+          } else {
+            let remaining = r.actual;
+            const lotResults = await Promise.allSettled(materialLots.map(async (lot, idx) => {
+              const lotExpected = Number(lot.remaining ?? 0);
+              let lotActual: number;
+              if (idx < materialLots.length - 1) {
+                lotActual = Math.min(remaining, lotExpected);
+                remaining = Math.max(0, remaining - lotExpected);
+              } else {
+                lotActual = remaining;
+              }
+              const patch: Record<string, unknown> = { remaining: lotActual };
+              if (lotActual < lotExpected) {
+                patch.status = "Needs Refill";
+                patch.shortageQty = lotExpected - lotActual;
+              } else {
+                patch.status = "In Stock";
+                patch.shortageQty = 0;
+              }
+              await api.patch(`/client-inventory/${lot.id}`, patch);
+            }));
+            if (lotResults.some(r => r.status === "rejected")) inventoryFailed = true;
+          }
+        }));
+        if (results.some(r => r.status === "rejected")) inventoryFailed = true;
+        qc.invalidateQueries({ queryKey: ["/api/client-inventory"] });
+      }
+
+      await logAudit({ entity: "audits", entityId: editTarget.id, entityName: `${editTarget.id} — ${editTarget.clientName}`, action: "update", snapshot: { ...editTarget, comparison: editRows, matched: matchedCount, shortage: shortageCount, surplus: surplusCount, status }, endpoint: "/api/audits", idField: "id", performedBy: _userName });
+
+      qc.invalidateQueries({ queryKey: ["/api/audits"] });
+      setEditDialogOpen(false);
+      setEditTarget(null);
+      setEditRows([]);
+      if (selectedAudit?.id === editTarget.id) {
+        setSelectedAudit({ ...editTarget, comparison: editRows, matched: matchedCount, shortage: shortageCount, surplus: surplusCount, status });
+      }
+      if (inventoryFailed) {
+        toast.warning("تم تحديث الجرد لكن بعض تحديثات المخزون فشلت — يرجى مراجعة مخزون العميل");
+      } else {
+        toast.success("تم تحديث الجرد بنجاح");
+      }
+    } catch {
+      toast.error("فشل تحديث الجرد");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const initManualEntry = () => {
     if (clientInventory.length === 0) { toast.error(t.noInventoryForClient); return; }
     // Merge lots with the same code — show one row per unique material
@@ -633,6 +734,7 @@ export default function AuditsPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => setSelectedAudit(audit)}><Eye className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.viewDetails}</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleEditClick(audit)}><Pencil className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.edit}</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => printClientInvoice(audit)}><Printer className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.clientInvoice}</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => exportPurchaseSheet(audit)}><FileSpreadsheet className="h-3.5 w-3.5 ltr:mr-2 rtl:ml-2" />{t.purchaseListLabel}</DropdownMenuItem>
                       {audit.shortage > 0 && (
@@ -923,6 +1025,73 @@ export default function AuditsPage() {
               )}
             </div>
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editDialogOpen} onOpenChange={(open) => { if (!open) { setEditDialogOpen(false); setEditTarget(null); setEditRows([]); } }}>
+        <DialogContent className="max-w-3xl max-h-[90vh]">
+          <DialogHeader><DialogTitle>تعديل الجرد — {editTarget?.id} — {editTarget?.clientName}</DialogTitle></DialogHeader>
+          {editTarget && (
+            <ScrollArea className="max-h-[75vh]">
+              <div className="space-y-4 pe-2">
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <div><span className="text-muted-foreground">{t.date}:</span> <span className="font-medium">{editTarget.date}</span></div>
+                  <div><span className="text-muted-foreground">{t.auditor}:</span> <span className="font-medium">{editTarget.auditor}</span></div>
+                  <div><span className="text-muted-foreground">{t.client}:</span> <span className="font-medium">{editTarget.clientName}</span></div>
+                </div>
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="p-3 rounded-lg bg-success/10"><p className="text-xs text-muted-foreground">{t.matched}</p><p className="text-xl font-bold text-success">{editRows.filter(r => r.result === "matched").length}</p></div>
+                  <div className="p-3 rounded-lg bg-destructive/10"><p className="text-xs text-muted-foreground">{t.shortage}</p><p className="text-xl font-bold text-destructive">{editRows.filter(r => r.result === "shortage").length}</p></div>
+                  <div className="p-3 rounded-lg bg-warning/10"><p className="text-xs text-muted-foreground">{t.surplus}</p><p className="text-xl font-bold text-warning">{editRows.filter(r => r.result === "surplus").length}</p></div>
+                </div>
+                <div className="overflow-x-auto border border-border rounded-lg">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="py-2 px-3 w-14"></th>
+                        <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.material}</th>
+                        <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.expected}</th>
+                        <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.actual}</th>
+                        <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.differenceCol}</th>
+                        <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.result}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {editRows.map((r, i) => (
+                        <tr key={i} className={`border-b border-border/50 ${r.result === "shortage" ? "bg-destructive/5" : r.result === "surplus" ? "bg-warning/5" : ""}`}>
+                          <td className="py-2 px-3">
+                            {(r.imageUrl || imageByCode[r.code]) ? (
+                              <img src={r.imageUrl || imageByCode[r.code]} alt={r.material} className="h-12 w-12 rounded-lg object-cover border border-border shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                            ) : (
+                              <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center border border-border"><Package className="h-5 w-5 text-muted-foreground" /></div>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 font-medium">{r.material} <span className="text-xs text-muted-foreground">({r.unit})</span></td>
+                          <td className="py-2 px-3 text-end text-muted-foreground">{r.expected}</td>
+                          <td className="py-2 px-3 text-end">
+                            <Input type="number" className="h-7 w-20 text-end text-sm ms-auto" value={r.actual} onChange={e => handleEditActual(i, Number(e.target.value))} />
+                          </td>
+                          <td className="py-2 px-3 text-end font-medium">{r.diff === 0 ? "—" : <span className={r.diff < 0 ? "text-destructive" : "text-warning"}>{r.diff > 0 ? "+" : ""}{r.diff}</span>}</td>
+                          <td className="py-2 px-3">
+                            <span className={`inline-flex items-center gap-1 text-xs font-medium ${r.result === "matched" ? "text-success" : r.result === "shortage" ? "text-destructive" : "text-warning"}`}>
+                              {r.result === "matched" ? <CheckCircle2 className="h-3 w-3" /> : r.result === "shortage" ? <XCircle className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+                              {resultLabel(r.result)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => { setEditDialogOpen(false); setEditTarget(null); setEditRows([]); }}>إلغاء</Button>
+                  <Button size="sm" onClick={handleSaveEdit} disabled={editSaving}>
+                    {editSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="h-3.5 w-3.5 ltr:mr-1.5 rtl:ml-1.5" />حفظ التعديلات</>}
+                  </Button>
+                </div>
+              </div>
+            </ScrollArea>
+          )}
         </DialogContent>
       </Dialog>
 
