@@ -57,6 +57,26 @@ function calcFifoValue(lots: LotPrice[] | undefined, consumed: number, field: "s
   return total;
 }
 
+function buildPriceBreakdown(lots: LotPrice[] | undefined, consumed: number, field: "sellingPrice" | "storeCost", fallbackPrice?: number): string {
+  if (!lots || lots.length === 0) {
+    const p = fallbackPrice || 0;
+    return consumed > 0 ? `${consumed}×${p}` : "—";
+  }
+  let left = consumed;
+  const parts: { qty: number; price: number }[] = [];
+  for (const lot of lots) {
+    if (left <= 0) break;
+    const take = Math.min(left, lot.remaining);
+    parts.push({ qty: take, price: lot[field] });
+    left -= take;
+  }
+  if (left > 0) {
+    parts.push({ qty: left, price: lots[lots.length - 1][field] });
+  }
+  if (parts.length === 1) return `${parts[0].price}`;
+  return parts.map(p => `(${p.qty}×${p.price})`).join("+");
+}
+
 type AuditRecord = {
   id: string;
   clientId: string;
@@ -645,15 +665,16 @@ export default function AuditsPage() {
     printInvoice({
       title: "فاتورة مواد جديدة للعميل", companyName: "DSB", subtitle: `جرد ${audit.id} — مواد مطلوب توصيلها`,
       clientName: audit.clientName, invoiceNumber: `INV-${audit.id}`, date: audit.date,
-      columns: ["الصورة", t.material, t.codeCol, t.unit, t.qtyRequired, `${t.total} (${t.currency})`],
+      columns: ["الصورة", t.material, "سعر القطعة", t.unit, t.qtyRequired, `${t.total} (${t.currency})`],
       rows: shortages.map(r => {
         const qty = Math.abs(r.diff);
         const totalVal = calcFifoValue(r.lots, qty, "sellingPrice", r.sellingPrice);
+        const priceCol = buildPriceBreakdown(r.lots, qty, "sellingPrice", r.sellingPrice);
         return [
           b64Map[r.code]
             ? `<img src="${b64Map[r.code]}" class="item-img" alt="${r.material}" />`
             : `<div style="width:42px;height:42px;background:#f1f5f9;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:18px;">📦</div>`,
-          r.material, r.code, r.unit, qty,
+          r.material, priceCol, r.unit, qty,
           totalVal.toLocaleString(),
         ];
       }),
