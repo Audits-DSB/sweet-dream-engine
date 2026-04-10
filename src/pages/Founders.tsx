@@ -501,7 +501,8 @@ export default function FoundersPage() {
 
       const orderId = order.id;
       const clientName = order.client || order.clientName || order.client_name || "";
-      const totalCost = toNum(order.totalCost ?? order.total_cost);
+      const totalCostFull = toNum(order.totalCost ?? order.total_cost);
+      const fundingCost = contribs.reduce((s: number, c: any) => s + toNum(c.amount), 0) || totalCostFull;
       const totalSelling = toNum(order.totalSelling ?? order.total_selling);
       const status = order.status || "";
       const date = order.date || order.createdAt || "";
@@ -525,7 +526,7 @@ export default function FoundersPage() {
           amount: amt,
           originalAmount: amt,
           percentage: toNum(c.percentage),
-          totalCost,
+          totalCost: fundingCost,
           totalSelling,
           status,
           date: typeof date === "string" ? date.split("T")[0] : "",
