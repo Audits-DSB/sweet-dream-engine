@@ -457,7 +457,6 @@ export default function FoundersPage() {
         const paidAt = c.paidAt || c.paid_at || "";
         return { id: fId, name: c.founder || "", paidAmt, share, diff: initialPaid - share, paidAt };
       }).filter(e => e.id);
-      const allPaid = entries.every(e => e.paidAmt >= e.share);
       const overpayers = entries.filter(e => e.diff > 0);
       const underpayers = entries.filter(e => e.diff < 0);
       if (overpayers.length === 0 || underpayers.length === 0) return;
@@ -468,6 +467,7 @@ export default function FoundersPage() {
         const transfer = Math.min(oRemain[oi], uRemain[ui]);
         if (transfer > 0) {
           const paymentDate = overpayers[oi].paidAt ? overpayers[oi].paidAt.split("T")[0] : (order.date || "").split("T")[0];
+          const fromSettled = underpayers[ui].paidAmt >= underpayers[ui].share;
           settlements.push({
             orderId: order.id,
             clientName: order.client || order.clientName || order.client_name || "",
@@ -478,7 +478,7 @@ export default function FoundersPage() {
             amount: Math.round(transfer),
             toPaidTotal: overpayers[oi].paidAmt,
             toShare: overpayers[oi].share,
-            settled: allPaid,
+            settled: fromSettled,
           });
         }
         oRemain[oi] -= transfer;

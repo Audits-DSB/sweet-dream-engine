@@ -408,19 +408,21 @@ export default function FounderProfile({
               )}
 
               {(settlementsOwed.length > 0 || settlementsOwing.length > 0) && (() => {
-                const totalOwedToOthers = settlementsOwed.reduce((s, e) => s + e.amount, 0);
-                const totalOwedFromOthers = settlementsOwing.reduce((s, e) => s + e.amount, 0);
+                const unsettledOwed = settlementsOwed.filter(s => !s.settled);
+                const unsettledOwing = settlementsOwing.filter(s => !s.settled);
+                const totalOwedToOthers = unsettledOwed.reduce((s, e) => s + e.amount, 0);
+                const totalOwedFromOthers = unsettledOwing.reduce((s, e) => s + e.amount, 0);
                 const netSettlement = totalOwedFromOthers - totalOwedToOthers;
 
                 const owedByPerson: Record<string, { name: string; total: number; entries: typeof settlementsOwed }> = {};
-                settlementsOwed.forEach(s => {
+                unsettledOwed.forEach(s => {
                   if (!owedByPerson[s.toId]) owedByPerson[s.toId] = { name: s.to, total: 0, entries: [] };
                   owedByPerson[s.toId].total += s.amount;
                   owedByPerson[s.toId].entries.push(s);
                 });
 
                 const owingByPerson: Record<string, { name: string; total: number; entries: typeof settlementsOwing }> = {};
-                settlementsOwing.forEach(s => {
+                unsettledOwing.forEach(s => {
                   if (!owingByPerson[s.fromId]) owingByPerson[s.fromId] = { name: s.from, total: 0, entries: [] };
                   owingByPerson[s.fromId].total += s.amount;
                   owingByPerson[s.fromId].entries.push(s);
