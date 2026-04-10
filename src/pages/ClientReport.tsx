@@ -216,7 +216,7 @@ export default function ClientReport() {
     const totalConsumed = aggregated.reduce((s, i) => s + i.totalConsumed, 0);
     const consumptionRate = totalDelivered > 0 ? Math.round((totalConsumed / totalDelivered) * 100) : 0;
     const avgWeeklyTotal = aggregated.reduce((s, i) => s + i.avgWeekly, 0);
-    const totalSellingValue = aggregated.reduce((s, i) => s + (i.sellingPrice * i.totalRemaining), 0);
+    const totalSellingValue = aggregated.reduce((s, i) => s + (i.sellingPrice * i.totalDelivered), 0);
     return { totalDelivered, totalRemaining, totalConsumed, consumptionRate, avgWeeklyTotal, materialCount: aggregated.length, totalSellingValue };
   }, [aggregated]);
 
