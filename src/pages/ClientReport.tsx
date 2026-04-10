@@ -1282,7 +1282,7 @@ export default function ClientReport() {
                     {aggregated.length > 0 && (
                       <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
                         <td colSpan={4} className="py-3 px-4 text-gray-900">{t.crTotalLabel}</td>
-                        <td className="py-3 px-4 text-end text-gray-900">{stats.totalSellingValue > 0 ? cur(stats.totalSellingValue) : ""}</td>
+                        <td className="py-3 px-4 text-end text-gray-900">{totalOrderValue > 0 ? cur(totalOrderValue) : ""}</td>
                         <td className="py-3 px-4 text-end text-gray-900">{stats.totalDelivered}</td>
                         <td className="py-3 px-4 text-end text-orange-700">{stats.totalConsumed}</td>
                         <td className="py-3 px-4 text-end text-blue-700">{stats.totalRemaining}</td>
