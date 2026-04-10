@@ -113,19 +113,45 @@ export default function CompanyAnalysis() {
     }).finally(() => setLoading(false));
   }, []);
 
-  const DELIVERED_STATUSES = ["Delivered", "Closed", "Partially Delivered", "Completed", "مُسلَّم", "مغلق", "مكتمل"];
+  const DELIVERED_STATUSES = ["Delivered", "Closed", "Partially Delivered", "Completed", "مُسلَّم", "مغلق", "مكتمل", "مرتجع جزئي"];
 
   const deliveredOrders = useMemo(() =>
-    orders.filter(o => DELIVERED_STATUSES.includes(o.status)),
+    orders.filter(o => DELIVERED_STATUSES.includes(o.status) && o.status !== "مرتجع كلي"),
   [orders]);
 
+  const returnDeductions = useMemo(() => {
+    const map: Record<string, { returnedSelling: number; returnedCost: number }> = {};
+    returns.forEach((ret: any) => {
+      if (ret.status !== "accepted" && ret.status !== "Accepted") return;
+      const oid = ret.orderId || ret.order_id;
+      if (!oid) return;
+      if (!map[oid]) map[oid] = { returnedSelling: 0, returnedCost: 0 };
+      const items: any[] = ret.items || [];
+      items.forEach((it: any) => {
+        const qty = Number(it.quantity || 0);
+        map[oid].returnedSelling += Number(it.sellingPrice || it.selling_price || 0) * qty;
+        map[oid].returnedCost += Number(it.costPrice || it.cost_price || 0) * qty;
+      });
+      if (items.length === 0 && ret.totalValue > 0) {
+        map[oid].returnedSelling += ret.totalValue;
+      }
+    });
+    return map;
+  }, [returns]);
+
   const totalRevenue = useMemo(() =>
-    deliveredOrders.reduce((s, o) => s + o.totalSelling, 0),
-  [deliveredOrders]);
+    deliveredOrders.reduce((s, o) => {
+      const ded = returnDeductions[o.id];
+      return s + Math.max(o.totalSelling - (ded?.returnedSelling || 0), 0);
+    }, 0),
+  [deliveredOrders, returnDeductions]);
 
   const totalCost = useMemo(() =>
-    deliveredOrders.reduce((s, o) => s + o.totalCost, 0),
-  [deliveredOrders]);
+    deliveredOrders.reduce((s, o) => {
+      const ded = returnDeductions[o.id];
+      return s + Math.max(o.totalCost - (ded?.returnedCost || 0), 0);
+    }, 0),
+  [deliveredOrders, returnDeductions]);
 
   const netProfit = totalRevenue - totalCost;
   const profitMargin = totalRevenue > 0 ? Math.round((netProfit / totalRevenue) * 100) : 0;
@@ -154,9 +180,15 @@ export default function CompanyAnalysis() {
       months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
     }
     return months.map(ym => {
-      const mOrders = orders.filter(o => o.date?.startsWith(ym) && DELIVERED_STATUSES.includes(o.status));
-      const revenue = mOrders.reduce((s, o) => s + o.totalSelling, 0);
-      const cost = mOrders.reduce((s, o) => s + o.totalCost, 0);
+      const mOrders = orders.filter(o => o.date?.startsWith(ym) && DELIVERED_STATUSES.includes(o.status) && o.status !== "مرتجع كلي");
+      const revenue = mOrders.reduce((s, o) => {
+        const ded = returnDeductions[o.id];
+        return s + Math.max(o.totalSelling - (ded?.returnedSelling || 0), 0);
+      }, 0);
+      const cost = mOrders.reduce((s, o) => {
+        const ded = returnDeductions[o.id];
+        return s + Math.max(o.totalCost - (ded?.returnedCost || 0), 0);
+      }, 0);
       const mCol = collections.filter(c => c.date?.startsWith(ym)).reduce((s, c) => s + c.paidAmount, 0);
       const mDel = deliveries.filter(d => d.date?.startsWith(ym)).length;
       const mRet = returns.filter(r => r.date?.startsWith(ym)).length;
@@ -167,7 +199,7 @@ export default function CompanyAnalysis() {
         orders: allOrders, deliveries: mDel, collections: mCol, returns: mRet,
       };
     });
-  }, [orders, deliveries, collections, returns, lang]);
+  }, [orders, deliveries, collections, returns, returnDeductions, lang]);
 
   const orderStatusDist = useMemo(() => {
     const map: Record<string, number> = {};

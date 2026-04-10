@@ -216,7 +216,7 @@ export default function ClientReport() {
     const totalConsumed = aggregated.reduce((s, i) => s + i.totalConsumed, 0);
     const consumptionRate = totalDelivered > 0 ? Math.round((totalConsumed / totalDelivered) * 100) : 0;
     const avgWeeklyTotal = aggregated.reduce((s, i) => s + i.avgWeekly, 0);
-    const totalSellingValue = aggregated.reduce((s, i) => s + (i.sellingPrice * i.totalDelivered), 0);
+    const totalSellingValue = aggregated.reduce((s, i) => s + (i.sellingPrice * i.totalRemaining), 0);
     return { totalDelivered, totalRemaining, totalConsumed, consumptionRate, avgWeeklyTotal, materialCount: aggregated.length, totalSellingValue };
   }, [aggregated]);
 
@@ -948,7 +948,7 @@ export default function ClientReport() {
                       {mAggregated.length > 0 && (
                         <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
                           <td colSpan={4} className="py-3 px-4 text-gray-900">{t.crTotalLabel}</td>
-                          <td className="py-3 px-4 text-end text-gray-900">{mAggregated.reduce((s, i) => s + (i.sellingPrice * i.totalDelivered), 0) > 0 ? cur(mAggregated.reduce((s, i) => s + (i.sellingPrice * i.totalDelivered), 0)) : ""}</td>
+                          <td className="py-3 px-4 text-end text-gray-900">{mAggregated.reduce((s, i) => s + (i.sellingPrice * i.totalRemaining), 0) > 0 ? cur(mAggregated.reduce((s, i) => s + (i.sellingPrice * i.totalRemaining), 0)) : ""}</td>
                           <td className="py-3 px-4 text-end text-gray-900">{mTotalDelivered}</td>
                           <td className="py-3 px-4 text-end text-orange-700">{mTotalConsumed}</td>
                           <td className="py-3 px-4 text-end text-blue-700">{mAggregated.reduce((s, i) => s + i.totalRemaining, 0)}</td>
