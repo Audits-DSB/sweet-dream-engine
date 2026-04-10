@@ -426,6 +426,17 @@ export default function FounderProfile({
                   owingByPerson[s.fromId].entries.push(s);
                 });
 
+                const allPersonIds = [...new Set([...Object.keys(owedByPerson), ...Object.keys(owingByPerson)])];
+                const netByPerson = allPersonIds.map(pid => {
+                  const owingTotal = owingByPerson[pid]?.total || 0;
+                  const owedTotal = owedByPerson[pid]?.total || 0;
+                  const net = owingTotal - owedTotal;
+                  const name = owingByPerson[pid]?.name || owedByPerson[pid]?.name || pid;
+                  const owingEntries = owingByPerson[pid]?.entries || [];
+                  const owedEntries = owedByPerson[pid]?.entries || [];
+                  return { id: pid, name, owingTotal, owedTotal, net, owingEntries, owedEntries };
+                });
+
                 return (
                   <div className="space-y-4">
                     <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -442,6 +453,16 @@ export default function FounderProfile({
                         <p className={`text-lg font-bold ${totalOwedFromOthers > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
                           {totalOwedFromOthers > 0 ? `${totalOwedFromOthers.toLocaleString()} ${t.currency}` : "—"}
                         </p>
+                        {Object.entries(owingByPerson).length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {Object.entries(owingByPerson).map(([pid, p]) => (
+                              <div key={pid} className="flex justify-between text-xs">
+                                <span className="text-muted-foreground">{p.name} عليه ليه</span>
+                                <span className="font-semibold text-emerald-600">{p.total.toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       <div className={`rounded-xl border p-4 ${totalOwedToOthers > 0 ? "border-red-200/50 dark:border-red-800/30 bg-red-50/50 dark:bg-red-950/10" : "border-border bg-muted/30"}`}>
@@ -452,91 +473,137 @@ export default function FounderProfile({
                         <p className={`text-lg font-bold ${totalOwedToOthers > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
                           {totalOwedToOthers > 0 ? `${totalOwedToOthers.toLocaleString()} ${t.currency}` : "—"}
                         </p>
+                        {Object.entries(owedByPerson).length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {Object.entries(owedByPerson).map(([pid, p]) => (
+                              <div key={pid} className="flex justify-between text-xs">
+                                <span className="text-muted-foreground">عليه لـ {p.name}</span>
+                                <span className="font-semibold text-red-600">{p.total.toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       <div className={`rounded-xl border p-4 ${netSettlement !== 0 ? (netSettlement > 0 ? "border-emerald-200/50 dark:border-emerald-800/30 bg-emerald-50/50 dark:bg-emerald-950/10" : "border-red-200/50 dark:border-red-800/30 bg-red-50/50 dark:bg-red-950/10") : "border-border bg-muted/30"}`}>
                         <div className="flex items-center gap-2 mb-2">
                           <Coins className="h-4 w-4 text-amber-600" />
-                          <span className="text-xs font-semibold text-muted-foreground">إجمالي الخصم</span>
+                          <span className="text-xs font-semibold text-muted-foreground">المقاصة النهائية</span>
                         </div>
                         <p className={`text-lg font-bold ${netSettlement > 0 ? "text-emerald-600 dark:text-emerald-400" : netSettlement < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
                           {netSettlement !== 0 ? (
                             <>
-                              {netSettlement > 0 ? "+" : ""}{netSettlement.toLocaleString()} {t.currency}
+                              {Math.abs(netSettlement).toLocaleString()} {t.currency}
                               <span className="text-xs font-normal text-muted-foreground mr-1">
                                 {netSettlement > 0 ? "(ليه)" : "(عليه)"}
                               </span>
                             </>
                           ) : "متساوي ✓"}
                         </p>
+                        {netByPerson.filter(p => p.net !== 0).length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {netByPerson.filter(p => p.net !== 0).map(p => (
+                              <div key={p.id} className="flex justify-between text-xs">
+                                <span className="text-muted-foreground">
+                                  {p.net > 0 ? `${p.name} يحول ليه` : `يحول لـ ${p.name}`}
+                                </span>
+                                <span className={`font-semibold ${p.net > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                  {Math.abs(p.net).toLocaleString()}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    {Object.keys(owingByPerson).length > 0 && (
-                      <div className="rounded-xl border border-emerald-200/50 dark:border-emerald-800/30 overflow-hidden">
-                        <div className="px-4 py-2.5 bg-emerald-50/50 dark:bg-emerald-950/20 border-b border-emerald-200/30 dark:border-emerald-800/20">
-                          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
-                            <ArrowDownLeft className="h-3.5 w-3.5" />
-                            تفاصيل: ليه عند غيره
+                    {netByPerson.filter(p => p.net !== 0).length > 0 && (
+                      <div className="rounded-xl border border-amber-200/50 dark:border-amber-800/30 overflow-hidden">
+                        <div className="px-4 py-2.5 bg-amber-50/50 dark:bg-amber-950/20 border-b border-amber-200/30 dark:border-amber-800/20">
+                          <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                            <Coins className="h-3.5 w-3.5" />
+                            تفاصيل المقاصة
                           </span>
                         </div>
-                        {Object.entries(owingByPerson).map(([personId, person]) => (
-                          <div key={personId} className="border-b border-border/30 last:border-b-0">
-                            <div className="px-4 py-2 bg-muted/20 flex items-center justify-between">
-                              <span className="text-xs font-semibold">{person.name} عليه ليه</span>
-                              <span className="text-xs font-bold text-emerald-600">{person.total.toLocaleString()} {t.currency}</span>
-                            </div>
-                            <div className="divide-y divide-border/20">
-                              {person.entries.sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date)).map((entry, i) => (
-                                <div key={`oi-${entry.orderId}-${i}`} className="flex items-center justify-between px-4 py-2 text-xs hover:bg-muted/10">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <button className="font-mono text-primary hover:underline flex-shrink-0" onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                      {entry.orderId}
-                                    </button>
-                                    <span className="text-muted-foreground truncate">{entry.clientName}</span>
-                                    <span className="text-muted-foreground flex-shrink-0">{entry.paidAt || entry.date}</span>
-                                    {entry.settled && <CheckCircle2 className="h-3 w-3 text-emerald-500 flex-shrink-0" />}
-                                  </div>
-                                  <span className="font-semibold text-emerald-600 flex-shrink-0">+{entry.amount.toLocaleString()}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                        {netByPerson.filter(p => p.net !== 0).map(person => {
+                          const isPositive = person.net > 0;
+                          return (
+                            <div key={person.id} className="border-b border-border/30 last:border-b-0">
+                              <div className={`px-4 py-2.5 flex items-center justify-between ${isPositive ? "bg-emerald-50/30 dark:bg-emerald-950/10" : "bg-red-50/30 dark:bg-red-950/10"}`}>
+                                <span className={`text-xs font-bold ${isPositive ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+                                  {isPositive ? `${person.name} يحول لـ ${f.name}` : `${f.name} يحول لـ ${person.name}`}
+                                </span>
+                                <span className={`text-sm font-bold ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
+                                  {Math.abs(person.net).toLocaleString()} {t.currency}
+                                </span>
+                              </div>
 
-                    {Object.keys(owedByPerson).length > 0 && (
-                      <div className="rounded-xl border border-red-200/50 dark:border-red-800/30 overflow-hidden">
-                        <div className="px-4 py-2.5 bg-red-50/50 dark:bg-red-950/20 border-b border-red-200/30 dark:border-red-800/20">
-                          <span className="text-xs font-semibold text-red-700 dark:text-red-400 flex items-center gap-1.5">
-                            <ArrowUpRight className="h-3.5 w-3.5" />
-                            تفاصيل: عليه لغيره
-                          </span>
-                        </div>
-                        {Object.entries(owedByPerson).map(([personId, person]) => (
-                          <div key={personId} className="border-b border-border/30 last:border-b-0">
-                            <div className="px-4 py-2 bg-muted/20 flex items-center justify-between">
-                              <span className="text-xs font-semibold">عليه لـ {person.name}</span>
-                              <span className="text-xs font-bold text-red-600">{person.total.toLocaleString()} {t.currency}</span>
-                            </div>
-                            <div className="divide-y divide-border/20">
-                              {person.entries.sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date)).map((entry, i) => (
-                                <div key={`oo-${entry.orderId}-${i}`} className="flex items-center justify-between px-4 py-2 text-xs hover:bg-muted/10">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <button className="font-mono text-primary hover:underline flex-shrink-0" onClick={() => navigate(`/orders/${entry.orderId}`)}>
-                                      {entry.orderId}
-                                    </button>
-                                    <span className="text-muted-foreground truncate">{entry.clientName}</span>
-                                    <span className="text-muted-foreground flex-shrink-0">{entry.paidAt || entry.date}</span>
-                                    {entry.settled && <CheckCircle2 className="h-3 w-3 text-emerald-500 flex-shrink-0" />}
+                              <div className="px-4 py-2 bg-muted/10">
+                                <p className="text-[10px] text-muted-foreground font-semibold mb-1 uppercase tracking-wide">
+                                  {isPositive ? `${person.name} عليه لـ ${f.name} (من الأوردرات)` : `${f.name} عليه لـ ${person.name} (من الأوردرات)`}
+                                </p>
+                                {(isPositive ? person.owingEntries : person.owedEntries).length > 0 ? (
+                                  <div className="divide-y divide-border/20">
+                                    {(isPositive ? person.owingEntries : person.owedEntries)
+                                      .sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date))
+                                      .map((entry, i) => (
+                                        <div key={`net-a-${entry.orderId}-${i}`} className="flex items-center justify-between py-1.5 text-xs">
+                                          <div className="flex items-center gap-2 min-w-0">
+                                            <button className="font-mono text-primary hover:underline flex-shrink-0" onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                              {entry.orderId}
+                                            </button>
+                                            <span className="text-muted-foreground truncate">{entry.clientName}</span>
+                                            <span className="text-muted-foreground flex-shrink-0">{entry.paidAt || entry.date}</span>
+                                            {entry.settled && <CheckCircle2 className="h-3 w-3 text-emerald-500 flex-shrink-0" />}
+                                          </div>
+                                          <span className={`font-semibold flex-shrink-0 ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
+                                            {entry.amount.toLocaleString()}
+                                          </span>
+                                        </div>
+                                      ))}
                                   </div>
-                                  <span className="font-semibold text-red-600 flex-shrink-0">-{entry.amount.toLocaleString()}</span>
+                                ) : (
+                                  <p className="text-[10px] text-muted-foreground">لا توجد تفاصيل</p>
+                                )}
+                              </div>
+
+                              {(isPositive ? person.owedEntries : person.owingEntries).length > 0 && (
+                                <div className="px-4 py-2 bg-muted/10 border-t border-border/20">
+                                  <p className="text-[10px] text-muted-foreground font-semibold mb-1 uppercase tracking-wide">
+                                    يُخصم منها ({isPositive ? `${f.name} عليه لـ ${person.name}` : `${person.name} عليه لـ ${f.name}`})
+                                  </p>
+                                  <div className="divide-y divide-border/20">
+                                    {(isPositive ? person.owedEntries : person.owingEntries)
+                                      .sort((a, b) => (b.paidAt || b.date).localeCompare(a.paidAt || a.date))
+                                      .map((entry, i) => (
+                                        <div key={`net-b-${entry.orderId}-${i}`} className="flex items-center justify-between py-1.5 text-xs">
+                                          <div className="flex items-center gap-2 min-w-0">
+                                            <button className="font-mono text-primary hover:underline flex-shrink-0" onClick={() => navigate(`/orders/${entry.orderId}`)}>
+                                              {entry.orderId}
+                                            </button>
+                                            <span className="text-muted-foreground truncate">{entry.clientName}</span>
+                                            <span className="text-muted-foreground flex-shrink-0">{entry.paidAt || entry.date}</span>
+                                            {entry.settled && <CheckCircle2 className="h-3 w-3 text-emerald-500 flex-shrink-0" />}
+                                          </div>
+                                          <span className="font-semibold text-muted-foreground flex-shrink-0">
+                                            -{entry.amount.toLocaleString()}
+                                          </span>
+                                        </div>
+                                      ))}
+                                  </div>
                                 </div>
-                              ))}
+                              )}
+
+                              <div className={`px-4 py-2 border-t border-border/30 flex items-center justify-between ${isPositive ? "bg-emerald-50/20 dark:bg-emerald-950/5" : "bg-red-50/20 dark:bg-red-950/5"}`}>
+                                <span className="text-xs font-semibold text-muted-foreground">الصافي بعد المقاصة</span>
+                                <span className={`text-xs font-bold ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
+                                  {isPositive ? `${person.name} يحول ` : `يحول لـ ${person.name} `}
+                                  {Math.abs(person.net).toLocaleString()} {t.currency}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
