@@ -129,12 +129,18 @@ export default function ClientReport() {
       setAudits((aud || []).filter((a: any) => (a.clientId || a.client_id) === id).sort((a: any, b: any) =>
         (b.date || b.createdAt || b.created_at || "").localeCompare(a.date || a.createdAt || a.created_at || "")
       ));
-      const allCol = (col || []).map((c: any) => ({
-        id: c.id, date: c.date || c.invoiceDate || c.invoice_date || c.createdAt || "",
-        totalAmount: Number(c.totalAmount ?? c.total_amount ?? c.amount ?? 0),
-        paidAmount: Number(c.paidAmount ?? c.paid_amount ?? c.paid ?? 0),
-        status: c.status || "", clientId: c.clientId || c.client_id || "",
-      }));
+      const allCol = (col || []).map((c: any) => {
+        const notesMeta = (() => { const raw = c.notes; if (!raw) return {} as any; if (typeof raw === "object" && !Array.isArray(raw)) return raw; if (typeof raw === "string") { try { const p = JSON.parse(raw); if (p && typeof p === "object") return p; } catch {} } return {}; })();
+        const li: any[] = notesMeta.lineItems || [];
+        const storedTotal = Number(c.totalAmount ?? c.total_amount ?? c.amount ?? 0);
+        const totalAmount = li.length > 0 ? li.reduce((s: number, l: any) => s + (Number(l.lineTotal) || Number(l.sellingPrice) * Number(l.quantity || 1)), 0) : storedTotal;
+        return {
+          id: c.id, date: c.date || c.invoiceDate || c.invoice_date || c.createdAt || "",
+          totalAmount,
+          paidAmount: Number(c.paidAmount ?? c.paid_amount ?? c.paid ?? 0),
+          status: c.status || "", clientId: c.clientId || c.client_id || "",
+        };
+      });
       setCollections(allCol.filter((c: any) => c.clientId === id));
       setReturns((ret || []).filter((r: any) => (r.clientId || r.client_id) === id).map((r: any) => ({
         id: r.id, date: r.date || r.createdAt || r.created_at || "",

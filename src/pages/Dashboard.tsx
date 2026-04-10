@@ -41,17 +41,34 @@ function toNum(v: string | number | undefined): number {
   return typeof v === "number" ? v : Number(String(v).replace(/,/g, "")) || 0;
 }
 
+function parseNotesMeta(raw: any): any {
+  const notes = raw.notes;
+  if (!notes) return {};
+  if (typeof notes === "object" && !Array.isArray(notes)) return notes;
+  if (typeof notes === "string") { try { const p = JSON.parse(notes); if (p && typeof p === "object") return p; } catch {} }
+  return {};
+}
+
+function computeCollectionTotal(raw: any): number {
+  const notesMeta = parseNotesMeta(raw);
+  const lineItems: any[] = notesMeta.lineItems || [];
+  if (lineItems.length > 0) return lineItems.reduce((s: number, l: any) => s + (toNum(l.lineTotal) || toNum(l.sellingPrice) * toNum(l.quantity || 1)), 0);
+  return toNum(raw.totalAmount ?? raw.total_amount);
+}
+
 function mapCollection(raw: any): Collection & { dueDate: string } {
   const clientId = raw.clientId || raw.client_id || "";
+  const totalAmount = computeCollectionTotal(raw);
+  const paidAmount = toNum(raw.paidAmount ?? raw.paid_amount);
   return {
     id: raw.id, clientId,
     client: raw.client || raw.clientName || raw.client_name || clientId,
     invoiceDate: raw.invoiceDate || raw.invoice_date || raw.createdAt || "",
     dueDate: raw.dueDate || raw.due_date || "",
     status: raw.status || "Awaiting Confirmation",
-    totalAmount: toNum(raw.totalAmount ?? raw.total_amount),
-    paidAmount: toNum(raw.paidAmount ?? raw.paid_amount),
-    outstanding: toNum(raw.outstanding),
+    totalAmount,
+    paidAmount,
+    outstanding: Math.max(totalAmount - paidAmount, 0),
   };
 }
 

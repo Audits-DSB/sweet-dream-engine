@@ -358,9 +358,12 @@ export default function FinancialReportPage() {
         try { if (parseISO(dateStr) < cutoff) return; } catch { }
       }
 
-      const total = parseAmount(c.total ?? c.totalAmount ?? c.total_amount);
+      const notesMeta = (() => { const raw = (c as any).notes; if (!raw) return {} as any; if (typeof raw === "object" && !Array.isArray(raw)) return raw; if (typeof raw === "string") { try { const p = JSON.parse(raw); if (p && typeof p === "object") return p; } catch {} } return {}; })();
+      const lineItems: any[] = notesMeta.lineItems || [];
+      const storedTotal = parseAmount(c.total ?? c.totalAmount ?? c.total_amount);
+      const total = lineItems.length > 0 ? lineItems.reduce((s: number, l: any) => s + (parseAmount(l.lineTotal) || parseAmount(l.sellingPrice) * parseAmount(l.quantity || 1)), 0) : storedTotal;
       const paid = parseAmount(c.paid ?? c.paidAmount ?? c.paid_amount);
-      const remaining = total - paid;
+      const remaining = Math.max(total - paid, 0);
       totalInvoiced += total;
       totalCollected += paid;
       totalOutstanding += remaining;

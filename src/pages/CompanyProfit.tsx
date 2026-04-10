@@ -212,7 +212,10 @@ export default function CompanyProfitPage() {
       try { d = parseISO(issueDate); } catch { return; }
       if (d < cutoff) return;
 
-      const totalCollection = parseAmount(col.totalAmount ?? col.total_amount ?? col.total);
+      const notesMeta0 = (() => { const raw = col.notes || col._notesObj; if (!raw) return {} as any; if (typeof raw === "object") return raw; try { return JSON.parse(raw); } catch { return {}; } })();
+      const storedTotal = parseAmount(col.totalAmount ?? col.total_amount ?? col.total);
+      const li0: any[] = notesMeta0.lineItems || [];
+      const totalCollection = li0.length > 0 ? li0.reduce((s: number, l: any) => s + (parseAmount(l.lineTotal) || parseAmount(l.sellingPrice) * parseAmount(l.quantity || 1)), 0) : storedTotal;
       const totalPaid = parseAmount(col.paidAmount ?? col.paid_amount ?? col.paid);
       const paymentHistory = parsePaymentsHistory(col.payments);
       const sortedPayments = [...paymentHistory].sort((a, b) => a.date > b.date ? -1 : 1);

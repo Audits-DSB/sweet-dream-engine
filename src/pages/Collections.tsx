@@ -48,10 +48,13 @@ function parseNotes(notes: any): NotesMeta {
 }
 
 function mapCollection(raw: any, clientsMap: Record<string, string> = {}): Collection {
-  const total = Number(raw.totalAmount ?? raw.total_amount ?? raw.total ?? 0);
+  const storedTotal = Number(raw.totalAmount ?? raw.total_amount ?? raw.total ?? 0);
   const paid = Number(raw.paidAmount ?? raw.paid_amount ?? raw.paid ?? 0);
   const clientId = raw.clientId || raw.client_id || "";
   const notesMeta = parseNotes(raw.notes);
+  const lineItems: LineItem[] = notesMeta.lineItems || [];
+  const computedTotal = lineItems.length > 0 ? lineItems.reduce((s, l) => s + (l.lineTotal ?? l.sellingPrice * (l.quantity || 1)), 0) : storedTotal;
+  const total = computedTotal;
   // Payment history is stored in notes.paymentHistory — no separate DB column needed
   const payments: PayEntry[] = notesMeta.paymentHistory || [];
   return {
@@ -62,7 +65,7 @@ function mapCollection(raw: any, clientsMap: Record<string, string> = {}): Colle
     issueDate: raw.issueDate || raw.invoice_date || raw.invoiceDate || raw.createdAt || "",
     dueDate: raw.dueDate || raw.due_date || "",
     total, paid,
-    remaining: Number(raw.outstanding ?? raw.remaining ?? (total - paid)),
+    remaining: Math.max(total - paid, 0),
     payments,
     status: raw.status || "Awaiting Confirmation",
     auditId: notesMeta.auditId || "",
