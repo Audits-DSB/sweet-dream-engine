@@ -149,6 +149,7 @@ export default function ClientReport() {
         materialName: l.materialName || l.material_name || "",
         quantity: Number(l.quantity || 0),
         unit: l.unit || "unit",
+        sellingPrice: Number(l.sellingPrice || l.selling_price || 0),
       })));
 
       const allDates = [
@@ -184,31 +185,63 @@ export default function ClientReport() {
   }, [filteredOrders, filteredDeliveries, filteredCollections, filteredReturns]);
 
   const aggregated = useMemo(() => {
-    const map = new Map<string, { material: string; code: string; unit: string; totalDelivered: number; totalRemaining: number; totalConsumed: number; avgWeekly: number; sellingPrice: number; count: number; imageUrl: string }>();
+    const invMap = new Map<string, { totalDelivered: number; totalRemaining: number; avgWeekly: number; sellingPrice: number; imageUrl: string }>();
     for (const item of inventory) {
       const key = item.code || item.material;
-      const consumed = Math.max(0, item.delivered - item.remaining);
-      const existing = map.get(key);
+      const existing = invMap.get(key);
       if (existing) {
         existing.totalDelivered += item.delivered;
         existing.totalRemaining += item.remaining;
-        existing.totalConsumed += consumed;
         existing.avgWeekly = Math.max(existing.avgWeekly, item.avgWeeklyUsage);
         if (item.sellingPrice > 0) existing.sellingPrice = item.sellingPrice;
         if (item.imageUrl && !existing.imageUrl) existing.imageUrl = item.imageUrl;
-        existing.count++;
       } else {
-        map.set(key, {
-          material: item.material, code: item.code, unit: item.unit,
+        invMap.set(key, {
           totalDelivered: item.delivered, totalRemaining: item.remaining,
-          totalConsumed: consumed, avgWeekly: item.avgWeeklyUsage,
-          sellingPrice: item.sellingPrice, count: 1,
+          avgWeekly: item.avgWeeklyUsage, sellingPrice: item.sellingPrice,
           imageUrl: item.imageUrl || "",
         });
       }
     }
+
+    const map = new Map<string, { material: string; code: string; unit: string; totalOrdered: number; totalDelivered: number; totalRemaining: number; totalConsumed: number; avgWeekly: number; sellingPrice: number; count: number; imageUrl: string }>();
+    for (const line of orderLines) {
+      const key = line.materialCode || line.materialName;
+      const existing = map.get(key);
+      if (existing) {
+        existing.totalOrdered += line.quantity;
+        if (line.sellingPrice > 0) existing.sellingPrice = line.sellingPrice;
+        existing.count++;
+      } else {
+        map.set(key, {
+          material: line.materialName, code: line.materialCode, unit: line.unit,
+          totalOrdered: line.quantity, totalDelivered: 0, totalRemaining: 0,
+          totalConsumed: 0, avgWeekly: 0, sellingPrice: line.sellingPrice, count: 1, imageUrl: "",
+        });
+      }
+    }
+
+    for (const [key, inv] of invMap) {
+      const entry = map.get(key);
+      if (entry) {
+        entry.totalDelivered = inv.totalDelivered;
+        entry.totalRemaining = inv.totalRemaining;
+        entry.totalConsumed = Math.max(0, inv.totalDelivered - inv.totalRemaining);
+        entry.avgWeekly = inv.avgWeekly;
+        if (inv.sellingPrice > 0) entry.sellingPrice = inv.sellingPrice;
+        if (inv.imageUrl) entry.imageUrl = inv.imageUrl;
+      } else {
+        map.set(key, {
+          material: key, code: key, unit: "unit",
+          totalOrdered: 0, totalDelivered: inv.totalDelivered, totalRemaining: inv.totalRemaining,
+          totalConsumed: Math.max(0, inv.totalDelivered - inv.totalRemaining),
+          avgWeekly: inv.avgWeekly, sellingPrice: inv.sellingPrice, count: 1, imageUrl: inv.imageUrl,
+        });
+      }
+    }
+
     return [...map.values()].sort((a, b) => b.totalConsumed - a.totalConsumed);
-  }, [inventory]);
+  }, [inventory, orderLines]);
 
   const stats = useMemo(() => {
     const totalDelivered = aggregated.reduce((s, i) => s + i.totalDelivered, 0);
