@@ -39,8 +39,8 @@ type ComparisonRow = {
   lots?: LotPrice[];
 };
 
-function calcFifoValue(lots: LotPrice[], consumed: number, field: "sellingPrice" | "storeCost"): number {
-  if (!lots || lots.length === 0) return 0;
+function calcFifoValue(lots: LotPrice[] | undefined, consumed: number, field: "sellingPrice" | "storeCost", fallbackPrice?: number): number {
+  if (!lots || lots.length === 0) return consumed * (fallbackPrice || 0);
   let left = consumed;
   let total = 0;
   for (const lot of lots) {
@@ -49,10 +49,10 @@ function calcFifoValue(lots: LotPrice[], consumed: number, field: "sellingPrice"
     total += take * lot[field];
     left -= take;
   }
-  if (left > 0 && lots.length > 0) {
+  if (left > 0) {
     total += left * lots[lots.length - 1][field];
   }
-  return total;
+  return Math.round(total * 100) / 100;
 }
 
 type AuditRecord = {
@@ -458,8 +458,8 @@ export default function AuditsPage() {
         const companyProfitPct = orderPctMap[srcOrd] ?? 40;
         const delInfo = orderDeliveryInfoMap[srcOrd];
         const consumed = Math.abs(r.diff);
-        const fifoSelling = r.lots && r.lots.length > 1 ? calcFifoValue(r.lots, consumed, "sellingPrice") : consumed * r.sellingPrice;
-        const fifoCost = r.lots && r.lots.length > 1 ? calcFifoValue(r.lots, consumed, "storeCost") : consumed * r.storeCost;
+        const fifoSelling = calcFifoValue(r.lots, consumed, "sellingPrice", r.sellingPrice);
+        const fifoCost = calcFifoValue(r.lots, consumed, "storeCost", r.storeCost);
         return {
           code: r.code, material: r.material,
           imageUrl: imgMap[r.code] || "",
@@ -551,12 +551,12 @@ export default function AuditsPage() {
         b64Map[r.code]
           ? `<img src="${b64Map[r.code]}" class="item-img" alt="${r.material}" />`
           : `<div style="width:42px;height:42px;background:#f1f5f9;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:18px;">📦</div>`,
-        r.material, r.code, r.unit, Math.abs(r.diff), r.lots && r.lots.length > 1 ? Math.round(calcFifoValue(r.lots, Math.abs(r.diff), "sellingPrice") / Math.abs(r.diff)) : r.sellingPrice,
-        (r.lots && r.lots.length > 1 ? calcFifoValue(r.lots, Math.abs(r.diff), "sellingPrice") : Math.abs(r.diff) * r.sellingPrice).toLocaleString(),
+        r.material, r.code, r.unit, Math.abs(r.diff),
+        calcFifoValue(r.lots, Math.abs(r.diff), "sellingPrice", r.sellingPrice).toLocaleString(),
       ]),
       totals: [
         { label: t.totalShortageItems, value: String(shortages.length) },
-        { label: t.totalCostForClient, value: `${shortages.reduce((s, r) => s + (r.lots && r.lots.length > 1 ? calcFifoValue(r.lots, Math.abs(r.diff), "sellingPrice") : Math.abs(r.diff) * r.sellingPrice), 0).toLocaleString()} ${t.currency}` },
+        { label: t.totalCostForClient, value: `${shortages.reduce((s, r) => s + calcFifoValue(r.lots, Math.abs(r.diff), "sellingPrice", r.sellingPrice), 0).toLocaleString()} ${t.currency}` },
       ],
       footer: `${t.auditor}: ${audit.auditor} — ${audit.date}`,
     });
@@ -567,7 +567,7 @@ export default function AuditsPage() {
     if (shortages.length === 0) { toast.info(t.noResults); return; }
     exportToCsv(`purchase_list_${audit.id}`,
       [t.material, t.codeCol, t.unit, t.qtyRequired, `${t.storeCostColon} (${t.currency})`, `${t.total} (${t.currency})`, t.client],
-      shortages.map(r => [r.material, r.code, r.unit, Math.abs(r.diff), r.lots && r.lots.length > 1 ? Math.round(calcFifoValue(r.lots, Math.abs(r.diff), "storeCost") / Math.abs(r.diff)) : r.storeCost, (r.lots && r.lots.length > 1 ? calcFifoValue(r.lots, Math.abs(r.diff), "storeCost") : Math.abs(r.diff) * r.storeCost).toLocaleString(), audit.clientName])
+      shortages.map(r => [r.material, r.code, r.unit, Math.abs(r.diff), Math.round(calcFifoValue(r.lots, Math.abs(r.diff), "storeCost", r.storeCost) / Math.abs(r.diff)), calcFifoValue(r.lots, Math.abs(r.diff), "storeCost", r.storeCost).toLocaleString(), audit.clientName])
     );
     toast.success(t.purchaseListExported);
   };
@@ -811,15 +811,18 @@ export default function AuditsPage() {
                 {(() => {
                   const details = selectedAudit.comparison;
                   const shortages = details.filter(r => r.result === "shortage");
-                  const shortageTotal = shortages.reduce((s, r) => s + (r.lots && r.lots.length > 1 ? calcFifoValue(r.lots, Math.abs(r.diff), "sellingPrice") : Math.abs(r.diff) * r.sellingPrice), 0);
-                  const purchaseTotal = shortages.reduce((s, r) => s + (r.lots && r.lots.length > 1 ? calcFifoValue(r.lots, Math.abs(r.diff), "storeCost") : Math.abs(r.diff) * r.storeCost), 0);
+                  const shortageTotal = shortages.reduce((s, r) => s + calcFifoValue(r.lots, Math.abs(r.diff), "sellingPrice", r.sellingPrice), 0);
+                  const purchaseTotal = shortages.reduce((s, r) => s + calcFifoValue(r.lots, Math.abs(r.diff), "storeCost", r.storeCost), 0);
+                  const profitTotal = shortageTotal - purchaseTotal;
                   return (
                     <>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                         <div className="p-3 rounded-lg bg-muted/50 text-center"><p className="text-xs text-muted-foreground">{t.matched}</p><p className="text-lg font-bold text-success">{details.filter(r => r.result === "matched").length}</p></div>
                         <div className="p-3 rounded-lg bg-muted/50 text-center"><p className="text-xs text-muted-foreground">{t.shortage}</p><p className="text-lg font-bold text-destructive">{shortages.length}</p></div>
                         <div className="p-3 rounded-lg bg-muted/50 text-center"><p className="text-xs text-muted-foreground">{t.surplus}</p><p className="text-lg font-bold text-warning">{details.filter(r => r.result === "surplus").length}</p></div>
-                        <div className="p-3 rounded-lg bg-muted/50 text-center"><p className="text-xs text-muted-foreground">{t.totalShortageCost}</p><p className="text-lg font-bold">{shortageTotal.toLocaleString()} <span className="text-xs font-normal">{t.currency}</span></p></div>
+                        <div className="p-3 rounded-lg bg-destructive/10 text-center"><p className="text-xs text-muted-foreground">{t.shortagesCostForClient}</p><p className="text-lg font-bold">{shortageTotal.toLocaleString()} <span className="text-xs font-normal">{t.currency}</span></p></div>
+                        <div className="p-3 rounded-lg bg-muted/50 text-center"><p className="text-xs text-muted-foreground">{t.purchaseCost}</p><p className="text-lg font-bold">{purchaseTotal.toLocaleString()} <span className="text-xs font-normal">{t.currency}</span></p></div>
+                        <div className="p-3 rounded-lg bg-success/10 text-center"><p className="text-xs text-muted-foreground">{t.profit}</p><p className="text-lg font-bold text-success">{profitTotal.toLocaleString()} <span className="text-xs font-normal">{t.currency}</span></p></div>
                       </div>
                       {details.length > 0 && (
                         <div className="overflow-x-auto">
@@ -832,11 +835,19 @@ export default function AuditsPage() {
                                 <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.expected}</th>
                                 <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.actual}</th>
                                 <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.differenceCol}</th>
+                                <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">قيمة البيع</th>
+                                <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">التكلفة</th>
+                                <th className="text-end py-2 px-3 text-xs font-medium text-muted-foreground">{t.profit}</th>
                                 <th className="text-start py-2 px-3 text-xs font-medium text-muted-foreground">{t.result}</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {details.map((d, i) => (
+                              {details.map((d, i) => {
+                                const consumed = Math.abs(d.diff);
+                                const rowSelling = d.result === "shortage" ? calcFifoValue(d.lots, consumed, "sellingPrice", d.sellingPrice) : 0;
+                                const rowCost = d.result === "shortage" ? calcFifoValue(d.lots, consumed, "storeCost", d.storeCost) : 0;
+                                const rowProfit = rowSelling - rowCost;
+                                return (
                                 <tr key={i} className={`border-b border-border/50 ${d.result === "shortage" ? "bg-destructive/5" : d.result === "surplus" ? "bg-warning/5" : ""}`}>
                                   <td className="py-2 px-3">
                                     {(d.imageUrl || imageByCode[d.code]) ? (
@@ -850,6 +861,9 @@ export default function AuditsPage() {
                                   <td className="py-2 px-3 text-end">{d.expected}</td>
                                   <td className="py-2 px-3 text-end font-medium">{d.actual}</td>
                                   <td className="py-2 px-3 text-end font-medium">{d.diff === 0 ? "—" : <span className={d.diff < 0 ? "text-destructive" : "text-warning"}>{d.diff > 0 ? "+" : ""}{d.diff}</span>}</td>
+                                  <td className="py-2 px-3 text-end font-medium">{d.result === "shortage" ? <span className="text-destructive">{rowSelling.toLocaleString()}</span> : "—"}</td>
+                                  <td className="py-2 px-3 text-end font-medium">{d.result === "shortage" ? rowCost.toLocaleString() : "—"}</td>
+                                  <td className="py-2 px-3 text-end font-medium">{d.result === "shortage" ? <span className="text-success">{rowProfit.toLocaleString()}</span> : "—"}</td>
                                   <td className="py-2 px-3">
                                     <span className={`inline-flex items-center gap-1 text-xs font-medium ${d.result === "matched" ? "text-success" : d.result === "shortage" ? "text-destructive" : "text-warning"}`}>
                                       {d.result === "matched" ? <CheckCircle2 className="h-3 w-3" /> : d.result === "shortage" ? <XCircle className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
@@ -857,7 +871,8 @@ export default function AuditsPage() {
                                     </span>
                                   </td>
                                 </tr>
-                              ))}
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -873,13 +888,19 @@ export default function AuditsPage() {
                           printInvoice({
                             title: t.exportInvoice, companyName: "DSB", subtitle: t.auditsTitle,
                             clientName: selectedAudit.clientName, invoiceNumber: selectedAudit.id, date: selectedAudit.date,
-                            columns: [t.material, t.codeCol, t.expected, t.actual, t.differenceCol, t.result],
-                            rows: details.map(d => [d.material, d.code, d.expected, d.actual, d.diff, resultLabel(d.result)]),
+                            columns: [t.material, t.codeCol, t.expected, t.actual, t.differenceCol, "قيمة البيع", "التكلفة", t.profit, t.result],
+                            rows: details.map(d => {
+                              const consumed = Math.abs(d.diff);
+                              const rSell = d.result === "shortage" ? calcFifoValue(d.lots, consumed, "sellingPrice", d.sellingPrice) : 0;
+                              const rCost = d.result === "shortage" ? calcFifoValue(d.lots, consumed, "storeCost", d.storeCost) : 0;
+                              return [d.material, d.code, d.expected, d.actual, d.diff, d.result === "shortage" ? rSell.toLocaleString() : "—", d.result === "shortage" ? rCost.toLocaleString() : "—", d.result === "shortage" ? (rSell - rCost).toLocaleString() : "—", resultLabel(d.result)];
+                            }),
                             totals: [
                               { label: t.matched, value: String(details.filter(d => d.result === "matched").length) },
                               { label: t.shortage, value: String(shortages.length) },
                               { label: t.shortagesCostForClient, value: `${shortageTotal.toLocaleString()} ${t.currency}` },
                               { label: t.purchaseCost, value: `${purchaseTotal.toLocaleString()} ${t.currency}` },
+                              { label: t.profit, value: `${profitTotal.toLocaleString()} ${t.currency}` },
                             ],
                             footer: `${t.auditor}: ${selectedAudit.auditor} — ${selectedAudit.date}`,
                           });
