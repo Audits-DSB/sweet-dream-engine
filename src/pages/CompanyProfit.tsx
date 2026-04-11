@@ -245,13 +245,25 @@ export default function CompanyProfitPage() {
           const oid = li.sourceOrderId || primaryOrderId;
           if (!orderMap[oid]) return;
           const itemSelling = parseAmount(li.sellingPrice ?? li.selling_price ?? 0);
-          const itemCost = parseAmount(li.costPrice ?? li.cost_price ?? li.cost ?? 0);
           const qty = parseAmount(li.quantity ?? 1);
           const lineSelling = li.lineTotal != null ? parseAmount(li.lineTotal) : itemSelling * qty;
           totalItemsSelling += lineSelling;
         });
 
         const payRatio = totalItemsSelling > 0 ? Math.min(totalPaid / totalItemsSelling, 1) : 0;
+
+        const orderGrossMap: Record<string, number> = {};
+        lineItems.forEach((li: any) => {
+          const oid = li.sourceOrderId || primaryOrderId;
+          if (!orderMap[oid]) return;
+          const itemSelling = parseAmount(li.sellingPrice ?? li.selling_price ?? 0);
+          const itemCost = parseAmount(li.costPrice ?? li.cost_price ?? li.cost ?? 0);
+          const qty = parseAmount(li.quantity ?? 1);
+          const lineSelling = li.lineTotal != null ? parseAmount(li.lineTotal) : itemSelling * qty;
+          const lineCost = li.lineCostTotal != null ? parseAmount(li.lineCostTotal) : itemCost * qty;
+          const lineGross = lineSelling - lineCost;
+          orderGrossMap[oid] = (orderGrossMap[oid] || 0) + lineGross;
+        });
 
         lineItems.forEach((li: any) => {
           const oid = li.sourceOrderId || primaryOrderId;
@@ -265,19 +277,25 @@ export default function CompanyProfitPage() {
           const pct = getOrderPct(oid);
           const normPct = pct >= 2 ? pct / 100 : pct;
 
+          const lineGross = lineSelling - lineCost;
+          const grossRealized = lineGross * payRatio;
+
           let lineDeliveryDeduction = 0;
           if (!globalOrderDeliveryApplied[oid] && (order.deliveryFeeBearer || (order as any).delivery_fee_bearer) === "company") {
             const delFee = parseAmount(order.deliveryFee ?? (order as any).delivery_fee);
-            lineDeliveryDeduction = delFee * payRatio;
+            const orderTotalGross = Math.max(orderGrossMap[oid] || 0, 0);
+            const orderTotalGrossRealized = orderTotalGross * payRatio;
+            const proportionalDel = delFee * payRatio;
+            const orderReimbursement = Math.min(proportionalDel, orderTotalGrossRealized);
+            const orderDeficit = Math.max(proportionalDel - orderReimbursement, 0);
+            totalDeliveryDeficit += orderDeficit;
             globalOrderDeliveryApplied[oid] = true;
+            if (orderTotalGrossRealized > 0 && lineGross > 0) {
+              lineDeliveryDeduction = orderReimbursement * (Math.max(grossRealized, 0) / orderTotalGrossRealized);
+            }
           }
 
-          const lineGross = lineSelling - lineCost;
-          const grossRealized = lineGross * payRatio;
-          const reimbursable = Math.max(grossRealized, 0);
-          const reimbursement = Math.min(lineDeliveryDeduction, reimbursable);
-          const lineDeficit = Math.max(lineDeliveryDeduction - reimbursement, 0);
-          const lineRealized = Math.max(grossRealized - reimbursement, 0);
+          const lineRealized = Math.max(grossRealized - lineDeliveryDeduction, 0);
           const lineCompany = lineRealized * normPct;
           const lineFounders = lineRealized - lineCompany;
 
@@ -285,7 +303,6 @@ export default function CompanyProfitPage() {
           totalRealizedProfit += lineRealized;
           totalCompanyProfit += lineCompany;
           totalFoundersProfit += lineFounders;
-          totalDeliveryDeficit += lineDeficit;
           weightedPctSum += normPct * lineSelling;
 
           const contribArray = getOrderContribs(oid);

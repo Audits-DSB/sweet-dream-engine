@@ -240,55 +240,36 @@ export default function CollectionsPage() {
     if (!amt || amt <= 0) { toast.error(t.enterValidAmount); return; }
     if (amt > paymentInvoice.remaining) { toast.error(t.amountExceedsRemaining); return; }
 
-    const newPaid = paymentInvoice.paid + amt;
-    const newRemaining = paymentInvoice.total - newPaid;
-    const newPaymentEntry = { date: new Date().toISOString().split("T")[0], amount: amt, method: paymentMethod === "cash" ? "Cash" : "Bank Transfer" };
-    const newPaymentHistory = [...paymentInvoice.payments, newPaymentEntry];
-    const newStatus = newRemaining <= 0 ? "Paid" : "Partially Paid";
-
-    // Store payment history inside notes JSON (no separate payments column in DB)
-    const updatedNotesObj = { ...paymentInvoice._notesObj, paymentHistory: newPaymentHistory };
     try {
-      await api.patch(`/collections/${paymentInvoice.id}`, {
-        paidAmount: newPaid, outstanding: newRemaining, status: newStatus,
-        notes: JSON.stringify(updatedNotesObj),
+      const result = await api.post<{ ok: boolean; newPaid: number; newRemaining: number; newStatus: string; paymentHistory: any[] }>(`/collections/${paymentInvoice.id}/record-payment`, {
+        amount: amt,
+        method: paymentMethod === "cash" ? "Cash" : "Bank Transfer",
+        treasuryAccountId: linkToTreasury ? treasuryAccountId : null,
+        linkToTreasury,
+        orderId: paymentInvoice.order || null,
+        performedBy: user?.id || null,
       });
+
+      const { newPaid, newRemaining, newStatus, paymentHistory: updatedHistory } = result;
+
+      if (newRemaining <= 0 && paymentInvoice.order) {
+        toast.info("تم تحديث حالة الطلب — الأرباح جاهزة للتوزيع");
+      }
+
+      if (linkToTreasury && treasuryAccountId) {
+        setTreasuryAccounts(prev => prev.map(a => a.id === treasuryAccountId ? { ...a, balance: Number(a.balance) + amt } : a));
+      }
+
+      await logAudit({ entity: "collection", entityId: paymentInvoice.id, entityName: `${paymentInvoice.id} - ${paymentInvoice.client}`, action: "update", snapshot: { paid: newPaid, remaining: newRemaining, status: newStatus, newPayment: { date: new Date().toISOString().split("T")[0], amount: amt } }, endpoint: `/collections/${paymentInvoice.id}/record-payment`, performedBy: _userName });
+
+      const updatedNotesObj = { ...paymentInvoice._notesObj, paymentHistory: updatedHistory };
+      setCollections(prev => prev.map(c => c.id !== paymentInvoice.id ? c : { ...c, paid: newPaid, remaining: newRemaining, payments: updatedHistory, status: newStatus, _notesObj: updatedNotesObj }));
+      toast.success(t.paymentRecorded);
+      setPaymentDialogOpen(false);
+      setPaymentInvoice(null);
     } catch (err: any) {
       toast.error(err?.message || "فشل حفظ الدفعة");
-      return;
     }
-
-    // Auto-unlock profit distribution when fully paid
-    if (newRemaining <= 0 && paymentInvoice.order) {
-      try {
-        await api.patch(`/orders/${paymentInvoice.order}`, { status: "Delivered" });
-        await logAudit({ entity: "order", entityId: paymentInvoice.order, entityName: `طلب ${paymentInvoice.order}`, action: "update", snapshot: { status: "Delivered", trigger: "collection_paid", collectionId: paymentInvoice.id }, endpoint: `/orders/${paymentInvoice.order}`, performedBy: _userName });
-        toast.info("تم تحديث حالة الطلب — الأرباح جاهزة للتوزيع");
-      } catch { /* non-critical */ }
-    }
-
-    // Link to treasury if enabled
-    if (linkToTreasury && treasuryAccountId) {
-      const account = treasuryAccounts.find(a => a.id === treasuryAccountId);
-      if (account) {
-        const newBalance = Number(account.balance) + amt;
-        await api.post("/treasury/transactions", {
-          accountId: treasuryAccountId, txType: "inflow", amount: amt,
-          balanceAfter: newBalance,
-          description: `تحصيل: ${paymentInvoice.id} - ${paymentInvoice.client}`,
-          referenceId: paymentInvoice.id, performedBy: user?.id || null, newBalance,
-        });
-        setTreasuryAccounts(prev => prev.map(a => a.id === treasuryAccountId ? { ...a, balance: newBalance } : a));
-      }
-    }
-
-    await logAudit({ entity: "collection", entityId: paymentInvoice.id, entityName: `${paymentInvoice.id} - ${paymentInvoice.client}`, action: "update", snapshot: { paid: newPaid, remaining: newRemaining, status: newStatus, newPayment: newPaymentEntry }, endpoint: `/collections/${paymentInvoice.id}`, performedBy: _userName });
-
-    // Update local state (including _notesObj so subsequent payments in same session work)
-    setCollections(prev => prev.map(c => c.id !== paymentInvoice.id ? c : { ...c, paid: newPaid, remaining: newRemaining, payments: newPaymentHistory, status: newStatus, _notesObj: updatedNotesObj }));
-    toast.success(t.paymentRecorded);
-    setPaymentDialogOpen(false);
-    setPaymentInvoice(null);
   };
 
   const fmtMoney = (n: number) => n.toLocaleString(lang === "ar" ? "ar-EG" : "en-US");
@@ -521,26 +502,27 @@ export default function CollectionsPage() {
                         const snappedPct: number = contribs[0]?.companyProfitPercentage ?? od.companyProfitPct ?? 40;
                         const allTotal = sourceLines.reduce((s, l) => s + l.lineTotal, 0);
                         const orderTotal = lines.reduce((s, l) => s + l.lineTotal, 0);
+                        const orderCost = lines.reduce((s, l) => s + (l.lineCostTotal ?? l.costPrice * (l.quantity || 1)), 0);
                         const orderShare = allTotal > 0 ? orderTotal / allTotal : 1;
                         const orderPaid = selectedInvoice.paid * orderShare;
                         const delFeeDeduction = (od.deliveryFeeBearer || (od as any).delivery_fee_bearer) === "company" ? (od.deliveryFee || (od as any).delivery_fee || 0) : 0;
-                        const qp = quickProfit({ orderTotal: od.totalSelling, totalCost: od.totalCost, paidValue: orderPaid, companyProfitPct: snappedPct, deliveryFeeDeduction: delFeeDeduction });
+                        const qp = quickProfit({ orderTotal, totalCost: orderCost, paidValue: orderPaid, companyProfitPct: snappedPct, deliveryFeeDeduction: delFeeDeduction });
                         const gross = qp.expectedProfit;
-                        const paidRatio = od.totalSelling > 0 ? Math.min(orderPaid / od.totalSelling, 1) : 0;
-                        const realized = Math.round(qp.realizedProfit);
-                        const companyAmt = Math.round(qp.companyProfit);
-                        const foundersAmt = Math.round(qp.foundersProfit);
+                        const paidRatio = orderTotal > 0 ? Math.min(orderPaid / orderTotal, 1) : 0;
+                        const realized = qp.realizedProfit;
+                        const companyAmt = qp.companyProfit;
+                        const foundersAmt = qp.foundersProfit;
                         const splitMode = od.splitMode?.includes("مساهمة") || od.splitMode?.toLowerCase().includes("contribution") ? "weighted" as const : "equal" as const;
-                        const splits = founderSplit(foundersAmt, Math.round(qp.recoveredCapital), contribs, splitMode);
+                        const splits = founderSplit(foundersAmt, qp.recoveredCapital, contribs, splitMode);
                         const founderRows = contribs.length > 0
-                          ? splits.map(s => ({ name: s.name, amount: Math.round(s.profit) }))
-                          : founders.map(f => ({ name: f.name, amount: founders.length > 0 ? Math.round(foundersAmt / founders.length) : 0 }));
+                          ? splits.map(s => ({ name: s.name, amount: s.profit }))
+                          : founders.map(f => ({ name: f.name, amount: founders.length > 0 ? foundersAmt / founders.length : 0 }));
 
                         profitBox = (
                           <div className="bg-muted/30 border-t border-border p-3 space-y-2">
                             <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
-                              <div className="flex justify-between"><span className="text-muted-foreground">إجمالي البيع:</span><span className="font-medium">{od.totalSelling.toLocaleString("en-US")} ج.م</span></div>
-                              <div className="flex justify-between"><span className="text-muted-foreground">التكلفة:</span><span className="font-medium">{od.totalCost.toLocaleString("en-US")} ج.م</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">إجمالي البيع:</span><span className="font-medium">{orderTotal.toLocaleString("en-US")} ج.م</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">التكلفة:</span><span className="font-medium">{orderCost.toLocaleString("en-US")} ج.م</span></div>
                               <div className="flex justify-between"><span className="text-muted-foreground">الربح الكلي:</span><span className="font-semibold">{gross.toLocaleString("en-US")} ج.م</span></div>
                               <div className="flex justify-between"><span className="text-muted-foreground">نسبة المحصّل:</span><span className="font-semibold text-success">{(paidRatio * 100).toFixed(1)}%</span></div>
                               <div className="flex justify-between col-span-2 pt-1 border-t border-border/50">

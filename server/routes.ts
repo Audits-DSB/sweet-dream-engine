@@ -2532,6 +2532,66 @@ router.post("/collections", async (req, res) => {
 router.patch("/collections/:id", async (req, res) => {
   sbOk(res, await supabaseAdmin.from("collections").update(snakifyKeys(req.body)).eq("id", req.params.id).select().single());
 });
+
+router.post("/collections/:id/record-payment", async (req, res) => {
+  try {
+    const { amount, method, treasuryAccountId, linkToTreasury, orderId, performedBy } = req.body;
+    const amt = Number(amount);
+    if (!amt || amt <= 0) return res.status(400).json({ error: "Invalid amount" });
+
+    const { data: col } = await supabaseAdmin.from("collections").select("*").eq("id", req.params.id).single();
+    if (!col) return res.status(404).json({ error: "Collection not found" });
+
+    let notesMeta: any = {};
+    try { notesMeta = typeof col.notes === "string" ? JSON.parse(col.notes) : (col.notes || {}); } catch {}
+
+    const li: any[] = notesMeta.lineItems || [];
+    const totalAmount = li.length > 0 ? li.reduce((s: number, l: any) => s + (Number(l.lineTotal) || 0), 0) : Number(col.total_amount || 0);
+    const currentPaid = Number(col.paid_amount || 0);
+
+    if (amt > totalAmount - currentPaid + 0.01) return res.status(400).json({ error: "Amount exceeds remaining" });
+
+    const newPaid = currentPaid + amt;
+    const newRemaining = Math.max(totalAmount - newPaid, 0);
+    const newStatus = newRemaining <= 0 ? "Paid" : "Partially Paid";
+
+    const paymentEntry = { date: new Date().toISOString().split("T")[0], amount: amt, method: method || "Cash" };
+    const paymentHistory = Array.isArray(notesMeta.paymentHistory) ? [...notesMeta.paymentHistory, paymentEntry] : [paymentEntry];
+    notesMeta.paymentHistory = paymentHistory;
+
+    await supabaseAdmin.from("collections").update({
+      paid_amount: newPaid,
+      outstanding: newRemaining,
+      status: newStatus,
+      notes: JSON.stringify(notesMeta),
+    }).eq("id", req.params.id);
+
+    if (newRemaining <= 0 && orderId) {
+      await supabaseAdmin.from("orders").update({ status: "Delivered" }).eq("id", orderId).catch(() => {});
+    }
+
+    if (linkToTreasury && treasuryAccountId) {
+      const { data: acct } = await supabaseAdmin.from("treasury_accounts").select("balance").eq("id", treasuryAccountId).single();
+      if (acct) {
+        const newBalance = Number(acct.balance || 0) + amt;
+        await supabaseAdmin.from("treasury_transactions").insert({
+          id: `TXN-${Date.now()}`,
+          account_id: treasuryAccountId,
+          tx_type: "inflow",
+          amount: amt,
+          balance_after: newBalance,
+          description: `تحصيل: ${req.params.id}`,
+          reference_id: req.params.id,
+          performed_by: performedBy || null,
+          new_balance: newBalance,
+        });
+        await supabaseAdmin.from("treasury_accounts").update({ balance: newBalance }).eq("id", treasuryAccountId);
+      }
+    }
+
+    res.json({ ok: true, newPaid, newRemaining, newStatus, paymentHistory });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
 router.delete("/collections/:id", async (req, res) => {
   const collectionId = req.params.id;
   const { data: snap } = await supabaseAdmin.from("collections").select("*").eq("id", collectionId).single();
