@@ -776,7 +776,24 @@ export default function AuditsPage() {
 
       await logAudit({ entity: "audits", entityId: editTarget.id, entityName: `${editTarget.id} — ${editTarget.clientName}`, action: "update", snapshot: { ...editTarget, comparison: editRows, matched: matchedCount, shortage: shortageCount, surplus: surplusCount, status }, endpoint: "/api/audits", idField: "id", performedBy: _userName });
 
+      let collectionUpdated = false;
+      const linkedCollection = (collections || []).find((c: any) => {
+        try {
+          const n = typeof c.notes === "string" ? JSON.parse(c.notes) : c.notes;
+          return n?.auditId === editTarget.id;
+        } catch { return false; }
+      });
+      if (linkedCollection) {
+        try {
+          await api.post(`/collections/regenerate-from-audit/${linkedCollection.id}`, {});
+          collectionUpdated = true;
+        } catch {}
+      }
+
       qc.invalidateQueries({ queryKey: ["/api/audits"] });
+      qc.invalidateQueries({ queryKey: ["/api/collections"] });
+      qc.invalidateQueries({ queryKey: ["/api/client-inventory"] });
+      qc.invalidateQueries({ queryKey: ["/api/orders"] });
       setEditDialogOpen(false);
       setEditTarget(null);
       setEditRows([]);
@@ -785,6 +802,8 @@ export default function AuditsPage() {
       }
       if (inventoryFailed) {
         toast.warning("تم تحديث الجرد لكن بعض تحديثات المخزون فشلت — يرجى مراجعة مخزون العميل");
+      } else if (collectionUpdated) {
+        toast.success("تم تحديث الجرد والتحصيل المرتبط بنجاح");
       } else {
         toast.success("تم تحديث الجرد بنجاح");
       }
